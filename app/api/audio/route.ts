@@ -17,9 +17,10 @@ function getAllowedAudioUrl(value: string | null) {
 }
 
 async function proxyAudio(request: NextRequest, headOnly = false) {
-  const source = await verifyMediaToken(request.nextUrl.searchParams.get('token'), 'audio');
+  const directSource = request.nextUrl.searchParams.get('source');
+  const source = directSource ?? await verifyMediaToken(request.nextUrl.searchParams.get('token'), 'audio');
   const audioUrl = getAllowedAudioUrl(source);
-  if (!audioUrl) return NextResponse.json({ error: 'Token media không hợp lệ hoặc đã hết hạn.' }, { status: 401 });
+  if (!audioUrl) return NextResponse.json({ error: 'Nguồn âm thanh hoặc token không hợp lệ.' }, { status: directSource ? 400 : 401 });
 
   try {
     const range = request.headers.get('range');

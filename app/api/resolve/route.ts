@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       id: clipId,
       title: typeof clip?.title === 'string' ? clip.title : typeof data.songtitle === 'string' ? data.songtitle : 'Suno audio',
       picture: pictureToken ? `/api/image?token=${encodeURIComponent(pictureToken)}` : null,
-      audio: data.audio,
+      audio: `/api/audio?source=${encodeURIComponent(data.audio)}`,
       sourceAudio: `/api/audio?token=${encodeURIComponent(sourceAudioToken)}`,
       video: videoToken ? `/api/audio?token=${encodeURIComponent(videoToken)}` : null,
       description: typeof data.description === 'string' ? data.description : null,
