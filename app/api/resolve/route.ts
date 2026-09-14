@@ -9,6 +9,27 @@ export async function POST(request: NextRequest) {
     const data = await upstream.json() as Record<string, unknown>;
     if (!upstream.ok || data.success !== true || typeof data.audio !== 'string') return NextResponse.json({ error: 'Không tìm thấy bài hát. Hãy kiểm tra lại liên kết.' }, { status: 502 });
     const playableSource = typeof data.video === 'string' ? data.video : data.audio;
-    return NextResponse.json({ title: typeof data.songtitle === 'string' ? data.songtitle : 'Suno audio', picture: typeof data.picture === 'string' ? data.picture : null, audio: `/api/audio?source=${encodeURIComponent(playableSource)}`, description: typeof data.description === 'string' ? data.description : null });
+    const clipId = playableSource.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ?? null;
+    let clip: Record<string, unknown> | null = null;
+    if (clipId) {
+      const clipResponse = await fetch(`https://studio-api-prod.suno.com/api/clip/${clipId}`, { headers: { accept: 'application/json' } });
+      if (clipResponse.ok) clip = await clipResponse.json() as Record<string, unknown>;
+    }
+    const metadata = clip?.metadata && typeof clip.metadata === 'object' ? clip.metadata as Record<string, unknown> : null;
+    return NextResponse.json({
+      id: clipId,
+      title: typeof clip?.title === 'string' ? clip.title : typeof data.songtitle === 'string' ? data.songtitle : 'Suno audio',
+      picture: typeof clip?.image_large_url === 'string' ? clip.image_large_url : typeof data.picture === 'string' ? data.picture : null,
+      audio: `/api/audio?source=${encodeURIComponent(playableSource)}`,
+      video: typeof data.video === 'string' ? data.video : null,
+      description: typeof data.description === 'string' ? data.description : null,
+      lyrics: typeof metadata?.prompt === 'string' ? metadata.prompt : null,
+      tags: typeof metadata?.tags === 'string' ? metadata.tags : typeof clip?.display_tags === 'string' ? clip.display_tags : null,
+      duration: typeof metadata?.duration === 'number' ? metadata.duration : null,
+      creator: typeof clip?.display_name === 'string' ? clip.display_name : null,
+      handle: typeof clip?.handle === 'string' ? clip.handle : null,
+      createdAt: typeof clip?.created_at === 'string' ? clip.created_at : null,
+      isPublic: typeof clip?.is_public === 'boolean' ? clip.is_public : null,
+    });
   } catch { return NextResponse.json({ error: 'Dịch vụ đang bận. Vui lòng thử lại sau.' }, { status: 500 }); }
 }
