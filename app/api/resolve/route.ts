@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
       const videoCheck = await fetch(videoSource, { method: 'HEAD' });
       if (!videoCheck.ok) videoSource = null;
     }
-    const playableSource = videoSource ?? data.audio;
     let clip: Record<string, unknown> | null = null;
     if (clipId) {
       const clipResponse = await fetch(`https://studio-api-prod.suno.com/api/clip/${clipId}`, { headers: { accept: 'application/json' } });
@@ -24,8 +23,7 @@ export async function POST(request: NextRequest) {
     const metadata = clip?.metadata && typeof clip.metadata === 'object' ? clip.metadata as Record<string, unknown> : null;
     const rawPicture = typeof clip?.image_large_url === 'string' ? clip.image_large_url : typeof data.picture === 'string' ? data.picture : null;
     const picture = rawPicture?.replace('https://cdn2.suno.ai/', 'https://cdn1.suno.ai/') ?? null;
-    const [audioToken, sourceAudioToken, videoToken, pictureToken] = await Promise.all([
-      createMediaToken(playableSource, 'audio'),
+    const [sourceAudioToken, videoToken, pictureToken] = await Promise.all([
       createMediaToken(data.audio, 'audio'),
       videoSource ? createMediaToken(videoSource, 'audio') : null,
       picture ? createMediaToken(picture, 'image') : null,
@@ -35,7 +33,7 @@ export async function POST(request: NextRequest) {
       embedUrl: clipId ? `https://suno.com/embed/${clipId}` : null,
       title: typeof clip?.title === 'string' ? clip.title : typeof data.songtitle === 'string' ? data.songtitle : 'Suno audio',
       picture: pictureToken ? `/api/image?token=${encodeURIComponent(pictureToken)}` : null,
-      audio: `/api/audio?token=${encodeURIComponent(audioToken)}`,
+      audio: data.audio,
       sourceAudio: `/api/audio?token=${encodeURIComponent(sourceAudioToken)}`,
       video: videoToken ? `/api/audio?token=${encodeURIComponent(videoToken)}` : null,
       description: typeof data.description === 'string' ? data.description : null,
