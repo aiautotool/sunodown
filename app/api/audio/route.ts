@@ -16,6 +16,24 @@ function getAllowedAudioUrl(value: string | null) {
   }
 }
 
+function hasMp4Header(bytes: Uint8Array) {
+  return bytes.length >= 8 && String.fromCharCode(...bytes.slice(4, 8)) === 'ftyp';
+}
+
+async function resolvePlayableUrl(url: URL) {
+  const match = url.hostname.endsWith('.cloudfront.net') && url.pathname.toLowerCase().endsWith('.m4a')
+    ? url.pathname.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.m4a$/i)
+    : null;
+  if (!match) return url;
+
+  const probe = await fetch(url.toString(), { headers: { range: 'bytes=0-31' } });
+  if (probe.ok && hasMp4Header(new Uint8Array(await probe.arrayBuffer()))) return url;
+
+  const videoUrl = new URL(`https://cdn1.suno.ai/${match[1]}.mp4`);
+  const videoCheck = await fetch(videoUrl.toString(), { method: 'HEAD' });
+  return videoCheck.ok ? videoUrl : url;
+}
+
 async function proxyAudio(request: NextRequest, headOnly = false) {
   const directSource = request.nextUrl.searchParams.get('source');
   const source = directSource ?? await verifyMediaToken(request.nextUrl.searchParams.get('token'), 'audio');
@@ -23,8 +41,9 @@ async function proxyAudio(request: NextRequest, headOnly = false) {
   if (!audioUrl) return NextResponse.json({ error: 'Nguồn âm thanh hoặc token không hợp lệ.' }, { status: directSource ? 400 : 401 });
 
   try {
+    const playableUrl = directSource ? await resolvePlayableUrl(audioUrl) : audioUrl;
     const range = request.headers.get('range');
-    const upstream = await fetch(audioUrl.toString(), {
+    const upstream = await fetch(playableUrl.toString(), {
       method: headOnly ? 'HEAD' : 'GET',
       headers: range ? { range } : undefined,
     });
