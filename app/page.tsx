@@ -53,13 +53,9 @@ async function generateVideo(song: Song) {
       '-i', audioName,
       '-map', '0:v:0', '-map', '1:a:0',
       '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black',
-      '-c:a', 'aac', '-b:a', '192k', '-pix_fmt', 'yuv420p', '-shortest', '-movflags', '+faststart',
+      '-c:a', 'copy', '-pix_fmt', 'yuv420p', '-shortest',
     ];
-    let exitCode = await ffmpeg.exec([...commonArgs, '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-r', '1', outputName]);
-    if (exitCode !== 0) {
-      await ffmpeg.deleteFile(outputName).catch(() => undefined);
-      exitCode = await ffmpeg.exec([...commonArgs, '-c:v', 'mpeg4', '-q:v', '5', '-r', '1', outputName]);
-    }
+    const exitCode = await ffmpeg.exec([...commonArgs, '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-r', '1', outputName]);
     if (exitCode !== 0) throw new Error(`FFmpeg không thể ghép video. ${logs.at(-1) || ''}`.trim());
     const output = await ffmpeg.readFile(outputName);
     if (typeof output === 'string') throw new Error('FFmpeg trả về dữ liệu không hợp lệ.');
