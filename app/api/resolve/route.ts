@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
       video: typeof data.video === 'string' ? data.video : null,
       description: typeof data.description === 'string' ? data.description : null,
       lyrics: typeof metadata?.prompt === 'string' ? metadata.prompt : null,
+      style: typeof metadata?.tags === 'string' ? metadata.tags : typeof clip?.display_tags === 'string' ? clip.display_tags : null,
       tags: typeof metadata?.tags === 'string' ? metadata.tags : typeof clip?.display_tags === 'string' ? clip.display_tags : null,
       duration: typeof metadata?.duration === 'number' ? metadata.duration : null,
       creator: typeof clip?.display_name === 'string' ? clip.display_name : null,
