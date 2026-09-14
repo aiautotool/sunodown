@@ -20,7 +20,7 @@ async function generateVideo(song: Song) {
 
   const canvas = document.createElement('canvas'); canvas.width = 1280; canvas.height = 720;
   const context2d = canvas.getContext('2d'); if (!context2d) throw new Error('Không thể tạo khung video.');
-  const image = new Image(); image.crossOrigin = 'anonymous'; image.src = `/api/image?source=${encodeURIComponent(song.picture)}`;
+  const image = new Image(); image.crossOrigin = 'anonymous'; image.src = song.picture;
   await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error('Không thể tải ảnh bìa.')); });
   context2d.fillStyle = '#080812'; context2d.fillRect(0, 0, 1280, 720);
   const scale = Math.min(1120 / image.width, 640 / image.height); const width = image.width * scale; const height = image.height * scale;

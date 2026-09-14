@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createMediaToken } from '../../lib/media-token';
 const API_URL = 'https://sunodownload.net/api/downloadsong';
 function validSunoUrl(value: unknown): value is string { if (typeof value !== 'string' || value.length > 500) return false; try { const url = new URL(value); return url.protocol === 'https:' && (url.hostname === 'suno.com' || url.hostname.endsWith('.suno.com')); } catch { return false; } }
 export async function POST(request: NextRequest) {
@@ -23,13 +24,19 @@ export async function POST(request: NextRequest) {
     const metadata = clip?.metadata && typeof clip.metadata === 'object' ? clip.metadata as Record<string, unknown> : null;
     const rawPicture = typeof clip?.image_large_url === 'string' ? clip.image_large_url : typeof data.picture === 'string' ? data.picture : null;
     const picture = rawPicture?.replace('https://cdn2.suno.ai/', 'https://cdn1.suno.ai/') ?? null;
+    const [audioToken, sourceAudioToken, videoToken, pictureToken] = await Promise.all([
+      createMediaToken(playableSource, 'audio'),
+      createMediaToken(data.audio, 'audio'),
+      videoSource ? createMediaToken(videoSource, 'audio') : null,
+      picture ? createMediaToken(picture, 'image') : null,
+    ]);
     return NextResponse.json({
       id: clipId,
       title: typeof clip?.title === 'string' ? clip.title : typeof data.songtitle === 'string' ? data.songtitle : 'Suno audio',
-      picture,
-      audio: `/api/audio?source=${encodeURIComponent(playableSource)}`,
-      sourceAudio: `/api/audio?source=${encodeURIComponent(data.audio)}`,
-      video: videoSource ? `/api/audio?source=${encodeURIComponent(videoSource)}` : null,
+      picture: pictureToken ? `/api/image?token=${encodeURIComponent(pictureToken)}` : null,
+      audio: `/api/audio?token=${encodeURIComponent(audioToken)}`,
+      sourceAudio: `/api/audio?token=${encodeURIComponent(sourceAudioToken)}`,
+      video: videoToken ? `/api/audio?token=${encodeURIComponent(videoToken)}` : null,
       description: typeof data.description === 'string' ? data.description : null,
       lyrics: typeof metadata?.prompt === 'string' ? metadata.prompt : null,
       style: typeof metadata?.tags === 'string' ? metadata.tags : typeof clip?.display_tags === 'string' ? clip.display_tags : null,

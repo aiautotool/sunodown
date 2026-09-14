@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyMediaToken } from '../../lib/media-token';
 
 function getAllowedAudioUrl(value: string | null) {
   if (!value || value.length > 2000) return null;
@@ -16,8 +17,9 @@ function getAllowedAudioUrl(value: string | null) {
 }
 
 async function proxyAudio(request: NextRequest, headOnly = false) {
-  const audioUrl = getAllowedAudioUrl(request.nextUrl.searchParams.get('source'));
-  if (!audioUrl) return NextResponse.json({ error: 'Nguồn âm thanh không hợp lệ.' }, { status: 400 });
+  const source = await verifyMediaToken(request.nextUrl.searchParams.get('token'), 'audio');
+  const audioUrl = getAllowedAudioUrl(source);
+  if (!audioUrl) return NextResponse.json({ error: 'Token media không hợp lệ hoặc đã hết hạn.' }, { status: 401 });
 
   try {
     const range = request.headers.get('range');
