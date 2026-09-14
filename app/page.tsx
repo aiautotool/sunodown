@@ -136,8 +136,8 @@ export default function Home() {
     if (!song) return;
     setError(''); setConverting(format);
     try {
-      const response = await fetch(song.audio);
-      if (!response.ok) throw new Error('Không thể tải nguồn âm thanh để chuyển đổi.');
+      const response = await fetch('/api/video', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ input: url.trim() }), cache: 'no-store' });
+      if (!response.ok) throw new Error('Không thể tải video nguồn đầy đủ để chuyển đổi.');
       const blob = await convertMedia(await response.blob(), format);
       saveBlob(blob, `${song.title || 'suno-audio'}.${format}`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : `Không thể tạo file ${format.toUpperCase()}.`); }

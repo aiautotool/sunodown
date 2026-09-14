@@ -35,7 +35,7 @@ async function proxyAudio(request: NextRequest, headOnly = false) {
       if (value) headers.set(name, value);
     }
     headers.set('accept-ranges', 'bytes');
-    headers.set('cache-control', 'public, max-age=3600');
+    headers.set('cache-control', 'private, no-store');
     headers.set('access-control-allow-origin', '*');
 
     return new Response(headOnly ? null : upstream.body, { status: upstream.status, headers });
