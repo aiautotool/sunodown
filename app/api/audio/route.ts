@@ -41,7 +41,7 @@ async function proxyAudio(request: NextRequest, headOnly = false) {
   if (!audioUrl) return NextResponse.json({ error: 'Nguồn âm thanh hoặc token không hợp lệ.' }, { status: directSource ? 400 : 401 });
 
   try {
-    const playableUrl = directSource ? await resolvePlayableUrl(audioUrl) : audioUrl;
+    const playableUrl = await resolvePlayableUrl(audioUrl);
     const range = request.headers.get('range');
     const upstream = await fetch(playableUrl.toString(), {
       method: headOnly ? 'HEAD' : 'GET',
