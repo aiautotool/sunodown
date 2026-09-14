@@ -37,7 +37,11 @@ export async function POST(request: NextRequest) {
     const allowedHost = videoUrl.protocol === 'https:' && (videoUrl.hostname === 'suno.ai' || videoUrl.hostname.endsWith('.suno.ai'));
     if (!allowedHost) return NextResponse.json({ error: 'Nguồn video không được hỗ trợ.' }, { status: 502 });
 
-    const videoResponse = await fetch(videoUrl.toString());
+    let videoResponse = await fetch(videoUrl.toString());
+    for (let attempt = 0; !videoResponse.ok && attempt < 2; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+      videoResponse = await fetch(videoUrl.toString(), { cache: 'no-store' });
+    }
     if (!videoResponse.ok || !videoResponse.body) return NextResponse.json({ error: 'Video hiện không khả dụng.' }, { status: 502 });
 
     const title = safeName(metadata.songtitle);
