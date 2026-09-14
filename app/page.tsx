@@ -13,29 +13,54 @@ function saveBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
+let ffmpegPromise: Promise<import('@ffmpeg/ffmpeg').FFmpeg> | null = null;
+
+async function loadFFmpeg() {
+  if (!ffmpegPromise) ffmpegPromise = (async () => {
+    const [{ FFmpeg }, { toBlobURL }] = await Promise.all([import('@ffmpeg/ffmpeg'), import('@ffmpeg/util')]);
+    const ffmpeg = new FFmpeg();
+    const coreBase = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${coreBase}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${coreBase}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+    return ffmpeg;
+  })();
+  return ffmpegPromise;
+}
+
 async function generateVideo(song: Song) {
-  if (!song.picture || !song.sourceAudio || typeof MediaRecorder === 'undefined') throw new Error('Không đủ ảnh hoặc audio để tự tạo video.');
-  const mimeType = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4'].find((type) => MediaRecorder.isTypeSupported(type));
-  if (!mimeType) throw new Error('Trình duyệt này chưa hỗ trợ tự tạo MP4. Hãy dùng Chrome hoặc Safari mới nhất.');
+  if (!song.picture || !song.audio) throw new Error('Không đủ ảnh hoặc audio để tự tạo video.');
+  const [imageResponse, audioResponse] = await Promise.all([
+    fetch(song.picture, { cache: 'no-store' }),
+    fetch(song.audio, { cache: 'no-store' }),
+  ]);
+  if (!imageResponse.ok || !audioResponse.ok) throw new Error('Không thể tải ảnh hoặc audio để tạo video.');
 
-  const canvas = document.createElement('canvas'); canvas.width = 1280; canvas.height = 720;
-  const context2d = canvas.getContext('2d'); if (!context2d) throw new Error('Không thể tạo khung video.');
-  const image = new Image(); image.crossOrigin = 'anonymous'; image.src = song.picture;
-  await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error('Không thể tải ảnh bìa.')); });
-  context2d.fillStyle = '#080812'; context2d.fillRect(0, 0, 1280, 720);
-  const scale = Math.min(1120 / image.width, 640 / image.height); const width = image.width * scale; const height = image.height * scale;
-  context2d.drawImage(image, (1280 - width) / 2, (720 - height) / 2, width, height);
-
-  const audio = new Audio(song.sourceAudio); audio.crossOrigin = 'anonymous'; audio.preload = 'auto';
-  await new Promise<void>((resolve, reject) => { audio.oncanplaythrough = () => resolve(); audio.onerror = () => reject(new Error('Audio nguồn không thể giải mã để tạo video.')); audio.load(); });
-  const audioContext = new AudioContext(); const source = audioContext.createMediaElementSource(audio); const destination = audioContext.createMediaStreamDestination(); source.connect(destination);
-  const stream = canvas.captureStream(1); destination.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
-  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 1_500_000, audioBitsPerSecond: 192_000 }); const chunks: BlobPart[] = [];
-  recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
-  const completed = new Promise<void>((resolve, reject) => { recorder.onstop = () => resolve(); recorder.onerror = () => reject(new Error('Không thể ghi video MP4.')); });
-  recorder.start(1000); await audio.play(); await new Promise<void>((resolve) => { audio.onended = () => resolve(); }); recorder.stop(); await completed;
-  stream.getTracks().forEach((track) => track.stop()); await audioContext.close();
-  return new Blob(chunks, { type: mimeType });
+  const ffmpeg = await loadFFmpeg();
+  const suffix = crypto.randomUUID().replace(/-/g, '');
+  const imageName = `cover-${suffix}.jpg`;
+  const audioName = `audio-${suffix}.bin`;
+  const outputName = `video-${suffix}.mp4`;
+  try {
+    await ffmpeg.writeFile(imageName, new Uint8Array(await imageResponse.arrayBuffer()));
+    await ffmpeg.writeFile(audioName, new Uint8Array(await audioResponse.arrayBuffer()));
+    const exitCode = await ffmpeg.exec([
+      '-loop', '1', '-framerate', '1', '-i', imageName,
+      '-i', audioName,
+      '-map', '0:v:0', '-map', '1:a:0',
+      '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-r', '1',
+      '-c:a', 'aac', '-b:a', '192k', '-pix_fmt', 'yuv420p', '-shortest', '-movflags', '+faststart',
+      outputName,
+    ]);
+    if (exitCode !== 0) throw new Error('FFmpeg không thể ghép video.');
+    const output = await ffmpeg.readFile(outputName);
+    if (typeof output === 'string') throw new Error('FFmpeg trả về dữ liệu không hợp lệ.');
+    return new Blob([output], { type: 'video/mp4' });
+  } finally {
+    await Promise.allSettled([ffmpeg.deleteFile(imageName), ffmpeg.deleteFile(audioName), ffmpeg.deleteFile(outputName)]);
+  }
 }
 
 async function convertMedia(source: Blob, format: 'mp3' | 'wav') {
