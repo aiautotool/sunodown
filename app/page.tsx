@@ -47,7 +47,16 @@ async function convertMedia(source: Blob, format: 'mp3' | 'wav') {
   const input = new Input({ source: new BlobSource(source), formats: ALL_FORMATS });
   const target = new BufferTarget();
   const output = new Output({ format: format === 'mp3' ? new Mp3OutputFormat() : new WavOutputFormat(), target });
-  const conversion = await Conversion.init({ input, output, video: { discard: true }, showWarnings: false });
+  const conversion = await Conversion.init({
+    input,
+    output,
+    video: { discard: true },
+    audio: format === 'mp3'
+      ? { bitrate: 192_000, numberOfChannels: 2, sampleRate: 48_000, forceTranscode: true }
+      : { numberOfChannels: 2, sampleRate: 48_000, sampleFormat: 's16', forceTranscode: true },
+    copy: false,
+    showWarnings: false,
+  });
   if (!conversion.isValid) throw new Error(`Trình duyệt không hỗ trợ tạo file ${format.toUpperCase()}.`);
   await conversion.execute();
   if (!target.buffer) throw new Error(`Không thể tạo file ${format.toUpperCase()}.`);
@@ -157,8 +166,8 @@ export default function Home() {
     if (!song) return;
     setError(''); setConverting(format);
     try {
-      const response = await fetch('/api/video', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ input: url.trim() }), cache: 'no-store' });
-      if (!response.ok) throw new Error('Không thể tải video nguồn đầy đủ để chuyển đổi.');
+      const response = await fetch(song.audio, { cache: 'no-store' });
+      if (!response.ok) throw new Error('Không thể tải nguồn âm thanh để chuyển đổi.');
       const blob = await convertMedia(await response.blob(), format);
       saveBlob(blob, `${song.title || 'suno-audio'}.${format}`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : `Không thể tạo file ${format.toUpperCase()}.`); }
