@@ -26,11 +26,14 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({ input }),
     });
     const metadata = await metadataResponse.json() as Record<string, unknown>;
-    if (!metadataResponse.ok || metadata.success !== true || typeof metadata.video !== 'string') {
+    if (!metadataResponse.ok || metadata.success !== true) {
       return NextResponse.json({ error: 'Bài hát này chưa có video MP4.' }, { status: 502 });
     }
 
-    const videoUrl = new URL(metadata.video);
+    const clipId = [metadata.video, metadata.audio].find((value): value is string => typeof value === 'string')?.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ?? null;
+    const videoSource = typeof metadata.video === 'string' ? metadata.video : clipId ? `https://cdn1.suno.ai/${clipId}.mp4` : null;
+    if (!videoSource) return NextResponse.json({ error: 'Bài hát này chưa có video MP4.' }, { status: 502 });
+    const videoUrl = new URL(videoSource);
     const allowedHost = videoUrl.protocol === 'https:' && (videoUrl.hostname === 'suno.ai' || videoUrl.hostname.endsWith('.suno.ai'));
     if (!allowedHost) return NextResponse.json({ error: 'Nguồn video không được hỗ trợ.' }, { status: 502 });
 
