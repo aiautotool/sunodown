@@ -5,6 +5,60 @@ import { ArrowDownToLine, CheckCircle2, Clapperboard, Link2, LoaderCircle, Music
 
 type Song = { id: string | null; title: string; picture: string | null; audio: string; description: string | null; lyrics: string | null; style: string | null; tags: string | null; duration: number | null; creator: string | null };
 
+function saveBlob(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl; anchor.download = filename;
+  document.body.appendChild(anchor); anchor.click(); anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+function pcm16(samples: Float32Array) {
+  const output = new Int16Array(samples.length);
+  for (let index = 0; index < samples.length; index++) {
+    const sample = Math.max(-1, Math.min(1, samples[index]));
+    output[index] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+  }
+  return output;
+}
+
+function encodeWav(buffer: AudioBuffer) {
+  const channels = Math.min(buffer.numberOfChannels, 2);
+  const bytesPerSample = 2;
+  const dataSize = buffer.length * channels * bytesPerSample;
+  const output = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(output);
+  const text = (offset: number, value: string) => [...value].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
+  text(0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); text(8, 'WAVE'); text(12, 'fmt ');
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, channels, true);
+  view.setUint32(24, buffer.sampleRate, true); view.setUint32(28, buffer.sampleRate * channels * bytesPerSample, true);
+  view.setUint16(32, channels * bytesPerSample, true); view.setUint16(34, 16, true); text(36, 'data'); view.setUint32(40, dataSize, true);
+  const channelData = Array.from({ length: channels }, (_, index) => buffer.getChannelData(index));
+  let offset = 44;
+  for (let frame = 0; frame < buffer.length; frame++) for (let channel = 0; channel < channels; channel++) {
+    const sample = Math.max(-1, Math.min(1, channelData[channel][frame]));
+    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true); offset += 2;
+  }
+  return new Blob([output], { type: 'audio/wav' });
+}
+
+async function encodeMp3(buffer: AudioBuffer) {
+  const { Mp3Encoder } = await import('@breezystack/lamejs');
+  const channels = Math.min(buffer.numberOfChannels, 2);
+  const encoder = new Mp3Encoder(channels, buffer.sampleRate, 192);
+  const left = pcm16(buffer.getChannelData(0));
+  const right = channels === 2 ? pcm16(buffer.getChannelData(1)) : undefined;
+  const chunks: BlobPart[] = [];
+  for (let offset = 0, step = 0; offset < left.length; offset += 1152, step++) {
+    const encoded = encoder.encodeBuffer(left.subarray(offset, offset + 1152), right?.subarray(offset, offset + 1152));
+    if (encoded.length) chunks.push(encoded.slice().buffer as ArrayBuffer);
+    if (step % 200 === 0) await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+  }
+  const end = encoder.flush();
+  if (end.length) chunks.push(end.slice().buffer as ArrayBuffer);
+  return new Blob(chunks, { type: 'audio/mpeg' });
+}
+
 export default function Home() {
   const [url, setUrl] = useState('');
   const [song, setSong] = useState<Song | null>(null);
@@ -12,6 +66,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [downloadingVideo, setDownloadingVideo] = useState(false);
+  const [converting, setConverting] = useState<'mp3' | 'wav' | null>(null);
   const [copied, setCopied] = useState<'lyrics' | 'style' | null>(null);
   const lastResolvedUrl = useRef('');
 
@@ -107,6 +162,21 @@ export default function Home() {
     finally { setDownloadingVideo(false); }
   }
 
+  async function downloadConverted(format: 'mp3' | 'wav') {
+    if (!song) return;
+    setError(''); setConverting(format);
+    let context: AudioContext | null = null;
+    try {
+      const response = await fetch(song.audio);
+      if (!response.ok) throw new Error('Không thể tải nguồn âm thanh để chuyển đổi.');
+      context = new AudioContext();
+      const decoded = await context.decodeAudioData(await response.arrayBuffer());
+      const blob = format === 'wav' ? encodeWav(decoded) : await encodeMp3(decoded);
+      saveBlob(blob, `${song.title || 'suno-audio'}.${format}`);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : `Không thể tạo file ${format.toUpperCase()}.`); }
+    finally { await context?.close(); setConverting(null); }
+  }
+
   return (
     <main className="min-h-screen overflow-hidden bg-[#080812] text-white">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_18%_5%,rgba(139,92,246,.24),transparent_31%),radial-gradient(circle_at_82%_20%,rgba(34,211,238,.16),transparent_27%),linear-gradient(rgba(255,255,255,.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.025)_1px,transparent_1px)] bg-[size:auto,auto,44px_44px,44px_44px]" />
@@ -126,7 +196,7 @@ export default function Home() {
           {song && <article className="rounded-[26px] border border-white/10 bg-white/[.06] p-5 text-left shadow-2xl backdrop-blur-xl"><div className="flex flex-col items-center gap-5 sm:flex-row">
             {song.picture ? <img src={song.picture} alt="Ảnh bìa bài hát" className="size-28 rounded-2xl object-cover shadow-lg sm:size-32" /> : <div className="grid size-28 place-items-center rounded-2xl bg-white/10 sm:size-32"><Music2 /></div>}
             <div className="min-w-0 flex-1 text-center sm:text-left"><p className="mb-2 flex items-center justify-center gap-1.5 text-xs font-semibold uppercase tracking-[.13em] text-emerald-300 sm:justify-start"><CheckCircle2 className="size-3.5" /> Đã tìm thấy</p><h2 className="truncate text-xl font-bold tracking-tight sm:text-2xl">{song.title}</h2><p className="mt-2 text-sm text-white/45">{[song.creator, song.duration ? `${Math.floor(song.duration / 60)}:${String(Math.round(song.duration % 60)).padStart(2, '0')}` : null].filter(Boolean).join(' · ') || song.description || 'Bản nhạc được tạo trên Suno.'}</p>{song.tags && <p className="mt-1 line-clamp-1 text-xs text-violet-200/60">{song.tags}</p>}<audio key={song.audio} controls preload="metadata" src={song.audio} className="mt-4 h-10 w-full min-w-0 accent-violet-500" aria-label={`Nghe thử ${song.title}`}>Trình duyệt của bạn không hỗ trợ phát audio.</audio></div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto"><button onClick={downloadSong} disabled={downloading} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 text-sm font-bold shadow-[0_12px_32px_rgba(124,58,237,.28)] transition hover:brightness-110 focus:outline-none focus:ring-4 focus:ring-violet-400/25 disabled:opacity-60">{downloading ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowDownToLine className="size-4" />}{downloading ? 'Đang tải...' : 'Tải audio'}</button><button onClick={downloadVideo} disabled={downloadingVideo} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-4 text-sm font-bold text-cyan-100 transition hover:bg-cyan-300/15 focus:outline-none focus:ring-4 focus:ring-cyan-300/15 disabled:opacity-60">{downloadingVideo ? <LoaderCircle className="size-4 animate-spin" /> : <Clapperboard className="size-4" />}{downloadingVideo ? 'Đang tải...' : 'Tải video MP4'}</button></div>
+            <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-1"><button onClick={() => downloadConverted('mp3')} disabled={converting !== null} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 text-sm font-bold shadow-[0_12px_32px_rgba(124,58,237,.28)] transition hover:brightness-110 focus:outline-none focus:ring-4 focus:ring-violet-400/25 disabled:opacity-60">{converting === 'mp3' ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowDownToLine className="size-4" />}{converting === 'mp3' ? 'Đang đổi...' : 'Tải MP3'}</button><button onClick={() => downloadConverted('wav')} disabled={converting !== null} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-violet-300/20 bg-violet-300/10 px-4 text-sm font-bold text-violet-100 transition hover:bg-violet-300/15 disabled:opacity-60">{converting === 'wav' ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowDownToLine className="size-4" />}{converting === 'wav' ? 'Đang đổi...' : 'Tải WAV'}</button><button onClick={downloadSong} disabled={downloading} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-bold text-white/70 transition hover:bg-white/10 disabled:opacity-60">{downloading ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowDownToLine className="size-4" />}{downloading ? 'Đang tải...' : 'Tải M4A'}</button><button onClick={downloadVideo} disabled={downloadingVideo} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-4 text-sm font-bold text-cyan-100 transition hover:bg-cyan-300/15 focus:outline-none focus:ring-4 focus:ring-cyan-300/15 disabled:opacity-60">{downloadingVideo ? <LoaderCircle className="size-4 animate-spin" /> : <Clapperboard className="size-4" />}{downloadingVideo ? 'Đang tải...' : 'Tải MP4'}</button></div>
           </div>{song.style && <div className="mt-5 border-t border-white/10 pt-4"><div className="mb-2 flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-white/80">Style</h3><button onClick={() => copyText(song.style!, 'style')} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/65 hover:bg-white/10">{copied === 'style' ? 'Đã sao chép' : 'Sao chép style'}</button></div><p className="whitespace-pre-wrap rounded-2xl bg-violet-400/[.07] p-4 text-sm leading-6 text-violet-100/70">{song.style}</p></div>}{song.lyrics && <details className="group mt-5 border-t border-white/10 pt-4"><summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-white/80"><span>Xem lời bài hát</span><span className="text-xs text-violet-300 group-open:hidden">Mở</span><span className="hidden text-xs text-violet-300 group-open:inline">Đóng</span></summary><div className="mt-4 max-h-96 overflow-y-auto rounded-2xl bg-black/25 p-4"><div className="mb-3 flex justify-end"><button onClick={() => copyText(song.lyrics!, 'lyrics')} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/65 hover:bg-white/10">{copied === 'lyrics' ? 'Đã sao chép' : 'Sao chép lyrics'}</button></div><pre className="whitespace-pre-wrap font-sans text-sm leading-7 text-white/65">{song.lyrics}</pre></div></details>}</article>}
         </div>
         <div className="mt-14 grid w-full grid-cols-1 gap-3 text-left sm:grid-cols-3">{[['01','Dán liên kết','Sao chép link chia sẻ của bài hát trên Suno.'],['02','Lấy bài hát','Hệ thống tự tìm thông tin và file âm thanh.'],['03','Tải xuống','Lưu audio về thiết bị để nghe bất cứ lúc nào.']].map(([number,title,copy]) => <div key={number} className="rounded-2xl border border-white/[.07] bg-white/[.035] p-5"><span className="text-xs font-bold text-violet-300">{number}</span><h3 className="mt-3 font-semibold">{title}</h3><p className="mt-1.5 text-sm leading-6 text-white/40">{copy}</p></div>)}</div>
