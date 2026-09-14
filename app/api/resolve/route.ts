@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
     ]);
     return NextResponse.json({
       id: clipId,
+      embedUrl: clipId ? `https://suno.com/embed/${clipId}` : null,
       title: typeof clip?.title === 'string' ? clip.title : typeof data.songtitle === 'string' ? data.songtitle : 'Suno audio',
       picture: pictureToken ? `/api/image?token=${encodeURIComponent(pictureToken)}` : null,
       audio: `/api/audio?token=${encodeURIComponent(audioToken)}`,
