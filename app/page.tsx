@@ -13,50 +13,20 @@ function saveBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
-function pcm16(samples: Float32Array) {
-  const output = new Int16Array(samples.length);
-  for (let index = 0; index < samples.length; index++) {
-    const sample = Math.max(-1, Math.min(1, samples[index]));
-    output[index] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+async function convertMedia(source: Blob, format: 'mp3' | 'wav') {
+  const { Input, ALL_FORMATS, BlobSource, Output, BufferTarget, Mp3OutputFormat, WavOutputFormat, Conversion, canEncodeAudio } = await import('mediabunny');
+  if (format === 'mp3' && !(await canEncodeAudio('mp3'))) {
+    const { registerMp3Encoder } = await import('@mediabunny/mp3-encoder');
+    registerMp3Encoder();
   }
-  return output;
-}
-
-function encodeWav(buffer: AudioBuffer) {
-  const channels = Math.min(buffer.numberOfChannels, 2);
-  const bytesPerSample = 2;
-  const dataSize = buffer.length * channels * bytesPerSample;
-  const output = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(output);
-  const text = (offset: number, value: string) => [...value].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
-  text(0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); text(8, 'WAVE'); text(12, 'fmt ');
-  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, channels, true);
-  view.setUint32(24, buffer.sampleRate, true); view.setUint32(28, buffer.sampleRate * channels * bytesPerSample, true);
-  view.setUint16(32, channels * bytesPerSample, true); view.setUint16(34, 16, true); text(36, 'data'); view.setUint32(40, dataSize, true);
-  const channelData = Array.from({ length: channels }, (_, index) => buffer.getChannelData(index));
-  let offset = 44;
-  for (let frame = 0; frame < buffer.length; frame++) for (let channel = 0; channel < channels; channel++) {
-    const sample = Math.max(-1, Math.min(1, channelData[channel][frame]));
-    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true); offset += 2;
-  }
-  return new Blob([output], { type: 'audio/wav' });
-}
-
-async function encodeMp3(buffer: AudioBuffer) {
-  const { Mp3Encoder } = await import('@breezystack/lamejs');
-  const channels = Math.min(buffer.numberOfChannels, 2);
-  const encoder = new Mp3Encoder(channels, buffer.sampleRate, 192);
-  const left = pcm16(buffer.getChannelData(0));
-  const right = channels === 2 ? pcm16(buffer.getChannelData(1)) : undefined;
-  const chunks: BlobPart[] = [];
-  for (let offset = 0, step = 0; offset < left.length; offset += 1152, step++) {
-    const encoded = encoder.encodeBuffer(left.subarray(offset, offset + 1152), right?.subarray(offset, offset + 1152));
-    if (encoded.length) chunks.push(encoded.slice().buffer as ArrayBuffer);
-    if (step % 200 === 0) await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-  }
-  const end = encoder.flush();
-  if (end.length) chunks.push(end.slice().buffer as ArrayBuffer);
-  return new Blob(chunks, { type: 'audio/mpeg' });
+  const input = new Input({ source: new BlobSource(source), formats: ALL_FORMATS });
+  const target = new BufferTarget();
+  const output = new Output({ format: format === 'mp3' ? new Mp3OutputFormat() : new WavOutputFormat(), target });
+  const conversion = await Conversion.init({ input, output, video: { discard: true }, showWarnings: false });
+  if (!conversion.isValid) throw new Error(`Trình duyệt không hỗ trợ tạo file ${format.toUpperCase()}.`);
+  await conversion.execute();
+  if (!target.buffer) throw new Error(`Không thể tạo file ${format.toUpperCase()}.`);
+  return new Blob([target.buffer], { type: format === 'mp3' ? 'audio/mpeg' : 'audio/wav' });
 }
 
 export default function Home() {
@@ -165,16 +135,13 @@ export default function Home() {
   async function downloadConverted(format: 'mp3' | 'wav') {
     if (!song) return;
     setError(''); setConverting(format);
-    let context: AudioContext | null = null;
     try {
       const response = await fetch(song.audio);
       if (!response.ok) throw new Error('Không thể tải nguồn âm thanh để chuyển đổi.');
-      context = new AudioContext();
-      const decoded = await context.decodeAudioData(await response.arrayBuffer());
-      const blob = format === 'wav' ? encodeWav(decoded) : await encodeMp3(decoded);
+      const blob = await convertMedia(await response.blob(), format);
       saveBlob(blob, `${song.title || 'suno-audio'}.${format}`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : `Không thể tạo file ${format.toUpperCase()}.`); }
-    finally { await context?.close(); setConverting(null); }
+    finally { setConverting(null); }
   }
 
   return (
