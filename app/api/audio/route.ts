@@ -20,18 +20,40 @@ function hasMp4Header(bytes: Uint8Array) {
   return bytes.length >= 8 && String.fromCharCode(...bytes.slice(4, 8)) === 'ftyp';
 }
 
-async function resolvePlayableUrl(url: URL) {
-  const match = url.hostname.endsWith('.cloudfront.net') && url.pathname.toLowerCase().endsWith('.m4a')
-    ? url.pathname.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.m4a$/i)
-    : null;
-  if (!match) return url;
+function fromBase64(value: string) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, character => character.charCodeAt(0));
+}
 
-  const probe = await fetch(url.toString(), { headers: { range: 'bytes=0-31' } });
-  if (probe.ok && hasMp4Header(new Uint8Array(await probe.arrayBuffer()))) return url;
+async function aesGcmDecrypt(value: string, aad: string, keyBytes: ArrayBuffer) {
+  const raw = fromBase64(value);
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
+  return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw.subarray(0, 12), additionalData: new TextEncoder().encode(aad), tagLength: 128 }, key, raw.subarray(12)));
+}
 
-  const videoUrl = new URL(`https://cdn1.suno.ai/${match[1]}.mp4`);
-  const videoCheck = await fetch(videoUrl.toString(), { method: 'HEAD' });
-  return videoCheck.ok ? videoUrl : url;
+async function decryptSunoAudio(url: URL, clipId: string) {
+  const [rightsResponse, encryptedResponse] = await Promise.all([
+    fetch('https://studio-api-prod.suno.com/api/mango/rights', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content_params: { content_id: clipId, content_type: 'clip' } }),
+    }),
+    fetch(url.toString(), { cache: 'no-store' }),
+  ]);
+  if (!rightsResponse.ok || !encryptedResponse.ok) throw new Error('Suno media request failed');
+  const rights = await rightsResponse.json() as { key?: string; iv?: string; glt?: string };
+  if (!rights.key || !rights.iv || !rights.glt) throw new Error('Invalid Suno media rights');
+  const gltKey = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(rights.glt));
+  const [counterKey, counterIv] = await Promise.all([aesGcmDecrypt(rights.key, clipId, gltKey), aesGcmDecrypt(rights.iv, clipId, gltKey)]);
+  const key = await crypto.subtle.importKey('raw', counterKey, { name: 'AES-CTR' }, false, ['decrypt']);
+  return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-CTR', counter: counterIv.subarray(0, 16), length: 128 }, key, await encryptedResponse.arrayBuffer()));
+}
+
+function parseRange(value: string | null, length: number) {
+  const match = value?.match(/^bytes=(\d*)-(\d*)$/);
+  if (!match) return null;
+  const start = match[1] ? Number(match[1]) : 0;
+  const end = match[2] ? Math.min(Number(match[2]), length - 1) : length - 1;
+  return Number.isInteger(start) && start >= 0 && start <= end && start < length ? { start, end } : null;
 }
 
 async function proxyAudio(request: NextRequest, headOnly = false) {
@@ -41,9 +63,20 @@ async function proxyAudio(request: NextRequest, headOnly = false) {
   if (!audioUrl) return NextResponse.json({ error: 'Nguồn âm thanh hoặc token không hợp lệ.' }, { status: directSource ? 400 : 401 });
 
   try {
-    const playableUrl = await resolvePlayableUrl(audioUrl);
+    const encryptedMatch = audioUrl.hostname.endsWith('.cloudfront.net') && audioUrl.pathname.toLowerCase().endsWith('.m4a')
+      ? audioUrl.pathname.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.m4a$/i)
+      : null;
+    if (encryptedMatch && !headOnly) {
+      const clear = await decryptSunoAudio(audioUrl, encryptedMatch[1]);
+      if (!hasMp4Header(clear)) throw new Error('Invalid decrypted audio');
+      const range = parseRange(request.headers.get('range'), clear.byteLength);
+      const body = range ? clear.slice(range.start, range.end + 1) : clear;
+      const headers = new Headers({ 'content-type': 'audio/mp4', 'content-length': String(body.byteLength), 'accept-ranges': 'bytes', 'cache-control': 'private, no-store', 'access-control-allow-origin': '*' });
+      if (range) headers.set('content-range', `bytes ${range.start}-${range.end}/${clear.byteLength}`);
+      return new Response(body, { status: range ? 206 : 200, headers });
+    }
     const range = request.headers.get('range');
-    const upstream = await fetch(playableUrl.toString(), {
+    const upstream = await fetch(audioUrl.toString(), {
       method: headOnly ? 'HEAD' : 'GET',
       headers: range ? { range } : undefined,
     });
