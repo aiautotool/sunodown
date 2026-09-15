@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Be_Vietnam_Pro } from 'next/font/google';
+import { PasteLinkEnhancer } from '@/components/paste-link-enhancer';
 import './globals.css';
 
 const font = Be_Vietnam_Pro({ variable: '--font-app', subsets: ['latin', 'vietnamese'], weight: ['400', '500', '600', '700'] });
@@ -18,5 +19,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="vi"><body className={`${font.variable} antialiased`}>{children}</body></html>;
+  return <html lang="vi"><body className={`${font.variable} antialiased`}><PasteLinkEnhancer />{children}</body></html>;
 }
