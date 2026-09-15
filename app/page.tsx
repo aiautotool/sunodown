@@ -5,6 +5,7 @@ import { ArrowDownToLine, CheckCircle2, Clapperboard, Link2, LoaderCircle, Music
 
 type Song = { id: string | null; title: string; picture: string | null; audio: string; sourceAudio: string; video: string | null; description: string | null; lyrics: string | null; style: string | null; tags: string | null; duration: number | null; creator: string | null };
 type VideoAspect = '16:9' | '9:16' | '1:1' | '4:5' | '4:3';
+type WaveStyle = 'bars' | 'mirror' | 'line' | 'dots' | 'pulse';
 
 const VIDEO_SIZES: Record<VideoAspect, { width: number; height: number }> = {
   '16:9': { width: 1280, height: 720 },
@@ -13,6 +14,14 @@ const VIDEO_SIZES: Record<VideoAspect, { width: number; height: number }> = {
   '4:5': { width: 864, height: 1080 },
   '4:3': { width: 960, height: 720 },
 };
+
+const WAVE_STYLES: { id: WaveStyle; label: string; hint: string }[] = [
+  { id: 'bars', label: 'Bars', hint: 'Thanh dọc' },
+  { id: 'mirror', label: 'Mirror', hint: 'Đối xứng' },
+  { id: 'line', label: 'Line', hint: 'Đường sóng' },
+  { id: 'dots', label: 'Dots', hint: 'Chấm nhịp' },
+  { id: 'pulse', label: 'Pulse', hint: 'Nhịp sáng' },
+];
 
 function saveBlob(blob: Blob, filename: string) {
   const objectUrl = URL.createObjectURL(blob);
@@ -38,62 +47,119 @@ function drawCover(context: CanvasRenderingContext2D, bitmap: ImageBitmap, width
   context.globalAlpha = 1;
   context.fillStyle = 'rgba(0,0,0,.35)';
   context.fillRect(0, 0, width, height);
-
   const scale = Math.min(width / bitmap.width, height / bitmap.height);
   const imageW = bitmap.width * scale;
   const imageH = bitmap.height * scale;
   context.drawImage(bitmap, (width - imageW) / 2, (height - imageH) / 2, imageW, imageH);
 }
 
-function drawWaveform(context: CanvasRenderingContext2D, samples: Float32Array | null, sampleRate: number, time: number, width: number, height: number) {
-  const panelHeight = Math.max(112, Math.round(height * 0.13));
-  const panelTop = height - panelHeight;
-  const gradient = context.createLinearGradient(0, panelTop, 0, height);
-  gradient.addColorStop(0, 'rgba(8,8,18,0)');
-  gradient.addColorStop(0.25, 'rgba(8,8,18,.62)');
-  gradient.addColorStop(1, 'rgba(8,8,18,.94)');
-  context.fillStyle = gradient;
-  context.fillRect(0, panelTop, width, panelHeight);
-
-  const bars = Math.max(40, Math.min(96, Math.round(width / 14)));
-  const gap = Math.max(3, Math.round(width * 0.004));
-  const usableWidth = width * 0.84;
-  const barWidth = Math.max(3, (usableWidth - gap * (bars - 1)) / bars);
-  const startX = (width - usableWidth) / 2;
-  const centerY = height - panelHeight * 0.42;
-  const maxBarHeight = panelHeight * 0.54;
-  const baseIndex = samples ? Math.floor(time * sampleRate) : 0;
-  const windowSize = Math.max(64, Math.round(sampleRate * 0.035));
-
-  for (let i = 0; i < bars; i++) {
-    let amplitude = 0.12 + 0.08 * Math.sin(time * 4.5 + i * 0.45);
-    if (samples) {
-      const offset = Math.round((i - bars / 2) * windowSize * 0.45);
-      const center = Math.max(0, Math.min(samples.length - 1, baseIndex + offset));
-      let sum = 0;
-      let count = 0;
-      const from = Math.max(0, center - windowSize / 2);
-      const to = Math.min(samples.length, center + windowSize / 2);
-      const stride = Math.max(1, Math.floor((to - from) / 24));
-      for (let j = from; j < to; j += stride) { sum += Math.abs(samples[j]); count++; }
-      amplitude = count ? Math.min(1, (sum / count) * 4.8) : 0.08;
-    }
-    const pulse = 0.82 + 0.18 * Math.sin(time * 7 + i * 0.31);
-    const barHeight = Math.max(6, maxBarHeight * amplitude * pulse);
-    const x = startX + i * (barWidth + gap);
-    const y = centerY - barHeight / 2;
-    const g = context.createLinearGradient(x, y, x, y + barHeight);
-    g.addColorStop(0, 'rgba(103,232,249,.96)');
-    g.addColorStop(0.5, 'rgba(167,139,250,.96)');
-    g.addColorStop(1, 'rgba(232,121,249,.88)');
-    context.fillStyle = g;
-    context.beginPath();
-    context.roundRect(x, y, barWidth, barHeight, barWidth / 2);
-    context.fill();
-  }
+function amplitudeAt(samples: Float32Array | null, sampleRate: number, time: number, offsetSeconds: number) {
+  if (!samples) return Math.max(0.08, 0.22 + 0.14 * Math.sin((time + offsetSeconds) * 5.5));
+  const center = Math.max(0, Math.min(samples.length - 1, Math.floor((time + offsetSeconds) * sampleRate)));
+  const radius = Math.max(64, Math.floor(sampleRate * 0.012));
+  const from = Math.max(0, center - radius);
+  const to = Math.min(samples.length, center + radius);
+  const stride = Math.max(1, Math.floor((to - from) / 28));
+  let sum = 0;
+  let count = 0;
+  for (let i = from; i < to; i += stride) { sum += Math.abs(samples[i]); count++; }
+  return count ? Math.min(1, (sum / count) * 5.2) : 0.08;
 }
 
-async function generateVideo(song: Song, aspect: VideoAspect) {
+function waveGradient(context: CanvasRenderingContext2D, top: number, bottom: number) {
+  const gradient = context.createLinearGradient(0, top, 0, bottom);
+  gradient.addColorStop(0, 'rgba(103,232,249,.98)');
+  gradient.addColorStop(0.5, 'rgba(167,139,250,.98)');
+  gradient.addColorStop(1, 'rgba(232,121,249,.9)');
+  return gradient;
+}
+
+function drawWaveform(context: CanvasRenderingContext2D, samples: Float32Array | null, sampleRate: number, time: number, width: number, height: number, style: WaveStyle) {
+  const panelHeight = Math.max(120, Math.round(height * 0.15));
+  const panelTop = height - panelHeight;
+  const shade = context.createLinearGradient(0, panelTop, 0, height);
+  shade.addColorStop(0, 'rgba(8,8,18,0)');
+  shade.addColorStop(0.22, 'rgba(8,8,18,.58)');
+  shade.addColorStop(1, 'rgba(8,8,18,.95)');
+  context.fillStyle = shade;
+  context.fillRect(0, panelTop, width, panelHeight);
+
+  const points = Math.max(42, Math.min(96, Math.round(width / 14)));
+  const usableWidth = width * 0.84;
+  const startX = (width - usableWidth) / 2;
+  const centerY = height - panelHeight * 0.42;
+  const maxAmp = panelHeight * 0.55;
+  const values = Array.from({ length: points }, (_, i) => {
+    const offset = ((i / Math.max(1, points - 1)) - 0.5) * 0.72;
+    const amp = amplitudeAt(samples, sampleRate, time, offset);
+    return Math.max(0.06, amp * (0.84 + 0.16 * Math.sin(time * 6 + i * 0.31)));
+  });
+
+  context.save();
+  context.shadowColor = 'rgba(167,139,250,.55)';
+  context.shadowBlur = Math.max(8, width * 0.008);
+  context.strokeStyle = waveGradient(context, centerY - maxAmp, centerY + maxAmp);
+  context.fillStyle = waveGradient(context, centerY - maxAmp, centerY + maxAmp);
+  context.lineWidth = Math.max(3, width * 0.003);
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+
+  if (style === 'bars' || style === 'mirror') {
+    const gap = Math.max(3, Math.round(width * 0.004));
+    const barWidth = Math.max(3, (usableWidth - gap * (points - 1)) / points);
+    values.forEach((amp, i) => {
+      const h = Math.max(6, maxAmp * amp);
+      const x = startX + i * (barWidth + gap);
+      const y = style === 'mirror' ? centerY - h : centerY - h / 2;
+      const bh = style === 'mirror' ? h * 2 : h;
+      context.beginPath();
+      context.roundRect(x, y, barWidth, bh, barWidth / 2);
+      context.fill();
+    });
+  } else if (style === 'line') {
+    context.beginPath();
+    values.forEach((amp, i) => {
+      const x = startX + (i / (points - 1)) * usableWidth;
+      const y = centerY - (amp - 0.18) * maxAmp * 1.25;
+      if (i === 0) context.moveTo(x, y); else context.lineTo(x, y);
+    });
+    context.stroke();
+    context.globalAlpha = 0.35;
+    context.lineWidth *= 0.55;
+    context.beginPath();
+    values.forEach((amp, i) => {
+      const x = startX + (i / (points - 1)) * usableWidth;
+      const y = centerY + (amp - 0.18) * maxAmp * 0.7;
+      if (i === 0) context.moveTo(x, y); else context.lineTo(x, y);
+    });
+    context.stroke();
+  } else if (style === 'dots') {
+    const radius = Math.max(3, width * 0.004);
+    values.forEach((amp, i) => {
+      const x = startX + (i / (points - 1)) * usableWidth;
+      const y = centerY - (amp - 0.22) * maxAmp;
+      context.globalAlpha = 0.5 + amp * 0.5;
+      context.beginPath();
+      context.arc(x, y, radius * (0.8 + amp * 1.1), 0, Math.PI * 2);
+      context.fill();
+    });
+  } else {
+    const groups = 34;
+    for (let i = 0; i < groups; i++) {
+      const amp = values[Math.floor((i / groups) * values.length)] ?? 0.1;
+      const x = startX + (i / (groups - 1)) * usableWidth;
+      const pulse = 0.65 + 0.35 * Math.sin(time * 9 - i * 0.45);
+      const h = Math.max(8, amp * maxAmp * (0.7 + pulse * 0.8));
+      context.globalAlpha = 0.45 + pulse * 0.55;
+      context.beginPath();
+      context.roundRect(x, centerY - h / 2, Math.max(5, width * 0.006), h, width * 0.004);
+      context.fill();
+    }
+  }
+  context.restore();
+}
+
+async function generateVideo(song: Song, aspect: VideoAspect, waveStyle: WaveStyle) {
   if (!song.picture || !song.audio) throw new Error('Không đủ ảnh hoặc audio để tự tạo video.');
   const [imageResponse, audioResponse] = await Promise.all([
     fetch(song.picture, { cache: 'no-store' }),
@@ -146,7 +212,7 @@ async function generateVideo(song: Song, aspect: VideoAspect) {
     for (let frame = 0; frame < frames; frame++) {
       const timestamp = frame * frameDuration;
       drawCover(context, bitmap, width, height);
-      drawWaveform(context, waveformSamples, sampleRate, timestamp, width, height);
+      drawWaveform(context, waveformSamples, sampleRate, timestamp, width, height, waveStyle);
       await videoSource.add(timestamp, Math.min(frameDuration, duration - timestamp), { keyFrame: frame % (fps * 2) === 0 });
     }
     bitmap.close();
@@ -187,6 +253,7 @@ export default function Home() {
   const [downloading, setDownloading] = useState(false);
   const [videoAction, setVideoAction] = useState<'original' | 'generated' | null>(null);
   const [videoAspect, setVideoAspect] = useState<VideoAspect>('16:9');
+  const [waveStyle, setWaveStyle] = useState<WaveStyle>('bars');
   const [converting, setConverting] = useState<'mp3' | 'wav' | null>(null);
   const [copied, setCopied] = useState<'lyrics' | 'style' | null>(null);
   const lastResolvedUrl = useRef('');
@@ -247,7 +314,7 @@ export default function Home() {
     if (!song) return;
     setError(''); setVideoAction('generated');
     try {
-      saveBlob(await generateVideo(song, videoAspect), `${song.title || 'suno-video'}-${videoAspect.replace(':', 'x')}-waveform.mp4`);
+      saveBlob(await generateVideo(song, videoAspect, waveStyle), `${song.title || 'suno-video'}-${videoAspect.replace(':', 'x')}-${waveStyle}.mp4`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Không thể tạo video MP4.'); }
     finally { setVideoAction(null); }
   }
@@ -287,16 +354,19 @@ export default function Home() {
             </div>
             <div className="mt-5 rounded-2xl border border-fuchsia-300/15 bg-fuchsia-300/[.055] p-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-fuchsia-100"><Waves className="size-4" /> Tạo video + sóng nhạc</div>
-              <p className="mt-1 text-xs leading-5 text-white/45">Video tự tạo dùng ảnh bìa + audio hiện tại, thêm waveform động ở đáy. Video gốc không bị thay đổi.</p>
-              <div className="mt-3 flex flex-wrap gap-2">{(['16:9','9:16','1:1','4:5','4:3'] as VideoAspect[]).map((aspect) => <button key={aspect} onClick={() => setVideoAspect(aspect)} disabled={videoAction !== null} className={`rounded-xl border px-3 py-2 text-xs font-bold transition ${videoAspect === aspect ? 'border-fuchsia-300/50 bg-fuchsia-300/20 text-fuchsia-50' : 'border-white/10 bg-black/20 text-white/55 hover:bg-white/10'}`}>{aspect}</button>)}</div>
-              <button onClick={downloadGeneratedVideo} disabled={videoAction !== null} className="mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-500 px-4 text-sm font-bold shadow-lg disabled:opacity-60">{videoAction === 'generated' ? <LoaderCircle className="size-4 animate-spin" /> : <Clapperboard className="size-4" />}{videoAction === 'generated' ? `Đang tạo video ${videoAspect}...` : `Tạo & tải video ${videoAspect}`}</button>
+              <p className="mt-1 text-xs leading-5 text-white/45">Video tự tạo dùng ảnh bìa + audio hiện tại. Video gốc không bị thay đổi.</p>
+              <p className="mt-4 text-[11px] font-bold uppercase tracking-[.14em] text-white/40">Tỉ lệ video</p>
+              <div className="mt-2 flex flex-wrap gap-2">{(['16:9','9:16','1:1','4:5','4:3'] as VideoAspect[]).map((aspect) => <button key={aspect} onClick={() => setVideoAspect(aspect)} disabled={videoAction !== null} className={`rounded-xl border px-3 py-2 text-xs font-bold transition ${videoAspect === aspect ? 'border-fuchsia-300/50 bg-fuchsia-300/20 text-fuchsia-50' : 'border-white/10 bg-black/20 text-white/55 hover:bg-white/10'}`}>{aspect}</button>)}</div>
+              <p className="mt-4 text-[11px] font-bold uppercase tracking-[.14em] text-white/40">Kiểu sóng nhạc</p>
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">{WAVE_STYLES.map((item) => <button key={item.id} onClick={() => setWaveStyle(item.id)} disabled={videoAction !== null} className={`rounded-xl border px-3 py-2.5 text-left transition ${waveStyle === item.id ? 'border-cyan-300/50 bg-cyan-300/15 text-cyan-50' : 'border-white/10 bg-black/20 text-white/55 hover:bg-white/10'}`}><span className="block text-xs font-bold">{item.label}</span><span className="mt-0.5 block text-[10px] opacity-60">{item.hint}</span></button>)}</div>
+              <button onClick={downloadGeneratedVideo} disabled={videoAction !== null} className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-500 px-4 text-sm font-bold shadow-lg disabled:opacity-60">{videoAction === 'generated' ? <LoaderCircle className="size-4 animate-spin" /> : <Clapperboard className="size-4" />}{videoAction === 'generated' ? `Đang tạo ${videoAspect} · ${waveStyle}...` : `Tạo & tải ${videoAspect} · ${waveStyle}`}</button>
             </div>
             {song.video && <details className="group mt-5 border-t border-white/10 pt-4"><summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-white/80"><span>Xem video Suno</span><span className="text-xs text-cyan-300 group-open:hidden">Mở</span><span className="hidden text-xs text-cyan-300 group-open:inline">Đóng</span></summary><video controls preload="metadata" poster={song.picture || undefined} src={song.video} className="mt-4 aspect-video w-full rounded-2xl bg-black object-contain" /></details>}
             {song.style && <div className="mt-5 border-t border-white/10 pt-4"><div className="mb-2 flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-white/80">Style</h3><button onClick={() => copyText(song.style!, 'style')} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/65 hover:bg-white/10">{copied === 'style' ? 'Đã sao chép' : 'Sao chép style'}</button></div><p className="whitespace-pre-wrap rounded-2xl bg-violet-400/[.07] p-4 text-sm leading-6 text-violet-100/70">{song.style}</p></div>}
             {song.lyrics && <details className="group mt-5 border-t border-white/10 pt-4"><summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-white/80"><span>Xem lời bài hát</span><span className="text-xs text-violet-300 group-open:hidden">Mở</span><span className="hidden text-xs text-violet-300 group-open:inline">Đóng</span></summary><div className="mt-4 max-h-96 overflow-y-auto rounded-2xl bg-black/25 p-4"><div className="mb-3 flex justify-end"><button onClick={() => copyText(song.lyrics!, 'lyrics')} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/65 hover:bg-white/10">{copied === 'lyrics' ? 'Đã sao chép' : 'Sao chép lyrics'}</button></div><pre className="whitespace-pre-wrap font-sans text-sm leading-7 text-white/65">{song.lyrics}</pre></div></details>}
           </article>}
         </div>
-        <div className="mt-14 grid w-full grid-cols-1 gap-3 text-left sm:grid-cols-3">{[['01','Dán liên kết','Sao chép link chia sẻ của bài hát trên Suno.'],['02','Lấy bài hát','Hệ thống tự tìm thông tin, ảnh, audio và video.'],['03','Tải xuống','Chọn định dạng hoặc tạo video theo tỉ lệ mong muốn.']].map(([number,title,copy]) => <div key={number} className="rounded-2xl border border-white/[.07] bg-white/[.035] p-5"><span className="text-xs font-bold text-violet-300">{number}</span><h3 className="mt-3 font-semibold">{title}</h3><p className="mt-1.5 text-sm leading-6 text-white/40">{copy}</p></div>)}</div>
+        <div className="mt-14 grid w-full grid-cols-1 gap-3 text-left sm:grid-cols-3">{[['01','Dán liên kết','Sao chép link chia sẻ của bài hát trên Suno.'],['02','Lấy bài hát','Hệ thống tự tìm thông tin, ảnh, audio và video.'],['03','Tải xuống','Chọn định dạng, tỉ lệ và kiểu waveform mong muốn.']].map(([number,title,copy]) => <div key={number} className="rounded-2xl border border-white/[.07] bg-white/[.035] p-5"><span className="text-xs font-bold text-violet-300">{number}</span><h3 className="mt-3 font-semibold">{title}</h3><p className="mt-1.5 text-sm leading-6 text-white/40">{copy}</p></div>)}</div>
         <p className="mt-10 max-w-xl text-xs leading-5 text-white/30">Chỉ tải nội dung bạn sở hữu hoặc được phép sử dụng. Suno Grab không lưu trữ file âm thanh trên máy chủ.</p>
       </section>
     </main>
