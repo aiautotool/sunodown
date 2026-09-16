@@ -1,1 +1,1 @@
-v8 aligned lyrics implementation staged.
+v8 alignment stage ready.
