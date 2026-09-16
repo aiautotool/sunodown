@@ -1,1 +1,1 @@
-v8 aligned lyrics revision prepared for branch deployment.
+v8 aligned lyrics implementation staged.
