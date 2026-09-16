@@ -12,7 +12,7 @@ if(!queueExists){console.log('Creating Queue…');wr(['queues','create',queueNam
 const cfg=JSON.parse(readFileSync('wrangler.jsonc','utf8'));
 cfg.d1_databases=[{binding:'RENDER_DB',database_name:d1Name,database_id:db.uuid||db.id,migrations_dir:'migrations'}];
 cfg.r2_buckets=[{binding:'RENDER_RESULTS',bucket_name:r2Name}];
-cfg.queues={producers:[{binding:'RENDER_QUEUE',queue:queueName}]};
+cfg.queues={producers:[{binding:'RENDER_QUEUE',queue:queueName}],consumers:[{queue:queueName,max_batch_size:1,max_batch_timeout:2,max_retries:3,max_concurrency:2}]};
 writeFileSync(generated,JSON.stringify(cfg,null,2));
 console.log('Applying D1 migration…');wr(['d1','migrations','apply','RENDER_DB','--remote','--config',generated]);
 console.log('Cloudflare v6 resources ready.');
