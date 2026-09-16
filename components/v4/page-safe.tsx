@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useRef,useState} from 'react';
-import {Download,LoaderCircle,Play} from 'lucide-react';
+import {Copy,Download,LoaderCircle,Play} from 'lucide-react';
 import {generateVisualizerVideoArt} from '../v7/renderer-art';
 import {
   LYRIC_MODES,
@@ -52,6 +52,7 @@ export default function V4SafePage() {
   const [preset, setPreset] = useState<PlatformPreset>('tiktok');
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [resultUrl, setResultUrl] = useState('');
+  const [copied, setCopied] = useState<'lyrics' | 'style' | null>(null);
   const lastResolved = useRef('');
 
   useEffect(() => () => { if (resultUrl) URL.revokeObjectURL(resultUrl); }, [resultUrl]);
@@ -71,6 +72,7 @@ export default function V4SafePage() {
         if (!response.ok) throw new Error(data.error || 'Không đọc được bài hát.');
         lastResolved.current = input;
         setSong(data);
+        setCopied(null);
       } catch (cause) {
         if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Không đọc được bài hát.');
       } finally { setLoading(false); }
@@ -81,6 +83,16 @@ export default function V4SafePage() {
   async function paste() {
     try { setUrl((await navigator.clipboard.readText()).trim()); }
     catch { setError('Không đọc được clipboard.'); }
+  }
+
+  async function copyText(kind: 'lyrics' | 'style', text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(kind);
+      window.setTimeout(() => setCopied((current) => current === kind ? null : current), 1200);
+    } catch {
+      setError('Không copy được nội dung.');
+    }
   }
 
   async function render(mode: 'preview' | 'full') {
@@ -128,6 +140,49 @@ export default function V4SafePage() {
                 <p className="text-sm text-white/50">{song.creator}</p>
                 <audio controls src={song.audio} className="mt-2 w-full" />
               </div>
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              {song.lyrics && (
+                <details className="group rounded-2xl border border-white/[.07] bg-black/15">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-bold">Lyrics</p>
+                      <p className="text-[11px] text-white/35">Nhấn để mở / thu gọn lời bài hát</p>
+                    </div>
+                    <span className="text-xs text-white/35 transition-transform group-open:rotate-180">⌄</span>
+                  </summary>
+                  <div className="border-t border-white/[.06] px-4 py-4">
+                    <div className="mb-3 flex justify-end">
+                      <button type="button" onClick={() => copyText('lyrics', song.lyrics || '')} className="rounded-lg bg-white/[.07] px-3 py-2 text-xs font-semibold text-white/70">
+                        <Copy className="mr-1 inline size-3.5" />{copied === 'lyrics' ? 'Đã copy' : 'Copy'}
+                      </button>
+                    </div>
+                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-sans text-xs leading-6 text-white/65">{song.lyrics}</pre>
+                  </div>
+                </details>
+              )}
+
+              {(song.style || song.tags) && (
+                <details className="group rounded-2xl border border-white/[.07] bg-black/15">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-bold">Style</p>
+                      <p className="text-[11px] text-white/35">Nhấn để mở / thu gọn style bài hát</p>
+                    </div>
+                    <span className="text-xs text-white/35 transition-transform group-open:rotate-180">⌄</span>
+                  </summary>
+                  <div className="border-t border-white/[.06] px-4 py-4">
+                    <div className="mb-3 flex justify-end">
+                      <button type="button" onClick={() => copyText('style', song.style || song.tags || '')} className="rounded-lg bg-white/[.07] px-3 py-2 text-xs font-semibold text-white/70">
+                        <Copy className="mr-1 inline size-3.5" />{copied === 'style' ? 'Đã copy' : 'Copy'}
+                      </button>
+                    </div>
+                    <p className="whitespace-pre-wrap text-xs leading-6 text-white/65">{song.style || song.tags}</p>
+                    {song.style && song.tags && song.tags !== song.style && <p className="mt-3 border-t border-white/[.05] pt-3 text-[11px] leading-5 text-white/40">{song.tags}</p>}
+                  </div>
+                </details>
+              )}
             </div>
 
             <div id="studio-editor" className="mt-6 grid gap-4">
