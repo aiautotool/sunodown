@@ -1,1 +1,1 @@
-v8 aligned lyrics implementation ready for CI.
+v8 lyrics synchronization implementation complete for this build stage.
