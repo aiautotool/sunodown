@@ -1,1 +1,1 @@
-v8 aligned lyrics implementation ready.
+v8 aligned lyrics implementation ready for CI.
