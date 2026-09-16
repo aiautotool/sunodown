@@ -26,9 +26,6 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Normalize TSX
-        if: github.ref == 'refs/heads/v8'
-        run: npx --yes prettier@3.6.2 --write components/v4/page-safe.tsx components/v5/download-enhancer.tsx components/v8/history-enhancer.tsx
       - name: Build
         run: npm run build
       - name: Provision background-render resources
