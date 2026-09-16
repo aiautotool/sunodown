@@ -1,1 +1,1 @@
-v8 aligned lyrics implementation prepared. CI deployment configured for branch v8.
+v8 aligned lyrics implementation prepared and ready to build.
