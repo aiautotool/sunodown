@@ -1,1 +1,1 @@
-Aligned lyrics parser and timeline implementation ready for v8 build.
+Aligned lyrics parser, Suno proxy route, timeline utilities and synced-render facade are ready on v8.
