@@ -1,0 +1,4 @@
+export const runtime='edge';
+type Env={RENDER_DB:D1Database;RENDER_RESULTS:R2Bucket};
+async function env():Promise<Env>{const mod=await import('cloudflare:workers');return (mod as any).env as Env}
+export async function GET(_request:Request,context:{params:Promise<{id:string}>}){const{id}=await context.params,e=await env(),row=await e.RENDER_DB.prepare('SELECT result_key,title,status FROM render_jobs WHERE id=?').bind(id).first<any>();if(!row||row.status!=='completed'||!row.result_key)return new Response('Not found',{status:404});const object=await e.RENDER_RESULTS.get(row.result_key);if(!object)return new Response('Not found',{status:404});const headers=new Headers();object.writeHttpMetadata(headers);headers.set('content-type','video/mp4');headers.set('content-disposition',`inline; filename="${id}.mp4"`);headers.set('cache-control','private, max-age=3600');return new Response(object.body,{headers})}
