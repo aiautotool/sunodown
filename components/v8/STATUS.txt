@@ -1,1 +1,1 @@
-v8 lyrics synchronization implementation complete for this build stage.
+v8 lyrics sync: Suno aligned-word parser, API route, timeline and renderer guard implemented.
