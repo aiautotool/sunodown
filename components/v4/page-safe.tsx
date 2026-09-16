@@ -44,6 +44,7 @@ export default function V4SafePage() {
   const [loading, setLoading] = useState(false);
   const [action, setAction] = useState<'preview' | 'full' | null>(null);
   const [progress, setProgress] = useState(0);
+  const [renderStatus, setRenderStatus] = useState('');
   const [aspect, setAspect] = useState<VideoAspect>('9:16');
   const [wave, setWave] = useState<WaveStyle>('bars');
   const [template, setTemplate] = useState<VisualTemplate>('cover-motion');
@@ -79,6 +80,8 @@ export default function V4SafePage() {
         if (!response.ok) throw new Error(data.error || 'Không đọc được bài hát.');
         lastResolved.current = input;
         setSong(data);
+        setProgress(0);
+        setRenderStatus('');
       } catch (cause) {
         if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : 'Không đọc được bài hát.');
@@ -106,6 +109,7 @@ export default function V4SafePage() {
     if (!song) return;
     setAction(mode);
     setProgress(0);
+    setRenderStatus(mode === 'preview' ? 'Đang render preview 10s…' : 'Đang render video đầy đủ…');
     setError('');
     if (resultUrl) URL.revokeObjectURL(resultUrl);
     setResultUrl('');
@@ -117,11 +121,14 @@ export default function V4SafePage() {
         lyrics,
         startSeconds: 0,
         previewSeconds: mode === 'preview' ? 10 : undefined,
-        onProgress: setProgress,
+        onProgress: (value) => setProgress(Math.max(0, Math.min(100, Math.round(value)))),
       });
+      setProgress(100);
+      setRenderStatus(mode === 'preview' ? 'Preview hoàn tất' : 'Render hoàn tất');
       setResultBlob(blob);
       setResultUrl(URL.createObjectURL(blob));
     } catch (cause) {
+      setRenderStatus('Render bị lỗi');
       setError(cause instanceof Error ? cause.message : 'Render lỗi.');
     } finally {
       setAction(null);
@@ -137,15 +144,8 @@ export default function V4SafePage() {
         <h1 className="mt-8 text-4xl font-bold">Tải nhạc Suno & tạo video visualizer</h1>
 
         <div className="relative mt-7">
-          <input
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            placeholder="Dán link Suno..."
-            className="h-14 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pr-24"
-          />
-          <button onClick={paste} className="absolute right-2 top-2 h-10 rounded-xl bg-violet-500/20 px-4 font-bold">
-            Dán
-          </button>
+          <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="Dán link Suno..." className="h-14 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pr-24" />
+          <button onClick={paste} className="absolute right-2 top-2 h-10 rounded-xl bg-violet-500/20 px-4 font-bold">Dán</button>
         </div>
 
         {loading && <p className="mt-3 text-sm text-white/50">Đang lấy bài hát…</p>}
@@ -163,116 +163,35 @@ export default function V4SafePage() {
             </div>
 
             <div className="mt-6 grid gap-4">
-              <div>
-                <b>Preset</b>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {PLATFORM_PRESETS.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        setPreset(item.id);
-                        if (item.id !== 'custom') setAspect(item.aspect);
-                      }}
-                      className={`rounded-lg px-3 py-2 text-xs ${preset === item.id ? 'bg-emerald-400/20' : 'bg-white/5'}`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <b>Template</b>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {VISUAL_TEMPLATES.map((item) => (
-                    <button key={item.id} onClick={() => setTemplate(item.id)} className={`rounded-lg px-3 py-2 text-xs ${template === item.id ? 'bg-fuchsia-400/20' : 'bg-white/5'}`}>
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <b>Tỉ lệ</b>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {(Object.keys(VIDEO_SIZES) as VideoAspect[]).map((item) => (
-                    <button key={item} onClick={() => setAspect(item)} className={`rounded-lg px-3 py-2 text-xs ${aspect === item ? 'bg-violet-400/20' : 'bg-white/5'}`}>
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <b>Waveform</b>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {WAVE_STYLES.map((item) => (
-                    <button key={item.id} onClick={() => setWave(item.id)} className={`rounded-lg px-3 py-2 text-xs ${wave === item.id ? 'bg-cyan-400/20' : 'bg-white/5'}`}>
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <b>Motion</b>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {MOTION_LEVELS.map((item) => (
-                    <button key={item.id} onClick={() => setMotion(item.id)} className={`rounded-lg px-3 py-2 text-xs ${motion === item.id ? 'bg-amber-400/20' : 'bg-white/5'}`}>
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <b>Lyrics</b>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {LYRIC_MODES.map((item) => (
-                    <button
-                      key={item.id}
-                      disabled={!song.lyrics && item.id !== 'off'}
-                      onClick={() => setLyrics(item.id)}
-                      className={`rounded-lg px-3 py-2 text-xs ${lyrics === item.id ? 'bg-pink-400/20' : 'bg-white/5'} disabled:opacity-30`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <div><b>Preset</b><div className="mt-2 flex flex-wrap gap-2">{PLATFORM_PRESETS.map((item) => <button key={item.id} onClick={() => {setPreset(item.id); if (item.id !== 'custom') setAspect(item.aspect);}} className={`rounded-lg px-3 py-2 text-xs ${preset === item.id ? 'bg-emerald-400/20' : 'bg-white/5'}`}>{item.label}</button>)}</div></div>
+              <div><b>Template</b><div className="mt-2 flex flex-wrap gap-2">{VISUAL_TEMPLATES.map((item) => <button key={item.id} onClick={() => setTemplate(item.id)} className={`rounded-lg px-3 py-2 text-xs ${template === item.id ? 'bg-fuchsia-400/20' : 'bg-white/5'}`}>{item.label}</button>)}</div></div>
+              <div><b>Tỉ lệ</b><div className="mt-2 flex flex-wrap gap-2">{(Object.keys(VIDEO_SIZES) as VideoAspect[]).map((item) => <button key={item} onClick={() => setAspect(item)} className={`rounded-lg px-3 py-2 text-xs ${aspect === item ? 'bg-violet-400/20' : 'bg-white/5'}`}>{item}</button>)}</div></div>
+              <div><b>Waveform</b><div className="mt-2 flex flex-wrap gap-2">{WAVE_STYLES.map((item) => <button key={item.id} onClick={() => setWave(item.id)} className={`rounded-lg px-3 py-2 text-xs ${wave === item.id ? 'bg-cyan-400/20' : 'bg-white/5'}`}>{item.label}</button>)}</div></div>
+              <div><b>Motion</b><div className="mt-2 flex flex-wrap gap-2">{MOTION_LEVELS.map((item) => <button key={item.id} onClick={() => setMotion(item.id)} className={`rounded-lg px-3 py-2 text-xs ${motion === item.id ? 'bg-amber-400/20' : 'bg-white/5'}`}>{item.label}</button>)}</div></div>
+              <div><b>Lyrics</b><div className="mt-2 flex flex-wrap gap-2">{LYRIC_MODES.map((item) => <button key={item.id} disabled={!song.lyrics && item.id !== 'off'} onClick={() => setLyrics(item.id)} className={`rounded-lg px-3 py-2 text-xs ${lyrics === item.id ? 'bg-pink-400/20' : 'bg-white/5'} disabled:opacity-30`}>{item.label}</button>)}</div></div>
             </div>
 
-            {action && (
-              <div className="mt-4">
-                <div className="flex justify-between text-sm">
-                  <span>{action === 'preview' ? 'Render preview' : 'Render full'}</span>
-                  <b>{progress}%</b>
+            {(action || renderStatus || progress > 0) && (
+              <div className="mt-5 rounded-2xl border border-violet-300/15 bg-violet-400/[.06] p-4">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-semibold">{renderStatus || (action === 'preview' ? 'Render preview' : 'Render full')}</span>
+                  <b className="text-lg tabular-nums text-violet-200">{progress}%</b>
                 </div>
-                <div className="mt-2 h-2 rounded bg-white/10">
-                  <div className="h-full rounded bg-violet-500" style={{width: `${progress}%`}} />
+                <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/10">
+                  <div className="h-full rounded-full bg-violet-500 transition-[width] duration-200" style={{width: `${progress}%`}} />
                 </div>
               </div>
             )}
 
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <button disabled={!!action} onClick={() => render('preview')} className="h-12 rounded-xl bg-cyan-400/10 font-bold disabled:opacity-40">
-                <Play className="mr-2 inline size-4" />Preview 10s
-              </button>
-              <button disabled={!!action} onClick={() => render('full')} className="h-12 rounded-xl bg-violet-500 font-bold disabled:opacity-40">
-                {action === 'full' && <LoaderCircle className="mr-2 inline size-4 animate-spin" />}
-                Render full {size.width}×{size.height}
-              </button>
+              <button disabled={!!action} onClick={() => render('preview')} className="h-12 rounded-xl bg-cyan-400/10 font-bold disabled:opacity-40"><Play className="mr-2 inline size-4" />Preview 10s</button>
+              <button disabled={!!action} onClick={() => render('full')} className="h-12 rounded-xl bg-violet-500 font-bold disabled:opacity-40">{action === 'full' && <LoaderCircle className="mr-2 inline size-4 animate-spin" />}Render full {size.width}×{size.height}</button>
             </div>
 
             {resultUrl && (
               <div className="mt-5 rounded-xl border border-emerald-300/20 bg-emerald-300/5 p-3">
                 <video src={resultUrl} controls playsInline className="max-h-[70vh] w-full rounded-xl bg-black" />
-                <button
-                  onClick={() => resultBlob && saveBlob(resultBlob, `${song.title || 'suno'}-${template}-${aspect}.mp4`)}
-                  className="mt-3 rounded-lg bg-white/10 px-3 py-2"
-                >
-                  <Download className="mr-2 inline size-4" />Tải video
-                </button>
+                <button onClick={() => resultBlob && saveBlob(resultBlob, `${song.title || 'suno'}-${template}-${aspect}.mp4`)} className="mt-3 rounded-lg bg-white/10 px-3 py-2"><Download className="mr-2 inline size-4" />Tải video</button>
               </div>
             )}
           </article>
