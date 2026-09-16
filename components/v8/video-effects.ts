@@ -1,0 +1,20 @@
+'use client';
+
+export type VideoEffect='snow'|'smoke'|'leaves'|'petals'|'rain'|'bokeh'|'embers'|'sparkles'|'feathers'|'film';
+export type EffectConfig={effects:VideoEffect[];intensity:number;speed:number;opacity:number;wind:number};
+export const VIDEO_EFFECTS:{id:VideoEffect;label:string;icon:string}[]=[
+ {id:'snow',label:'Tuyết',icon:'❄️'},{id:'smoke',label:'Khói',icon:'🌫️'},{id:'leaves',label:'Lá bay',icon:'🍂'},{id:'petals',label:'Cánh hoa',icon:'🌸'},{id:'rain',label:'Mưa',icon:'🌧️'},{id:'bokeh',label:'Bokeh',icon:'💫'},{id:'embers',label:'Tàn lửa',icon:'🔥'},{id:'sparkles',label:'Sao sáng',icon:'✨'},{id:'feathers',label:'Lông vũ',icon:'🪶'},{id:'film',label:'Film grain',icon:'🎞️'},
+];
+function hash(n:number){const x=Math.sin(n*127.1+311.7)*43758.5453;return x-Math.floor(x)}
+function count(base:number,c:EffectConfig){return Math.max(3,Math.round(base*Math.max(.2,c.intensity)))}
+export function drawVideoEffects(ctx:CanvasRenderingContext2D,w:number,h:number,t:number,c?:EffectConfig){if(!c?.effects?.length)return;const op=Math.max(.05,Math.min(1,c.opacity)),speed=Math.max(.2,Math.min(3,c.speed)),wind=Math.max(-2,Math.min(2,c.wind));ctx.save();
+ for(const effect of c.effects){
+  if(effect==='snow'||effect==='petals'||effect==='leaves'||effect==='feathers'){const n=count(effect==='snow'?70:32,c);for(let i=0;i<n;i++){const r=hash(i+11),r2=hash(i+41),fall=(t*speed*(18+36*r)+r2*h*1.3)%(h+80)-40,x=((r*w+t*wind*(12+24*r2)+Math.sin(t*.7+i)*18)% (w+80)+w+80)%(w+80)-40;ctx.globalAlpha=op*(.35+.65*r2);ctx.save();ctx.translate(x,fall);ctx.rotate(t*(.25+r)+i);if(effect==='snow'){ctx.fillStyle='white';ctx.beginPath();ctx.arc(0,0,1.5+4*r,0,Math.PI*2);ctx.fill()}else if(effect==='petals'){ctx.fillStyle='rgba(255,185,215,.9)';ctx.beginPath();ctx.ellipse(0,0,3+5*r,1.5+3*r2,.5,0,Math.PI*2);ctx.fill()}else if(effect==='leaves'){ctx.fillStyle=`rgba(${150+Math.round(70*r)},${65+Math.round(75*r2)},28,.9)`;ctx.beginPath();ctx.ellipse(0,0,4+7*r,2+4*r2,.5,0,Math.PI*2);ctx.fill()}else{ctx.strokeStyle='rgba(255,255,255,.8)';ctx.lineWidth=1.2+2*r;ctx.beginPath();ctx.moveTo(-5-5*r,0);ctx.quadraticCurveTo(0,4+5*r2,7+7*r,0);ctx.stroke()}ctx.restore()}}
+  else if(effect==='rain'){ctx.strokeStyle='rgba(190,220,255,.72)';ctx.lineWidth=Math.max(1,w*.001);const n=count(85,c);for(let i=0;i<n;i++){const r=hash(i+90),y=(hash(i+120)*h+t*speed*(240+180*r))%(h+50)-25,x=(r*w+t*wind*35)%w;ctx.globalAlpha=op*(.25+.55*hash(i+7));ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+wind*8,y+12+20*r);ctx.stroke()}}
+  else if(effect==='bokeh'){const n=count(22,c);for(let i=0;i<n;i++){const r=hash(i+180),x=(r*w+t*wind*8)%w,y=(hash(i+210)*h+Math.sin(t*.25+i)*22+h)%h,rad=8+32*hash(i+240);ctx.globalAlpha=op*(.05+.16*hash(i));ctx.fillStyle=i%2?'#c4b5fd':'#67e8f9';ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);ctx.fill()}}
+  else if(effect==='embers'||effect==='sparkles'){const n=count(42,c);for(let i=0;i<n;i++){const r=hash(i+280),y=h-((hash(i+310)*h+t*speed*(25+55*r))%(h+30)),x=((r*w+t*wind*18+Math.sin(t+i)*12)%w+w)%w;ctx.globalAlpha=op*(.25+.7*hash(i+340));ctx.fillStyle=effect==='embers'?'#fb923c':'#fff7c2';const rad=1+3*hash(i+370)*(effect==='embers'?1:1.4);ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);ctx.fill()}}
+  else if(effect==='smoke'){const n=count(7,c);for(let i=0;i<n;i++){const r=hash(i+410),x=w*(.08+.84*r)+Math.sin(t*.18*speed+i)*w*.08+wind*t*4,y=h*(.2+.65*hash(i+440))-t*speed*(4+7*r);const rad=w*(.07+.12*hash(i+470));const g=ctx.createRadialGradient(x,y,0,x,y,rad);g.addColorStop(0,`rgba(220,225,235,${op*.09})`);g.addColorStop(1,'rgba(220,225,235,0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(x-rad,y-rad,rad*2,rad*2)}}
+  else if(effect==='film'){ctx.globalAlpha=op*.12;ctx.fillStyle='white';const n=count(90,c);for(let i=0;i<n;i++){const x=hash(i+Math.floor(t*12)*101)*w,y=hash(i+Math.floor(t*12)*137)*h,s=.5+1.5*hash(i+520);ctx.fillRect(x,y,s,s)}ctx.globalAlpha=op*.1;ctx.strokeStyle='white';for(let i=0;i<3;i++){const x=hash(i+Math.floor(t*.8)*19)*w;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+Math.sin(t+i)*3,h);ctx.stroke()}}
+ }
+ ctx.restore();
+}
