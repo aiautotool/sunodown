@@ -1,1 +1,1 @@
-v8 alignment build revision ready.
+v8 aligned lyrics implementation finalized for build.
