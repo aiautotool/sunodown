@@ -1,19 +1,10 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "suno-aiautotool",
-  "main": "dist/server/index.js",
+  "main": "worker-v6.ts",
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat"],
-  "assets": {
-    "directory": "dist/client"
-  },
-  "routes": [
-    {
-      "pattern": "suno.aiautotool.com",
-      "custom_domain": true
-    }
-  ],
-  "observability": {
-    "enabled": true
-  }
+  "assets": {"directory":"dist/client"},
+  "routes":[{"pattern":"suno.aiautotool.com","custom_domain":true}],
+  "observability":{"enabled":true}
 }
