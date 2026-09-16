@@ -1,12 +1,14 @@
 'use client';
 
-export type LocalRenderCheckpoint={
- version:1; key:string; songId:string; songTitle:string; aspect:string; wave:string; template:string; motion:string; lyrics:string;
- duration:number; segmentSeconds:number; completedSeconds:number; createdAt:number; updatedAt:number;
-};
-const DB='suno-render-v6',STORE='checkpoints';
-function openDB(){return new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open(DB,1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains(STORE))r.result.createObjectStore(STORE,{keyPath:'key'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
-export async function saveCheckpoint(c:LocalRenderCheckpoint){const db=await openDB();await new Promise<void>((resolve,reject)=>{const t=db.transaction(STORE,'readwrite');t.objectStore(STORE).put(c);t.oncomplete=()=>resolve();t.onerror=()=>reject(t.error)});db.close()}
-export async function loadCheckpoint(key:string){const db=await openDB();const v=await new Promise<LocalRenderCheckpoint|undefined>((resolve,reject)=>{const r=db.transaction(STORE).objectStore(STORE).get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});db.close();return v}
-export async function removeCheckpoint(key:string){const db=await openDB();await new Promise<void>((resolve,reject)=>{const t=db.transaction(STORE,'readwrite');t.objectStore(STORE).delete(key);t.oncomplete=()=>resolve();t.onerror=()=>reject(t.error)});db.close()}
+export type LocalRenderCheckpoint={version:1;key:string;songId:string;songTitle:string;aspect:string;wave:string;template:string;motion:string;lyrics:string;duration:number;segmentSeconds:number;completedSeconds:number;segmentCount:number;createdAt:number;updatedAt:number};
+export type StoredSegment={id:string;key:string;index:number;start:number;duration:number;blob:Blob;createdAt:number};
+const DB='suno-render-v6',CHECKPOINTS='checkpoints',SEGMENTS='segments';
+function openDB(){return new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open(DB,2);r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains(CHECKPOINTS))db.createObjectStore(CHECKPOINTS,{keyPath:'key'});if(!db.objectStoreNames.contains(SEGMENTS)){const s=db.createObjectStore(SEGMENTS,{keyPath:'id'});s.createIndex('key','key',{unique:false})}};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
+async function tx(store:string,mode:IDBTransactionMode,fn:(s:IDBObjectStore)=>void){const db=await openDB();await new Promise<void>((resolve,reject)=>{const t=db.transaction(store,mode);fn(t.objectStore(store));t.oncomplete=()=>resolve();t.onerror=()=>reject(t.error)});db.close()}
+export async function saveCheckpoint(c:LocalRenderCheckpoint){return tx(CHECKPOINTS,'readwrite',s=>{s.put(c)})}
+export async function loadCheckpoint(key:string){const db=await openDB();const v=await new Promise<LocalRenderCheckpoint|undefined>((resolve,reject)=>{const r=db.transaction(CHECKPOINTS).objectStore(CHECKPOINTS).get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});db.close();return v}
+export async function saveSegment(key:string,index:number,start:number,duration:number,blob:Blob){return tx(SEGMENTS,'readwrite',s=>{s.put({id:`${key}::${index}`,key,index,start,duration,blob,createdAt:Date.now()} satisfies StoredSegment)})}
+export async function loadSegments(key:string){const db=await openDB();const list=await new Promise<StoredSegment[]>((resolve,reject)=>{const idx=db.transaction(SEGMENTS).objectStore(SEGMENTS).index('key'),r=idx.getAll(key);r.onsuccess=()=>resolve((r.result||[]).sort((a,b)=>a.index-b.index));r.onerror=()=>reject(r.error)});db.close();return list}
+export async function clearRender(key:string){const db=await openDB();await new Promise<void>((resolve,reject)=>{const t=db.transaction([CHECKPOINTS,SEGMENTS],'readwrite');t.objectStore(CHECKPOINTS).delete(key);const idx=t.objectStore(SEGMENTS).index('key'),r=idx.openKeyCursor(IDBKeyRange.only(key));r.onsuccess=()=>{const c=r.result;if(c){t.objectStore(SEGMENTS).delete(c.primaryKey);c.continue()}};t.oncomplete=()=>resolve();t.onerror=()=>reject(t.error)});db.close()}
+export async function removeCheckpoint(key:string){return tx(CHECKPOINTS,'readwrite',s=>{s.delete(key)})}
 export function checkpointKey(songId:string,aspect:string,wave:string,template:string,motion:string,lyrics:string){return [songId,aspect,wave,template,motion,lyrics].join('|')}
