@@ -9,103 +9,58 @@ function clickButton(root: Element, text: string) {
 }
 
 function applyPreset(root: Element, preset: (typeof VIDEO_PRESETS)[number]) {
-  const templateLabels: Record<string,string> = {
-    'cover-motion':'Cover Motion', vinyl:'Vinyl', 'glass-card':'Glass Card', 'lyrics-focus':'Lyrics Focus',
-  };
-  const motionLabels: Record<string,string> = { low:'Nhẹ', medium:'Vừa', high:'Mạnh' };
-  const lyricsLabels: Record<string,string> = { off:'Tắt', scroll:'Scroll', focus:'Focus' };
-  clickButton(root, templateLabels[preset.template]);
-  clickButton(root, preset.aspect);
-  clickButton(root, preset.wave[0].toUpperCase()+preset.wave.slice(1));
-  clickButton(root, motionLabels[preset.motion]);
-  clickButton(root, lyricsLabels[preset.lyrics]);
+  const templateLabels: Record<string,string> = {'cover-motion':'Cover Motion',vinyl:'Vinyl','glass-card':'Glass Card','lyrics-focus':'Lyrics Focus'};
+  const motionLabels: Record<string,string> = {low:'Nhẹ',medium:'Vừa',high:'Mạnh'};
+  const lyricsLabels: Record<string,string> = {off:'Tắt',scroll:'Scroll',focus:'Focus'};
+  clickButton(root,templateLabels[preset.template]); clickButton(root,preset.aspect);
+  clickButton(root,preset.wave[0].toUpperCase()+preset.wave.slice(1)); clickButton(root,motionLabels[preset.motion]); clickButton(root,lyricsLabels[preset.lyrics]);
 }
 
-function waveMarkup(wave: string) {
-  if (wave === 'line') return '<svg viewBox="0 0 120 28" class="h-7 w-full" aria-hidden="true"><path d="M0 16 C10 4 16 25 27 12 S43 22 54 10 S70 25 82 12 S101 20 120 7" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
-  if (wave === 'dots') return `<div class="flex h-7 items-center justify-center gap-1">${[1,2,3,4,5,6,7,8,9,10,11].map((_,i)=>`<i class="block rounded-full bg-current" style="width:${i%3===0?4:3}px;height:${i%4===0?4:3}px;opacity:${.35+(i%4)*.16}"></i>`).join('')}</div>`;
-  if (wave === 'pulse') return '<div class="relative h-7"><i class="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current shadow-[0_0_18px_currentColor]"></i><i class="absolute inset-x-3 top-1/2 h-px bg-current/40"></i></div>';
-  const bars = [8,15,22,12,26,18,9,23,14,20,11,17,25,13,8];
-  return `<div class="flex h-7 items-center justify-center gap-[2px]">${bars.map((h)=>`<i class="block w-[2px] rounded-full bg-current" style="height:${wave==='mirror'?Math.max(5,h*.72):h}px"></i>`).join('')}</div>`;
+const thumbThemes: Record<string,{bg:string;accent:string;kind:string}> = {
+  'cinematic-cover':{bg:'linear-gradient(135deg,#111827,#312e81 55%,#0e7490)',accent:'#67e8f9',kind:'cover'},
+  'vinyl-night':{bg:'linear-gradient(145deg,#020617,#3b0764)',accent:'#d8b4fe',kind:'vinyl'},
+  'glass-neon':{bg:'linear-gradient(135deg,#082f49,#581c87,#111827)',accent:'#22d3ee',kind:'glass'},
+  'lyrics-tiktok':{bg:'linear-gradient(160deg,#09090b,#831843)',accent:'#f9a8d4',kind:'lyrics'},
+  'minimal-album':{bg:'linear-gradient(145deg,#18181b,#292524)',accent:'#fde68a',kind:'minimal'},
+  'spectrum-club':{bg:'linear-gradient(135deg,#020617,#172554,#4c1d95)',accent:'#22d3ee',kind:'spectrum'},
+  'dreamy-reels':{bg:'linear-gradient(160deg,#312e81,#701a75,#0f172a)',accent:'#e879f9',kind:'glass'},
+  'karaoke-focus':{bg:'linear-gradient(135deg,#111827,#4c0519)',accent:'#fb7185',kind:'lyrics'},
+  'retro-record':{bg:'linear-gradient(145deg,#422006,#1c1917)',accent:'#fbbf24',kind:'vinyl'},
+  'social-pulse':{bg:'linear-gradient(160deg,#0f172a,#312e81,#164e63)',accent:'#a5f3fc',kind:'pulse'},
+  'chill-glass':{bg:'linear-gradient(145deg,#083344,#312e81)',accent:'#5eead4',kind:'glass'},
+  'youtube-music':{bg:'linear-gradient(135deg,#18181b,#7f1d1d)',accent:'#fca5a5',kind:'youtube'},
+};
+
+function bars(color:string){return `<div style="height:24px;display:flex;align-items:center;justify-content:center;gap:2px;color:${color}">${[7,13,20,10,24,16,8,21,12,18,9,15,22,11].map(h=>`<i style="display:block;width:2px;height:${h}px;border-radius:3px;background:currentColor"></i>`).join('')}</div>`}
+function cover(){return '<i style="display:block;width:42px;height:42px;border-radius:9px;background:linear-gradient(135deg,#22d3ee,#8b5cf6 52%,#fb7185);box-shadow:0 0 22px rgba(139,92,246,.35)"></i>'}
+
+function previewMarkup(p:(typeof VIDEO_PRESETS)[number]){
+  const t=thumbThemes[p.id]||{bg:'linear-gradient(135deg,#111827,#312e81)',accent:'#a5f3fc',kind:'cover'};
+  const vertical=p.aspect==='9:16'||p.aspect==='4:5', square=p.aspect==='1:1';
+  const frame=vertical?'width:70px;height:116px;margin:auto':square?'width:94px;height:94px;margin:auto':'width:100%;height:84px';
+  let body='';
+  if(t.kind==='vinyl') body=`<div style="height:100%;display:flex;align-items:center;justify-content:center;gap:9px"><div style="position:relative;width:48px;height:48px;border-radius:50%;background:repeating-radial-gradient(circle,#27272a 0 2px,#09090b 3px 6px);border:1px solid rgba(255,255,255,.2)"><i style="position:absolute;inset:14px;border-radius:50%;background:${t.accent}"></i><i style="position:absolute;left:23px;top:23px;width:3px;height:3px;border-radius:50%;background:#000"></i></div><div style="flex:1"><i style="display:block;width:75%;height:5px;border-radius:5px;background:rgba(255,255,255,.75)"></i><i style="display:block;margin-top:5px;width:48%;height:3px;border-radius:5px;background:rgba(255,255,255,.25)"></i>${bars(t.accent)}</div></div>`;
+  else if(t.kind==='lyrics') body=`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center"><b style="font-size:8px;line-height:12px;color:white">KHI GIAI ĐIỆU<br>CHẠM VÀO KÝ ỨC</b><span style="font-size:6px;color:rgba(255,255,255,.4);margin-top:3px">lyrics đang phát</span><div style="width:80%;margin-top:4px">${bars(t.accent)}</div></div>`;
+  else if(t.kind==='glass') body=`<div style="height:100%;display:flex;align-items:center;justify-content:center"><div style="width:90%;display:flex;align-items:center;gap:8px;padding:8px;border-radius:12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);box-shadow:0 8px 24px rgba(0,0,0,.25)">${cover()}<div style="flex:1"><i style="display:block;width:80%;height:5px;border-radius:5px;background:rgba(255,255,255,.8)"></i><i style="display:block;margin-top:4px;width:50%;height:3px;border-radius:5px;background:rgba(255,255,255,.3)"></i>${bars(t.accent)}</div></div></div>`;
+  else if(t.kind==='spectrum') body=`<div style="height:100%;display:flex;flex-direction:column;justify-content:center"><div style="font-size:7px;font-weight:700;color:white;text-align:center;letter-spacing:1px">SPECTRUM</div>${bars(t.accent)}<div style="height:1px;background:linear-gradient(90deg,transparent,${t.accent},transparent)"></div></div>`;
+  else if(t.kind==='pulse') body=`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center">${cover()}<div style="position:relative;width:70%;height:24px;margin-top:5px"><i style="position:absolute;left:50%;top:50%;width:12px;height:12px;transform:translate(-50%,-50%);border-radius:50%;background:${t.accent};box-shadow:0 0 18px ${t.accent}"></i><i style="position:absolute;left:0;right:0;top:50%;height:1px;background:${t.accent};opacity:.5"></i></div></div>`;
+  else if(t.kind==='youtube') body=`<div style="height:100%;display:flex;align-items:center;gap:9px"><div style="position:relative;width:48px;height:48px;border-radius:50%;background:#09090b;border:1px solid rgba(255,255,255,.18)"><i style="position:absolute;inset:14px;border-radius:50%;background:#ef4444"></i></div><div style="flex:1"><b style="font-size:7px;color:white">YOUTUBE MUSIC</b>${bars(t.accent)}</div></div>`;
+  else if(t.kind==='minimal') body=`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center">${cover()}<i style="display:block;margin-top:6px;width:45%;height:4px;border-radius:4px;background:rgba(255,255,255,.75)"></i><div style="width:60%;height:1px;margin-top:8px;background:${t.accent}"></div></div>`;
+  else body=vertical?`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center">${cover()}<i style="display:block;margin-top:6px;width:42px;height:4px;border-radius:4px;background:rgba(255,255,255,.8)"></i><div style="width:50px">${bars(t.accent)}</div></div>`:`<div style="height:100%;display:flex;align-items:center;gap:9px">${cover()}<div style="flex:1"><i style="display:block;width:72%;height:5px;border-radius:5px;background:rgba(255,255,255,.8)"></i><i style="display:block;margin-top:4px;width:45%;height:3px;border-radius:5px;background:rgba(255,255,255,.28)"></i>${bars(t.accent)}</div></div>`;
+  return `<div data-thumb="${p.id}" style="height:136px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;padding:8px;border-radius:12px;overflow:hidden;background:${t.bg};border:1px solid rgba(255,255,255,.12)"><div style="${frame};padding:8px;overflow:hidden;border-radius:9px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.12)">${body}</div></div>`;
 }
 
-function previewMarkup(preset: (typeof VIDEO_PRESETS)[number]) {
-  const vertical = preset.aspect === '9:16' || preset.aspect === '4:5';
-  const square = preset.aspect === '1:1';
-  const frame = vertical ? 'mx-auto h-[116px] w-[68px]' : square ? 'mx-auto h-[92px] w-[92px]' : 'h-[82px] w-full';
-  const accent = preset.category === 'Lyrics' ? 'text-fuchsia-300' : preset.category === 'Visualizer' ? 'text-cyan-300' : preset.category === 'Social' ? 'text-violet-300' : 'text-amber-200';
-  const cover = '<i class="block h-10 w-10 shrink-0 rounded-lg bg-[linear-gradient(135deg,rgba(34,211,238,.85),rgba(168,85,247,.9)_50%,rgba(244,63,94,.8))] shadow-[0_0_22px_rgba(168,85,247,.28)]"></i>';
-  let body = '';
-
-  if (preset.template === 'vinyl') {
-    body = `<div class="flex h-full items-center justify-center gap-2"><div class="relative h-12 w-12 rounded-full border border-white/20 bg-[repeating-radial-gradient(circle,rgba(255,255,255,.16)_0_1px,rgba(0,0,0,.75)_2px_5px)]"><i class="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-br from-violet-400 to-cyan-300"></i><i class="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black"></i></div><div class="min-w-0 flex-1"><i class="block h-1.5 w-3/4 rounded bg-white/75"></i><i class="mt-1 block h-1 w-1/2 rounded bg-white/25"></i><div class="mt-2 ${accent}">${waveMarkup(preset.wave)}</div></div></div>`;
-  } else if (preset.template === 'lyrics-focus') {
-    body = `<div class="flex h-full flex-col justify-center text-center"><i class="mx-auto block h-1 w-8 rounded bg-white/20"></i><b class="mt-2 block text-[8px] leading-3 text-white/90">Khi giai điệu<br/>chạm vào ký ức</b><span class="mt-1 text-[6px] text-white/35">lời bài hát đang phát</span><div class="mt-1 ${accent}">${waveMarkup(preset.wave)}</div></div>`;
-  } else if (preset.template === 'glass-card') {
-    body = `<div class="relative flex h-full items-center justify-center"><i class="absolute left-2 top-2 h-12 w-12 rounded-full bg-fuchsia-500/25 blur-xl"></i><div class="relative flex w-[88%] items-center gap-2 rounded-xl border border-white/15 bg-white/10 p-2 backdrop-blur">${cover}<div class="min-w-0 flex-1"><i class="block h-1.5 w-4/5 rounded bg-white/75"></i><i class="mt-1 block h-1 w-1/2 rounded bg-white/25"></i><div class="mt-1 ${accent}">${waveMarkup(preset.wave)}</div></div></div></div>`;
-  } else {
-    body = vertical
-      ? `<div class="flex h-full flex-col items-center justify-center">${cover}<i class="mt-2 block h-1.5 w-10 rounded bg-white/75"></i><i class="mt-1 block h-1 w-7 rounded bg-white/25"></i><div class="mt-1 w-12 ${accent}">${waveMarkup(preset.wave)}</div></div>`
-      : `<div class="flex h-full items-center gap-2">${cover}<div class="min-w-0 flex-1"><i class="block h-1.5 w-3/4 rounded bg-white/75"></i><i class="mt-1 block h-1 w-1/2 rounded bg-white/25"></i><div class="mt-2 ${accent}">${waveMarkup(preset.wave)}</div></div></div>`;
-  }
-
-  return `<div class="mb-3 overflow-hidden rounded-xl border border-white/10 bg-[radial-gradient(circle_at_75%_10%,rgba(168,85,247,.22),transparent_35%),linear-gradient(145deg,#17152b,#080810)] p-2"><div class="${frame} overflow-hidden rounded-lg border border-white/10 bg-black/25 p-2 shadow-inner">${body}</div></div>`;
-}
-
-function mountGallery() {
-  const labels = Array.from(document.querySelectorAll('p')).filter((el) => el.textContent?.trim() === 'Template');
-  const label = labels[0];
-  if (!label || document.getElementById('v5-video-preset-gallery')) return;
-  const visualizer = label.closest('div.rounded-2xl');
-  if (!visualizer) return;
-
-  const wrap = document.createElement('div');
-  wrap.id = 'v5-video-preset-gallery';
-  wrap.className = 'mt-5';
-  wrap.innerHTML = `
-    <div class="flex items-end justify-between gap-3">
-      <div><p class="text-[11px] font-bold uppercase text-white/40">Video mẫu</p><p class="mt-1 text-xs text-white/45">Xem thumbnail rồi chọn preset để áp dụng layout, waveform, motion và tỉ lệ.</p></div>
-      <span class="rounded-lg border border-fuchsia-300/20 bg-fuchsia-300/10 px-2 py-1 text-[10px] font-bold text-fuchsia-200">12 PRESET</span>
-    </div>
-    <div class="mt-3 flex gap-2 overflow-x-auto pb-2" data-preset-filters>
-      ${['Tất cả','Album','Social','Lyrics','Visualizer'].map((x,i)=>`<button data-filter="${x}" class="shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold ${i===0?'border-fuchsia-300/40 bg-fuchsia-300/15 text-fuchsia-100':'border-white/10 bg-black/20 text-white/50'}">${x}</button>`).join('')}
-    </div>
-    <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4" data-preset-grid>
-      ${VIDEO_PRESETS.map((p,i)=>`<button data-preset="${p.id}" data-category="${p.category}" class="group relative overflow-hidden rounded-2xl border ${i===0?'border-fuchsia-300/45 bg-fuchsia-300/[.04]':'border-white/10'} bg-[linear-gradient(145deg,rgba(255,255,255,.055),rgba(0,0,0,.2))] p-2.5 text-left transition hover:-translate-y-0.5 hover:border-fuchsia-300/35">
-        ${previewMarkup(p)}
-        <span class="absolute right-4 top-4 rounded-md border border-white/10 bg-black/55 px-1.5 py-1 text-[9px] font-bold text-white/70 backdrop-blur">${p.badge||p.category}</span>
-        <span class="block truncate px-0.5 text-sm font-bold text-white">${p.label}</span>
-        <span class="mt-1 block min-h-8 px-0.5 text-[10px] leading-4 text-white/45">${p.hint}</span>
-        <span class="mt-1.5 block px-0.5 text-[9px] font-semibold uppercase tracking-wide text-cyan-200/60">${p.aspect} · ${p.wave} · ${p.motion}</span>
-      </button>`).join('')}
-    </div>`;
-
+function mountGallery(){
+  const label=Array.from(document.querySelectorAll('p')).find(el=>el.textContent?.trim()==='Template');
+  if(!label||document.getElementById('v5-video-preset-gallery'))return;
+  const visualizer=label.closest('div.rounded-2xl'); if(!visualizer)return;
+  const wrap=document.createElement('div'); wrap.id='v5-video-preset-gallery'; wrap.className='mt-5';
+  wrap.innerHTML=`<div class="flex items-end justify-between gap-3"><div><p class="text-[11px] font-bold uppercase text-white/40">Video mẫu</p><p class="mt-1 text-xs text-white/45">Tất cả preset đều có thumbnail riêng. Chạm mẫu để áp dụng ngay.</p></div><span class="rounded-lg border border-fuchsia-300/20 bg-fuchsia-300/10 px-2 py-1 text-[10px] font-bold text-fuchsia-200">12 PRESET</span></div><div class="mt-3 flex gap-2 overflow-x-auto pb-2" data-preset-filters>${['Tất cả','Album','Social','Lyrics','Visualizer'].map((x,i)=>`<button data-filter="${x}" class="shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold ${i===0?'border-fuchsia-300/40 bg-fuchsia-300/15 text-fuchsia-100':'border-white/10 bg-black/20 text-white/50'}">${x}</button>`).join('')}</div><div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">${VIDEO_PRESETS.map((p,i)=>`<button data-preset="${p.id}" data-category="${p.category}" class="relative overflow-hidden rounded-2xl border ${i===0?'border-fuchsia-300/45':'border-white/10'} bg-white/[.035] p-2.5 text-left transition hover:border-fuchsia-300/35">${previewMarkup(p)}<span class="absolute right-4 top-4 rounded-md border border-white/10 bg-black/60 px-1.5 py-1 text-[9px] font-bold text-white/75">${p.badge||p.category}</span><span class="block truncate text-sm font-bold text-white">${p.label}</span><span class="mt-1 block min-h-8 text-[10px] leading-4 text-white/45">${p.hint}</span><span class="mt-1 block text-[9px] font-semibold uppercase text-cyan-200/60">${p.aspect} · ${p.wave} · ${p.motion}</span></button>`).join('')}</div>`;
   label.parentElement?.insertBefore(wrap,label);
-
-  const cards = Array.from(wrap.querySelectorAll<HTMLButtonElement>('[data-preset]'));
-  cards.forEach((card) => card.addEventListener('click', () => {
-    const preset = VIDEO_PRESETS.find((p) => p.id === card.dataset.preset);
-    if (!preset) return;
-    applyPreset(visualizer,preset);
-    cards.forEach((x) => { x.classList.remove('border-fuchsia-300/45','bg-fuchsia-300/[.04]'); x.classList.add('border-white/10'); });
-    card.classList.remove('border-white/10'); card.classList.add('border-fuchsia-300/45','bg-fuchsia-300/[.04]');
-  }));
-
-  const filters = Array.from(wrap.querySelectorAll<HTMLButtonElement>('[data-filter]'));
-  filters.forEach((button) => button.addEventListener('click', () => {
-    const filter = button.dataset.filter || 'Tất cả';
-    filters.forEach((x) => { x.className='shrink-0 rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[11px] font-bold text-white/50'; });
-    button.className='shrink-0 rounded-full border border-fuchsia-300/40 bg-fuchsia-300/15 px-3 py-1.5 text-[11px] font-bold text-fuchsia-100';
-    cards.forEach((card) => { card.style.display = filter==='Tất cả'||card.dataset.category===filter ? '' : 'none'; });
-  }));
+  const cards=Array.from(wrap.querySelectorAll<HTMLButtonElement>('[data-preset]'));
+  cards.forEach(card=>card.addEventListener('click',()=>{const p=VIDEO_PRESETS.find(x=>x.id===card.dataset.preset);if(!p)return;applyPreset(visualizer,p);cards.forEach(x=>{x.classList.remove('border-fuchsia-300/45');x.classList.add('border-white/10')});card.classList.remove('border-white/10');card.classList.add('border-fuchsia-300/45')}));
+  const filters=Array.from(wrap.querySelectorAll<HTMLButtonElement>('[data-filter]'));
+  filters.forEach(button=>button.addEventListener('click',()=>{const f=button.dataset.filter||'Tất cả';filters.forEach(x=>x.className='shrink-0 rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[11px] font-bold text-white/50');button.className='shrink-0 rounded-full border border-fuchsia-300/40 bg-fuchsia-300/15 px-3 py-1.5 text-[11px] font-bold text-fuchsia-100';cards.forEach(card=>card.style.display=f==='Tất cả'||card.dataset.category===f?'':'none')}));
 }
 
-export function V5PresetGalleryEnhancer(){
-  useEffect(()=>{
-    mountGallery();
-    const observer=new MutationObserver(mountGallery);
-    observer.observe(document.body,{childList:true,subtree:true});
-    return()=>observer.disconnect();
-  },[]);
-  return null;
-}
+export function V5PresetGalleryEnhancer(){useEffect(()=>{mountGallery();const o=new MutationObserver(mountGallery);o.observe(document.body,{childList:true,subtree:true});return()=>o.disconnect()},[]);return null}
