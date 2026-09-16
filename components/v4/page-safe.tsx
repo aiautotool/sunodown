@@ -37,6 +37,11 @@ function isSunoUrl(value: string) {
   }
 }
 
+function fmt(value: number) {
+  const seconds = Math.max(0, Math.floor(value));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
 export default function V4SafePage() {
   const [url, setUrl] = useState('https://suno.com/s/0Uzw4fboYOyOzHjc');
   const [song, setSong] = useState<Song | null>(null);
@@ -50,6 +55,7 @@ export default function V4SafePage() {
   const [motion, setMotion] = useState<MotionIntensity>('medium');
   const [lyrics, setLyrics] = useState<LyricsMode>('off');
   const [preset, setPreset] = useState<PlatformPreset>('tiktok');
+  const [previewStart, setPreviewStart] = useState(0);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [resultUrl, setResultUrl] = useState('');
   const [copied, setCopied] = useState<'lyrics' | 'style' | null>(null);
@@ -72,6 +78,7 @@ export default function V4SafePage() {
         if (!response.ok) throw new Error(data.error || 'Không đọc được bài hát.');
         lastResolved.current = input;
         setSong(data);
+        setPreviewStart(0);
         setCopied(null);
       } catch (cause) {
         if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Không đọc được bài hát.');
@@ -105,7 +112,11 @@ export default function V4SafePage() {
     setResultBlob(null);
     try {
       const blob = await generateVisualizerVideoArt(song, aspect, wave, template, {
-        motion, lyrics, startSeconds: 0, previewSeconds: mode === 'preview' ? 10 : undefined, onProgress: setProgress,
+        motion,
+        lyrics,
+        startSeconds: mode === 'preview' ? previewStart : 0,
+        previewSeconds: mode === 'preview' ? 10 : undefined,
+        onProgress: setProgress,
       });
       setProgress(100);
       setResultBlob(blob);
@@ -116,6 +127,8 @@ export default function V4SafePage() {
   }
 
   const size = VIDEO_SIZES[aspect];
+  const previewMax = Math.max(0, (song?.duration || 10) - 10);
+  const previewEnd = Math.min(song?.duration || previewStart + 10, previewStart + 10);
 
   return (
     <main className="min-h-screen bg-[#080812] text-white">
@@ -219,13 +232,32 @@ export default function V4SafePage() {
                 <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] text-white/40">{size.width}×{size.height}</span>
               </div>
 
+              <div className="mb-4 rounded-xl border border-cyan-300/10 bg-black/20 p-3">
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className="font-semibold text-white/65">Chọn đoạn preview 10 giây</span>
+                  <span className="rounded-full bg-cyan-300/10 px-2 py-1 font-mono text-cyan-100">{fmt(previewStart)} → {fmt(previewEnd)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max={previewMax}
+                  step="0.1"
+                  value={Math.min(previewStart, previewMax)}
+                  onChange={(event) => setPreviewStart(Number(event.target.value))}
+                  disabled={previewMax <= 0}
+                  className="mt-3 w-full accent-cyan-300 disabled:opacity-30"
+                  aria-label="Vị trí bắt đầu preview 10 giây"
+                />
+                <div className="mt-1 flex justify-between text-[10px] text-white/30"><span>0:00</span><span>{fmt(song.duration || 0)}</span></div>
+              </div>
+
               {(action || progress > 0) && <div className="mb-4 rounded-xl border border-white/[.06] bg-black/20 p-3">
-                <div className="flex justify-between text-sm"><span>{action === 'preview' ? 'Đang render preview' : action === 'full' ? 'Đang render full' : 'Render hoàn tất'}</span><b>{Math.round(progress)}%</b></div>
+                <div className="flex justify-between text-sm"><span>{action === 'preview' ? `Đang render ${fmt(previewStart)} → ${fmt(previewEnd)}` : action === 'full' ? 'Đang render full' : 'Render hoàn tất'}</span><b>{Math.round(progress)}%</b></div>
                 <div className="mt-2 h-2 overflow-hidden rounded bg-white/10"><div className="h-full rounded bg-violet-500 transition-[width] duration-200" style={{width: `${Math.max(0,Math.min(100,progress))}%`}} /></div>
               </div>}
 
               <div className="grid gap-2 sm:grid-cols-2">
-                <button disabled={!!action} onClick={() => render('preview')} className="h-12 rounded-xl bg-cyan-400/10 font-bold disabled:opacity-40"><Play className="mr-2 inline size-4" />Preview 10s</button>
+                <button disabled={!!action} onClick={() => render('preview')} className="h-12 rounded-xl bg-cyan-400/10 font-bold disabled:opacity-40"><Play className="mr-2 inline size-4" />Preview 10s · {fmt(previewStart)}</button>
                 <button disabled={!!action} onClick={() => render('full')} className="h-12 rounded-xl bg-violet-500 font-bold disabled:opacity-40">{action === 'full' && <LoaderCircle className="mr-2 inline size-4 animate-spin" />}Render full</button>
               </div>
             </section>
