@@ -6,7 +6,7 @@ import './globals.css';
 const font = Be_Vietnam_Pro({ variable: '--font-app', subsets: ['latin', 'vietnamese'], weight: ['400', '500', '600', '700'] });
 
 const title = 'Tải nhạc Suno miễn phí - MP3, WAV, M4A, Video | Suno Grab';
-const description = 'Tải nhạc Suno miễn phí từ liên kết Suno. Hỗ trợ tải MP3, WAV, M4A, video gốc và tạo video visualizer ngay trên trình duyệt, không cần cài ứng dụng.';
+const description = 'Tải nhạc Suno miễn phí từ liên kết Suno. Hỗ trợ tải MP3, WAV, M4A, video gốc và tạo video sóng nhạc ngay trên trình duyệt, không cần cài ứng dụng.';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://suno.aiautotool.com'),
