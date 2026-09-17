@@ -60,14 +60,18 @@ export default function V4SafePage() {
   const [resultUrl, setResultUrl] = useState('');
   const [copied, setCopied] = useState<'lyrics' | 'style' | null>(null);
   const lastResolved = useRef('');
+  const resolveNow = useRef<(() => void) | null>(null);
 
   useEffect(() => () => { if (resultUrl) URL.revokeObjectURL(resultUrl); }, [resultUrl]);
 
   useEffect(() => {
     const input = url.trim();
-    if (!isSunoUrl(input) || input === lastResolved.current) return;
+    if (!isSunoUrl(input)) return;
     const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
+    let inFlight = false;
+    const resolve = async () => {
+      if (inFlight) return;
+      inFlight = true;
       setLoading(true);
       setError('');
       try {
@@ -82,9 +86,23 @@ export default function V4SafePage() {
         setCopied(null);
       } catch (cause) {
         if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Không đọc được bài hát.');
-      } finally { setLoading(false); }
+      } finally {
+        inFlight = false;
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+    const timer = window.setTimeout(() => {
+      if (input !== lastResolved.current) void resolve();
     }, 300);
-    return () => { window.clearTimeout(timer); controller.abort(); };
+    resolveNow.current = () => {
+      window.clearTimeout(timer);
+      void resolve();
+    };
+    return () => {
+      resolveNow.current = null;
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [url]);
 
   async function paste() {
@@ -137,7 +155,15 @@ export default function V4SafePage() {
         <h1 className="mt-8 text-4xl font-bold">Tải nhạc Suno & tạo video visualizer</h1>
 
         <div className="relative mt-7">
-          <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="Dán link Suno..." className="h-14 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pr-24" />
+          <input value={url} onChange={(event) => setUrl(event.target.value)} onKeyDown={(event) => {
+            if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+            event.preventDefault();
+            if (!isSunoUrl(url.trim())) {
+              setError('Vui lòng nhập một liên kết Suno hợp lệ.');
+              return;
+            }
+            resolveNow.current?.();
+          }} placeholder="Dán link Suno..." className="h-14 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pr-24" />
           <button onClick={paste} className="absolute right-2 top-2 h-10 rounded-xl bg-violet-500/20 px-4 font-bold">Dán</button>
         </div>
 

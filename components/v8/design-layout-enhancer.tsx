@@ -3,6 +3,8 @@ import {useEffect} from 'react';
 
 export function V8DesignLayoutEnhancer(){
   useEffect(()=>{
+    const listeners = new AbortController();
+    const tracks = new WeakSet<HTMLElement>();
     const apply=()=>{
       const main=document.querySelector('.v7-workspace main');
       const article=main?.querySelector('article');
@@ -12,11 +14,49 @@ export function V8DesignLayoutEnhancer(){
       const input=main.querySelector('input[placeholder*="Suno"]');
       input?.parentElement?.classList.add('v8-link-card');
       article.firstElementChild?.classList.add('v8-song-detail');
+      main.querySelectorAll<HTMLElement>('.v5-preset-track, .v8-effects-track').forEach(track => {
+        if (tracks.has(track)) return;
+        tracks.add(track);
+        let startX = 0, startScroll = 0, dragging = false, moved = false;
+        const options = {signal: listeners.signal};
+        track.addEventListener('pointerdown', event => {
+          if (event.pointerType !== 'mouse' || event.button !== 0) return;
+          startX = event.clientX;
+          startScroll = track.scrollLeft;
+          dragging = true;
+          moved = false;
+        }, options);
+        track.addEventListener('pointermove', event => {
+          if (!dragging) return;
+          const delta = event.clientX - startX;
+          if (!moved && Math.abs(delta) < 5) return;
+          moved = true;
+          track.setPointerCapture(event.pointerId);
+          track.classList.add('is-dragging');
+          track.scrollLeft = startScroll - delta;
+          event.preventDefault();
+        }, options);
+        const stop = () => {
+          dragging = false;
+          track.classList.remove('is-dragging');
+        };
+        track.addEventListener('pointerup', stop, options);
+        track.addEventListener('pointercancel', stop, options);
+        track.addEventListener('lostpointercapture', stop, options);
+        track.addEventListener('pointerleave', () => { if (!moved) stop(); }, options);
+        track.addEventListener('click', event => {
+          if (!moved) return;
+          event.preventDefault();
+          event.stopPropagation();
+          moved = false;
+        }, {...options, capture: true});
+        track.addEventListener('dragstart', event => event.preventDefault(), options);
+      });
     };
     apply();
     const observer=new MutationObserver(apply);
     observer.observe(document.body,{childList:true,subtree:true});
-    return()=>observer.disconnect();
+    return()=>{observer.disconnect();listeners.abort();};
   },[]);
 
   return <style>{`
@@ -28,6 +68,18 @@ export function V8DesignLayoutEnhancer(){
 .v8-app-flow button{transition:transform .16s ease,background .16s ease,border-color .16s ease}
 .v8-app-flow button:active{transform:scale(.98)}
 #studio-editor{min-width:0}
+#studio-editor>section{min-width:0}
+#studio-editor>section>.grid{grid-template-columns:minmax(0,1fr)}
+#studio-editor>section>.grid>div{min-width:0}
+#v5-video-preset-gallery{min-width:0;max-width:100%}
+.v5-preset-track,.v8-effects-track{display:flex;flex-wrap:nowrap;gap:10px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scroll-padding-inline:4px;padding:4px 4px 16px;scrollbar-width:thin;scrollbar-color:rgba(167,139,250,.45) transparent}
+.v5-preset-track>[data-preset]{flex:0 0 176px;min-width:0;scroll-snap-align:start}
+.v5-preset-track>[data-preset]:focus-visible,.v8-effects-track>button:focus-visible{outline:2px solid #67e8f9;outline-offset:2px}
+.v5-preset-track,.v5-preset-track>[data-preset],.v8-effects-track,.v8-effects-track>button{cursor:grab;user-select:none}
+.v5-preset-track.is-dragging,.v8-effects-track.is-dragging{scroll-snap-type:none}
+.v5-preset-track.is-dragging,.v5-preset-track.is-dragging>[data-preset],.v8-effects-track.is-dragging,.v8-effects-track.is-dragging>button{cursor:grabbing}
+#effects-slot,#video-effects{min-width:0;max-width:100%}
+.v8-effects-track>button{flex:0 0 112px;min-width:0;scroll-snap-align:start}
 #render-zone{position:relative;z-index:1}
 #preview-result{position:relative;z-index:1;overflow:hidden}
 
