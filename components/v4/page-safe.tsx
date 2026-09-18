@@ -4,6 +4,7 @@ import {useEffect,useRef,useState} from 'react';
 import {Copy,Download,LoaderCircle,Play} from 'lucide-react';
 import {generateVisualizerVideoArt} from '../v7/renderer-art';
 import {LivePreview} from '../v8/live-preview';
+import {useRenderWakeLock} from '@/hooks/use-render-wake-lock';
 import {
   LYRIC_MODES,
   MOTION_LEVELS,
@@ -49,6 +50,7 @@ export default function V4SafePage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [action, setAction] = useState<'preview' | 'full' | null>(null);
+  const screenAwake = useRenderWakeLock(action !== null);
   const [progress, setProgress] = useState(0);
   const [aspect, setAspect] = useState<VideoAspect>('9:16');
   const [wave, setWave] = useState<WaveStyle>('bars');
@@ -281,6 +283,9 @@ export default function V4SafePage() {
               </div>
 
               {(action || progress > 0) && <div className="mb-4 rounded-xl border border-white/[.06] bg-black/20 p-3">
+                {action && <p role="status" className="mb-2 text-xs text-amber-200">{screenAwake
+                  ? 'Đang giữ màn hình sáng. Hãy giữ trang này mở đến khi xuất xong.'
+                  : 'Hãy giữ màn hình sáng và trang này mở đến khi xuất xong. Trình duyệt chưa bật được chế độ giữ sáng tự động.'}</p>}
                 <div className="flex justify-between text-sm"><span>{action === 'preview' ? `Đang xuất video ${fmt(previewStart)} → ${fmt(previewEnd)}` : action === 'full' ? 'Đang xuất toàn bộ video' : 'Xuất video hoàn tất'}</span><b>{Math.round(progress)}%</b></div>
                 <div className="mt-2 h-2 overflow-hidden rounded bg-white/10"><div className="h-full rounded bg-violet-500 transition-[width] duration-200" style={{width: `${Math.max(0,Math.min(100,progress))}%`}} /></div>
               </div>}
