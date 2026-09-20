@@ -37,23 +37,26 @@ export function V8EffectsPanel(){
   const panel=<section id="video-effects" className="rounded-2xl border border-fuchsia-300/10 bg-fuchsia-400/[.035] p-4">
     <div className="flex items-center justify-between gap-3">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[.14em] text-fuchsia-300">Bước 4 · Hiệu ứng</p>
+        <p className="text-[10px] font-bold uppercase tracking-[.14em] text-fuchsia-300">Bước 5 · Hiệu ứng</p>
         <b>Hiệu ứng video</b>
         <p className="mt-1 text-[11px] text-white/35">Vuốt ngang để xem, chạm để bật hoặc tắt hiệu ứng.</p>
       </div>
       {c.effects.length>0&&<button onClick={()=>update({...c,effects:[]})} className="rounded-lg bg-white/5 px-2 py-1 text-[10px] text-white/50">Tắt hết ({c.effects.length})</button>}
     </div>
-    <div className="v8-effects-track mt-4" aria-label="Chọn hiệu ứng video">
+    <div className="v8-effects-track mt-3" aria-label="Chọn hiệu ứng video">
         {VIDEO_EFFECTS.map(x=><button key={x.id} aria-pressed={c.effects.includes(x.id)} onClick={()=>toggle(x.id)} className={`relative rounded-xl border px-1 py-3 text-[11px] ${c.effects.includes(x.id)?'border-fuchsia-300/60 bg-fuchsia-400/20 shadow-[0_0_20px_rgba(217,70,239,.12)]':'border-white/[.06] bg-white/[.03]'}`}>
           <span className="mb-2 block text-[9px] uppercase text-white/35">{GROUPS.find(([group])=>group===x.group)?.[1]}</span><span className="block text-lg">{x.icon}</span><span className="mt-1 block">{x.label}</span>{c.effects.includes(x.id)&&<span className="absolute right-1 top-1 grid size-4 place-items-center rounded-full bg-fuchsia-400 text-[9px] font-black">✓</span>}
         </button>)}
     </div>
-    {c.effects.length > 0 && <div className="mt-5 grid gap-3 sm:grid-cols-2">
-      <label className="text-[11px] text-white/45">Cường độ <b className="float-right text-white">{Math.round(c.intensity*100)}%</b><input className="mt-2 w-full" type="range" min="20" max="180" value={c.intensity*100} onChange={e=>update({...c,intensity:+e.target.value/100})}/></label>
-      <label className="text-[11px] text-white/45">Tốc độ <b className="float-right text-white">{Math.round(c.speed*100)}%</b><input className="mt-2 w-full" type="range" min="20" max="200" value={c.speed*100} onChange={e=>update({...c,speed:+e.target.value/100})}/></label>
-      <label className="text-[11px] text-white/45">Độ trong <b className="float-right text-white">{Math.round(c.opacity*100)}%</b><input className="mt-2 w-full" type="range" min="10" max="100" value={c.opacity*100} onChange={e=>update({...c,opacity:+e.target.value/100})}/></label>
-      <label className="text-[11px] text-white/45">Gió <b className="float-right text-white">{c.wind===0?'0':c.wind>0?`→ ${c.wind.toFixed(1)}`:`← ${Math.abs(c.wind).toFixed(1)}`}</b><input className="mt-2 w-full" type="range" min="-20" max="20" value={c.wind*10} onChange={e=>update({...c,wind:+e.target.value/10})}/></label>
-    </div>}
+    {c.effects.length > 0 && <details className="mt-4 rounded-xl border border-white/[.06] bg-black/15">
+      <summary className="cursor-pointer px-3 py-2.5 text-xs font-semibold text-white/60">Tinh chỉnh hiệu ứng</summary>
+      <div className="grid gap-3 border-t border-white/[.05] p-3 sm:grid-cols-2">
+        <label className="text-[11px] text-white/45">Cường độ <b className="float-right text-white">{Math.round(c.intensity*100)}%</b><input className="mt-2 w-full" type="range" min="20" max="180" value={c.intensity*100} onChange={e=>update({...c,intensity:+e.target.value/100})}/></label>
+        <label className="text-[11px] text-white/45">Tốc độ <b className="float-right text-white">{Math.round(c.speed*100)}%</b><input className="mt-2 w-full" type="range" min="20" max="200" value={c.speed*100} onChange={e=>update({...c,speed:+e.target.value/100})}/></label>
+        <label className="text-[11px] text-white/45">Độ trong <b className="float-right text-white">{Math.round(c.opacity*100)}%</b><input className="mt-2 w-full" type="range" min="10" max="100" value={c.opacity*100} onChange={e=>update({...c,opacity:+e.target.value/100})}/></label>
+        <label className="text-[11px] text-white/45">Gió <b className="float-right text-white">{c.wind===0?'0':c.wind>0?`→ ${c.wind.toFixed(1)}`:`← ${Math.abs(c.wind).toFixed(1)}`}</b><input className="mt-2 w-full" type="range" min="-20" max="20" value={c.wind*10} onChange={e=>update({...c,wind:+e.target.value/10})}/></label>
+      </div>
+    </details>}
   </section>;
 
   return slot?createPortal(panel,slot):null;
