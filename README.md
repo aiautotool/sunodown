@@ -41,3 +41,29 @@ Transformers.js được tải on-demand từ jsDelivr khi người dùng bấm 
 Thư mục `services/karaoke-align` vẫn được giữ cho trường hợp sau này muốn chạy server GPU. Đây **không phải** yêu cầu để chức năng Auto Sync mặc định hoạt động.
 
 Endpoint `POST /api/karaoke/align` cũng chỉ là fallback server tùy chọn.
+
+
+## TikTok-like audio processing
+
+MP3, WAV và audio nhúng vào video được xử lý qua cùng một pipeline trước khi encode:
+
+```
+Suno source
+  -> 48 kHz stereo
+  -> HPF 30 Hz
+  -> sub cleanup dưới ~80 Hz
+  -> low-mid lift ~220 Hz
+  -> presence lift ~3 kHz
+  -> high softening ~8 kHz
+  -> gentle compression
+  -> RMS normalization gần mục tiêu -13 dBFS
+  -> peak ceiling gần -1 dBFS
+  -> encode MP3/WAV/AAC
+```
+
+Lưu ý: đây là **TikTok-like processing**, không phải thuật toán nội bộ TikTok. Browser pipeline hiện dùng RMS/peak approximation, không phải LUFS/true-peak meter chuẩn BS.1770.
+
+- Tải MP3: luôn xử lý trước khi encode 192 kbps.
+- Tải WAV: luôn xử lý trước khi xuất PCM 48 kHz stereo.
+- Gen Video và Karaoke Video: luôn dùng processed audio thay vì copy audio Suno gốc.
+- Nếu browser không encode AAC được, video fallback sang processed MP3 audio thay vì quay về audio gốc.
