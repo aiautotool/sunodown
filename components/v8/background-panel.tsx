@@ -68,7 +68,7 @@ export function BackgroundPanel({value,onChange,onError}:Props){
  ];
 
  return <section className="rounded-2xl border border-white/[.06] bg-white/[.02] p-4">
-  <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-sky-300">Background</p><b className="text-sm">Nền video</b></div>{value.mode!=='suno'&&<button type="button" onClick={remove} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] text-white/60">Xóa nền</button>}</div>
+  <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-sky-300">Bước 3 · Background</p><b className="text-sm">Nền video</b></div>{value.mode!=='suno'&&<button type="button" onClick={remove} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] text-white/60">Xóa nền</button>}</div>
   <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-2">
    {modes.map(([id,label,hint])=><button key={id} type="button" onClick={()=>chooseMode(id)} className={`shrink-0 rounded-xl border px-3 py-2.5 text-left ${value.mode===id?'border-sky-300/40 bg-sky-300/10':'border-white/10 bg-black/20'}`}><span className="block text-xs font-bold">{label}</span><span className="mt-0.5 block text-[10px] text-white/40">{hint}</span></button>)}
   </div>
