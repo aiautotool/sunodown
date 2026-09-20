@@ -18,3 +18,5 @@
 
 ## Next roadmap
 Only after the Long Video Loop feature is fully complete and verified, continue the previously proposed 30-feature V9 roadmap sequentially.
+
+Build verification trigger: long-loop core.
