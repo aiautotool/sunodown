@@ -185,7 +185,6 @@ export default function V4SafePage() {
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-xl font-bold">{song.title}</h2>
                 <p className="text-sm text-white/50">{song.creator}</p>
-                <audio controls src={song.audio} className="mt-2 w-full" />
               </div>
             </div>
 
@@ -266,7 +265,7 @@ export default function V4SafePage() {
                 <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] text-white/40">{size.width}×{size.height}</span>
               </div>
 
-              <LivePreview song={song} aspect={aspect} template={template} wave={wave} motion={motion} lyrics={lyrics} start={previewStart} exporting={!!action} />
+              <LivePreview song={song} aspect={aspect} template={template} wave={wave} motion={motion} lyrics={lyrics} karaokeTimeline={karaokeTimeline} start={previewStart} exporting={!!action} resultUrl={resultUrl} />
 
               <div className="mb-4 rounded-xl border border-cyan-300/10 bg-black/20 p-3">
                 <div className="flex items-center justify-between gap-3 text-xs">
@@ -296,16 +295,11 @@ export default function V4SafePage() {
               </div>}
 
               <div className="grid gap-2 sm:grid-cols-2">
-                <button disabled={!!action} onClick={() => render('preview')} className="h-12 rounded-xl bg-cyan-400/10 font-bold disabled:opacity-40"><Play className="mr-2 inline size-4" />Xem trước 10 giây · {fmt(previewStart)}</button>
+                <button disabled={!!action} onClick={() => render('preview')} className="h-12 rounded-xl bg-cyan-400/10 font-bold disabled:opacity-40"><Play className="mr-2 inline size-4" />Render thử 10 giây · {fmt(previewStart)}</button>
                 <button disabled={!!action} onClick={() => render('full')} className="h-12 rounded-xl bg-violet-500 font-bold disabled:opacity-40">{action === 'full' && <LoaderCircle className="mr-2 inline size-4 animate-spin" />}Xuất toàn bộ video</button>
               </div>
+              {resultBlob && <button onClick={() => saveBlob(resultBlob, `${song.title || 'suno'}-${template}-${aspect}.mp4`)} className="mt-3 w-full rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-3 text-sm font-bold text-emerald-100"><Download className="mr-2 inline size-4" />Tải video đang hiển thị</button>}
             </section>
-
-            {resultUrl && <section id="preview-result" className="mt-5 rounded-xl border border-emerald-300/20 bg-emerald-300/5 p-3">
-              <p className="mb-3 text-sm font-bold text-emerald-200">Bản xem trước / video đã xuất</p>
-              <video src={resultUrl} controls playsInline className="max-h-[70vh] w-full rounded-xl bg-black" />
-              <button onClick={() => resultBlob && saveBlob(resultBlob, `${song.title || 'suno'}-${template}-${aspect}.mp4`)} className="mt-3 rounded-lg bg-white/10 px-3 py-2"><Download className="mr-2 inline size-4" />Tải video</button>
-            </section>}
           </article>
         )}
       </section>
