@@ -5,6 +5,8 @@ import {Copy,Download,LoaderCircle,Play} from 'lucide-react';
 import {generateVisualizerVideoArt} from '../v7/renderer-art';
 import {LivePreview} from '../v8/live-preview';
 import {BackgroundPanel} from '../v8/background-panel';
+import {LongVideoLoopPanel} from '../v9/long-video-loop-panel';
+import {DEFAULT_LONG_VIDEO_CONFIG,generateLongVisualizerVideo,resolveLongDuration,type LongVideoConfig} from '../v9/long-video-render';
 import {DEFAULT_BACKGROUND_CONFIG,sanitizeStoredBackground,type BackgroundConfig} from '../v8/background';
 import KaraokeEditor from '@/app/components/KaraokeEditor';
 import {buildEstimatedKaraokeTimeline,type KaraokeLine} from '@/app/lib/karaoke';
@@ -90,6 +92,7 @@ export default function V4SafePage() {
   const [copied, setCopied] = useState<'lyrics' | 'style' | null>(null);
   const [karaokeTimeline,setKaraokeTimeline]=useState<KaraokeLine[]>([]);
   const [background,setBackground]=useState<BackgroundConfig>(DEFAULT_BACKGROUND_CONFIG);
+  const [longVideo,setLongVideo]=useState<LongVideoConfig>(DEFAULT_LONG_VIDEO_CONFIG);
   const lastResolved = useRef('');
   const resolveNow = useRef<(() => void) | null>(null);
 
@@ -173,7 +176,7 @@ export default function V4SafePage() {
     setResultUrl('');
     setResultBlob(null);
     try {
-      const blob = await generateVisualizerVideoArt(song, aspect, wave, template, {
+      const renderOptions = {
         motion,
         lyrics,
         startSeconds: mode === 'preview' ? previewStart : 0,
@@ -181,7 +184,11 @@ export default function V4SafePage() {
         onProgress: setProgress,
         karaokeTimeline: lyrics==='off'?undefined:karaokeTimeline,
         background,
-      });
+        loopDuration: resolveLongDuration(song.duration || 0,longVideo),
+      };
+      const blob = mode === 'full' && longVideo.enabled
+        ? await generateLongVisualizerVideo(song, aspect, wave, template, renderOptions, longVideo)
+        : await generateVisualizerVideoArt(song, aspect, wave, template, renderOptions);
       setProgress(100);
       setResultBlob(blob);
       setResultUrl(URL.createObjectURL(blob));
@@ -191,6 +198,7 @@ export default function V4SafePage() {
   }
 
   const size = VIDEO_SIZES[aspect];
+  const totalOutputDuration = resolveLongDuration(song?.duration || 0,longVideo);
   const previewMax = Math.max(0, (song?.duration || 10) - 10);
   const previewEnd = Math.min(song?.duration || previewStart + 10, previewStart + 10);
   const cleanLyrics = stripChords(song?.lyrics || '');
@@ -198,7 +206,7 @@ export default function V4SafePage() {
   return (
     <main className="min-h-screen bg-[#080812] text-white">
       <section className="mx-auto max-w-6xl px-5 py-8">
-        <p className="font-bold">Suno Grab <span className="text-violet-300">v8</span></p>
+        <p className="font-bold">Suno Grab <span className="text-violet-300">v9</span></p>
         <h1 className="mt-8 text-4xl font-bold">Tải nhạc Suno & tạo video sóng nhạc</h1>
 
         <div className="relative mt-7">
@@ -291,6 +299,8 @@ export default function V4SafePage() {
 
               <BackgroundPanel value={background} onChange={setBackground} onError={setError}/>
 
+              <LongVideoLoopPanel songDuration={song.duration || 0} value={longVideo} onChange={setLongVideo}/>
+
               <section className="rounded-2xl border border-white/[.06] bg-white/[.02] p-4">
                 <p className="mb-3 text-[10px] font-bold uppercase tracking-[.14em] text-pink-300">Bước 4 · Lời bài hát</p>
                 <div className="flex flex-wrap gap-2">
@@ -304,7 +314,7 @@ export default function V4SafePage() {
             <section id="render-zone" className="mt-5 rounded-2xl border border-violet-300/15 bg-violet-400/[.045] p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-violet-300">Bước 6 · Xem trước và xuất video</p><b>Kiểm tra trước khi xuất video</b></div>
-                <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] text-white/40">{size.width}×{size.height}</span>
+                <div className="flex items-center gap-2"><span className="rounded-full bg-white/5 px-2 py-1 text-[10px] text-white/40">{size.width}×{size.height}</span>{longVideo.enabled&&<span className="rounded-full bg-amber-300/10 px-2 py-1 text-[10px] text-amber-100">{fmt(totalOutputDuration)}</span>}</div>
               </div>
 
               <LivePreview song={song} aspect={aspect} template={template} wave={wave} motion={motion} lyrics={lyrics} karaokeTimeline={karaokeTimeline} background={background} start={previewStart} exporting={!!action} resultUrl={resultUrl} />
@@ -338,7 +348,7 @@ export default function V4SafePage() {
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <button disabled={!!action} onClick={() => render('preview')} className="h-11 rounded-xl bg-cyan-400/10 text-sm font-bold disabled:opacity-40"><Play className="mr-2 inline size-4" />Preview 10 giây</button>
-                <button disabled={!!action} onClick={() => render('full')} className="h-11 rounded-xl bg-violet-500 text-sm font-bold disabled:opacity-40">{action === 'full' && <LoaderCircle className="mr-2 inline size-4 animate-spin" />}Xuất toàn bộ</button>
+                <button disabled={!!action} onClick={() => render('full')} className="h-11 rounded-xl bg-violet-500 text-sm font-bold disabled:opacity-40">{action === 'full' && <LoaderCircle className="mr-2 inline size-4 animate-spin" />}{longVideo.enabled ? 'Xuất video dài' : 'Xuất toàn bộ'}</button>
               </div>
               {resultUrl && resultBlob && <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-emerald-300/15 bg-emerald-300/[.06] px-3 py-2.5">
                 <div className="min-w-0"><p className="text-xs font-bold text-emerald-200">Video đã xuất xong</p><p className="truncate text-[10px] text-white/35">Xem trực tiếp ở khung preview phía trên.</p></div>
