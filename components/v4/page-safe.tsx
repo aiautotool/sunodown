@@ -102,6 +102,10 @@ export default function V4SafePage() {
     }catch{}
   },[]);
 
+  useEffect(()=>{
+    window.dispatchEvent(new CustomEvent('suno-karaoke-timeline-change',{detail:karaokeTimeline}));
+  },[karaokeTimeline]);
+
   useEffect(() => {
     const input = url.trim();
     if (!isSunoUrl(input)) return;
