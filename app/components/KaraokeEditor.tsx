@@ -9,6 +9,7 @@ import {
   exportEnhancedLrc,
   exportSrt,
   parseKaraokeJson,
+  alignRoughWordsToLyrics,
   setLineTiming,
   setWordTiming,
   shiftTimeline,
@@ -61,26 +62,72 @@ export default function KaraokeEditor({ audioUrl, lyrics, duration, timeline, on
     setTapStarts([]);
   }
 
+  async function decodeTo16kMono(blob: Blob) {
+    const arrayBuffer = await blob.arrayBuffer();
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) throw new Error('Trình duyệt không hỗ trợ Web Audio.');
+
+    const context = new AudioCtx();
+    try {
+      const decoded = await context.decodeAudioData(arrayBuffer.slice(0));
+      const frameCount = Math.ceil(decoded.duration * 16000);
+      const offline = new OfflineAudioContext(1, frameCount, 16000);
+      const source = offline.createBufferSource();
+      source.buffer = decoded;
+      source.connect(offline.destination);
+      source.start(0);
+      const rendered = await offline.startRendering();
+      return new Float32Array(rendered.getChannelData(0));
+    } finally {
+      await context.close();
+    }
+  }
+
   async function autoAlign() {
     setAligning(true);
-    setAlignMessage('');
+    setAlignMessage('Đang tải audio...');
     try {
       const audioResponse = await fetch(audioUrl, { cache: 'no-store' });
       if (!audioResponse.ok) throw new Error('Không tải được audio để căn lời.');
-      const audioBlob = await audioResponse.blob();
-      const form = new FormData();
-      form.set('audio', new File([audioBlob], 'suno-audio', { type: audioBlob.type || 'audio/mpeg' }));
-      form.set('lyrics', lyrics);
-      form.set('language', 'vi');
 
-      const response = await fetch('/api/karaoke/align', { method: 'POST', body: form });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Auto Sync thất bại.');
+      const pcm = await decodeTo16kMono(await audioResponse.blob());
+      setAlignMessage('Đang tải model Whisper lần đầu...');
 
-      const parsed = parseKaraokeJson(JSON.stringify(data));
-      onChange(parsed);
-      const rate = typeof data?.meta?.match_rate === 'number' ? Math.round(data.meta.match_rate * 100) : null;
-      setAlignMessage(rate === null ? 'Auto Sync hoàn tất.' : `Auto Sync hoàn tất · khớp ${rate}% từ.`);
+      const worker = new Worker(new URL('../workers/karaoke-whisper.worker.ts', import.meta.url), { type: 'module' });
+
+      const result = await new Promise<{ chunks: Array<{ text: string; timestamp: [number | null, number | null] }> }>((resolve, reject) => {
+        worker.onmessage = (event) => {
+          const data = event.data;
+          if (data?.type === 'status' && data.message) setAlignMessage(String(data.message));
+          if (data?.type === 'progress') {
+            const raw = data.progress;
+            const percent = typeof raw?.progress === 'number' ? Math.round(raw.progress) : null;
+            const label = raw?.file ? `Đang tải model · ${raw.file}` : 'Đang tải model';
+            setAlignMessage(percent == null ? label : `${label} · ${percent}%`);
+          }
+          if (data?.type === 'result') resolve(data);
+          if (data?.type === 'error') reject(new Error(data.message || 'Whisper trong trình duyệt bị lỗi.'));
+        };
+        worker.onerror = () => reject(new Error('Web Worker chạy Whisper bị lỗi.'));
+        worker.postMessage({ type: 'transcribe', audio: pcm.buffer, language: 'vi' }, [pcm.buffer]);
+      }).finally(() => worker.terminate());
+
+      const rough = result.chunks
+        .map((chunk) => ({
+          text: chunk.text,
+          start: typeof chunk.timestamp?.[0] === 'number' ? chunk.timestamp[0] : NaN,
+          end: typeof chunk.timestamp?.[1] === 'number' ? chunk.timestamp[1] : NaN,
+        }))
+        .filter((word) => Number.isFinite(word.start) && Number.isFinite(word.end));
+
+      if (!rough.length) throw new Error('Whisper không tìm được timestamp trong bài hát.');
+
+      const aligned = alignRoughWordsToLyrics(lyrics, rough, duration);
+      if (!aligned.length) throw new Error('Không căn được lyrics với audio.');
+
+      onChange(aligned);
+      const gpu = 'gpu' in navigator ? 'WebGPU' : 'WASM';
+      setAlignMessage(`Auto Sync hoàn tất trên máy của bạn · ${gpu} · ${rough.length} mốc từ.`);
     } catch (error) {
       setAlignMessage(error instanceof Error ? error.message : 'Auto Sync thất bại.');
     } finally {
@@ -155,7 +202,7 @@ export default function KaraokeEditor({ audioUrl, lyrics, duration, timeline, on
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={estimate} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/10">Auto estimate</button>
-          <button onClick={() => void autoAlign()} disabled={aligning} className="rounded-lg border border-fuchsia-300/20 bg-fuchsia-300/10 px-3 py-1.5 text-xs font-semibold text-fuchsia-100 hover:bg-fuchsia-300/15 disabled:opacity-50">{aligning ? 'Đang Auto Sync AI...' : 'Auto Sync AI'}</button>
+          <button onClick={() => void autoAlign()} disabled={aligning} className="rounded-lg border border-fuchsia-300/20 bg-fuchsia-300/10 px-3 py-1.5 text-xs font-semibold text-fuchsia-100 hover:bg-fuchsia-300/15 disabled:opacity-50">{aligning ? 'Đang Auto Sync...' : 'Auto Sync trên máy'}</button>
           {!tapMode ? (
             <button onClick={startTapSync} className="rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-300/15">Bắt đầu Tap Sync</button>
           ) : (
