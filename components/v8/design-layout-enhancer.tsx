@@ -73,22 +73,27 @@ export function V8DesignLayoutEnhancer(){
 #studio-editor>section>.grid>div{min-width:0}
 #v5-video-preset-gallery{min-width:0;max-width:100%}
 .v5-preset-track,.v8-effects-track{display:flex;flex-wrap:nowrap;gap:10px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scroll-padding-inline:4px;padding:4px 4px 16px;scrollbar-width:thin;scrollbar-color:rgba(167,139,250,.45) transparent}
-.v5-preset-track>[data-preset]{flex:0 0 176px;min-width:0;scroll-snap-align:start}
+.v5-preset-track>[data-preset]{flex:0 0 164px;min-width:0;scroll-snap-align:start}
 .v5-preset-track>[data-preset]:focus-visible,.v8-effects-track>button:focus-visible{outline:2px solid #67e8f9;outline-offset:2px}
 .v5-preset-track,.v5-preset-track>[data-preset],.v8-effects-track,.v8-effects-track>button{cursor:grab;user-select:none}
 .v5-preset-track.is-dragging,.v8-effects-track.is-dragging{scroll-snap-type:none}
 .v5-preset-track.is-dragging,.v5-preset-track.is-dragging>[data-preset],.v8-effects-track.is-dragging,.v8-effects-track.is-dragging>button{cursor:grabbing}
 #effects-slot,#video-effects{min-width:0;max-width:100%}
-.v8-effects-track>button{flex:0 0 112px;min-width:0;scroll-snap-align:start}
-#render-zone{position:relative;z-index:1}
-#preview-result{position:relative;z-index:1;overflow:hidden}
+.v8-effects-track>button{flex:0 0 96px;min-width:0;scroll-snap-align:start}
+#render-zone{position:relative;z-index:1;overflow:hidden}
+#render-zone>div:first-of-type{margin-bottom:10px!important}
+#render-zone canvas,#render-zone video{display:block;max-width:100%}
+#render-zone input[type="range"]{min-width:0}
+#studio-editor>section,#video-effects{box-shadow:none!important}
+#studio-editor>section{overflow:hidden}
+#studio-editor>section+section,#studio-editor>section+#effects-slot{margin-top:0!important}
 
 @media(min-width:900px){
-  .v8-song-studio{display:grid!important;grid-template-columns:minmax(0,1.25fr) minmax(340px,.75fr);gap:20px;align-items:start}
+  .v8-song-studio{display:grid!important;grid-template-columns:minmax(0,1.36fr) minmax(360px,.64fr);column-gap:22px;row-gap:16px;align-items:start}
   .v8-song-detail{grid-column:1/-1}
-  #studio-editor{grid-column:1;grid-row:2 / span 3}
-  #render-zone{grid-column:2;grid-row:2;position:sticky;top:18px;margin-top:24px!important}
-  #preview-result{grid-column:2;grid-row:3;margin-top:0!important}
+  .v8-song-studio>div:nth-of-type(2){grid-column:1/-1}
+  #studio-editor{grid-column:1;grid-row:auto;gap:12px!important;min-width:0}
+  #render-zone{grid-column:2;grid-row:3 / span 20;position:sticky;top:16px;margin-top:0!important;align-self:start;min-width:0;max-height:calc(100vh - 32px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
   .v8-link-card{max-width:820px}
 }
 
@@ -102,9 +107,10 @@ export function V8DesignLayoutEnhancer(){
   #studio-editor{gap:12px!important}
   #studio-editor>section,#video-effects{padding:12px!important;border-radius:14px!important}
   #studio-editor button{min-height:34px}
-  #render-zone{position:static!important;margin-top:14px!important;padding:12px!important}
-  #preview-result{margin-top:12px!important}
+  #render-zone{position:static!important;margin-top:14px!important;padding:12px!important;max-height:none!important;overflow:visible!important}
   .v8-app-flow video{border-radius:14px!important}
+  .v8-effects-track>button{flex-basis:88px}
+  .v5-preset-track>[data-preset]{flex-basis:154px}
 }
 `}</style>;
 }
