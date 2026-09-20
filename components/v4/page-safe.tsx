@@ -4,6 +4,8 @@ import {useEffect,useRef,useState} from 'react';
 import {Copy,Download,LoaderCircle,Play} from 'lucide-react';
 import {generateVisualizerVideoArt} from '../v7/renderer-art';
 import {LivePreview} from '../v8/live-preview';
+import {BackgroundPanel} from '../v8/background-panel';
+import {DEFAULT_BACKGROUND_CONFIG,sanitizeStoredBackground,type BackgroundConfig} from '../v8/background';
 import KaraokeEditor from '@/app/components/KaraokeEditor';
 import {buildEstimatedKaraokeTimeline,type KaraokeLine} from '@/app/lib/karaoke';
 import {useRenderWakeLock} from '@/hooks/use-render-wake-lock';
@@ -87,10 +89,18 @@ export default function V4SafePage() {
   const [resultUrl, setResultUrl] = useState('');
   const [copied, setCopied] = useState<'lyrics' | 'style' | null>(null);
   const [karaokeTimeline,setKaraokeTimeline]=useState<KaraokeLine[]>([]);
+  const [background,setBackground]=useState<BackgroundConfig>(DEFAULT_BACKGROUND_CONFIG);
   const lastResolved = useRef('');
   const resolveNow = useRef<(() => void) | null>(null);
 
   useEffect(() => () => { if (resultUrl) URL.revokeObjectURL(resultUrl); }, [resultUrl]);
+
+  useEffect(()=>{
+    try{
+      const raw=localStorage.getItem('suno-v8-background');
+      if(raw)setBackground(sanitizeStoredBackground(JSON.parse(raw)));
+    }catch{}
+  },[]);
 
   useEffect(() => {
     const input = url.trim();
@@ -166,6 +176,7 @@ export default function V4SafePage() {
         previewSeconds: mode === 'preview' ? 10 : undefined,
         onProgress: setProgress,
         karaokeTimeline: lyrics==='off'?undefined:karaokeTimeline,
+        background,
       });
       setProgress(100);
       setResultBlob(blob);
@@ -274,6 +285,8 @@ export default function V4SafePage() {
                 </div>
               </section>
 
+              <BackgroundPanel value={background} onChange={setBackground} onError={setError}/>
+
               <section className="rounded-2xl border border-white/[.06] bg-white/[.02] p-4">
                 <p className="mb-3 text-[10px] font-bold uppercase tracking-[.14em] text-pink-300">Bước 3 · Lời bài hát</p>
                 <div className="flex flex-wrap gap-2">
@@ -290,7 +303,7 @@ export default function V4SafePage() {
                 <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] text-white/40">{size.width}×{size.height}</span>
               </div>
 
-              <LivePreview song={song} aspect={aspect} template={template} wave={wave} motion={motion} lyrics={lyrics} start={previewStart} exporting={!!action} />
+              <LivePreview song={song} aspect={aspect} template={template} wave={wave} motion={motion} lyrics={lyrics} karaokeTimeline={karaokeTimeline} background={background} start={previewStart} exporting={!!action} resultUrl={resultUrl} />
 
               <div className="mb-4 rounded-xl border border-cyan-300/10 bg-black/20 p-3">
                 <div className="flex items-center justify-between gap-3 text-xs">
