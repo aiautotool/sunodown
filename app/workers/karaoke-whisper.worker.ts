@@ -1,7 +1,5 @@
 /// <reference lib="webworker" />
 
-import { pipeline } from '@huggingface/transformers';
-
 type RequestMessage = {
   type: 'transcribe';
   audio: ArrayBuffer;
@@ -17,6 +15,9 @@ let transcriberPromise: Promise<any> | null = null;
 
 async function getTranscriber() {
   if (!transcriberPromise) {
+    const moduleUrl = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
+    const transformers = await import(/* @vite-ignore */ moduleUrl);
+    const pipeline = transformers.pipeline as any;
     const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator;
     transcriberPromise = pipeline(
       'automatic-speech-recognition',
