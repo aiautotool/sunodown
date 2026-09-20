@@ -1,2 +1,3 @@
 v8 aligned lyrics build ready.
 deploy-trigger: karaoke-audio-merge
+verify-custom-background-build
