@@ -4,6 +4,8 @@ import {useEffect,useRef,useState} from 'react';
 import {Copy,Download,LoaderCircle,Play} from 'lucide-react';
 import {generateVisualizerVideoArt} from '../v7/renderer-art';
 import {LivePreview} from '../v8/live-preview';
+import KaraokeEditor from '@/app/components/KaraokeEditor';
+import {buildEstimatedKaraokeTimeline,type KaraokeLine} from '@/app/lib/karaoke';
 import {useRenderWakeLock} from '@/hooks/use-render-wake-lock';
 import {
   LYRIC_MODES,
@@ -62,6 +64,7 @@ export default function V4SafePage() {
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [resultUrl, setResultUrl] = useState('');
   const [copied, setCopied] = useState<'lyrics' | 'style' | null>(null);
+  const [karaokeTimeline,setKaraokeTimeline]=useState<KaraokeLine[]>([]);
   const lastResolved = useRef('');
   const resolveNow = useRef<(() => void) | null>(null);
 
@@ -87,6 +90,7 @@ export default function V4SafePage() {
         setSong(data);
         setPreviewStart(0);
         setCopied(null);
+        setKaraokeTimeline(data?.lyrics&&data?.duration?buildEstimatedKaraokeTimeline(data.lyrics,data.duration):[]);
       } catch (cause) {
         if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Không đọc được bài hát.');
       } finally {
@@ -138,6 +142,7 @@ export default function V4SafePage() {
         startSeconds: mode === 'preview' ? previewStart : 0,
         previewSeconds: mode === 'preview' ? 10 : undefined,
         onProgress: setProgress,
+        karaokeTimeline: lyrics==='off'?undefined:karaokeTimeline,
       });
       setProgress(100);
       setResultBlob(blob);
@@ -200,7 +205,7 @@ export default function V4SafePage() {
                         <Copy className="mr-1 inline size-3.5" />{copied === 'lyrics' ? 'Đã sao chép' : 'Sao chép'}
                       </button>
                     </div>
-                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-sans text-xs leading-6 text-white/65">{song.lyrics}</pre>
+                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-sans text-xs leading-6 text-white/65">{song.lyrics}</pre>{song.duration&&<KaraokeEditor audioUrl={song.audio} lyrics={song.lyrics} duration={song.duration} timeline={karaokeTimeline} onChange={setKaraokeTimeline}/>} 
                   </div>
                 </details>
               )}
