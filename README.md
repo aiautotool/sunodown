@@ -4,47 +4,40 @@ Trình tải và phát nhạc Suno chạy trên Cloudflare Workers.
 
 ## Karaoke lyrics trong Gen Video
 
-Khi bài Suno có lyrics, phần **Xem lời bài hát** có thêm Karaoke Timing Editor:
+Khi bài Suno có lyrics, phần **Xem lời bài hát** có Karaoke Timing Editor:
 
-- Auto estimate timing.
-- **Tap Sync** theo từng câu ngay khi nghe audio.
-- Chỉnh start/end từng câu.
-- Chỉnh start/end từng từ.
+- **Auto Sync trên máy**: không cần Python, GPU server, API key hay cấu hình.
+- WebGPU được ưu tiên; nếu máy/browser không có WebGPU thì tự fallback sang WASM.
+- Whisper chạy trong Web Worker để không khóa giao diện.
+- Audio được decode và resample 16 kHz mono ngay trong browser.
+- Word timestamps được fuzzy/monotonic-align lại với **lyrics gốc Suno**. ASR không được phép thay lời.
+- Dùng chunk 29 giây để tránh lỗi timestamp từng được ghi nhận với chunk 30 giây.
+- Tap Sync theo từng câu là fallback thủ công.
+- Chỉnh start/end từng câu và từng từ.
 - Nudge toàn bài hoặc từng câu.
 - Preview từ đang hát.
 - Import/export timing JSON.
 - Export ASS karaoke, Enhanced LRC và SRT.
 - **Tạo video Karaoke** dùng chính timeline đã chỉnh.
 
-### Auto Sync AI
-
-Web app có endpoint proxy:
+### Luồng mặc định — không cần setup
 
 ```
-POST /api/karaoke/align
+Dán link Suno
+  -> lấy audio + lyrics
+  -> bấm Auto Sync trên máy
+  -> tải Whisper model vào browser (lần đầu)
+  -> WebGPU/WASM xử lý audio
+  -> word timestamps thô
+  -> fuzzy alignment với lyrics gốc Suno
+  -> editor/preview
+  -> Gen Video karaoke
 ```
 
-Để dùng Auto Sync AI, chạy service trong:
+Transformers.js được tải on-demand từ jsDelivr khi người dùng bấm Auto Sync, vì vậy project không cần thêm dependency vào `package-lock.json`.
 
-```
-services/karaoke-align
-```
+### Service alignment tùy chọn
 
-Sau đó cấu hình:
+Thư mục `services/karaoke-align` vẫn được giữ cho trường hợp sau này muốn chạy server GPU. Đây **không phải** yêu cầu để chức năng Auto Sync mặc định hoạt động.
 
-```
-KARAOKE_ALIGN_URL=https://your-align-service.example.com
-```
-
-Service thực hiện:
-
-```
-Suno audio
-  -> Demucs tách vocal
-  -> faster-whisper lấy rough word timestamps
-  -> fuzzy monotonic alignment với lyrics gốc Suno
-  -> nội suy từ bị ASR bỏ sót
-  -> line + word timestamps
-```
-
-Lyrics gốc từ Suno luôn là nguồn text cuối cùng; ASR chỉ dùng để tìm thời gian, không thay thế lời bài hát.
+Endpoint `POST /api/karaoke/align` cũng chỉ là fallback server tùy chọn.
