@@ -1,3 +1,4 @@
 v8 aligned lyrics build ready.
 deploy-trigger: karaoke-audio-merge
 deploy-clean-studio-layout
+retry-observable-deploy-srt-download
