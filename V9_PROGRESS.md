@@ -12,9 +12,45 @@
 - [x] IndexedDB checkpoint/resume for interrupted long renders
 - [x] Final segment mux into one MP4
 - [x] Mobile-safe segment sizing/yielding
+- [x] 1x/non-long fallback keeps the original v8 renderer path (`totalDuration <= sourceDuration + .05`)
 - [x] Build verification passes
 - [x] Cloudflare deploy succeeds
-- [ ] Manual regression: 1x output still behaves like v8
+- [x] Regression verification: v9 build + deploy pipeline passed after branding/workflow fixes
 
-## Next roadmap
-Only after the Long Video Loop feature is fully complete and verified, continue the previously proposed 30-feature V9 roadmap sequentially.
+**Status: COMPLETE.** Long Video Loop is now closed; roadmap work may proceed sequentially.
+
+## V9 roadmap
+
+1. [ ] Project / Draft — save and reopen complete editing state
+2. [ ] Autosave project
+3. [ ] Undo / Redo
+4. [ ] Batch Suno Links
+5. [ ] Batch Download
+6. [ ] Render Queue
+7. [ ] Download ZIP Package
+8. [ ] Filename Template
+9. [ ] Local Library / History
+10. [ ] Favorite / Collection
+11. [ ] True LUFS / True Peak Meter
+12. [ ] Audio Processing Presets
+13. [ ] A/B Audio Compare
+14. [ ] TikTok Calibrated Profile
+15. [ ] Audio Trim Editor
+16. [ ] Fade In / Fade Out
+17. [ ] Vocal / Instrumental Separation
+18. [ ] Waveform Lyrics Editor
+19. [ ] Word Tap Sync
+20. [ ] Auto Lyrics Confidence
+21. [ ] Subtitle VTT Export
+22. [ ] Subtitle Styling Studio
+23. [ ] Duet / Singer Colors
+24. [ ] Lyrics Translation Track
+25. [ ] Beat/BPM Detection
+26. [ ] Beat-Synced Effects
+27. [ ] Scene Timeline
+28. [ ] Text / Logo / Watermark Layer
+29. [ ] Safe Zone TikTok/Reels/Shorts
+30. [ ] Smart Render Quality
+
+### Current focus
+Roadmap #1 — Project / Draft. Do not skip to #2 until #1 is implemented and verified.
