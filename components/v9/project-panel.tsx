@@ -10,6 +10,7 @@ function stamp(value:number){try{return new Intl.DateTimeFormat('vi-VN',{dateSty
 export function ProjectPanel({state,defaultName='Dự án Suno',activeProjectId,onActiveProject,onOpen}:Props){
   const [projects,setProjects]=useState<V9Project[]>([]);const [name,setName]=useState(defaultName);const [message,setMessage]=useState('');
   const active=useMemo(()=>projects.find(item=>item.id===activeProjectId)||null,[projects,activeProjectId]);
+  const stateSignature=useMemo(()=>JSON.stringify(state),[state.url,state.aspect,state.wave,state.template,state.motion,state.lyrics,state.preset,state.previewStart,state.karaokeTimeline,state.background,state.longVideo]);
   const skipAutosave=useRef(true);const refresh=()=>setProjects(listProjects());
   useEffect(()=>{refresh()},[]);
   useEffect(()=>{if(!activeProjectId&&!name.trim())setName(defaultName)},[activeProjectId,defaultName,name]);
@@ -21,13 +22,13 @@ export function ProjectPanel({state,defaultName='Dự án Suno',activeProjectId,
     if(!activeProjectId){skipAutosave.current=true;return;}
     if(skipAutosave.current){skipAutosave.current=false;return;}
     const timer=window.setTimeout(()=>{
-      try{
-        const project=saveProject(name||defaultName,state,activeProjectId);
-        onActiveProject(project);refresh();setMessage('Đã tự động lưu');
-      }catch{setMessage('Tự động lưu thất bại')}
+      try{const project=saveProject(name||defaultName,state,activeProjectId);onActiveProject(project);refresh();setMessage('Đã tự động lưu')}
+      catch{setMessage('Tự động lưu thất bại')}
     },900);
     return()=>window.clearTimeout(timer);
-  },[state,activeProjectId,name,defaultName,onActiveProject]);
+    // stateSignature deliberately represents the complete serializable editor state and avoids rerunning after updatedAt-only parent renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[stateSignature,activeProjectId,name,defaultName,onActiveProject]);
 
   function save(){try{const project=saveProject(name||defaultName,state,activeProjectId||undefined);skipAutosave.current=true;onActiveProject(project);refresh();setName(project.name);setMessage('Đã lưu dự án')}catch{setMessage('Không lưu được dự án trên thiết bị này')}}
   function createNew(){skipAutosave.current=true;onActiveProject(null);setName(defaultName);setMessage('Dự án mới — chỉnh sửa rồi bấm Lưu')}
