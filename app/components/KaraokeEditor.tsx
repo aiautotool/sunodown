@@ -47,6 +47,8 @@ export default function KaraokeEditor({ audioUrl, lyrics, duration, timeline, on
   const [tapMode, setTapMode] = useState(false);
   const [selectedLine, setSelectedLine] = useState(0);
   const [expandedWordLine, setExpandedWordLine] = useState<number | null>(null);
+  const [aligning, setAligning] = useState(false);
+  const [alignMessage, setAlignMessage] = useState('');
 
   const active = useMemo(() => activeKaraokeLine(timeline, time), [timeline, time]);
 
@@ -57,6 +59,33 @@ export default function KaraokeEditor({ audioUrl, lyrics, duration, timeline, on
   function estimate() {
     onChange(buildEstimatedKaraokeTimeline(lyrics, duration));
     setTapStarts([]);
+  }
+
+  async function autoAlign() {
+    setAligning(true);
+    setAlignMessage('');
+    try {
+      const audioResponse = await fetch(audioUrl, { cache: 'no-store' });
+      if (!audioResponse.ok) throw new Error('Không tải được audio để căn lời.');
+      const audioBlob = await audioResponse.blob();
+      const form = new FormData();
+      form.set('audio', new File([audioBlob], 'suno-audio', { type: audioBlob.type || 'audio/mpeg' }));
+      form.set('lyrics', lyrics);
+      form.set('language', 'vi');
+
+      const response = await fetch('/api/karaoke/align', { method: 'POST', body: form });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Auto Sync thất bại.');
+
+      const parsed = parseKaraokeJson(JSON.stringify(data));
+      onChange(parsed);
+      const rate = typeof data?.meta?.match_rate === 'number' ? Math.round(data.meta.match_rate * 100) : null;
+      setAlignMessage(rate === null ? 'Auto Sync hoàn tất.' : `Auto Sync hoàn tất · khớp ${rate}% từ.`);
+    } catch (error) {
+      setAlignMessage(error instanceof Error ? error.message : 'Auto Sync thất bại.');
+    } finally {
+      setAligning(false);
+    }
   }
 
   function startTapSync() {
@@ -126,6 +155,7 @@ export default function KaraokeEditor({ audioUrl, lyrics, duration, timeline, on
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={estimate} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/10">Auto estimate</button>
+          <button onClick={() => void autoAlign()} disabled={aligning} className="rounded-lg border border-fuchsia-300/20 bg-fuchsia-300/10 px-3 py-1.5 text-xs font-semibold text-fuchsia-100 hover:bg-fuchsia-300/15 disabled:opacity-50">{aligning ? 'Đang Auto Sync AI...' : 'Auto Sync AI'}</button>
           {!tapMode ? (
             <button onClick={startTapSync} className="rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-300/15">Bắt đầu Tap Sync</button>
           ) : (
@@ -146,6 +176,8 @@ export default function KaraokeEditor({ audioUrl, lyrics, duration, timeline, on
         onSeeked={(event) => setTime(event.currentTarget.currentTime)}
         className="mt-4 h-10 w-full"
       />
+
+      {alignMessage && <div className="mt-2 rounded-lg border border-white/[.07] bg-white/[.035] px-3 py-2 text-xs text-white/60">{alignMessage}</div>}
 
       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
         <input
