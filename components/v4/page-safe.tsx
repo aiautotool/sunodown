@@ -46,6 +46,71 @@ function fmt(value: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+const CHORD_TOKEN = String.raw`(?:[A-G](?:#|b)?(?:maj|min|m|dim|aug|sus|add)?\\d*(?:\\/[A-G](?:#|b)?)?)`;
+
+function stripChords(lyrics: string) {
+  if (!lyrics) return '';
+  const bracketChord = new RegExp(`\\\\[\\\\s*${CHORD_TOKEN}(?:\\\\s+${CHORD_TOKEN})*\\\\s*\\\\]`, 'gi');
+  const parenChord = new RegExp(`\\\\(\\\\s*${CHORD_TOKEN}(?:\\\\s+${CHORD_TOKEN})*\\\\s*\\\\)`, 'gi');
+  const chordOnlyLine = new RegExp(`^\\\\s*${CHORD_TOKEN}(?:\\\\s+${CHORD_TOKEN})+\\\\s*'use client';
+
+import {useEffect,useRef,useState} from 'react';
+import {Copy,Download,LoaderCircle,Play} from 'lucide-react';
+import {generateVisualizerVideoArt} from '../v7/renderer-art';
+import {LivePreview} from '../v8/live-preview';
+import KaraokeEditor from '@/app/components/KaraokeEditor';
+import {buildEstimatedKaraokeTimeline,type KaraokeLine} from '@/app/lib/karaoke';
+import {useRenderWakeLock} from '@/hooks/use-render-wake-lock';
+import {
+  LYRIC_MODES,
+  MOTION_LEVELS,
+  PLATFORM_PRESETS,
+  VIDEO_SIZES,
+  VISUAL_TEMPLATES,
+  WAVE_STYLES,
+  type LyricsMode,
+  type MotionIntensity,
+  type PlatformPreset,
+  type Song,
+  type VideoAspect,
+  type VisualTemplate,
+  type WaveStyle,
+} from './types';
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function isSunoUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && (url.hostname === 'suno.com' || url.hostname.endsWith('.suno.com'));
+  } catch {
+    return false;
+  }
+}
+
+function fmt(value: number) {
+  const seconds = Math.max(0, Math.floor(value));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+, 'i');
+  return lyrics
+    .split(/\\r?\\n/)
+    .map((line) => line.replace(bracketChord, '').replace(parenChord, '').trimEnd())
+    .filter((line) => !chordOnlyLine.test(line))
+    .join('\\n')
+    .replace(/[ \\t]{2,}/g, ' ')
+    .replace(/\\n{3,}/g, '\\n\\n')
+    .trim();
+}
+
 export default function V4SafePage() {
   const [url, setUrl] = useState('https://suno.com/s/0Uzw4fboYOyOzHjc');
   const [song, setSong] = useState<Song | null>(null);
@@ -90,7 +155,8 @@ export default function V4SafePage() {
         setSong(data);
         setPreviewStart(0);
         setCopied(null);
-        setKaraokeTimeline(data?.lyrics&&data?.duration?buildEstimatedKaraokeTimeline(data.lyrics,data.duration):[]);
+        const cleanLyrics = stripChords(data?.lyrics || '');
+        setKaraokeTimeline(cleanLyrics&&data?.duration?buildEstimatedKaraokeTimeline(cleanLyrics,data.duration):[]);
       } catch (cause) {
         if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Không đọc được bài hát.');
       } finally {
@@ -155,6 +221,7 @@ export default function V4SafePage() {
   const size = VIDEO_SIZES[aspect];
   const previewMax = Math.max(0, (song?.duration || 10) - 10);
   const previewEnd = Math.min(song?.duration || previewStart + 10, previewStart + 10);
+  const cleanLyrics = stripChords(song?.lyrics || '');
 
   return (
     <main className="min-h-screen bg-[#080812] text-white">
@@ -200,11 +267,11 @@ export default function V4SafePage() {
                   </summary>
                   <div className="border-t border-white/[.06] px-4 py-4">
                     <div className="mb-3 flex justify-end">
-                      <button type="button" onClick={() => copyText('lyrics', song.lyrics || '')} className="rounded-lg bg-white/[.07] px-3 py-2 text-xs font-semibold text-white/70">
+                      <button type="button" onClick={() => copyText('lyrics', cleanLyrics)} className="rounded-lg bg-white/[.07] px-3 py-2 text-xs font-semibold text-white/70">
                         <Copy className="mr-1 inline size-3.5" />{copied === 'lyrics' ? 'Đã sao chép' : 'Sao chép'}
                       </button>
                     </div>
-                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-sans text-xs leading-6 text-white/65">{song.lyrics}</pre>{song.duration&&<KaraokeEditor audioUrl={song.audio} lyrics={song.lyrics} duration={song.duration} timeline={karaokeTimeline} onChange={setKaraokeTimeline}/>} 
+                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-sans text-xs leading-6 text-white/65">{cleanLyrics}</pre>{song.duration&&<KaraokeEditor audioUrl={song.audio} lyrics={cleanLyrics} duration={song.duration} timeline={karaokeTimeline} onChange={setKaraokeTimeline}/>} 
                   </div>
                 </details>
               )}
