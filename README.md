@@ -67,3 +67,8 @@ Lưu ý: đây là **TikTok-like processing**, không phải thuật toán nội
 - Tải WAV: luôn xử lý trước khi xuất PCM 48 kHz stereo.
 - Gen Video và Karaoke Video: luôn dùng processed audio thay vì copy audio Suno gốc.
 - Nếu browser không encode AAC được, video fallback sang processed MP3 audio thay vì quay về audio gốc.
+
+
+## GitHub Actions build
+
+Mỗi lần push lên `main`, workflow `.github/workflows/build-deploy.yml` sẽ chạy `npm ci` và `npm run build`, lưu artifact `sunodown-dist`. Nếu repository có `CLOUDFLARE_API_TOKEN` và `CLOUDFLARE_ACCOUNT_ID`, job deploy sẽ đưa bản build lên Cloudflare bằng Wrangler.
