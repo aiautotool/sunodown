@@ -6,6 +6,7 @@ import {VIDEO_SIZES, type Song, type VideoAspect, type VisualTemplate, type Wave
 import {getStoredEffects} from './effects-panel';
 import {drawVideoEffects, type EffectConfig} from './video-effects';
 import {drawKaraokeOverlay, type KaraokeLine} from '@/app/lib/karaoke';
+import {DEFAULT_BACKGROUND_CONFIG,applyBackgroundFinish,drawMediaBackground,drawPresetBackground,type BackgroundConfig} from './background';
 
 type Props = {
   song: Song;
@@ -15,6 +16,7 @@ type Props = {
   motion: MotionIntensity;
   lyrics: LyricsMode;
   karaokeTimeline?: KaraokeLine[];
+  background?: BackgroundConfig;
   start: number;
   exporting: boolean;
   resultUrl?: string;
@@ -36,6 +38,8 @@ export function LivePreview(props: Props) {
   const [time, setTime] = useState(props.start);
   const [status, setStatus] = useState('Đang tải ảnh xem trước…');
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
+  const [backgroundBitmap,setBackgroundBitmap]=useState<ImageBitmap|null>(null);
+  const backgroundVideo=useRef<HTMLVideoElement|null>(null);
 
   const previewEnd = Math.min(props.song.duration || props.start + 10, props.start + 10);
   const previewDuration = Math.max(.1, previewEnd - props.start);
@@ -66,6 +70,30 @@ export function LivePreview(props: Props) {
     })();
     return () => { controller.abort(); image?.close(); };
   }, [props.song.picture]);
+
+  useEffect(()=>{
+    const config=props.background||DEFAULT_BACKGROUND_CONFIG;
+    let cancelled=false,createdBitmap:ImageBitmap|null=null,createdVideo:HTMLVideoElement|null=null;
+    setBackgroundBitmap(null);
+    if(backgroundVideo.current){backgroundVideo.current.pause();backgroundVideo.current.removeAttribute('src');backgroundVideo.current.load();backgroundVideo.current=null}
+    (async()=>{
+      try{
+        if(config.mode==='image'&&config.imageUrl){
+          const response=await fetch(config.imageUrl);
+          if(!response.ok)throw new Error('Không tải được ảnh nền.');
+          createdBitmap=await createImageBitmap(await response.blob());
+          if(cancelled){createdBitmap.close();return}
+          setBackgroundBitmap(createdBitmap);
+        }else if(config.mode==='video'&&config.videoUrl){
+          const v=document.createElement('video');createdVideo=v;v.src=config.videoUrl;v.muted=true;v.playsInline=true;v.preload='auto';
+          await new Promise<void>((resolve,reject)=>{const ok=()=>{cleanup();resolve()},bad=()=>{cleanup();reject(new Error('Trình duyệt không đọc được video này.'))},cleanup=()=>{v.removeEventListener('loadeddata',ok);v.removeEventListener('error',bad)};v.addEventListener('loadeddata',ok,{once:true});v.addEventListener('error',bad,{once:true});v.load()});
+          if(cancelled){v.removeAttribute('src');v.load();return}
+          backgroundVideo.current=v;
+        }
+      }catch(error){if(!cancelled)setStatus(error instanceof Error?error.message:'Không tải được background.')}
+    })();
+    return()=>{cancelled=true;if(createdBitmap)createdBitmap.close();if(createdVideo){createdVideo.pause();createdVideo.removeAttribute('src');createdVideo.load()}if(backgroundVideo.current===createdVideo)backgroundVideo.current=null};
+  },[props.background?.mode,props.background?.presetId,props.background?.imageUrl,props.background?.videoUrl]);
 
   useEffect(() => {
     const player = audio.current;
@@ -117,14 +145,24 @@ export function LivePreview(props: Props) {
 
       context.setTransform(scale, 0, 0, scale, 0, 0);
       const hasExactLyrics = p.lyrics !== 'off' && !!p.karaokeTimeline?.length;
-      paint(context, p.song, size.width, size.height, absoluteTime, p.template, p.wave, p.motion, hasExactLyrics ? 'off' : p.lyrics);
+      const background=p.background||DEFAULT_BACKGROUND_CONFIG,customBackground=background.mode!=='suno';
+      if(background.mode==='preset'){
+        drawPresetBackground(context,background.presetId,size.width,size.height,absoluteTime);applyBackgroundFinish(context,size.width,size.height,background);
+      }else if(background.mode==='image'&&backgroundBitmap){
+        drawMediaBackground(context,backgroundBitmap,backgroundBitmap.width,backgroundBitmap.height,size.width,size.height,background);applyBackgroundFinish(context,size.width,size.height,background);
+      }else if(background.mode==='video'&&backgroundVideo.current&&Number.isFinite(backgroundVideo.current.duration)){
+        const v=backgroundVideo.current,d=v.duration,target=background.loopVideo&&d>0?absoluteTime%d:Math.min(absoluteTime,Math.max(0,d-.02));
+        if(Math.abs(v.currentTime-target)>.12)try{v.currentTime=target}catch{}
+        if(v.readyState>=2){drawMediaBackground(context,v,v.videoWidth,v.videoHeight,size.width,size.height,background);applyBackgroundFinish(context,size.width,size.height,background)}
+      }
+      paint(context, p.song, size.width, size.height, absoluteTime, p.template, p.wave, p.motion, hasExactLyrics ? 'off' : p.lyrics,customBackground);
       if (hasExactLyrics) drawKaraokeOverlay(context, p.karaokeTimeline!, absoluteTime, size.width, size.height);
       drawVideoEffects(context, size.width, size.height, absoluteTime, effects.current);
     };
 
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
-  }, [bitmap, props.exporting, props.resultUrl]);
+  }, [bitmap, backgroundBitmap, props.background, props.exporting, props.resultUrl]);
 
   async function togglePlayback() {
     const player = audio.current;
