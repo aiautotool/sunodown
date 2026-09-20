@@ -46,68 +46,25 @@ function fmt(value: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-const CHORD_TOKEN = String.raw`(?:[A-G](?:#|b)?(?:maj|min|m|dim|aug|sus|add)?\\d*(?:\\/[A-G](?:#|b)?)?)`;
+function isChordToken(token: string) {
+  return /^[A-G](?:#|b)?(?:maj|min|m|dim|aug|sus|add)?\d*(?:\/[A-G](?:#|b)?)?$/.test(token);
+}
 
 function stripChords(lyrics: string) {
   if (!lyrics) return '';
-  const bracketChord = new RegExp(`\\\\[\\\\s*${CHORD_TOKEN}(?:\\\\s+${CHORD_TOKEN})*\\\\s*\\\\]`, 'gi');
-  const parenChord = new RegExp(`\\\\(\\\\s*${CHORD_TOKEN}(?:\\\\s+${CHORD_TOKEN})*\\\\s*\\\\)`, 'gi');
-  const chordOnlyLine = new RegExp(`^\\\\s*${CHORD_TOKEN}(?:\\\\s+${CHORD_TOKEN})+\\\\s*'use client';
-
-import {useEffect,useRef,useState} from 'react';
-import {Copy,Download,LoaderCircle,Play} from 'lucide-react';
-import {generateVisualizerVideoArt} from '../v7/renderer-art';
-import {LivePreview} from '../v8/live-preview';
-import KaraokeEditor from '@/app/components/KaraokeEditor';
-import {buildEstimatedKaraokeTimeline,type KaraokeLine} from '@/app/lib/karaoke';
-import {useRenderWakeLock} from '@/hooks/use-render-wake-lock';
-import {
-  LYRIC_MODES,
-  MOTION_LEVELS,
-  PLATFORM_PRESETS,
-  VIDEO_SIZES,
-  VISUAL_TEMPLATES,
-  WAVE_STYLES,
-  type LyricsMode,
-  type MotionIntensity,
-  type PlatformPreset,
-  type Song,
-  type VideoAspect,
-  type VisualTemplate,
-  type WaveStyle,
-} from './types';
-
-function saveBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1500);
-}
-
-function isSunoUrl(value: string) {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && (url.hostname === 'suno.com' || url.hostname.endsWith('.suno.com'));
-  } catch {
-    return false;
-  }
-}
-
-function fmt(value: number) {
-  const seconds = Math.max(0, Math.floor(value));
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-}
-
-, 'i');
   return lyrics
-    .split(/\\r?\\n/)
-    .map((line) => line.replace(bracketChord, '').replace(parenChord, '').trimEnd())
-    .filter((line) => !chordOnlyLine.test(line))
-    .join('\\n')
-    .replace(/[ \\t]{2,}/g, ' ')
-    .replace(/\\n{3,}/g, '\\n\\n')
+    .split(/\r?\n/)
+    .map((line) => {
+      const cleaned = line
+        .replace(/\[([^\]]+)\]/g, (full, inner: string) => inner.trim().split(/\s+/).every(isChordToken) ? '' : full)
+        .replace(/\(([^)]+)\)/g, (full, inner: string) => inner.trim().split(/\s+/).every(isChordToken) ? '' : full)
+        .replace(/[ \t]{2,}/g, ' ')
+        .trimEnd();
+      const tokens = cleaned.trim().split(/\s+/).filter(Boolean);
+      return tokens.length > 0 && tokens.every(isChordToken) ? '' : cleaned;
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -252,6 +209,7 @@ export default function V4SafePage() {
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-xl font-bold">{song.title}</h2>
                 <p className="text-sm text-white/50">{song.creator}</p>
+                <audio controls src={song.audio} className="mt-2 w-full" />
               </div>
             </div>
 
@@ -332,7 +290,7 @@ export default function V4SafePage() {
                 <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] text-white/40">{size.width}×{size.height}</span>
               </div>
 
-              <LivePreview song={song} aspect={aspect} template={template} wave={wave} motion={motion} lyrics={lyrics} karaokeTimeline={karaokeTimeline} start={previewStart} exporting={!!action} resultUrl={resultUrl} />
+              <LivePreview song={song} aspect={aspect} template={template} wave={wave} motion={motion} lyrics={lyrics} start={previewStart} exporting={!!action} />
 
               <div className="mb-4 rounded-xl border border-cyan-300/10 bg-black/20 p-3">
                 <div className="flex items-center justify-between gap-3 text-xs">
@@ -362,11 +320,16 @@ export default function V4SafePage() {
               </div>}
 
               <div className="grid gap-2 sm:grid-cols-2">
-                <button disabled={!!action} onClick={() => render('preview')} className="h-12 rounded-xl bg-cyan-400/10 font-bold disabled:opacity-40"><Play className="mr-2 inline size-4" />Render thử 10 giây · {fmt(previewStart)}</button>
+                <button disabled={!!action} onClick={() => render('preview')} className="h-12 rounded-xl bg-cyan-400/10 font-bold disabled:opacity-40"><Play className="mr-2 inline size-4" />Xem trước 10 giây · {fmt(previewStart)}</button>
                 <button disabled={!!action} onClick={() => render('full')} className="h-12 rounded-xl bg-violet-500 font-bold disabled:opacity-40">{action === 'full' && <LoaderCircle className="mr-2 inline size-4 animate-spin" />}Xuất toàn bộ video</button>
               </div>
-              {resultBlob && <button onClick={() => saveBlob(resultBlob, `${song.title || 'suno'}-${template}-${aspect}.mp4`)} className="mt-3 w-full rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-3 text-sm font-bold text-emerald-100"><Download className="mr-2 inline size-4" />Tải video đang hiển thị</button>}
             </section>
+
+            {resultUrl && <section id="preview-result" className="mt-5 rounded-xl border border-emerald-300/20 bg-emerald-300/5 p-3">
+              <p className="mb-3 text-sm font-bold text-emerald-200">Bản xem trước / video đã xuất</p>
+              <video src={resultUrl} controls playsInline className="max-h-[70vh] w-full rounded-xl bg-black" />
+              <button onClick={() => resultBlob && saveBlob(resultBlob, `${song.title || 'suno'}-${template}-${aspect}.mp4`)} className="mt-3 rounded-lg bg-white/10 px-3 py-2"><Download className="mr-2 inline size-4" />Tải video</button>
+            </section>}
           </article>
         )}
       </section>
