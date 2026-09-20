@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useRef,useState} from 'react';
-import {BACKGROUND_PRESETS,DEFAULT_BACKGROUND_CONFIG,type BackgroundConfig,type BackgroundMode} from './background';
+import {BACKGROUND_PRESETS,DEFAULT_BACKGROUND_CONFIG,backgroundFingerprint,type BackgroundConfig,type BackgroundMode} from './background';
 
 type Props={value:BackgroundConfig;onChange:(next:BackgroundConfig)=>void;onError:(message:string)=>void};
 
@@ -19,7 +19,10 @@ export function BackgroundPanel({value,onChange,onError}:Props){
  useEffect(()=>{
   const stored={...value,imageUrl:undefined,videoUrl:undefined,imageFingerprint:undefined,videoFingerprint:undefined,mode:value.mode==='image'||value.mode==='video'?'suno':value.mode};
   try{localStorage.setItem('suno-v8-background',JSON.stringify(stored))}catch{}
- },[value.mode,value.presetId,value.fit,value.blur,value.dim,value.overlayOpacity,value.loopVideo]);
+  document.documentElement.dataset.sunoBackground=backgroundFingerprint(value);
+  document.documentElement.dataset.sunoBackgroundMode=value.mode;
+  return()=>{delete document.documentElement.dataset.sunoBackground;delete document.documentElement.dataset.sunoBackgroundMode};
+ },[value.mode,value.presetId,value.imageFingerprint,value.videoFingerprint,value.fit,value.blur,value.dim,value.overlayOpacity,value.loopVideo]);
 
  function chooseMode(mode:BackgroundMode){
   if(mode==='image'){imageInput.current?.click();return}
