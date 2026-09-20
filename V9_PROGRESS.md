@@ -21,7 +21,7 @@
 
 ## V9 roadmap
 
-1. [ ] Project / Draft — save and reopen complete editing state
+1. [x] Project / Draft — save and reopen complete editing state
 2. [ ] Autosave project
 3. [ ] Undo / Redo
 4. [ ] Batch Suno Links
@@ -52,11 +52,20 @@
 29. [ ] Safe Zone TikTok/Reels/Shorts
 30. [ ] Smart Render Quality
 
-### Current focus
-Roadmap #1 — Project / Draft. Do not skip to #2 until #1 is implemented and verified.
-
-Progress for #1:
+### Roadmap #1 — Project / Draft
 - [x] Versioned local project store (`components/v9/project-store.ts`)
 - [x] Project manager UI with Save / New / Open / Rename / Delete (`components/v9/project-panel.tsx`)
 - [x] Wire ProjectPanel to editor state and restore URL, aspect, waveform, template, motion, lyrics mode, karaoke timing, background controls, preview position, preset and Long Video Loop on Open
-- [ ] Build verification + deploy (workflow triggered by commit `ba09a36`; awaiting result)
+- [x] Build verification + Cloudflare deploy: push workflow for `0c3f6a3` completed successfully (run 35543373677)
+
+**Status: COMPLETE.**
+
+### Current focus
+Roadmap #2 — Autosave project. Do not skip to #3 until #2 is implemented and verified.
+
+Progress for #2:
+- [x] Debounced autosave for active saved/opened projects (900 ms)
+- [x] Autosave persists the complete serializable editor state through the same versioned project store
+- [x] New unsaved work is not silently added to the project library; first explicit Save establishes the project identity
+- [x] Prevent autosave feedback/render loops by tracking a stable serialized editor-state signature
+- [ ] Build verification + Cloudflare deploy for autosave HEAD
