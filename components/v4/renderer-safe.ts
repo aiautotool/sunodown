@@ -92,19 +92,41 @@ export function createLiveFramePainter(bitmap: ImageBitmap) {
  };
 }
 
+function isMobileRenderDevice(){
+  if(typeof navigator==='undefined')return false;
+  const ua=navigator.userAgent||'';
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(ua)||(navigator.maxTouchPoints>1&&/Macintosh/i.test(ua));
+}
+
+async function yieldToBrowser(){
+  await new Promise<void>(resolve=>setTimeout(resolve,0));
+}
+
 export async function generateVisualizerVideoSafe(song:Song,aspect:VideoAspect,waveStyle:WaveStyle,template:VisualTemplate,options:SafeRenderOptions){
  if(!song.picture||!song.audio)throw new Error('Không đủ ảnh hoặc âm thanh để tạo video.');
  options.onProgress?.(1);
  const[ir,ar]=await Promise.all([fetch(song.picture,{cache:'no-store'}),fetch(song.audio,{cache:'no-store'})]);if(!ir.ok||!ar.ok)throw new Error('Không thể tải ảnh hoặc âm thanh.');
+ options.onProgress?.(4);
  if(!('VideoEncoder'in window))throw new Error('Trình duyệt chưa hỗ trợ tạo video MP4.');
  const{ALL_FORMATS,BlobSource,BufferTarget,CanvasSource,EncodedAudioPacketSource,EncodedPacketSink,EncodedPacket,Input,Mp4OutputFormat,Output}=await import('mediabunny');
- const originalAudio=await ar.blob(),processedWav=await renderTikTokLikeAudio(originalAudio);let audioBlob:Blob;try{audioBlob=await convertProcessedAudio(processedWav,'m4a')}catch{audioBlob=await convertProcessedAudio(processedWav,'mp3')}const input=new Input({source:new BlobSource(audioBlob),formats:ALL_FORMATS}),track=await input.getPrimaryAudioTrack();if(!track)throw new Error('Không có luồng âm thanh hợp lệ.');
+ const originalAudio=await ar.blob(),mobile=isMobileRenderDevice();
+ let processedWav:Blob|null=null,audioBlob:Blob=originalAudio;
+ if(!mobile){
+   options.onProgress?.(6);
+   processedWav=await renderTikTokLikeAudio(originalAudio);
+   options.onProgress?.(8);
+   try{audioBlob=await convertProcessedAudio(processedWav,'m4a')}catch{audioBlob=await convertProcessedAudio(processedWav,'mp3')}
+ }else{
+   options.onProgress?.(8);
+   await yieldToBrowser();
+ }
+ const input=new Input({source:new BlobSource(audioBlob),formats:ALL_FORMATS}),track=await input.getPrimaryAudioTrack();if(!track)throw new Error('Không có luồng âm thanh hợp lệ.');
  const codec=await track.getCodec(),decoderConfig=await track.getDecoderConfig(),fullDuration=await input.computeDuration();if(!codec||!decoderConfig||!Number.isFinite(fullDuration)||fullDuration<=0)throw new Error('Không đọc được âm thanh.');
  const start=Math.max(0,Math.min(options.startSeconds||0,Math.max(0,fullDuration-.05))),duration=options.previewSeconds?Math.min(options.previewSeconds,fullDuration-start):fullDuration,end=start+duration;
- let samples:Float32Array|null=null,rate=48000;try{const ac=new AudioContext(),d=await ac.decodeAudioData(await processedWav.arrayBuffer());samples=d.getChannelData(0);rate=d.sampleRate;await ac.close()}catch{samples=null}
+ let samples:Float32Array|null=null,rate=48000;if(!mobile&&processedWav){try{const ac=new AudioContext(),d=await ac.decodeAudioData(await processedWav.arrayBuffer());samples=d.getChannelData(0);rate=d.sampleRate;await ac.close()}catch{samples=null}}else{samples=null}
  const{width,height}=VIDEO_SIZES[aspect],canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw new Error('Không tạo được khung hình.');
  const bmp=await createImageBitmap(await ir.blob()),palette=extractPalette(bmp),target=new BufferTarget(),output=new Output({format:new Mp4OutputFormat(),target}),bitrate=width*height>=1_000_000?2_700_000:1_900_000,videoSource=new CanvasSource(canvas,{codec:'avc',bitrate}),audioSource=new EncodedAudioPacketSource(codec);output.addVideoTrack(videoSource);output.addAudioTrack(audioSource,{decoderConfig});await output.start();
- try{const fps=15,fd=1/fps,frames=Math.ceil(duration*fps);for(let i=0;i<frames;i++){const localT=i*fd,absoluteT=start+localT,level=amplitude(samples,rate,absoluteT);drawTemplate(ctx,bmp,song,width,height,absoluteT,level,template,options.motion,palette);if(options.lyrics!=='off'&&options.karaokeTimeline?.length){drawKaraokeOverlay(ctx,options.karaokeTimeline,absoluteT,width,height)}else{drawLyrics(ctx,song,width,height,absoluteT,fullDuration,options.lyrics)}drawWave(ctx,samples,rate,absoluteT,width,height,waveStyle,palette);await videoSource.add(localT,Math.min(fd,duration-localT),{keyFrame:i%(fps*2)===0});if(i%3===0||i===frames-1)options.onProgress?.(Math.min(90,Math.round(((i+1)/frames)*90)))}
+ try{const fps=15,fd=1/fps,frames=Math.ceil(duration*fps);for(let i=0;i<frames;i++){const localT=i*fd,absoluteT=start+localT,level=amplitude(samples,rate,absoluteT);drawTemplate(ctx,bmp,song,width,height,absoluteT,level,template,options.motion,palette);if(options.lyrics!=='off'&&options.karaokeTimeline?.length){drawKaraokeOverlay(ctx,options.karaokeTimeline,absoluteT,width,height)}else{drawLyrics(ctx,song,width,height,absoluteT,fullDuration,options.lyrics)}drawWave(ctx,samples,rate,absoluteT,width,height,waveStyle,palette);await videoSource.add(localT,Math.min(fd,duration-localT),{keyFrame:i%(fps*2)===0});if(mobile&&i%12===0)await yieldToBrowser();if(i%3===0||i===frames-1)options.onProgress?.(Math.min(90,10+Math.round(((i+1)/frames)*80)))}
  bmp.close();const sink=new EncodedPacketSink(track),meta={decoderConfig};let added=0;for await(const p of sink.packets()){if(p.timestamp+p.duration<=start)continue;if(p.timestamp>=end)break;const packet=start>0?new EncodedPacket(p.data,p.type,Math.max(0,p.timestamp-start),p.duration):p;await audioSource.add(packet,meta);added++;if(added%10===0)options.onProgress?.(94)}options.onProgress?.(97);await output.finalize();options.onProgress?.(100)}catch(e){bmp.close();output.cancel();throw e}
  if(!target.buffer)throw new Error('Không xuất được MP4.');return new Blob([target.buffer],{type:'video/mp4'})
 }
