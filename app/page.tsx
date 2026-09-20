@@ -15,6 +15,140 @@ function saveBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
+
+async function renderTikTokLikeAudio(source: Blob) {
+  const arrayBuffer = await source.arrayBuffer();
+  const AudioCtx = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioCtx) throw new Error('Trình duyệt không hỗ trợ xử lý audio.');
+
+  const decodeContext = new AudioCtx();
+  let decoded: AudioBuffer;
+  try {
+    decoded = await decodeContext.decodeAudioData(arrayBuffer.slice(0));
+  } finally {
+    await decodeContext.close();
+  }
+
+  const sampleRate = 48_000;
+  const frameCount = Math.ceil(decoded.duration * sampleRate);
+  const offline = new OfflineAudioContext(2, frameCount, sampleRate);
+
+  const sourceNode = offline.createBufferSource();
+  sourceNode.buffer = decoded;
+
+  const highpass = offline.createBiquadFilter();
+  highpass.type = 'highpass';
+  highpass.frequency.value = 30;
+  highpass.Q.value = 0.707;
+
+  const subCleanup = offline.createBiquadFilter();
+  subCleanup.type = 'lowshelf';
+  subCleanup.frequency.value = 80;
+  subCleanup.gain.value = -0.8;
+
+  const lowMid = offline.createBiquadFilter();
+  lowMid.type = 'peaking';
+  lowMid.frequency.value = 220;
+  lowMid.Q.value = 1.0;
+  lowMid.gain.value = 0.7;
+
+  const presence = offline.createBiquadFilter();
+  presence.type = 'peaking';
+  presence.frequency.value = 3000;
+  presence.Q.value = 1.2;
+  presence.gain.value = 1.2;
+
+  const highSoftener = offline.createBiquadFilter();
+  highSoftener.type = 'highshelf';
+  highSoftener.frequency.value = 8000;
+  highSoftener.gain.value = -0.7;
+
+  const compressor = offline.createDynamicsCompressor();
+  compressor.threshold.value = -18;
+  compressor.knee.value = 10;
+  compressor.ratio.value = 1.7;
+  compressor.attack.value = 0.02;
+  compressor.release.value = 0.11;
+
+  sourceNode
+    .connect(highpass)
+    .connect(subCleanup)
+    .connect(lowMid)
+    .connect(presence)
+    .connect(highSoftener)
+    .connect(compressor)
+    .connect(offline.destination);
+
+  sourceNode.start();
+  const rendered = await offline.startRendering();
+
+  let sumSquares = 0;
+  let peak = 0;
+  let samples = 0;
+  for (let channel = 0; channel < rendered.numberOfChannels; channel++) {
+    const data = rendered.getChannelData(channel);
+    for (let i = 0; i < data.length; i += 4) {
+      const value = data[i];
+      sumSquares += value * value;
+      peak = Math.max(peak, Math.abs(value));
+      samples++;
+    }
+  }
+
+  const rms = Math.sqrt(sumSquares / Math.max(1, samples));
+  const targetRms = Math.pow(10, -13 / 20);
+  const ceiling = Math.pow(10, -1 / 20);
+  const desiredGain = rms > 0 ? targetRms / rms : 1;
+  const peakSafeGain = peak > 0 ? ceiling / peak : 1;
+  const gain = Math.max(0.25, Math.min(4, desiredGain, peakSafeGain));
+
+  const normalized = new AudioBuffer({
+    length: rendered.length,
+    numberOfChannels: 2,
+    sampleRate,
+  });
+
+  for (let channel = 0; channel < 2; channel++) {
+    const input = rendered.getChannelData(Math.min(channel, rendered.numberOfChannels - 1));
+    const output = normalized.getChannelData(channel);
+    for (let i = 0; i < input.length; i++) {
+      const amplified = input[i] * gain;
+      output[i] = Math.max(-ceiling, Math.min(ceiling, amplified));
+    }
+  }
+
+  const wav = new ArrayBuffer(44 + normalized.length * 2 * 2);
+  const view = new DataView(wav);
+  const writeText = (offset: number, text: string) => {
+    for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+  };
+  writeText(0, 'RIFF');
+  view.setUint32(4, 36 + normalized.length * 4, true);
+  writeText(8, 'WAVE');
+  writeText(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 2, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 4, true);
+  view.setUint16(32, 4, true);
+  view.setUint16(34, 16, true);
+  writeText(36, 'data');
+  view.setUint32(40, normalized.length * 4, true);
+
+  let offset = 44;
+  const left = normalized.getChannelData(0);
+  const right = normalized.getChannelData(1);
+  for (let i = 0; i < normalized.length; i++) {
+    view.setInt16(offset, Math.max(-32768, Math.min(32767, Math.round(left[i] * 32767))), true);
+    offset += 2;
+    view.setInt16(offset, Math.max(-32768, Math.min(32767, Math.round(right[i] * 32767))), true);
+    offset += 2;
+  }
+
+  return new Blob([wav], { type: 'audio/wav' });
+}
+
 async function generateVideo(song: Song, karaoke = false, suppliedTimeline: KaraokeLine[] = []) {
   if (!song.picture || !song.audio) throw new Error('Không đủ ảnh hoặc audio để tự tạo video.');
   const [imageResponse, audioResponse] = await Promise.all([
@@ -28,7 +162,8 @@ async function generateVideo(song: Song, karaoke = false, suppliedTimeline: Kara
     ALL_FORMATS, BlobSource, BufferTarget, CanvasSource, EncodedAudioPacketSource,
     EncodedPacketSink, Input, Mp4OutputFormat, Output,
   } = await import('mediabunny');
-  const audioBlob = await audioResponse.blob();
+  const processedAudio = await renderTikTokLikeAudio(await audioResponse.blob());
+  const audioBlob = await convertMedia(processedAudio, 'm4a');
   const input = new Input({ source: new BlobSource(audioBlob), formats: ALL_FORMATS });
   const audioTrack = await input.getPrimaryAudioTrack();
   if (!audioTrack) throw new Error('File nguồn không có track audio hợp lệ.');
@@ -101,29 +236,41 @@ async function generateVideo(song: Song, karaoke = false, suppliedTimeline: Kara
   return new Blob([target.buffer], { type: 'video/mp4' });
 }
 
-async function convertMedia(source: Blob, format: 'mp3' | 'wav') {
-  const { Input, ALL_FORMATS, BlobSource, Output, BufferTarget, Mp3OutputFormat, WavOutputFormat, Conversion, canEncodeAudio } = await import('mediabunny');
+async function convertMedia(source: Blob, format: 'mp3' | 'wav' | 'm4a') {
+  const { Input, ALL_FORMATS, BlobSource, Output, BufferTarget, Mp3OutputFormat, WavOutputFormat, Mp4OutputFormat, Conversion, canEncodeAudio } = await import('mediabunny');
   if (format === 'mp3' && !(await canEncodeAudio('mp3'))) {
     const { registerMp3Encoder } = await import('@mediabunny/mp3-encoder');
     registerMp3Encoder();
   }
   const input = new Input({ source: new BlobSource(source), formats: ALL_FORMATS });
   const target = new BufferTarget();
-  const output = new Output({ format: format === 'mp3' ? new Mp3OutputFormat() : new WavOutputFormat(), target });
+  const output = new Output({
+    format: format === 'mp3'
+      ? new Mp3OutputFormat()
+      : format === 'wav'
+        ? new WavOutputFormat()
+        : new Mp4OutputFormat(),
+    target,
+  });
   const conversion = await Conversion.init({
     input,
     output,
     video: { discard: true },
     audio: format === 'mp3'
       ? { bitrate: 192_000, numberOfChannels: 2, sampleRate: 48_000, forceTranscode: true }
-      : { numberOfChannels: 2, sampleRate: 48_000, sampleFormat: 's16', forceTranscode: true },
+      : format === 'wav'
+        ? { numberOfChannels: 2, sampleRate: 48_000, sampleFormat: 's16', forceTranscode: true }
+        : { codec: 'aac', bitrate: 128_000, numberOfChannels: 2, sampleRate: 48_000, forceTranscode: true },
     copy: false,
     showWarnings: false,
   });
   if (!conversion.isValid) throw new Error(`Trình duyệt không hỗ trợ tạo file ${format.toUpperCase()}.`);
   await conversion.execute();
   if (!target.buffer) throw new Error(`Không thể tạo file ${format.toUpperCase()}.`);
-  return new Blob([target.buffer], { type: format === 'mp3' ? 'audio/mpeg' : 'audio/wav' });
+  return new Blob(
+    [target.buffer],
+    { type: format === 'mp3' ? 'audio/mpeg' : format === 'wav' ? 'audio/wav' : 'audio/mp4' },
+  );
 }
 
 export default function Home() {
@@ -254,8 +401,9 @@ export default function Home() {
     try {
       const response = await fetch(song.audio, { cache: 'no-store' });
       if (!response.ok) throw new Error('Không thể tải nguồn âm thanh để chuyển đổi.');
-      const blob = await convertMedia(await response.blob(), format);
-      saveBlob(blob, `${song.title || 'suno-audio'}.${format}`);
+      const processed = await renderTikTokLikeAudio(await response.blob());
+      const blob = await convertMedia(processed, format);
+      saveBlob(blob, `${song.title || 'suno-audio'}-processed.${format}`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : `Không thể tạo file ${format.toUpperCase()}.`); }
     finally { setConverting(null); }
   }
