@@ -288,7 +288,7 @@ export default function V4SafePage() {
               <BackgroundPanel value={background} onChange={setBackground} onError={setError}/>
 
               <section className="rounded-2xl border border-white/[.06] bg-white/[.02] p-4">
-                <p className="mb-3 text-[10px] font-bold uppercase tracking-[.14em] text-pink-300">Bước 3 · Lời bài hát</p>
+                <p className="mb-3 text-[10px] font-bold uppercase tracking-[.14em] text-pink-300">Bước 4 · Lời bài hát</p>
                 <div className="flex flex-wrap gap-2">
                   {LYRIC_MODES.map((item) => <button key={item.id} disabled={!song.lyrics && item.id !== 'off'} onClick={() => setLyrics(item.id)} className={`rounded-lg px-3 py-2 text-xs ${lyrics === item.id ? 'bg-pink-400/20' : 'bg-white/5'} disabled:opacity-30`}>{item.label}</button>)}
                 </div>
@@ -299,7 +299,7 @@ export default function V4SafePage() {
 
             <section id="render-zone" className="mt-5 rounded-2xl border border-violet-300/15 bg-violet-400/[.045] p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-violet-300">Bước 5 · Xem trước và xuất video</p><b>Kiểm tra trước khi xuất video</b></div>
+                <div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-violet-300">Bước 6 · Xem trước và xuất video</p><b>Kiểm tra trước khi xuất video</b></div>
                 <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] text-white/40">{size.width}×{size.height}</span>
               </div>
 
@@ -324,25 +324,25 @@ export default function V4SafePage() {
                 <div className="mt-1 flex justify-between text-[10px] text-white/30"><span>0:00</span><span>{fmt(song.duration || 0)}</span></div>
               </div>
 
-              {(action || progress > 0) && <div className="mb-4 rounded-xl border border-white/[.06] bg-black/20 p-3">
-                {action && <p role="status" className="mb-2 text-xs text-amber-200">{screenAwake
-                  ? 'Đang giữ màn hình sáng. Hãy giữ trang này mở đến khi xuất xong.'
-                  : 'Hãy giữ màn hình sáng và trang này mở đến khi xuất xong. Trình duyệt chưa bật được chế độ giữ sáng tự động.'}</p>}
-                <div className="flex justify-between text-sm"><span>{action === 'preview' ? `Đang xuất video ${fmt(previewStart)} → ${fmt(previewEnd)}` : action === 'full' ? 'Đang xuất toàn bộ video' : 'Xuất video hoàn tất'}</span><b>{Math.round(progress)}%</b></div>
-                <div className="mt-2 h-2 overflow-hidden rounded bg-white/10"><div className="h-full rounded bg-violet-500 transition-[width] duration-200" style={{width: `${Math.max(0,Math.min(100,progress))}%`}} /></div>
+              {action && <div className="mb-4 rounded-xl border border-violet-300/15 bg-violet-300/[.055] p-3">
+                <p role="status" className="mb-2 text-[11px] text-amber-100">{screenAwake
+                  ? 'Đang giữ màn hình sáng · giữ trang này mở đến khi xuất xong.'
+                  : 'Giữ màn hình sáng và trang này mở đến khi xuất xong.'}</p>
+                <div className="flex justify-between text-xs"><span>{action === 'preview' ? `Đang xuất 10 giây · ${fmt(previewStart)} → ${fmt(previewEnd)}` : 'Đang xuất toàn bộ video'}</span><b>{Math.round(progress)}%</b></div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-violet-400 transition-[width] duration-200" style={{width: `${Math.max(0,Math.min(100,progress))}%`}} /></div>
               </div>}
 
               <div className="grid gap-2 sm:grid-cols-2">
-                <button disabled={!!action} onClick={() => render('preview')} className="h-12 rounded-xl bg-cyan-400/10 font-bold disabled:opacity-40"><Play className="mr-2 inline size-4" />Xem trước 10 giây · {fmt(previewStart)}</button>
-                <button disabled={!!action} onClick={() => render('full')} className="h-12 rounded-xl bg-violet-500 font-bold disabled:opacity-40">{action === 'full' && <LoaderCircle className="mr-2 inline size-4 animate-spin" />}Xuất toàn bộ video</button>
+                <button disabled={!!action} onClick={() => render('preview')} className="h-11 rounded-xl bg-cyan-400/10 text-sm font-bold disabled:opacity-40"><Play className="mr-2 inline size-4" />Preview 10 giây</button>
+                <button disabled={!!action} onClick={() => render('full')} className="h-11 rounded-xl bg-violet-500 text-sm font-bold disabled:opacity-40">{action === 'full' && <LoaderCircle className="mr-2 inline size-4 animate-spin" />}Xuất toàn bộ</button>
               </div>
+              {resultUrl && resultBlob && <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-emerald-300/15 bg-emerald-300/[.06] px-3 py-2.5">
+                <div className="min-w-0"><p className="text-xs font-bold text-emerald-200">Video đã xuất xong</p><p className="truncate text-[10px] text-white/35">Xem trực tiếp ở khung preview phía trên.</p></div>
+                <button onClick={() => saveBlob(resultBlob, `${song.title || 'suno'}-${template}-${aspect}.mp4`)} className="shrink-0 rounded-lg bg-emerald-300/10 px-3 py-2 text-xs font-bold text-emerald-100"><Download className="mr-1 inline size-3.5" />Tải video</button>
+              </div>}
             </section>
 
-            {resultUrl && <section id="preview-result" className="mt-5 rounded-xl border border-emerald-300/20 bg-emerald-300/5 p-3">
-              <p className="mb-3 text-sm font-bold text-emerald-200">Bản xem trước / video đã xuất</p>
-              <video src={resultUrl} controls playsInline className="max-h-[70vh] w-full rounded-xl bg-black" />
-              <button onClick={() => resultBlob && saveBlob(resultBlob, `${song.title || 'suno'}-${template}-${aspect}.mp4`)} className="mt-3 rounded-lg bg-white/10 px-3 py-2"><Download className="mr-2 inline size-4" />Tải video</button>
-            </section>}
+
           </article>
         )}
       </section>
