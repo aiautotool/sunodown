@@ -5,17 +5,40 @@ import {createLiveFramePainter} from '../v4/renderer-safe';
 import {VIDEO_SIZES, type Song, type VideoAspect, type VisualTemplate, type WaveStyle, type MotionIntensity, type LyricsMode} from '../v4/types';
 import {getStoredEffects} from './effects-panel';
 import {drawVideoEffects, type EffectConfig} from './video-effects';
+import {drawKaraokeOverlay, type KaraokeLine} from '@/app/lib/karaoke';
 
-type Props = {song: Song; aspect: VideoAspect; template: VisualTemplate; wave: WaveStyle; motion: MotionIntensity; lyrics: LyricsMode; start: number; exporting: boolean};
+type Props = {
+  song: Song;
+  aspect: VideoAspect;
+  template: VisualTemplate;
+  wave: WaveStyle;
+  motion: MotionIntensity;
+  lyrics: LyricsMode;
+  karaokeTimeline?: KaraokeLine[];
+  start: number;
+  exporting: boolean;
+  resultUrl?: string;
+};
+
+function fmt(value:number){
+  const seconds=Math.max(0,Math.floor(value));
+  return `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;
+}
 
 export function LivePreview(props: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const audio = useRef<HTMLAudioElement>(null);
+  const video = useRef<HTMLVideoElement>(null);
   const current = useRef(props);
   current.current = props;
   const effects = useRef<EffectConfig>(getStoredEffects());
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
+  const [time, setTime] = useState(props.start);
   const [status, setStatus] = useState('Đang tải ảnh xem trước…');
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
+
+  const previewEnd = Math.min(props.song.duration || props.start + 10, props.start + 10);
+  const previewDuration = Math.max(.1, previewEnd - props.start);
 
   useEffect(() => {
     const update = (event: Event) => { effects.current = (event as CustomEvent<EffectConfig>).detail; };
@@ -45,43 +68,134 @@ export function LivePreview(props: Props) {
   }, [props.song.picture]);
 
   useEffect(() => {
-    if (!bitmap || props.exporting) return;
+    const player = audio.current;
+    if (!player) return;
+    player.pause();
+    player.currentTime = props.start;
+    setTime(props.start);
+    setPlaying(false);
+  }, [props.song.audio, props.start, props.resultUrl]);
+
+  useEffect(() => {
+    if (props.exporting || props.resultUrl) {
+      audio.current?.pause();
+      setPlaying(false);
+    }
+  }, [props.exporting, props.resultUrl]);
+
+  useEffect(() => {
+    if (!bitmap || props.exporting || props.resultUrl) return;
     const context = canvas.current?.getContext('2d');
     if (!context) return;
     const paint = createLiveFramePainter(bitmap);
-    let frame = 0, previous = 0, elapsed = 0;
+    let frame = 0;
+    let previous = 0;
+
     const draw = (now: number) => {
       frame = requestAnimationFrame(draw);
       if (now - previous < 1000 / 30) return;
-      if (playing && previous && !document.hidden) elapsed += Math.min((now - previous) / 1000, .1);
       previous = now;
       if (document.hidden) return;
+
       const p = current.current;
+      const player = audio.current;
+      let absoluteTime = player?.currentTime ?? p.start;
+      const end = Math.min(p.song.duration || p.start + 10, p.start + 10);
+
+      if (player && !player.paused && absoluteTime >= end - .02) {
+        player.currentTime = p.start;
+        absoluteTime = p.start;
+        void player.play().catch(() => undefined);
+      }
+
+      setTime(absoluteTime);
       const size = VIDEO_SIZES[p.aspect];
       const surface = context.canvas;
-      // Keep the renderer's coordinates while drawing a smaller preview surface.
       const scale = Math.min(1, 640 / Math.max(size.width, size.height));
       const width = Math.round(size.width * scale), height = Math.round(size.height * scale);
       if (surface.width !== width || surface.height !== height) { surface.width = width; surface.height = height; }
+
       context.setTransform(scale, 0, 0, scale, 0, 0);
-      const time = p.start + elapsed % 10;
-      paint(context, p.song, size.width, size.height, time, p.template, p.wave, p.motion, p.lyrics);
-      drawVideoEffects(context, size.width, size.height, time, effects.current);
+      const hasExactLyrics = p.lyrics !== 'off' && !!p.karaokeTimeline?.length;
+      paint(context, p.song, size.width, size.height, absoluteTime, p.template, p.wave, p.motion, hasExactLyrics ? 'off' : p.lyrics);
+      if (hasExactLyrics) drawKaraokeOverlay(context, p.karaokeTimeline!, absoluteTime, size.width, size.height);
+      drawVideoEffects(context, size.width, size.height, absoluteTime, effects.current);
     };
+
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
-  }, [bitmap, playing, props.exporting]);
+  }, [bitmap, props.exporting, props.resultUrl]);
+
+  async function togglePlayback() {
+    const player = audio.current;
+    if (!player || props.exporting || props.resultUrl) return;
+    if (player.paused) {
+      if (player.currentTime < props.start || player.currentTime >= previewEnd) player.currentTime = props.start;
+      try {
+        await player.play();
+        setPlaying(true);
+      } catch {
+        setStatus('Trình duyệt chặn phát tự động. Hãy bấm Play lại.');
+      }
+    } else {
+      player.pause();
+      setPlaying(false);
+    }
+  }
+
+  function seekPreview(value:number){
+    const player=audio.current;
+    if(!player)return;
+    const next=Math.max(props.start,Math.min(previewEnd,value));
+    player.currentTime=next;
+    setTime(next);
+  }
 
   const size = VIDEO_SIZES[props.aspect];
+  const relative = Math.max(0, Math.min(previewDuration, time - props.start));
+
   return <div className="mb-4 rounded-xl border border-cyan-300/20 bg-black/30 p-3">
     <div className="mb-3 flex items-center justify-between gap-2">
-      <b className="text-sm text-cyan-100">Xem trước trực tiếp</b>
-      <button type="button" disabled={!!status || props.exporting} onClick={() => setPlaying(value => !value)} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs disabled:opacity-40">{playing ? 'Tạm dừng' : 'Tiếp tục'}</button>
+      <div>
+        <b className="text-sm text-cyan-100">{props.resultUrl ? 'Video đã xuất' : 'Xem trước trực tiếp'}</b>
+        <p className="mt-0.5 text-[10px] text-white/35">{props.resultUrl ? 'Kết quả thay trực tiếp khung preview.' : 'Hình ảnh, lyrics và nhạc chạy cùng một timeline.'}</p>
+      </div>
+      {!props.resultUrl && <button type="button" disabled={!!status || props.exporting} onClick={() => void togglePlayback()} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs disabled:opacity-40">{playing ? 'Tạm dừng' : 'Phát preview'}</button>}
     </div>
+
     <div className="flex justify-center overflow-hidden rounded-lg bg-black">
-      <canvas ref={canvas} role="img" aria-label="Xem trước mẫu video và hiệu ứng đã chọn" style={{aspectRatio: `${size.width}/${size.height}`, width: `min(100%, ${340 * size.width / size.height}px)`, maxHeight: 340}} />
+      {props.resultUrl
+        ? <video ref={video} src={props.resultUrl} controls playsInline autoPlay className="max-h-[70vh] w-full rounded-lg bg-black" />
+        : <canvas ref={canvas} role="img" aria-label="Xem trước video đồng bộ cùng âm thanh" style={{aspectRatio: `${size.width}/${size.height}`, width: `min(100%, ${340 * size.width / size.height}px)`, maxHeight: 340}} />}
     </div>
-    {status && <p role="status" className="mt-2 text-xs text-amber-200">{status}</p>}
-    <p className="mt-2 text-[11px] leading-5 text-white/45">{props.exporting ? 'Tạm dừng xem trước trong khi xuất video.' : 'Hiệu ứng cập nhật ngay khi chọn. Sóng nhạc đang mô phỏng, chưa đồng bộ âm thanh.'}</p>
+
+    {!props.resultUrl && <>
+      <audio
+        ref={audio}
+        src={props.song.audio}
+        preload="metadata"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+        className="hidden"
+      />
+      <div className="mt-3 grid grid-cols-[auto_1fr_auto] items-center gap-3">
+        <button type="button" disabled={props.exporting} onClick={() => void togglePlayback()} className="rounded-lg bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100 disabled:opacity-40">{playing ? '❚❚' : '▶'}</button>
+        <input
+          type="range"
+          min={props.start}
+          max={previewEnd}
+          step=".01"
+          value={Math.min(previewEnd,Math.max(props.start,time))}
+          onChange={event=>seekPreview(Number(event.target.value))}
+          className="w-full accent-cyan-300"
+          aria-label="Timeline preview có âm thanh"
+        />
+        <span className="min-w-[70px] text-right font-mono text-[10px] text-white/45">{fmt(relative)} / {fmt(previewDuration)}</span>
+      </div>
+    </>}
+
+    {status && !props.resultUrl && <p role="status" className="mt-2 text-xs text-amber-200">{status}</p>}
+    {!props.resultUrl && <p className="mt-2 text-[11px] leading-5 text-white/45">{props.exporting ? 'Preview đã dừng trong lúc xuất video.' : 'Preview dùng audio thật làm clock; thay đổi vị trí phát sẽ kéo hình và lyrics theo.'}</p>}
   </div>;
 }
