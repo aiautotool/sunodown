@@ -75,19 +75,26 @@ export function timelineFromLineStarts(lyrics: string, starts: number[], duratio
 }
 
 export function normalizeKaraokeTimeline(lines: KaraokeLine[], duration = Number.POSITIVE_INFINITY): KaraokeLine[] {
-  let previousEnd = 0;
+  let previousLineEnd = 0;
   return lines.map((line) => {
-    const start = Math.max(0, Number.isFinite(line.start) ? line.start : previousEnd);
-    const end = Math.min(duration, Math.max(start + 0.02, Number.isFinite(line.end) ? line.end : start + 1));
+    const requestedStart = Number.isFinite(line.start) ? line.start : previousLineEnd;
+    const start = Math.max(0, previousLineEnd, requestedStart);
+    const requestedEnd = Number.isFinite(line.end) ? line.end : start + 1;
+    const end = Math.min(duration, Math.max(start + 0.02, requestedEnd));
+
+    let previousWordEnd = start;
     const words = line.words?.length
-      ? line.words.map((word, index, list) => {
-          const floor = index === 0 ? start : list[index - 1].end;
-          const wordStart = Math.max(start, floor, Number.isFinite(word.start) ? word.start : floor);
-          const wordEnd = Math.min(end, Math.max(wordStart + 0.01, Number.isFinite(word.end) ? word.end : wordStart + 0.1));
+      ? line.words.map((word) => {
+          const requestedWordStart = Number.isFinite(word.start) ? word.start : previousWordEnd;
+          const wordStart = Math.min(end, Math.max(start, previousWordEnd, requestedWordStart));
+          const requestedWordEnd = Number.isFinite(word.end) ? word.end : wordStart + 0.1;
+          const wordEnd = Math.min(end, Math.max(wordStart + 0.01, requestedWordEnd));
+          previousWordEnd = wordEnd;
           return { text: word.text, start: wordStart, end: wordEnd };
         })
       : retimeWords(line.text, start, end);
-    previousEnd = end;
+
+    previousLineEnd = end;
     return { text: line.text, start, end, words };
   });
 }
