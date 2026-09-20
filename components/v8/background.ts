@@ -32,7 +32,6 @@ export const BACKGROUND_PRESETS=[
 ] as const;
 
 export function sanitizeStoredBackground(value:any):BackgroundConfig{
-  const mode:value is BackgroundConfig = value;
   const safeMode:BackgroundMode=value?.mode==='preset'?'preset':value?.mode==='suno'?'suno':'suno';
   return {
     ...DEFAULT_BACKGROUND_CONFIG,
