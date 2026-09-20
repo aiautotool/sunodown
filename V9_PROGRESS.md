@@ -54,3 +54,9 @@
 
 ### Current focus
 Roadmap #1 — Project / Draft. Do not skip to #2 until #1 is implemented and verified.
+
+Progress for #1:
+- [x] Versioned local project store (`components/v9/project-store.ts`)
+- [x] Project manager UI with Save / New / Open / Rename / Delete (`components/v9/project-panel.tsx`)
+- [ ] Wire ProjectPanel to editor state and restore all controls on Open
+- [ ] Build verification + deploy
