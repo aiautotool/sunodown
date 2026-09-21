@@ -17,12 +17,12 @@
 - [x] Cloudflare deploy succeeds
 - [x] Regression verification: v9 build + deploy pipeline passed after branding/workflow fixes
 
-**Status: COMPLETE.** Long Video Loop is now closed; roadmap work may proceed sequentially.
+**Status: COMPLETE.** Long Video Loop is closed; roadmap work proceeds sequentially.
 
 ## V9 roadmap
 
 1. [x] Project / Draft — save and reopen complete editing state
-2. [ ] Autosave project
+2. [x] Autosave project
 3. [ ] Undo / Redo
 4. [ ] Batch Suno Links
 5. [ ] Batch Download
@@ -60,12 +60,22 @@
 
 **Status: COMPLETE.**
 
-### Current focus
-Roadmap #2 — Autosave project. Do not skip to #3 until #2 is implemented and verified.
-
-Progress for #2:
+### Roadmap #2 — Autosave project
 - [x] Debounced autosave for active saved/opened projects (900 ms)
 - [x] Autosave persists the complete serializable editor state through the same versioned project store
 - [x] New unsaved work is not silently added to the project library; first explicit Save establishes the project identity
 - [x] Prevent autosave feedback/render loops by tracking a stable serialized editor-state signature
-- [ ] Build verification + Cloudflare deploy for autosave HEAD
+- [x] Build verification + Cloudflare deploy succeeded for autosave tracking HEAD `c979d19` (run 35546069478)
+
+**Status: COMPLETE.**
+
+### Current focus
+Roadmap #3 — Undo / Redo. Do not skip to #4 until #3 is implemented and verified.
+
+Progress for #3:
+- [x] Bounded 50-state editor history for the complete serializable V9 editing state
+- [x] Undo and redo restore editor state through the same project restore path
+- [x] Undo / Redo controls in Project panel
+- [x] Keyboard shortcuts: Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl/Cmd+Y (outside text inputs)
+- [x] Opening a project resets history so edits cannot leak between projects
+- [ ] Build verification + Cloudflare deploy for Undo / Redo HEAD
