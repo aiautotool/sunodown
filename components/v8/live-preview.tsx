@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect, useRef, useState} from 'react';
-import {createLiveFramePainter} from '../v4/renderer-safe';
+import {createLiveFramePainter, type OverlayLayout} from '../v4/renderer-safe';
 import {VIDEO_SIZES, type Song, type VideoAspect, type VisualTemplate, type WaveStyle, type MotionIntensity, type LyricsMode} from '../v4/types';
 import {getStoredEffects} from './effects-panel';
 import {drawVideoEffects, type EffectConfig} from './video-effects';
@@ -17,6 +17,8 @@ type Props = {
   lyrics: LyricsMode;
   karaokeTimeline?: KaraokeLine[];
   background?: BackgroundConfig;
+  layout?: OverlayLayout;
+  onLayoutChange?:(layout:OverlayLayout)=>void;
   start: number;
   exporting: boolean;
   resultUrl?: string;
