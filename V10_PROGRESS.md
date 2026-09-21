@@ -21,7 +21,7 @@
 8. [x] Filename Template
 9. [x] Local Library / History
 10. [x] Favorite / Collection
-11. [ ] True LUFS / True Peak Meter
+11. [x] True LUFS / True Peak Meter
 12. [ ] Audio Processing Presets
 13. [ ] A/B Audio Compare
 14. [ ] TikTok Calibrated Profile
@@ -60,8 +60,21 @@
 - [x] Add/remove songs from collections and filter by collection
 - [x] Preserve favorites/collections when song lifecycle metadata is updated
 - [x] Real local persistence; no mock-only controls
+- [x] Build/deploy verified by workflow 35603949982
 
-**Status: IMPLEMENTED.** Build/deploy verification is required for the commits completing this task before the run may stop.
+**Status: COMPLETE.**
+
+### Roadmap #11 — True LUFS / True Peak Meter
+- [x] Analyze the resolved full audio locally in-browser
+- [x] K-weighting filter and 400 ms / 100 ms overlap loudness blocks
+- [x] BS.1770/EBU-style absolute -70 LUFS and relative -10 LU gating
+- [x] Channel-weighted integrated loudness result in LUFS
+- [x] 4x inter-sample True Peak scan reported as dBTP
+- [x] Abort/restart analysis safely when the active song changes
+- [x] Responsive V10 meter UI mounted in the real app
+- [x] Build + Cloudflare deploy verified by workflow 35610111970
+
+**Status: COMPLETE.** Commits c6b7e89 + 5dfa4a7; workflow 35610111970 completed successfully including Build, background-render resource provisioning, deploy with bindings, and deploy-success marker.
 
 ### Current focus
-Roadmap #10 — Favorite / Collection. Verify build/deploy green for the completion commit; fix and rerun if needed. Do not start #11 in this run.
+Roadmap #12 — Audio Processing Presets. Start on the next run only; #11 is complete and verified. Exactly one roadmap task per run.
