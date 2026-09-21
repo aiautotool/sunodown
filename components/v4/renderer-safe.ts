@@ -153,10 +153,10 @@ function drawTemplate(ctx:CanvasRenderingContext2D,bmp:ImageBitmap,song:Song,w:n
 
 export function createLiveFramePainter(bitmap: ImageBitmap) {
  const palette = extractPalette(bitmap);
- return (ctx: CanvasRenderingContext2D, song: Song, w: number, h: number, time: number, template: VisualTemplate, wave: WaveStyle, motion: MotionIntensity, lyrics: LyricsMode, preserveBackground=false) => {
+ return (ctx: CanvasRenderingContext2D, song: Song, w: number, h: number, time: number, template: VisualTemplate, wave: WaveStyle, motion: MotionIntensity, lyrics: LyricsMode, preserveBackground=false, layout?:OverlayLayout) => {
   drawTemplate(ctx, bitmap, song, w, h, time, amplitude(null, 0, time), template, motion, palette,preserveBackground);
-  drawLyrics(ctx, song, w, h, time, song.duration || 1, lyrics);
-  drawWave(ctx, null, 0, time, w, h, wave, palette);
+  withSubtitleLayout(ctx,w,h,layout,()=>drawLyrics(ctx, song, w, h, time, song.duration || 1, lyrics));
+  drawWave(ctx, null, 0, time, w, h, wave, palette,layout);
  };
 }
 
