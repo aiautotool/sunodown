@@ -78,3 +78,14 @@
 
 ### Current focus
 Roadmap #14 — TikTok Calibrated Profile. Start on the next run only. Exactly one roadmap task per run.
+
+### Unified app redesign — approved mockup
+- [x] Rebuilt shell as SunoDown v10 with shared navigation language on desktop/mobile
+- [x] Desktop left navigation + compact top command bar
+- [x] Responsive dashboard grid with editor workspace and tool rail
+- [x] Mobile keeps the same visual system and feature hierarchy rather than a separate UI
+- [x] Existing Presets, Subtitle, Effects, Background, Audio Processing, LUFS, A/B, Library and Render functionality preserved
+- [x] Mobile preset/effect tracks remain independently swipeable
+- [ ] Build/deploy verification
+
+**Status: VERIFYING.** UI implementation only; roadmap #14 not started by this redesign.
