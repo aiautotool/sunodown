@@ -223,14 +223,15 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width:
   ctx.arcTo(x, y, x + width, y, r); ctx.closePath();
 }
 
-function drawWordLine(ctx: CanvasRenderingContext2D, line: KaraokeLine, time: number, centerX: number, baselineY: number, maxWidth: number) {
-  const gap = 14;
-  ctx.font = '700 42px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+export type KaraokeDrawStyle={color?:string;activeColor?:string;background?:string;backgroundOpacity?:number;fontSize?:number;bold?:boolean;shadow?:boolean;outline?:boolean;radius?:number};
+function drawWordLine(ctx: CanvasRenderingContext2D, line: KaraokeLine, time: number, centerX: number, baselineY: number, maxWidth: number, style:KaraokeDrawStyle={}) {
+  const gap = 14,scale=Math.max(.6,Math.min(1.8,(style.fontSize||100)/100)),weight=style.bold===false?500:700;
+  ctx.font = `${weight} ${42*scale}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.textBaseline = 'alphabetic';
   const widths = line.words.map((word) => ctx.measureText(word.text).width);
   const fullWidth = widths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, widths.length - 1);
-  const fontSize = Math.max(24, Math.floor(42 * Math.min(1, maxWidth / Math.max(1, fullWidth))));
-  ctx.font = `700 ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  const fontSize = Math.max(20, Math.floor(42*scale * Math.min(1, maxWidth / Math.max(1, fullWidth))));
+  ctx.font = `${weight} ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
   const measured = line.words.map((word) => ctx.measureText(word.text).width);
   let x = centerX - (measured.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, measured.length - 1)) / 2;
 
@@ -238,24 +239,23 @@ function drawWordLine(ctx: CanvasRenderingContext2D, line: KaraokeLine, time: nu
     const word = line.words[i];
     const width = measured[i];
     const progress = word.end <= word.start ? (time >= word.end ? 1 : 0) : Math.max(0, Math.min(1, (time - word.start) / (word.end - word.start)));
-    ctx.lineWidth = Math.max(4, fontSize * 0.12); ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,.9)';
-    ctx.strokeText(word.text, x, baselineY);
-    ctx.fillStyle = 'rgba(255,255,255,.84)'; ctx.fillText(word.text, x, baselineY);
+    ctx.lineWidth=Math.max(3,fontSize*.1);ctx.lineJoin='round';ctx.strokeStyle='rgba(0,0,0,.9)';ctx.shadowColor=style.shadow===false?'transparent':'rgba(0,0,0,.85)';ctx.shadowBlur=style.shadow===false?0:12;if(style.outline!==false)ctx.strokeText(word.text,x,baselineY);
+    ctx.fillStyle = style.color||'#ffffff'; ctx.fillText(word.text, x, baselineY);
     if (progress > 0) {
       ctx.save(); ctx.beginPath(); ctx.rect(x - 2, baselineY - fontSize * 1.15, (width + 4) * progress, fontSize * 1.5); ctx.clip();
-      ctx.fillStyle = '#f0abfc'; ctx.fillText(word.text, x, baselineY); ctx.restore();
+      ctx.fillStyle = style.activeColor||'#f0abfc'; ctx.fillText(word.text, x, baselineY); ctx.restore();
     }
     x += width + gap;
   }
 }
 
-export function drawKaraokeOverlay(ctx: CanvasRenderingContext2D, lines: KaraokeLine[], time: number, width: number, height: number) {
+export function drawKaraokeOverlay(ctx: CanvasRenderingContext2D, lines: KaraokeLine[], time: number, width: number, height: number, style:KaraokeDrawStyle={}) {
   const { line, next } = activeKaraokeLine(lines, time);
   if (!line && !next) return;
   const panelWidth = Math.min(width - 96, 1120), panelHeight = 154;
   const panelX = (width - panelWidth) / 2, panelY = height - panelHeight - 42;
-  ctx.save(); roundedRect(ctx, panelX, panelY, panelWidth, panelHeight, 28); ctx.fillStyle = 'rgba(8,8,18,.68)'; ctx.fill();
-  if (line) drawWordLine(ctx, line, time, width / 2, panelY + 66, panelWidth - 64);
+  ctx.save(); roundedRect(ctx,panelX,panelY,panelWidth,panelHeight,style.radius??28);const bg=style.background||'#080812',a=Math.max(0,Math.min(1,(style.backgroundOpacity??68)/100));ctx.fillStyle=bg;ctx.globalAlpha=a;ctx.fill();ctx.globalAlpha=1;
+  if (line) drawWordLine(ctx,line,time,width/2,panelY+66,panelWidth-64,style);
   if (next) {
     ctx.font = '600 26px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = 'rgba(255,255,255,.42)';
