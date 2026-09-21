@@ -1,18 +1,18 @@
 'use client';
 
 import {useEffect,useRef,useState} from 'react';
-import {Download,LoaderCircle,Play,RotateCcw,Trash2} from 'lucide-react';
+import {Download,LoaderCircle,RotateCcw,Trash2} from 'lucide-react';
 
-export type RenderQueueSnapshot={title:string;run:()=>Promise<Blob>;filename:string};
+export type RenderQueueSnapshot={title:string;run:()=>Promise<Blob>;filename:string;onComplete?:()=>void};
 type Status='pending'|'rendering'|'done'|'error';
-type Job={id:string;title:string;filename:string;status:Status;progress:number;error?:string;blob?:Blob;run:()=>Promise<Blob>};
+type Job={id:string;title:string;filename:string;status:Status;progress:number;error?:string;blob?:Blob;run:()=>Promise<Blob>;onComplete?:()=>void};
 
 function download(blob:Blob,name:string){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500)}
 
 export function RenderQueue({enqueue,onBusyChange}:{enqueue:RenderQueueSnapshot|null;onBusyChange?:(busy:boolean)=>void}){
  const [jobs,setJobs]=useState<Job[]>([]),running=useRef(false),seen=useRef<RenderQueueSnapshot|null>(null);
  useEffect(()=>{if(!enqueue||seen.current===enqueue)return;seen.current=enqueue;setJobs(list=>[...list,{...enqueue,id:crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,status:'pending',progress:0}])},[enqueue]);
- useEffect(()=>{if(running.current||!jobs.some(j=>j.status==='pending'))return;const job=jobs.find(j=>j.status==='pending');if(!job)return;running.current=true;onBusyChange?.(true);setJobs(list=>list.map(j=>j.id===job.id?{...j,status:'rendering',progress:5}:j));(async()=>{try{const blob=await job.run();setJobs(list=>list.map(j=>j.id===job.id?{...j,status:'done',progress:100,blob}:j))}catch(e){setJobs(list=>list.map(j=>j.id===job.id?{...j,status:'error',progress:0,error:e instanceof Error?e.message:'Render lỗi'}:j))}finally{running.current=false;onBusyChange?.(false)}})()},[jobs,onBusyChange]);
+ useEffect(()=>{if(running.current||!jobs.some(j=>j.status==='pending'))return;const job=jobs.find(j=>j.status==='pending');if(!job)return;running.current=true;onBusyChange?.(true);setJobs(list=>list.map(j=>j.id===job.id?{...j,status:'rendering',progress:5}:j));(async()=>{try{const blob=await job.run();job.onComplete?.();setJobs(list=>list.map(j=>j.id===job.id?{...j,status:'done',progress:100,blob}:j))}catch(e){setJobs(list=>list.map(j=>j.id===job.id?{...j,status:'error',progress:0,error:e instanceof Error?e.message:'Render lỗi'}:j))}finally{running.current=false;onBusyChange?.(false)}})()},[jobs,onBusyChange]);
  const retry=(id:string)=>setJobs(list=>list.map(j=>j.id===id?{...j,status:'pending',progress:0,error:undefined}:j));
  const remove=(id:string)=>setJobs(list=>list.filter(j=>j.id!==id));
  const clearDone=()=>setJobs(list=>list.filter(j=>j.status!=='done'));
