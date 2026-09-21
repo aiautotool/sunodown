@@ -8,7 +8,7 @@
 - [x] Mobile-safe segment sizing/yielding and original renderer fallback
 - [x] Implementation re-inspected on v10
 
-**Status: COMPLETE / REGRESSION CHECK PASS (code inspection).**
+**Status: COMPLETE / REGRESSION CHECK PASS (code inspection, 2026-09-21).** Rechecked duration resolution, segment/checkpoint resume path, absolute segment start time for continuous effects/background, renderer loopDuration path for repeated audio/karaoke, and 90s mobile segment cap/yield. No regression found.
 
 ## V10 roadmap
 1. [x] Project / Draft
@@ -24,7 +24,7 @@
 11. [x] True LUFS / True Peak Meter
 12. [x] Audio Processing Presets
 13. [x] A/B Audio Compare
-14. [ ] TikTok Calibrated Profile
+14. [x] TikTok Calibrated Profile
 15. [ ] Audio Trim Editor
 16. [ ] Fade In / Fade Out
 17. [ ] Vocal / Instrumental Separation
@@ -54,30 +54,23 @@
 ### Roadmap #12 — Audio Processing Presets
 **Status: COMPLETE.** Commits 32586b0 + 24f1a8a; workflow 35617230416 successful.
 
-### Mobile UI regression repair — preset/subtitle/effects
-- [x] Removed parent-level horizontal studio carousel that clipped/invisibly displaced injected controls
-- [x] Restored normal studio DOM flow so Preset Gallery enhancer remains visible and clickable
-- [x] Preset cards keep their own horizontal swipe track on mobile
-- [x] Subtitle mode + Edit Style remain in the normal editor flow
-- [x] Effects portal slot remains visible; effect choices use their own horizontal mobile track
-- [x] Existing Background, Long Video, Project, Filename and render controls preserved
-- [x] Repair included in current v10 build/deploy verification
-
-**Status: COMPLETE.**
-
 ### Roadmap #13 — A/B Audio Compare
-- [x] Real A/B player mounted in the app
-- [x] A plays original resolved Suno audio
-- [x] B renders the selected Audio Processing Preset using the existing offline processing engine
-- [x] Switching A/B preserves playback position and playing state
-- [x] Processed object URLs are revoked/rebuilt safely when song/preset changes
-- [x] Mobile-friendly two-button comparison UI
-- [x] Build + Cloudflare deploy verification
-
 **Status: COMPLETE.** Commits 2d326f5 + 658b469. Verification recorded after green workflow.
 
+### Roadmap #14 — TikTok Calibrated Profile
+- [x] Real Audio-tab calibrated profile UI, not mock controls
+- [x] 48 kHz stereo social EQ/compression chain
+- [x] Measured loudness correction toward −14 LUFS with −1 dBTP ceiling
+- [x] Before/after loudness + peak metrics and local calibrated preview
+- [x] Persistent profile toggle + app event for downstream integration
+- [x] Existing renderTikTokLikeAudio now uses the calibrated engine
+- [x] Mobile-friendly local processing UI
+- [x] Build + Cloudflare deploy verified
+
+**Status: COMPLETE.** Commits b85faaa + 55e1c95 + 3fbda06. Workflow 35636774746 build/deploy job successful.
+
 ### Current focus
-Roadmap #14 — TikTok Calibrated Profile. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #15 — Audio Trim Editor. Start on the next run only. Exactly one roadmap task per run.
 
 ### Unified app redesign — approved mockup
 - [x] Rebuilt shell as SunoDown v10 with shared navigation language on desktop/mobile
@@ -88,7 +81,7 @@ Roadmap #14 — TikTok Calibrated Profile. Start on the next run only. Exactly o
 - [x] Mobile preset/effect tracks remain independently swipeable
 - [x] Build/deploy verification — workflow 35624996890
 
-**Status: COMPLETE.** Unified redesign build/deploy succeeded. UI implementation only; roadmap #14 not started by this redesign.
+**Status: COMPLETE.** Unified redesign build/deploy succeeded.
 
 ### Mobile fidelity correction — supplied reference
 - [x] Added reference-style compact mobile header with Menu / SunoDown v10 / Export
@@ -99,7 +92,7 @@ Roadmap #14 — TikTok Calibrated Profile. Start on the next run only. Exactly o
 - [x] Desktop continues to use the same visual language responsively
 - [x] Build/deploy verification — workflow 35625801491
 
-**Status: COMPLETE.** Reference fidelity correction build/deploy succeeded; no roadmap task skipped.
+**Status: COMPLETE.**
 
 ### Reference-accurate navigation refactor
 - [x] Re-analyzed supplied three-screen mockup as stateful app navigation, not anchor links
@@ -111,4 +104,4 @@ Roadmap #14 — TikTok Calibrated Profile. Start on the next run only. Exactly o
 - [x] Existing render, long-video, subtitle, background, preset and effects logic retained
 - [x] Build/deploy verification — workflow 35626589087
 
-**Status: COMPLETE.** Stateful design refactor build/deploy succeeded; roadmap numbering unchanged.
+**Status: COMPLETE.**
