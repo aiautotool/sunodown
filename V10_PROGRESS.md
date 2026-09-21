@@ -97,6 +97,6 @@ Roadmap #14 — TikTok Calibrated Profile. Start on the next run only. Exactly o
 - [x] Restyled mobile feature cards to the same dark compact panel language
 - [x] Preserved real Presets, Subtitle, Effects, Background, Long Video, LUFS, Audio Processing, A/B and render behavior
 - [x] Desktop continues to use the same visual language responsively
-- [ ] Build/deploy verification
+- [x] Build/deploy verification — workflow 35625801491
 
-**Status: VERIFYING.** Fidelity correction only; no roadmap task skipped.
+**Status: COMPLETE.** Reference fidelity correction build/deploy succeeded; no roadmap task skipped.
