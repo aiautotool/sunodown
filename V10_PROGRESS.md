@@ -86,6 +86,6 @@ Roadmap #14 — TikTok Calibrated Profile. Start on the next run only. Exactly o
 - [x] Mobile keeps the same visual system and feature hierarchy rather than a separate UI
 - [x] Existing Presets, Subtitle, Effects, Background, Audio Processing, LUFS, A/B, Library and Render functionality preserved
 - [x] Mobile preset/effect tracks remain independently swipeable
-- [ ] Build/deploy verification
+- [x] Build/deploy verification — workflow 35624996890
 
-**Status: VERIFYING.** UI implementation only; roadmap #14 not started by this redesign.
+**Status: COMPLETE.** Unified redesign build/deploy succeeded. UI implementation only; roadmap #14 not started by this redesign.
