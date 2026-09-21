@@ -1,6 +1,6 @@
 'use client';
 
-import {useMemo,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import {Check,Clipboard,Download,ExternalLink,ListPlus,LoaderCircle,Trash2,X} from 'lucide-react';
 
 export type BatchSunoItem={id:string;url:string};
@@ -13,9 +13,10 @@ function safeName(value:string){return (value||'suno').normalize('NFC').replace(
 function saveBlob(blob:Blob,filename:string){const href=URL.createObjectURL(blob),a=document.createElement('a');a.href=href;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(href),1500)}
 export function parseBatchSunoLinks(input:string){const tokens=input.match(/https:\/\/[^\s<>"']+/gi)||[];const seen=new Set<string>();const items:BatchSunoItem[]=[];let invalid=0,duplicates=0;for(const token of tokens){const url=normalizeSunoUrl(token);if(!url){invalid++;continue}if(seen.has(url)){duplicates++;continue}seen.add(url);items.push({id:url,url})}return {items,invalid,duplicates}}
 
-export function BatchSunoLinks({currentUrl,onSelect}:{currentUrl:string;onSelect:(url:string)=>void}){
+export function BatchSunoLinks({currentUrl,onSelect,onItemsChange}:{currentUrl:string;onSelect:(url:string)=>void;onItemsChange?:(items:BatchSunoItem[])=>void}){
   const [open,setOpen]=useState(false),[text,setText]=useState(''),[items,setItems]=useState<BatchSunoItem[]>([]),[states,setStates]=useState<Record<string,DownloadState>>({}),[running,setRunning]=useState(false);
   const parsed=useMemo(()=>parseBatchSunoLinks(text),[text]);
+  useEffect(()=>{onItemsChange?.(items)},[items,onItemsChange]);
   function add(){if(!parsed.items.length)return;setItems(prev=>{const map=new Map(prev.map(x=>[x.url,x]));for(const item of parsed.items)map.set(item.url,item);return [...map.values()]});setText('')}
   async function paste(){try{const value=await navigator.clipboard.readText();setText(value);setOpen(true)}catch{}}
   async function downloadOne(item:BatchSunoItem,index:number){
