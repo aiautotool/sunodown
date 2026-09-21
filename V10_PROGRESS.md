@@ -48,10 +48,10 @@
 - [x] Mobile-safe metadata-only storage, 100-item cap, remove/clear controls
 - [x] Render Queue exposes completion callback so successful queued renders can be persisted by the library integration
 - [x] Enable v10 in Cloudflare build/deploy workflow with background-render bindings
-- [ ] Wire direct + queued render completion to the current song history record end-to-end
+- [x] Wire resolved + direct/queued render completion to the current song history record end-to-end
 - [ ] Build verification + Cloudflare deploy on v10
 
-**Status: IN PROGRESS.** CI run 35592710989 started for v10. Do not start #10 until rendered history is fully wired and build/deploy are green.
+**Status: IN PROGRESS.** Runtime library integration is mounted on v10 and records resolved/rendered lifecycle into the current song metadata record. Previous v10 CI run 35592739406 passed; waiting for CI/deploy of the new wiring commits before marking #9 complete. Do not start #10 yet.
 
 ### Current focus
-Roadmap #9 — finish direct/queued rendered-history wiring, then verify the active v10 CI/deploy. Do not start #10.
+Roadmap #9 — verify CI/deploy for commits 5d69190 and 5e2892d. If green, mark #9 complete; only then start #10.
