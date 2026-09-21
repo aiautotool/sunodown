@@ -25,7 +25,7 @@
 2. [x] Autosave project
 3. [x] Undo / Redo
 4. [x] Batch Suno Links
-5. [ ] Batch Download
+5. [x] Batch Download
 6. [ ] Render Queue
 7. [ ] Download ZIP Package
 8. [ ] Filename Template
@@ -88,14 +88,14 @@
 
 **Status: COMPLETE.**
 
-### Current focus
-Roadmap #5 — Batch Download. Do not skip to #6 until #5 is implemented and verified.
-
-Progress for #5:
+### Roadmap #5 — Batch Download
 - [x] Per-item real audio download through existing `/api/resolve` + media proxy
 - [x] Sequential “Download all” pipeline to avoid concurrent memory/network spikes on mobile
 - [x] Per-item resolving/downloading/done/error status and retry
 - [x] Safe numbered filenames derived from resolved song title
-- [ ] Build verification + Cloudflare deploy
+- [x] Build verification + Cloudflare deploy: latest v9 HEAD `bf883d5` passed run 35559655045 after Batch Download implementation, confirming the integrated branch builds and deploys successfully
 
-**Status: IMPLEMENTED, verification pending.**
+**Status: COMPLETE.**
+
+### Current focus
+Roadmap #6 — Render Queue. Do not skip to #7 until #6 is implemented and verified.
