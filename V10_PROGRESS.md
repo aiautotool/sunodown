@@ -25,7 +25,7 @@
 12. [x] Audio Processing Presets
 13. [x] A/B Audio Compare
 14. [x] TikTok Calibrated Profile
-15. [ ] Audio Trim Editor
+15. [x] Audio Trim Editor
 16. [ ] Fade In / Fade Out
 17. [ ] Vocal / Instrumental Separation
 18. [ ] Waveform Lyrics Editor
@@ -58,19 +58,21 @@
 **Status: COMPLETE.** Commits 2d326f5 + 658b469. Verification recorded after green workflow.
 
 ### Roadmap #14 — TikTok Calibrated Profile
-- [x] Real Audio-tab calibrated profile UI, not mock controls
-- [x] 48 kHz stereo social EQ/compression chain
-- [x] Measured loudness correction toward −14 LUFS with −1 dBTP ceiling
-- [x] Before/after loudness + peak metrics and local calibrated preview
-- [x] Persistent profile toggle + app event for downstream integration
-- [x] Existing renderTikTokLikeAudio now uses the calibrated engine
-- [x] Mobile-friendly local processing UI
-- [x] Build + Cloudflare deploy verified
-
 **Status: COMPLETE.** Commits b85faaa + 55e1c95 + 3fbda06. Workflow 35636774746 build/deploy job successful.
 
+### Roadmap #15 — Audio Trim Editor
+- [x] Real Audio-tab trim editor with start/end controls and waveform-style range visualization
+- [x] In-range playback preview with automatic stop/reset at trim end
+- [x] Persistent trim state for mobile/desktop
+- [x] Trim is consumed by video render: video timeline, audio packet selection and karaoke timing use the selected source range
+- [x] Trimmed range repeats when Long Video Loop extends output; continuous absolute background/effects timeline retained
+- [x] Mobile renderer retains cooperative yielding; long-video segmented checkpoint/resume path unchanged
+- [x] Build + Cloudflare deployment verified
+
+**Status: COMPLETE.** Commits 9ff1b77 + d926b4c + 043a8f7. Workflow 35643166119 build/deploy successful.
+
 ### Current focus
-Roadmap #15 — Audio Trim Editor. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #16 — Fade In / Fade Out. Start on the next run only. Exactly one roadmap task per run.
 
 ### Unified app redesign — approved mockup
 - [x] Rebuilt shell as SunoDown v10 with shared navigation language on desktop/mobile
