@@ -23,7 +23,7 @@
 
 1. [x] Project / Draft — save and reopen complete editing state
 2. [x] Autosave project
-3. [ ] Undo / Redo
+3. [x] Undo / Redo
 4. [ ] Batch Suno Links
 5. [ ] Batch Download
 6. [ ] Render Queue
@@ -69,13 +69,22 @@
 
 **Status: COMPLETE.**
 
-### Current focus
-Roadmap #3 — Undo / Redo. Do not skip to #4 until #3 is implemented and verified.
-
-Progress for #3:
+### Roadmap #3 — Undo / Redo
 - [x] Bounded 50-state editor history for the complete serializable V9 editing state
 - [x] Undo and redo restore editor state through the same project restore path
 - [x] Undo / Redo controls in Project panel
 - [x] Keyboard shortcuts: Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl/Cmd+Y (outside text inputs)
 - [x] Opening a project resets history so edits cannot leak between projects
-- [ ] Build verification + Cloudflare deploy for Undo / Redo HEAD
+- [x] Build verification + Cloudflare deploy succeeded for Undo / Redo tracking HEAD `e9224d` (run 35549442431)
+
+**Status: COMPLETE.**
+
+### Current focus
+Roadmap #4 — Batch Suno Links. Do not skip to #5 until #4 is implemented and verified.
+
+Progress for #4:
+- [ ] Parse/paste multiple Suno links safely
+- [ ] Validate, normalize and de-duplicate links
+- [ ] Batch list UI with per-item status/removal
+- [ ] Integrate batch input with existing single-link workflow without breaking it
+- [ ] Build verification + Cloudflare deploy
