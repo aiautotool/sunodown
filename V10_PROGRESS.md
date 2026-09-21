@@ -100,3 +100,15 @@ Roadmap #14 — TikTok Calibrated Profile. Start on the next run only. Exactly o
 - [x] Build/deploy verification — workflow 35625801491
 
 **Status: COMPLETE.** Reference fidelity correction build/deploy succeeded; no roadmap task skipped.
+
+### Reference-accurate navigation refactor
+- [x] Re-analyzed supplied three-screen mockup as stateful app navigation, not anchor links
+- [x] Song / Library / Queue are real state tabs
+- [x] Video / Audio / Lyrics / BG are real editor tabs with progressive disclosure
+- [x] Project / Presets / Effects / More bottom tools are real state controls
+- [x] Editor controls are tagged/scoped to their owning tab instead of one long settings page
+- [x] Audio Processing + LUFS + A/B grouped under Audio workspace
+- [x] Existing render, long-video, subtitle, background, preset and effects logic retained
+- [ ] Build/deploy verification
+
+**Status: VERIFYING.** Design fidelity refactor; roadmap numbering unchanged.
