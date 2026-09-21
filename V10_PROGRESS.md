@@ -88,3 +88,14 @@
 
 ### Current focus
 Roadmap #13 — A/B Audio Compare. Start on the next run only; #12 is complete and verified. Exactly one roadmap task per run.
+
+### Mobile UI correction — 2026-09-21
+- [x] Compact song header for phone screens
+- [x] Studio settings reorganized as horizontal snap/swipe cards instead of one long vertical stack
+- [x] Per-panel vertical scrolling capped to mobile viewport height
+- [x] Render actions reorganized into a compact sticky mobile action surface
+- [x] Touch targets/summary rows adjusted for mobile interaction
+- [x] V10 branding corrected in core workspace
+- [ ] Build/deploy verification for mobile correction
+
+**Status: VERIFYING.** This is a mobile usability correction and does not advance roadmap #13.
