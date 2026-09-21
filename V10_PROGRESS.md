@@ -8,7 +8,7 @@
 - [x] Mobile-safe segment sizing/yielding and original renderer fallback
 - [x] Implementation re-inspected on v10
 
-**Status: COMPLETE / REGRESSION CHECK PASS (code inspection).** Build on v10 still required below.
+**Status: COMPLETE / REGRESSION CHECK PASS (code inspection).**
 
 ## V10 roadmap
 1. [x] Project / Draft
@@ -46,10 +46,12 @@
 - [x] Persist resolved/downloaded song history locally
 - [x] Search/filter and reopen an item without re-entering the Suno URL
 - [x] Mobile-safe metadata-only storage, 100-item cap, remove/clear controls
-- [ ] Persist rendered event in history
+- [x] Render Queue exposes completion callback so successful queued renders can be persisted by the library integration
+- [x] Enable v10 in Cloudflare build/deploy workflow with background-render bindings
+- [ ] Wire direct + queued render completion to the current song history record end-to-end
 - [ ] Build verification + Cloudflare deploy on v10
 
-**Status: IN PROGRESS.** Do not start #10 until rendered history + build/deploy are complete.
+**Status: IN PROGRESS.** CI run 35592710989 started for v10. Do not start #10 until rendered history is fully wired and build/deploy are green.
 
 ### Current focus
-Roadmap #9 — finish rendered-history integration, then verify build/deploy. Do not start #10.
+Roadmap #9 — finish direct/queued rendered-history wiring, then verify the active v10 CI/deploy. Do not start #10.
