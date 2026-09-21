@@ -1,0 +1,12 @@
+'use client';
+import {useEffect,useState} from 'react';
+import {BookOpen,FolderOpen,Layers3,Music2,SlidersHorizontal,Sparkles,WandSparkles} from 'lucide-react';
+type Primary='song'|'library'|'queue';
+type Editor='video'|'audio'|'lyrics'|'bg';
+type Tool='project'|'presets'|'effects'|'more';
+const EVENT='sunodown-v10-nav';
+export function emitV10Nav(detail:{primary?:Primary;editor?:Editor;tool?:Tool}){window.dispatchEvent(new CustomEvent(EVENT,{detail}))}
+export function useV10Nav(){const[primary,setPrimary]=useState<Primary>('song');const[editor,setEditor]=useState<Editor>('video');const[tool,setTool]=useState<Tool>('presets');useEffect(()=>{const h=(e:Event)=>{const d=(e as CustomEvent<{primary?:Primary;editor?:Editor;tool?:Tool}>).detail||{};if(d.primary)setPrimary(d.primary);if(d.editor){setEditor(d.editor);setPrimary('song')}if(d.tool){setTool(d.tool);setPrimary('song')}};window.addEventListener(EVENT,h);return()=>window.removeEventListener(EVENT,h)},[]);return{primary,editor,tool,setPrimary:(v:Primary)=>{setPrimary(v);emitV10Nav({primary:v})},setEditor:(v:Editor)=>{setEditor(v);setPrimary('song');emitV10Nav({primary:'song',editor:v})},setTool:(v:Tool)=>{setTool(v);setPrimary('song');emitV10Nav({primary:'song',tool:v})}}}
+export function PrimaryTabs({value,onChange}:{value:Primary;onChange:(v:Primary)=>void}){return <div className="v10-segment grid grid-cols-3 gap-1 rounded-xl bg-[#101927] p-1">{([['song','Song',Music2],['library','Library',BookOpen],['queue','Queue',Layers3]] as const).map(([id,label,Icon])=><button key={id} onClick={()=>onChange(id)} className={value===id?'active':''}><Icon/> <span>{label}</span></button>)}</div>}
+export function EditorTabs({value,onChange}:{value:Editor;onChange:(v:Editor)=>void}){return <div className="v10-editor-nav grid grid-cols-4">{([['video','Video',FolderOpen],['audio','Audio',Music2],['lyrics','Lyrics',SlidersHorizontal],['bg','BG',Sparkles]] as const).map(([id,label,Icon])=><button key={id} onClick={()=>onChange(id)} className={value===id?'active':''}><Icon/><span>{label}</span></button>)}</div>}
+export function BottomTools(){const{tool,setTool}=useV10Nav();return <nav className="v10-bottom-tools grid grid-cols-4">{([['project','Project',FolderOpen],['presets','Presets',Sparkles],['effects','Effects',WandSparkles],['more','More',SlidersHorizontal]] as const).map(([id,label,Icon])=><button key={id} onClick={()=>setTool(id)} className={tool===id?'active':''}><Icon/><span>{label}</span></button>)}</nav>}
