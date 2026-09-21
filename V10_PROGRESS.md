@@ -19,7 +19,7 @@
 6. [x] Render Queue
 7. [x] Download ZIP Package
 8. [x] Filename Template
-9. [ ] Local Library / History
+9. [x] Local Library / History
 10. [ ] Favorite / Collection
 11. [ ] True LUFS / True Peak Meter
 12. [ ] Audio Processing Presets
@@ -49,9 +49,9 @@
 - [x] Render Queue exposes completion callback so successful queued renders can be persisted by the library integration
 - [x] Enable v10 in Cloudflare build/deploy workflow with background-render bindings
 - [x] Wire resolved + direct/queued render completion to the current song history record end-to-end
-- [ ] Build verification + Cloudflare deploy on v10
+- [x] Build verification + Cloudflare deploy on v10
 
-**Status: IN PROGRESS.** Runtime library integration is mounted on v10 and records resolved/rendered lifecycle into the current song metadata record. Previous v10 CI run 35592739406 passed; waiting for CI/deploy of the new wiring commits before marking #9 complete. Do not start #10 yet.
+**Status: COMPLETE.** Runtime library integration is mounted on v10 and records resolved/rendered lifecycle into the current song metadata record. GitHub Actions run 35598059129 passed for head 7bdfda1, verifying the complete #9 wiring and Cloudflare deployment.
 
 ### Current focus
-Roadmap #9 — verify CI/deploy for commits 5d69190 and 5e2892d. If green, mark #9 complete; only then start #10.
+Roadmap #10 — Favorite / Collection. Start this on the next run; #9 is complete and verified. One roadmap task must be fully completed per run before stopping.
