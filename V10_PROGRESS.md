@@ -109,6 +109,6 @@ Roadmap #14 — TikTok Calibrated Profile. Start on the next run only. Exactly o
 - [x] Editor controls are tagged/scoped to their owning tab instead of one long settings page
 - [x] Audio Processing + LUFS + A/B grouped under Audio workspace
 - [x] Existing render, long-video, subtitle, background, preset and effects logic retained
-- [ ] Build/deploy verification
+- [x] Build/deploy verification — workflow 35626589087
 
-**Status: VERIFYING.** Design fidelity refactor; roadmap numbering unchanged.
+**Status: COMPLETE.** Stateful design refactor build/deploy succeeded; roadmap numbering unchanged.
