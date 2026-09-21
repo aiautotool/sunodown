@@ -5,7 +5,7 @@ export type VisualTemplate = 'cover-motion'|'vinyl'|'glass-card'|'lyrics-focus'|
 export type MotionIntensity = 'low'|'medium'|'high';
 export type LyricsMode = 'off'|'scroll'|'focus';
 export type PlatformPreset = 'custom'|'tiktok'|'reels'|'shorts'|'youtube'|'instagram-square'|'instagram-feed';
-export type VideoPresetId = 'cinematic-cover'|'vinyl-night'|'glass-neon'|'lyrics-tiktok'|'minimal-album'|'spectrum-club'|'dreamy-reels'|'karaoke-focus'|'retro-record'|'social-pulse'|'chill-glass'|'youtube-music'|'portrait-record'|'square-record'|'cover-feed'|'gentle-story'|'glass-square'|'shorts-energy'|'lyrics-scroll'|'lyrics-square'|'lyrics-feed'|'wide-pulse'|'mirror-square'|'retro-spectrum'|'editorial-portrait'|'editorial-wide'|'spotlight-portrait'|'spotlight-square'|'gold-portrait'|'gold-wide';
+export type VideoPresetId = 'cinematic-cover'|'vinyl-night'|'glass-neon'|'lyrics-tiktok'|'minimal-album'|'spectrum-club'|'dreamy-reels'|'karaoke-focus'|'retro-record'|'social-pulse'|'chill-glass'|'youtube-music'|'portrait-record'|'square-record'|'cover-feed'|'gentle-story'|'glass-square'|'shorts-energy'|'lyrics-scroll'|'lyrics-square'|'lyrics-feed'|'wide-pulse'|'mirror-square'|'retro-spectrum'|'editorial-portrait'|'editorial-wide'|'spotlight-portrait'|'spotlight-square'|'gold-portrait'|'gold-wide'|'aurora-flow'|'deep-space'|'sacred-geometry'|'liquid-dream'|'fluid-nebula'|'neon-360'|'warp-tunnel'|'plasma-ocean'|'hyperspace'|'fractal-dreams'|'neon-vortex'|'psychedelic-mandala'|'retro-1980s'|'particle-field'|'soft-horizon'|'op-grid'|'concentric-glow'|'flow-field'|'reaction-glow'|'light-3d';
 
 export const VIDEO_SIZES: Record<VideoAspect,{width:number;height:number}> = {
   '16:9':{width:1280,height:720}, '9:16':{width:720,height:1280}, '1:1':{width:1080,height:1080}, '4:5':{width:864,height:1080}, '4:3':{width:960,height:720}
@@ -66,7 +66,27 @@ export const VIDEO_PRESETS:{id:VideoPresetId;label:string;hint:string;category:'
   {"id": "spotlight-portrait", "label": "Sân khấu dọc", "hint": "Bìa nổi, khung nghiêng và hào quang", "category": "Album", "template": "spotlight", "wave": "mirror", "motion": "medium", "lyrics": "off", "aspect": "9:16", "badge": "Cao cấp"},
   {"id": "spotlight-square", "label": "Sân khấu vuông", "hint": "Bìa nổi, khung nghiêng và hào quang", "category": "Album", "template": "spotlight", "wave": "pulse", "motion": "high", "lyrics": "off", "aspect": "1:1", "badge": "Cao cấp"},
   {"id": "gold-portrait", "label": "Đĩa vàng dọc", "hint": "Đĩa vàng xoay trên nền than trầm", "category": "Album", "template": "gold-record", "wave": "line", "motion": "low", "lyrics": "off", "aspect": "9:16", "badge": "Cao cấp"},
-  {"id": "gold-wide", "label": "Đĩa vàng toàn cảnh", "hint": "Đĩa vàng xoay trên nền than trầm", "category": "Album", "template": "gold-record", "wave": "dots", "motion": "low", "lyrics": "off", "aspect": "16:9", "badge": "Cao cấp"},
+  {"id": "gold-wide", "label": "Đĩa vàng toàn cảnh", "hint": "Đĩa vàng xoay trên nền than trầm", "category": "Album", "template": "gold-record", "wave": "dots", "motion": "low", "lyrics": "off", "aspect": "16:9", "badge": "Cao cấp"},,
+  {id:'aurora-flow',label:'Aurora Flow',hint:'Dải cực quang mềm, radial wave và chuyển động điện ảnh',category:'Visualizer',template:'glass-card',wave:'radial-wave',motion:'medium',lyrics:'off',aspect:'16:9',badge:'Cymatic'},
+  {id:'deep-space',label:'Deep Space',hint:'Không gian sâu, vòng phổ và chuyển động chậm',category:'Visualizer',template:'spotlight',wave:'spectrum-rings',motion:'low',lyrics:'off',aspect:'16:9',badge:'PulseForge'},
+  {id:'sacred-geometry',label:'Sacred Geometry',hint:'Hình học đối xứng phản ứng theo nhạc',category:'Visualizer',template:'glass-card',wave:'mandala',motion:'medium',lyrics:'off',aspect:'1:1',badge:'PulseForge'},
+  {id:'liquid-dream',label:'Liquid Dream',hint:'Không khí mơ màng, dải lụa và glow mềm',category:'Visualizer',template:'cover-motion',wave:'ribbon',motion:'low',lyrics:'off',aspect:'9:16',badge:'LappyCap'},
+  {id:'fluid-nebula',label:'Fluid Nebula',hint:'Tinh vân chuyển động với phổ xuyên tâm',category:'Visualizer',template:'spotlight',wave:'radial-spectrum',motion:'medium',lyrics:'off',aspect:'16:9',badge:'PulseForge'},
+  {id:'neon-360',label:'Neon 360',hint:'Vòng neon 360° cho EDM và synthwave',category:'Visualizer',template:'glass-card',wave:'neon-ring',motion:'high',lyrics:'off',aspect:'9:16',badge:'PulseForge'},
+  {id:'warp-tunnel',label:'Warp Tunnel',hint:'Cảm giác đường hầm tốc độ và arc burst',category:'Visualizer',template:'spotlight',wave:'arc-burst',motion:'high',lyrics:'off',aspect:'16:9',badge:'PulseForge'},
+  {id:'plasma-ocean',label:'Plasma Ocean',hint:'Sóng plasma nhiều lớp và chuyển động mạnh',category:'Visualizer',template:'glass-card',wave:'stacked-spectrum',motion:'high',lyrics:'off',aspect:'16:9',badge:'PulseForge'},
+  {id:'hyperspace',label:'Hyperspace',hint:'Không gian tốc độ cao với pinwheel năng lượng',category:'Visualizer',template:'spotlight',wave:'pinwheel',motion:'high',lyrics:'off',aspect:'9:16',badge:'PulseForge'},
+  {id:'fractal-dreams',label:'Fractal Dreams',hint:'Đường xoắn generative mang cảm giác fractal',category:'Visualizer',template:'glass-card',wave:'spiral',motion:'medium',lyrics:'off',aspect:'1:1',badge:'PulseForge'},
+  {id:'neon-vortex',label:'Neon Vortex',hint:'Xoáy neon mạnh cho video dọc',category:'Visualizer',template:'spotlight',wave:'spiral',motion:'high',lyrics:'off',aspect:'9:16',badge:'PulseForge'},
+  {id:'psychedelic-mandala',label:'Psychedelic Mandala',hint:'Mandala phản ứng nhạc với chuyển động mạnh',category:'Visualizer',template:'glass-card',wave:'mandala',motion:'high',lyrics:'off',aspect:'1:1',badge:'LappyCap'},
+  {id:'retro-1980s',label:'Retro 1980s',hint:'Synthwave retro, vòng neon và đĩa than',category:'Album',template:'vinyl',wave:'neon-ring',motion:'medium',lyrics:'off',aspect:'16:9',badge:'PulseForge'},
+  {id:'particle-field',label:'Particle Field',hint:'Trường hạt sáng dạng chấm phản ứng nhạc',category:'Visualizer',template:'spotlight',wave:'spark',motion:'high',lyrics:'off',aspect:'16:9',badge:'Cymatic'},
+  {id:'soft-horizon',label:'Soft Horizon',hint:'Color-field tối giản, đường sóng nhẹ',category:'Album',template:'cover-motion',wave:'line',motion:'low',lyrics:'off',aspect:'16:9',badge:'Cymatic'},
+  {id:'op-grid',label:'Op Grid',hint:'Hình học hiện đại, equalizer sắc nét',category:'Visualizer',template:'editorial',wave:'equalizer',motion:'medium',lyrics:'off',aspect:'1:1',badge:'Cymatic'},
+  {id:'concentric-glow',label:'Concentric Glow',hint:'Các vòng đồng tâm phát sáng theo beat',category:'Visualizer',template:'glass-card',wave:'spectrum-rings',motion:'medium',lyrics:'off',aspect:'1:1',badge:'Cymatic'},
+  {id:'flow-field',label:'Flow Field',hint:'Dòng chảy generative bằng dải lụa mềm',category:'Visualizer',template:'cover-motion',wave:'ribbon',motion:'medium',lyrics:'off',aspect:'16:9',badge:'Cymatic'},
+  {id:'reaction-glow',label:'Reaction Glow',hint:'Generative reaction với phổ nhiều tầng',category:'Visualizer',template:'glass-card',wave:'stacked-spectrum',motion:'medium',lyrics:'off',aspect:'16:9',badge:'Cymatic'},
+  {id:'light-3d',label:'Light 3D',hint:'Điểm sáng không gian với orbit dots',category:'Visualizer',template:'spotlight',wave:'orbit-dots',motion:'medium',lyrics:'off',aspect:'16:9',badge:'Cymatic'}
 ];
 
 export const MOTION_LEVELS:{id:MotionIntensity;label:string}[] = [
