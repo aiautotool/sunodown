@@ -206,7 +206,10 @@ export function LivePreview(props: Props) {
     <div className="flex justify-center overflow-hidden rounded-lg bg-black">
       {props.resultUrl
         ? <video ref={video} src={props.resultUrl} controls playsInline autoPlay className="max-h-[70vh] w-full rounded-lg bg-black" />
-        : <canvas ref={canvas} role="img" aria-label="Xem trước video đồng bộ cùng âm thanh" style={{aspectRatio: `${size.width}/${size.height}`, width: `min(100%, ${340 * size.width / size.height}px)`, maxHeight: 340}} />}
+        : <div className="relative" style={{aspectRatio:`${size.width}/${size.height}`,width:`min(100%, ${340*size.width/size.height}px)`,maxHeight:340}}>
+            <canvas ref={canvas} role="img" aria-label="Xem trước video đồng bộ cùng âm thanh" className="h-full w-full" />
+            {props.layout&&props.onLayoutChange&&(['wave','subtitle'] as const).map(key=><button key={key} type="button" aria-label={`Kéo ${key}`} onPointerDown={e=>{const box=e.currentTarget.parentElement!.getBoundingClientRect(),id=e.pointerId;e.currentTarget.setPointerCapture(id);const move=(ev:PointerEvent)=>{const x=Math.max(0,Math.min(100,(ev.clientX-box.left)/box.width*100)),y=Math.max(0,Math.min(100,(ev.clientY-box.top)/box.height*100));props.onLayoutChange?.({...props.layout!,[key]:{...props.layout![key],x,y}})};const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up)};window.addEventListener('pointermove',move);window.addEventListener('pointerup',up,{once:true})}} className={`absolute z-20 -translate-x-1/2 -translate-y-1/2 cursor-move rounded-full border px-2 py-1 text-[9px] font-bold shadow-lg backdrop-blur ${key==='wave'?'border-cyan-300/70 bg-cyan-950/70 text-cyan-100':'border-pink-300/70 bg-pink-950/70 text-pink-100'}`} style={{left:`${props.layout[key].x}%`,top:`${props.layout[key].y}%`,touchAction:'none'}}>{key==='wave'?'↔ Sóng':'↔ Subtitle'}</button>)}
+          </div>}
     </div>
 
     {!props.resultUrl && <>
