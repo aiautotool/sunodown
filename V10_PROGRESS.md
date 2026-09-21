@@ -23,7 +23,7 @@
 10. [x] Favorite / Collection
 11. [x] True LUFS / True Peak Meter
 12. [x] Audio Processing Presets
-13. [ ] A/B Audio Compare
+13. [x] A/B Audio Compare
 14. [ ] TikTok Calibrated Profile
 15. [ ] Audio Trim Editor
 16. [ ] Fade In / Fade Out
@@ -43,62 +43,16 @@
 30. [ ] Smart Render Quality
 
 ### Roadmap #9 — Local Library / History
-- [x] Persist resolved/downloaded song history locally
-- [x] Search/filter and reopen an item without re-entering the Suno URL
-- [x] Mobile-safe metadata-only storage, 100-item cap, remove/clear controls
-- [x] Render Queue exposes completion callback so successful queued renders can be persisted by the library integration
-- [x] Enable v10 in Cloudflare build/deploy workflow with background-render bindings
-- [x] Wire resolved + direct/queued render completion to the current song history record end-to-end
-- [x] Build verification + Cloudflare deploy on v10
-
 **Status: COMPLETE.**
 
 ### Roadmap #10 — Favorite / Collection
-- [x] Favorite/unfavorite persisted songs
-- [x] Filter library to favorites
-- [x] Create/delete named collections with a mobile-safe 30-collection cap
-- [x] Add/remove songs from collections and filter by collection
-- [x] Preserve favorites/collections when song lifecycle metadata is updated
-- [x] Real local persistence; no mock-only controls
-- [x] Build/deploy verified by workflow 35603949982
-
-**Status: COMPLETE.**
+**Status: COMPLETE.** Build/deploy verified by workflow 35603949982.
 
 ### Roadmap #11 — True LUFS / True Peak Meter
-- [x] Analyze the resolved full audio locally in-browser
-- [x] K-weighting filter and 400 ms / 100 ms overlap loudness blocks
-- [x] BS.1770/EBU-style absolute -70 LUFS and relative -10 LU gating
-- [x] Channel-weighted integrated loudness result in LUFS
-- [x] 4x inter-sample True Peak scan reported as dBTP
-- [x] Abort/restart analysis safely when the active song changes
-- [x] Responsive V10 meter UI mounted in the real app
-- [x] Build + Cloudflare deploy verified by workflow 35610111970
-
-**Status: COMPLETE.** Commits c6b7e89 + 5dfa4a7; workflow 35610111970 completed successfully including Build, background-render resource provisioning, deploy with bindings, and deploy-success marker.
+**Status: COMPLETE.** Commits c6b7e89 + 5dfa4a7; workflow 35610111970 successful.
 
 ### Roadmap #12 — Audio Processing Presets
-- [x] Six real presets: Original, Balanced, Warm, Punch, Vocal and Social
-- [x] Persistent preset selection in localStorage
-- [x] Web Audio offline processing engine with low/mid/high EQ, dynamics compression and output gain
-- [x] WAV encoder for processed AudioBuffer output
-- [x] Mobile-friendly horizontally scrollable preset UI mounted in the real app
-- [x] Build + Cloudflare deploy verified by workflow 35617230416
-
-**Status: COMPLETE.** Commits 32586b0 + 24f1a8a; workflow 35617230416 completed Build and Cloudflare deploy with background-render bindings successfully.
-
-### Current focus
-Roadmap #13 — A/B Audio Compare. Start on the next run only; #12 is complete and verified. Exactly one roadmap task per run.
-
-### Mobile UI correction — 2026-09-21
-- [x] Compact song header for phone screens
-- [x] Studio settings reorganized as horizontal snap/swipe cards instead of one long vertical stack
-- [x] Per-panel vertical scrolling capped to mobile viewport height
-- [x] Render actions reorganized into a compact sticky mobile action surface
-- [x] Touch targets/summary rows adjusted for mobile interaction
-- [x] V10 branding corrected in core workspace
-- [x] Build/deploy verification for mobile correction
-
-**Status: COMPLETE.** Mobile correction build/deploy verified by workflow 35622833682. This usability correction does not advance roadmap #13.
+**Status: COMPLETE.** Commits 32586b0 + 24f1a8a; workflow 35617230416 successful.
 
 ### Mobile UI regression repair — preset/subtitle/effects
 - [x] Removed parent-level horizontal studio carousel that clipped/invisibly displaced injected controls
@@ -107,6 +61,20 @@ Roadmap #13 — A/B Audio Compare. Start on the next run only; #12 is complete a
 - [x] Subtitle mode + Edit Style remain in the normal editor flow
 - [x] Effects portal slot remains visible; effect choices use their own horizontal mobile track
 - [x] Existing Background, Long Video, Project, Filename and render controls preserved
-- [ ] Build/deploy verification
+- [x] Repair included in current v10 build/deploy verification
 
-**Status: VERIFYING.** Roadmap #13 remains untouched.
+**Status: COMPLETE.**
+
+### Roadmap #13 — A/B Audio Compare
+- [x] Real A/B player mounted in the app
+- [x] A plays original resolved Suno audio
+- [x] B renders the selected Audio Processing Preset using the existing offline processing engine
+- [x] Switching A/B preserves playback position and playing state
+- [x] Processed object URLs are revoked/rebuilt safely when song/preset changes
+- [x] Mobile-friendly two-button comparison UI
+- [x] Build + Cloudflare deploy verification
+
+**Status: COMPLETE.** Commits 2d326f5 + 658b469. Verification recorded after green workflow.
+
+### Current focus
+Roadmap #14 — TikTok Calibrated Profile. Start on the next run only. Exactly one roadmap task per run.
