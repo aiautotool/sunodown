@@ -99,3 +99,14 @@ Roadmap #13 — A/B Audio Compare. Start on the next run only; #12 is complete a
 - [x] Build/deploy verification for mobile correction
 
 **Status: COMPLETE.** Mobile correction build/deploy verified by workflow 35622833682. This usability correction does not advance roadmap #13.
+
+### Mobile UI regression repair — preset/subtitle/effects
+- [x] Removed parent-level horizontal studio carousel that clipped/invisibly displaced injected controls
+- [x] Restored normal studio DOM flow so Preset Gallery enhancer remains visible and clickable
+- [x] Preset cards keep their own horizontal swipe track on mobile
+- [x] Subtitle mode + Edit Style remain in the normal editor flow
+- [x] Effects portal slot remains visible; effect choices use their own horizontal mobile track
+- [x] Existing Background, Long Video, Project, Filename and render controls preserved
+- [ ] Build/deploy verification
+
+**Status: VERIFYING.** Roadmap #13 remains untouched.
