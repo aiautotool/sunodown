@@ -1,6 +1,6 @@
 export type Song = { id:string|null; title:string; picture:string|null; audio:string; sourceAudio:string; video:string|null; description:string|null; lyrics:string|null; style:string|null; tags:string|null; duration:number|null; creator:string|null };
 export type VideoAspect = '16:9'|'9:16'|'1:1'|'4:5'|'4:3';
-export type WaveStyle = 'bars'|'mirror'|'line'|'dots'|'pulse'|'thin-bars'|'blocks'|'needles'|'mountain'|'ribbon'|'spark'|'center-line'|'equalizer';
+export type WaveStyle = 'bars'|'mirror'|'line'|'dots'|'pulse'|'thin-bars'|'blocks'|'needles'|'mountain'|'ribbon'|'spark'|'center-line'|'equalizer'|'circle'|'circle-bars'|'orbit-dots'|'radial-spectrum'|'neon-ring';
 export type VisualTemplate = 'cover-motion'|'vinyl'|'glass-card'|'lyrics-focus'|'editorial'|'spotlight'|'gold-record';
 export type MotionIntensity = 'low'|'medium'|'high';
 export type LyricsMode = 'off'|'scroll'|'focus';
@@ -23,7 +23,7 @@ export const PLATFORM_PRESETS:{id:PlatformPreset;label:string;aspect:VideoAspect
 
 export const WAVE_STYLES:{id:WaveStyle;label:string}[] = [
   {id:'bars',label:'Cột sóng'},{id:'mirror',label:'Đối xứng'},{id:'line',label:'Đường sóng'},{id:'dots',label:'Chấm'},{id:'pulse',label:'Nhịp đập'},
-  {id:'thin-bars',label:'Cột mảnh'},{id:'blocks',label:'Khối LED'},{id:'needles',label:'Kim phổ'},{id:'mountain',label:'Dãy núi'},{id:'ribbon',label:'Dải lụa'},{id:'spark',label:'Tia sáng'},{id:'center-line',label:'Đường tâm'},{id:'equalizer',label:'Equalizer'}
+  {id:'thin-bars',label:'Cột mảnh'},{id:'blocks',label:'Khối LED'},{id:'needles',label:'Kim phổ'},{id:'mountain',label:'Dãy núi'},{id:'ribbon',label:'Dải lụa'},{id:'spark',label:'Tia sáng'},{id:'center-line',label:'Đường tâm'},{id:'equalizer',label:'Equalizer'},{id:'circle',label:'Vòng tròn'},{id:'circle-bars',label:'Cột vòng tròn'},{id:'orbit-dots',label:'Chấm quỹ đạo'},{id:'radial-spectrum',label:'Phổ xuyên tâm'},{id:'neon-ring',label:'Vòng neon đổi màu'}
 ];
 
 export const VISUAL_TEMPLATES:{id:VisualTemplate;label:string;hint:string}[] = [
