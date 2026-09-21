@@ -26,7 +26,7 @@
 13. [x] A/B Audio Compare
 14. [x] TikTok Calibrated Profile
 15. [x] Audio Trim Editor
-16. [ ] Fade In / Fade Out
+16. [x] Fade In / Fade Out
 17. [ ] Vocal / Instrumental Separation
 18. [ ] Waveform Lyrics Editor
 19. [ ] Word Tap Sync
@@ -71,8 +71,21 @@
 
 **Status: COMPLETE.** Commits 9ff1b77 + d926b4c + 043a8f7. Workflow 35643166119 build/deploy successful.
 
+### Roadmap #16 — Fade In / Fade Out
+- [x] Real Audio-tab Fade In / Fade Out controls with persistent 0–15s durations
+- [x] Fade is applied to exported video audio, not mock UI
+- [x] Fade envelope uses absolute output time: only the beginning/end of the complete output fades
+- [x] Long Video Loop remains seamless between repeated audio cycles; no per-loop fade or silence gap
+- [x] Segmented multi-hour render applies fade correctly only to segments touching global start/end
+- [x] Trim range is respected before loop/fade processing
+- [x] Video/background/effects/karaoke timeline remains unchanged; fade remuxes audio after visual render
+- [x] Mobile-safe long-video segment sizing/checkpoint-resume path remains unchanged
+- [x] Build + Cloudflare deployment verified by workflow 35649439562
+
+**Status: COMPLETE.** Commits 85cf1d3 + 3c63c28 + 542a62d + 356f348 + cfb1772. Workflow 35649439562 build/deploy successful.
+
 ### Current focus
-Roadmap #16 — Fade In / Fade Out. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #17 — Vocal / Instrumental Separation. Start on the next run only. Exactly one roadmap task per run.
 
 ### Unified app redesign — approved mockup
 - [x] Rebuilt shell as SunoDown v10 with shared navigation language on desktop/mobile
