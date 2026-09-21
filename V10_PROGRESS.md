@@ -96,6 +96,6 @@ Roadmap #13 — A/B Audio Compare. Start on the next run only; #12 is complete a
 - [x] Render actions reorganized into a compact sticky mobile action surface
 - [x] Touch targets/summary rows adjusted for mobile interaction
 - [x] V10 branding corrected in core workspace
-- [ ] Build/deploy verification for mobile correction
+- [x] Build/deploy verification for mobile correction
 
-**Status: VERIFYING.** This is a mobile usability correction and does not advance roadmap #13.
+**Status: COMPLETE.** Mobile correction build/deploy verified by workflow 35622833682. This usability correction does not advance roadmap #13.
