@@ -80,9 +80,17 @@
 - [x] Configurable filename tokens for audio/video/subtitle/package outputs
 - [x] Preview + sanitization + persisted preference
 - [x] Integrate with batch/ZIP/render downloads
+- [x] Build verification + Cloudflare deploy succeeded for `b0d2187` (run 35579692997)
+
+**Status: COMPLETE.**
+
+### Roadmap #9 — Local Library / History
+- [ ] Persist resolved/downloaded/rendered song history locally
+- [ ] Search/filter and reopen an item without re-entering the Suno URL
+- [ ] Mobile-safe storage limits and clear/remove controls
 - [ ] Build verification + Cloudflare deploy
 
-**Status: IN PROGRESS.** Implementation complete; awaiting build/deploy verification.
+**Status: NEXT.** Do not start #10 until #9 is complete.
 
 ### Current focus
-Roadmap #8 — Filename Template. Implementation complete; verify build/deploy before starting #9.
+Roadmap #9 — Local Library / History. Implement and verify before starting #10.
