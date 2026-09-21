@@ -15,7 +15,14 @@ const faq=[{question:'Cách tải nhạc Suno về điện thoại?',answer:'Sao
 const structuredData={'@context':'https://schema.org','@graph':[{'@type':'WebApplication',name:'Suno Tools',url:'https://suno.aiautotool.com/',applicationCategory:'MultimediaApplication',operatingSystem:'Web',inLanguage:'vi',description:'Công cụ tải nhạc Suno MP3, WAV, M4A, video, ảnh bìa, lời bài hát và tạo video sóng nhạc.',offers:{'@type':'Offer',price:'0',priceCurrency:'VND'},featureList:['Tải Suno MP3','Tải Suno WAV','Tải Suno M4A','Tải video Suno','Tải ảnh bìa Suno','Tải lyrics Suno','Tạo video sóng nhạc']},{'@type':'FAQPage',mainEntity:faq.map(x=>({'@type':'Question',name:x.question,acceptedAnswer:{'@type':'Answer',text:x.answer}}))}]};
 export default function Page(){return <><V8DefaultSunoSample/><V8DesignLayoutEnhancer/><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(structuredData)}}/><V7AppShell><style>{`
 
-.v10-hidden-panel{display:none!important}
+
+html[data-v10-primary="song"] [data-primary-panel="library"],html[data-v10-primary="song"] #render-zone .v10-queue-only{display:none!important}
+html[data-v10-primary="library"] .v10-core,html[data-v10-primary="library"] .v10-side>*:not([data-primary-panel="library"]):not(.v10-bottom-tools){display:none!important}
+html[data-v10-primary="queue"] #studio-editor,html[data-v10-primary="queue"] .mobile-song-head,html[data-v10-primary="queue"] .v10-editor-nav{display:none!important}
+html[data-v10-editor="audio"] #studio-editor>[data-editor-panel],html[data-v10-editor="audio"] #studio-editor>[data-tool-panel],html[data-v10-editor="audio"] .v10-side>*:not(#v10-audio):not(.v10-bottom-tools){display:none!important}
+html[data-v10-editor="video"] #v10-audio,html[data-v10-editor="lyrics"] #v10-audio,html[data-v10-editor="bg"] #v10-audio{display:none!important}
+html[data-v10-tool="project"] [data-tool-panel]:not([data-tool-panel="project"]),html[data-v10-tool="presets"] [data-tool-panel]:not([data-tool-panel="presets"]),html[data-v10-tool="effects"] [data-tool-panel]:not([data-tool-panel="effects"]){display:none!important}
+\n.v10-hidden-panel{display:none!important}
 .v10-segment button{display:flex;align-items:center;justify-content:center;gap:7px;min-height:42px;border-radius:9px;font-size:12px;font-weight:650;color:rgba(255,255,255,.55)}
 .v10-segment button svg,.v10-editor-nav button svg,.v10-bottom-tools button svg{width:16px;height:16px}
 .v10-segment button.active{background:linear-gradient(135deg,#4f46e5,#6d5dfc);color:#fff;box-shadow:0 7px 22px rgba(79,70,229,.28)}
