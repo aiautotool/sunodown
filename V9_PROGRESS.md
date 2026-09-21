@@ -79,10 +79,7 @@
 
 **Status: COMPLETE.**
 
-### Current focus
-Roadmap #4 — Batch Suno Links. Do not skip to #5 until #4 is implemented and verified.
-
-Progress for #4:
+### Roadmap #4 — Batch Suno Links
 - [x] Parse/paste multiple Suno links safely
 - [x] Validate, normalize and de-duplicate links
 - [x] Batch list UI with per-item status/removal
@@ -93,3 +90,12 @@ Progress for #4:
 
 ### Current focus
 Roadmap #5 — Batch Download. Do not skip to #6 until #5 is implemented and verified.
+
+Progress for #5:
+- [x] Per-item real audio download through existing `/api/resolve` + media proxy
+- [x] Sequential “Download all” pipeline to avoid concurrent memory/network spikes on mobile
+- [x] Per-item resolving/downloading/done/error status and retry
+- [x] Safe numbered filenames derived from resolved song title
+- [ ] Build verification + Cloudflare deploy
+
+**Status: IMPLEMENTED, verification pending.**
