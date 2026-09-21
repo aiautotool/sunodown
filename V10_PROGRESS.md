@@ -20,7 +20,7 @@
 7. [x] Download ZIP Package
 8. [x] Filename Template
 9. [x] Local Library / History
-10. [ ] Favorite / Collection
+10. [x] Favorite / Collection
 11. [ ] True LUFS / True Peak Meter
 12. [ ] Audio Processing Presets
 13. [ ] A/B Audio Compare
@@ -51,7 +51,17 @@
 - [x] Wire resolved + direct/queued render completion to the current song history record end-to-end
 - [x] Build verification + Cloudflare deploy on v10
 
-**Status: COMPLETE.** Runtime library integration is mounted on v10 and records resolved/rendered lifecycle into the current song metadata record. GitHub Actions run 35598059129 passed for head 7bdfda1, verifying the complete #9 wiring and Cloudflare deployment.
+**Status: COMPLETE.**
+
+### Roadmap #10 — Favorite / Collection
+- [x] Favorite/unfavorite persisted songs
+- [x] Filter library to favorites
+- [x] Create/delete named collections with a mobile-safe 30-collection cap
+- [x] Add/remove songs from collections and filter by collection
+- [x] Preserve favorites/collections when song lifecycle metadata is updated
+- [x] Real local persistence; no mock-only controls
+
+**Status: IMPLEMENTED.** Build/deploy verification is required for the commits completing this task before the run may stop.
 
 ### Current focus
-Roadmap #10 — Favorite / Collection. Start this on the next run; #9 is complete and verified. One roadmap task must be fully completed per run before stopping.
+Roadmap #10 — Favorite / Collection. Verify build/deploy green for the completion commit; fix and rerun if needed. Do not start #11 in this run.
