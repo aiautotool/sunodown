@@ -12,6 +12,8 @@ type Palette=[[number,number,number],[number,number,number],[number,number,numbe
 export type OverlayLayout={wave:{x:number;y:number;scale:number};subtitle:{x:number;y:number;scale:number}};
 export type SafeRenderOptions={motion:MotionIntensity;lyrics:LyricsMode;layout?:OverlayLayout;subtitleStyle?:KaraokeDrawStyle;karaokeTimeline?:KaraokeLine[];background?:BackgroundConfig;loopDuration?:number;startSeconds?:number;previewSeconds?:number;onProgress?:(value:number)=>void};
 
+type AudioTrim={start:number;end:number;duration:number};
+function storedAudioTrim(fullDuration:number):AudioTrim|null{try{const v=JSON.parse(localStorage.getItem('suno-v10-audio-trim')||'null');if(!v)return null;const start=Math.max(0,Math.min(fullDuration,Number(v.start)||0)),end=Math.max(start+.05,Math.min(fullDuration,Number(v.end)||fullDuration));if(start<.01&&end>=fullDuration-.01)return null;return{start,end,duration:fullDuration}}catch{return null}}
 function clamp(v:number,min=0,max=255){return Math.max(min,Math.min(max,v))}
 function rgb(c:[number,number,number],a=1){return `rgba(${c[0]},${c[1]},${c[2]},${a})`}
 function coverFit(ctx:CanvasRenderingContext2D,bmp:ImageBitmap,w:number,h:number,scaleExtra=1,dx=0,dy=0){const s=Math.min(w/bmp.width,h/bmp.height)*scaleExtra,iw=bmp.width*s,ih=bmp.height*s;ctx.drawImage(bmp,(w-iw)/2+dx,(h-ih)/2+dy,iw,ih)}
@@ -19,191 +21,23 @@ function coverFill(ctx:CanvasRenderingContext2D,bmp:ImageBitmap,w:number,h:numbe
 function wrap(ctx:CanvasRenderingContext2D,text:string,maxW:number,maxLines=2){const words=text.trim().split(/\s+/).filter(Boolean),lines:string[]=[];let line='';for(const word of words){const n=line?`${line} ${word}`:word;if(!line||ctx.measureText(n).width<=maxW)line=n;else{lines.push(line);line=word;if(lines.length===maxLines-1)break}}if(line&&lines.length<maxLines)lines.push(line);return lines}
 function amplitude(samples:Float32Array|null,rate:number,t:number,off=0){if(!samples)return Math.max(.08,.2+.15*Math.sin((t+off)*5));const c=Math.max(0,Math.min(samples.length-1,Math.floor((t+off)*rate))),r=Math.max(64,Math.floor(rate*.012)),from=Math.max(0,c-r),to=Math.min(samples.length,c+r),stride=Math.max(1,Math.floor((to-from)/24));let sum=0,n=0;for(let i=from;i<to;i+=stride){sum+=Math.abs(samples[i]);n++}return n?Math.min(1,(sum/n)*5.2):.08}
 function extractPalette(bmp:ImageBitmap):Palette{const c=document.createElement('canvas');c.width=32;c.height=32;const x=c.getContext('2d',{willReadFrequently:true});if(!x)return [[103,232,249],[167,139,250],[232,121,249]];x.drawImage(bmp,0,0,32,32);const d=x.getImageData(0,0,32,32).data;let r=0,g=0,b=0,n=0;for(let i=0;i<d.length;i+=16){const lum=(d[i]+d[i+1]+d[i+2])/3;if(lum<25||lum>235)continue;r+=d[i];g+=d[i+1];b+=d[i+2];n++}if(!n)return [[103,232,249],[167,139,250],[232,121,249]];const base:[number,number,number]=[r/n,g/n,b/n].map(v=>Math.round(v)) as [number,number,number];return [base,[clamp(base[0]+55),clamp(base[1]+40),clamp(base[2]+65)],[clamp(base[2]+35),clamp(base[0]+20),clamp(base[1]+45)]] as Palette}
-
-function titleTypography(template:VisualTemplate,fs:number){
- if(template==='vinyl')return {font:`italic 700 ${Math.round(fs*1.05)}px Georgia, 'Times New Roman', serif`,spacing:1.4,stroke:1.1};
- if(template==='glass-card')return {font:`800 ${Math.round(fs*.98)}px 'Trebuchet MS', Arial, sans-serif`,spacing:2.2,stroke:.8};
- if(template==='lyrics-focus')return {font:`italic 700 ${Math.round(fs*1.02)}px Georgia, 'Times New Roman', serif`,spacing:.7,stroke:.7};
- return {font:`700 ${Math.round(fs*1.08)}px Georgia, 'Times New Roman', serif`,spacing:1,stroke:1};
-}
-function drawLetterSpaced(ctx:CanvasRenderingContext2D,text:string,x:number,y:number,spacing:number,align:'center'|'left'){
- if(spacing<=0){ctx.fillText(text,x,y);return}
- const chars=Array.from(text),widths=chars.map(c=>ctx.measureText(c).width),total=widths.reduce((a,b)=>a+b,0)+spacing*Math.max(0,chars.length-1);let cx=align==='center'?x-total/2:x;const old=ctx.textAlign;ctx.textAlign='left';chars.forEach((c,i)=>{ctx.fillText(c,cx,y);cx+=widths[i]+spacing});ctx.textAlign=old;
-}
-function drawMeta(ctx:CanvasRenderingContext2D,song:Song,w:number,y:number,align:'center'|'left'='center',max=.76,template:VisualTemplate='cover-motion',p?:Palette){
- ctx.save();const fs=Math.max(26,Math.min(54,Math.round(w*.039))),art=titleTypography(template,fs);ctx.font=art.font;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillStyle='rgba(255,255,255,.98)';ctx.strokeStyle='rgba(0,0,0,.28)';ctx.lineWidth=art.stroke;ctx.shadowColor=template==='glass-card'&&p?rgb(p[1],.6):'rgba(0,0,0,.7)';ctx.shadowBlur=template==='glass-card'?24:18;const lines=wrap(ctx,song.title||'Suno Track',w*max,2),lh=fs*1.22,x=align==='center'?w/2:w*.1;
- lines.forEach((l,i)=>{ctx.strokeText(l,x,y+i*lh);drawLetterSpaced(ctx,l,x,y+i*lh,art.spacing,align)});
- if(song.creator){ctx.shadowBlur=7;ctx.font=`600 ${Math.max(15,Math.round(fs*.4))}px system-ui,-apple-system,'Segoe UI',sans-serif`;ctx.fillStyle='rgba(255,255,255,.7)';ctx.textAlign=align;ctx.fillText(song.creator.toUpperCase(),x,y+lines.length*lh+Math.max(10,fs*.16))}ctx.restore();
-}
+function titleTypography(template:VisualTemplate,fs:number){if(template==='vinyl')return {font:`italic 700 ${Math.round(fs*1.05)}px Georgia, 'Times New Roman', serif`,spacing:1.4,stroke:1.1};if(template==='glass-card')return {font:`800 ${Math.round(fs*.98)}px 'Trebuchet MS', Arial, sans-serif`,spacing:2.2,stroke:.8};if(template==='lyrics-focus')return {font:`italic 700 ${Math.round(fs*1.02)}px Georgia, 'Times New Roman', serif`,spacing:.7,stroke:.7};return {font:`700 ${Math.round(fs*1.08)}px Georgia, 'Times New Roman', serif`,spacing:1,stroke:1}}
+function drawLetterSpaced(ctx:CanvasRenderingContext2D,text:string,x:number,y:number,spacing:number,align:'center'|'left'){if(spacing<=0){ctx.fillText(text,x,y);return}const chars=Array.from(text),widths=chars.map(c=>ctx.measureText(c).width),total=widths.reduce((a,b)=>a+b,0)+spacing*Math.max(0,chars.length-1);let cx=align==='center'?x-total/2:x;const old=ctx.textAlign;ctx.textAlign='left';chars.forEach((c,i)=>{ctx.fillText(c,cx,y);cx+=widths[i]+spacing});ctx.textAlign=old}
+function drawMeta(ctx:CanvasRenderingContext2D,song:Song,w:number,y:number,align:'center'|'left'='center',max=.76,template:VisualTemplate='cover-motion',p?:Palette){ctx.save();const fs=Math.max(26,Math.min(54,Math.round(w*.039))),art=titleTypography(template,fs);ctx.font=art.font;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillStyle='rgba(255,255,255,.98)';ctx.strokeStyle='rgba(0,0,0,.28)';ctx.lineWidth=art.stroke;ctx.shadowColor=template==='glass-card'&&p?rgb(p[1],.6):'rgba(0,0,0,.7)';ctx.shadowBlur=template==='glass-card'?24:18;const lines=wrap(ctx,song.title||'Suno Track',w*max,2),lh=fs*1.22,x=align==='center'?w/2:w*.1;lines.forEach((l,i)=>{ctx.strokeText(l,x,y+i*lh);drawLetterSpaced(ctx,l,x,y+i*lh,art.spacing,align)});if(song.creator){ctx.shadowBlur=7;ctx.font=`600 ${Math.max(15,Math.round(fs*.4))}px system-ui,-apple-system,'Segoe UI',sans-serif`;ctx.fillStyle='rgba(255,255,255,.7)';ctx.textAlign=align;ctx.fillText(song.creator.toUpperCase(),x,y+lines.length*lh+Math.max(10,fs*.16))}ctx.restore()}
 function lyricLines(song:Song){return cleanLyricsForVideo(song.lyrics).split(/\n+/).map(x=>x.trim()).filter(Boolean)}
 function drawLyrics(ctx:CanvasRenderingContext2D,song:Song,w:number,h:number,absoluteT:number,fullDuration:number,mode:LyricsMode){if(mode==='off'||!song.lyrics)return;const lines=lyricLines(song);if(!lines.length)return;const idx=Math.min(lines.length-1,Math.floor((absoluteT/Math.max(1,fullDuration))*lines.length));ctx.save();const fs=Math.max(22,Math.min(44,Math.round(w*.031)));ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=`700 ${fs}px system-ui,-apple-system,sans-serif`;ctx.shadowColor='rgba(0,0,0,.7)';ctx.shadowBlur=16;if(mode==='focus'){const current=lines[idx],y=h*.58,boxW=w*.82;ctx.fillStyle='rgba(5,5,16,.48)';ctx.beginPath();ctx.roundRect(w*.09,y-fs*1.4,boxW,fs*2.8,18);ctx.fill();ctx.fillStyle='rgba(255,255,255,.96)';wrap(ctx,current,boxW*.9,2).forEach((l,i,a)=>ctx.fillText(l,w/2,y+(i-(a.length-1)/2)*fs*1.16))}else{const rows=[lines[Math.max(0,idx-1)],lines[idx],lines[Math.min(lines.length-1,idx+1)]],ys=[h*.48,h*.57,h*.66];rows.forEach((l,i)=>{ctx.globalAlpha=i===1?1:.35;ctx.fillStyle='white';ctx.fillText(l,w/2,ys[i],w*.78)})}ctx.restore()}
 function waveGradient(ctx:CanvasRenderingContext2D,w:number,p:Palette){const g=ctx.createLinearGradient(w*.08,0,w*.92,0);g.addColorStop(0,rgb(p[0]));g.addColorStop(.5,rgb(p[1]));g.addColorStop(1,rgb(p[2]));return g}
-function drawWaveBase(ctx:CanvasRenderingContext2D,samples:Float32Array|null,rate:number,t:number,w:number,h:number,style:WaveStyle,p:Palette){
- const ph=Math.max(110,Math.round(h*.14)),top=h-ph,bg=ctx.createLinearGradient(0,top,0,h);bg.addColorStop(0,'rgba(6,7,18,0)');bg.addColorStop(.3,'rgba(6,7,18,.55)');bg.addColorStop(1,'rgba(6,7,18,.95)');ctx.fillStyle=bg;ctx.fillRect(0,top,w,ph);
- const n=Math.max(42,Math.min(92,Math.round(w/14))),usable=w*.84,start=w*.08,cy=h-ph*.42,max=ph*.52,vals=Array.from({length:n},(_,i)=>Math.max(.05,amplitude(samples,rate,t,((i/(n-1))-.5)*.7))),grad=waveGradient(ctx,w,p);
- ctx.save();ctx.fillStyle=grad;ctx.strokeStyle=grad;ctx.shadowColor=rgb(p[1],.55);ctx.shadowBlur=12;ctx.lineCap='round';ctx.lineJoin='round';
- if(style==='spiral'||style==='radial-wave'||style==='pinwheel'||style==='mandala'||style==='spectrum-rings'){
-   const cx=w/2,rcy=h-ph*.47,N=Math.min(80,n),base=Math.min(w,ph*3.2)*.075,hue=(t*30)%360;
-   ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowBlur=14;
-   if(style==='spiral'){ctx.lineWidth=Math.max(2,w*.002);ctx.beginPath();for(let i=0;i<N;i++){const a=vals[Math.round(i/(N-1)*(n-1))],ang=(i/(N-1))*Math.PI*8+t*.35,rr=base*.2+i*base*.035+a*base*.7,x=cx+Math.cos(ang)*rr,y=rcy+Math.sin(ang)*rr;ctx.strokeStyle=`hsl(${(hue+i*4)%360} 92% 65%)`;i?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.stroke()}
-   else if(style==='spectrum-rings'){for(let ring=0;ring<4;ring++){const avg=vals.slice(ring*12,ring*12+18).reduce((s,v)=>s+v,0)/18,rr=base*(.7+ring*.34)+avg*base*.32;ctx.strokeStyle=`hsla(${(hue+ring*65)%360} 95% 68% / ${.85-ring*.1})`;ctx.lineWidth=Math.max(2,w*.0025)*(1+avg);ctx.shadowColor=ctx.strokeStyle;ctx.beginPath();ctx.arc(cx,rcy,rr,0,Math.PI*2);ctx.stroke()}}
-   else{ctx.beginPath();for(let i=0;i<=N;i++){const j=i%N,a=vals[Math.round(j/(N-1)*(n-1))],ang=j/N*Math.PI*2+t*(style==='pinwheel'?.42:.08),rose=style==='mandala'?(1+.32*Math.cos(6*ang)):1,twist=style==='pinwheel'?a*1.4:0,rr=base*rose+a*base*(style==='radial-wave'?.85:.48),x=cx+Math.cos(ang+twist)*rr,y=rcy+Math.sin(ang+twist)*rr;i?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.closePath();const cg=ctx.createConicGradient(t*.15,cx,rcy);for(let k=0;k<=4;k++)cg.addColorStop(k/4,`hsl(${(hue+k*90)%360} 95% 65%)`);ctx.strokeStyle=cg;ctx.shadowColor=`hsl(${hue} 95% 65%)`;ctx.lineWidth=Math.max(2.5,w*.0028);ctx.stroke()}
-   ctx.restore();return;
- }
- if(style==='wave-bars'||style==='stacked-spectrum'){
-   const count=Math.min(64,n),gap=usable/count,bw=Math.max(2,gap*.62);
-   for(let i=0;i<count;i++){const a=vals[Math.round(i/(count-1)*(n-1))],x=start+i*gap,baseH=Math.max(4,a*max),wave=style==='wave-bars'?Math.sin(t*3+i*.24)*max*.16:0;
-     if(style==='stacked-spectrum'){const seg=Math.max(2,Math.round(a*10));for(let j=0;j<seg;j++){ctx.fillStyle=`hsla(${(t*28+i*5+j*8)%360} 92% 64% / ${.45+.55*j/seg})`;ctx.fillRect(x,cy-j*max*.075,bw,max*.055)}}
-     else{ctx.fillStyle=`hsl(${(t*28+i*5)%360} 92% 64%)`;ctx.beginPath();ctx.roundRect(x,cy-baseH/2+wave,bw,baseH,Math.min(4,bw/2));ctx.fill()}
-   }ctx.restore();return;
- }
- if(style==='circle'||style==='circle-bars'||style==='orbit-dots'||style==='radial-spectrum'||style==='neon-ring'||style==='arc-burst'){
-   // Radial renderer adapted from the MIT IUS Visualizer approach: fixed inner ring,
-   // amplitude-driven outward tips, per-bar root->tip gradients, glow and arc bursts.
-   const cx=w/2,rcy=h-ph*.47,radialN=Math.min(64,n),base=Math.min(w,ph*3.2)*.105;
-   const bass=vals.slice(0,Math.max(4,Math.floor(vals.length*.18))).reduce((s,v)=>s+v,0)/Math.max(1,Math.floor(vals.length*.18));
-   const pulse=1+bass*.13,r=base*pulse,maxLen=base*1.05,rotation=-Math.PI/2;
-   const hue=(t*32)%360;
-   const colorAt=(i:number,alpha=1)=>`hsla(${(hue+i/radialN*300)%360} 96% 66% / ${alpha})`;
-   ctx.shadowBlur=16+bass*20;
-   ctx.lineCap='round';
-   // Stable glowing base ring makes the spectrum read as a true circle.
-   ctx.strokeStyle=`hsla(${hue} 90% 70% / .42)`;ctx.lineWidth=Math.max(2,w*.0022);ctx.beginPath();ctx.arc(cx,rcy,r,0,Math.PI*2);ctx.stroke();
-   if(style==='circle'||style==='neon-ring'){
-     ctx.lineWidth=Math.max(3,w*.0032);ctx.beginPath();
-     for(let i=0;i<=radialN;i++){const j=i%radialN,a=vals[Math.round(j/(radialN-1)*(n-1))],ang=rotation+j/radialN*Math.PI*2,rr=r+Math.max(2,a*maxLen*.72),x=cx+Math.cos(ang)*rr,y=rcy+Math.sin(ang)*rr;i?ctx.lineTo(x,y):ctx.moveTo(x,y)}
-     ctx.closePath();ctx.strokeStyle=style==='neon-ring'?colorAt(Math.floor((t*12)%radialN),.95):grad;ctx.shadowBlur=style==='neon-ring'?28:16;ctx.stroke();
-   }else if(style==='arc-burst'){
-     const span=Math.PI*2/radialN;
-     for(let i=0;i<radialN;i++){const a=vals[Math.round(i/(radialN-1)*(n-1))],ang=rotation+i*span,arcLen=span*(.16+a*.78),rr=r*(.9+a*.48);ctx.strokeStyle=colorAt(i,.35+a*.65);ctx.lineWidth=Math.max(2,w*.0025)*(1+a);ctx.shadowColor=colorAt(i,.85);ctx.shadowBlur=10+a*22;ctx.beginPath();ctx.arc(cx,rcy,rr,ang-arcLen/2,ang+arcLen/2);ctx.stroke()}
-   }else{
-     for(let i=0;i<radialN;i++){const a=vals[Math.round(i/(radialN-1)*(n-1))],ang=rotation+i/radialN*Math.PI*2,inner=r,outer=r+Math.max(3,a*maxLen),co=Math.cos(ang),si=Math.sin(ang),x1=cx+co*inner,y1=rcy+si*inner,x2=cx+co*outer,y2=rcy+si*outer;
-       if(style==='orbit-dots'){ctx.fillStyle=colorAt(i,.5+a*.5);ctx.shadowColor=colorAt(i,.9);ctx.beginPath();ctx.arc(x2,y2,Math.max(2,w*.0023)*(1+a*.65),0,Math.PI*2);ctx.fill()}
-       else{const rg=ctx.createLinearGradient(x1,y1,x2,y2);rg.addColorStop(0,colorAt(i,.08));rg.addColorStop(1,colorAt(i,.55+a*.45));ctx.strokeStyle=rg;ctx.shadowColor=colorAt(i,.85);ctx.shadowBlur=8+a*18;ctx.lineWidth=style==='radial-spectrum'?Math.max(1.5,w*.0018):Math.max(3,w*.0032);ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
-     }
-   }
-   ctx.restore();return;
- }
- if(style==='line'||style==='mountain'||style==='center-line'){
-   ctx.lineWidth=style==='center-line'?Math.max(2,w*.002):Math.max(3,w*.003);ctx.beginPath();
-   vals.forEach((a,i)=>{const x=start+i/(n-1)*usable,shape=style==='mountain'?Math.pow(a,.72):a,y=cy-(shape-.15)*max*(.9+.1*Math.sin(t*7+i*.2));i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();
-   if(style==='center-line'){ctx.globalAlpha=.45;ctx.beginPath();vals.forEach((a,i)=>{const x=start+i/(n-1)*usable,y=cy+(a-.15)*max*.55;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke()}
- }else if(style==='ribbon'){
-   ctx.globalAlpha=.72;ctx.beginPath();vals.forEach((a,i)=>{const x=start+i/(n-1)*usable,y=cy-a*max*.75;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});for(let i=n-1;i>=0;i--){const a=vals[i],x=start+i/(n-1)*usable,y=cy+a*max*.38;ctx.lineTo(x,y)}ctx.closePath();ctx.fill();
- }else if(style==='dots'||style==='spark'){
-   vals.forEach((a,i)=>{const x=start+i/(n-1)*usable,y=cy-(a-.15)*max,r=(style==='spark'?Math.max(1.5,w*.0018):Math.max(2.5,w*.003))*(1+a);ctx.globalAlpha=style==='spark'?.35+.65*Math.sin(t*8+i*.7)**2:1;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();if(style==='spark'&&a>.32){ctx.beginPath();ctx.moveTo(x-r*2.8,y);ctx.lineTo(x+r*2.8,y);ctx.moveTo(x,y-r*2.8);ctx.lineTo(x,y+r*2.8);ctx.stroke()}})
- }else{
-   const thin=style==='thin-bars'||style==='needles',count=style==='equalizer'?Math.max(28,Math.round(n*.58)):n,gap=Math.max(2,w*(thin?.002:.004)),bw=thin?Math.max(1.5,w*.0018):Math.max(3,(usable-gap*(count-1))/count);
-   for(let i=0;i<count;i++){const a=vals[Math.min(n-1,Math.round(i/(count-1)*(n-1)))],x=start+i/(count-1)*usable-bw/2,pulse=.82+.18*Math.sin(t*7+i*.3),hh=Math.max(5,max*a*pulse*(style==='pulse'?1.25:1));
-     if(style==='blocks'||style==='equalizer'){const unit=Math.max(3,ph*(style==='equalizer'?.035:.045)),blocks=Math.max(1,Math.round(hh/unit));for(let b=0;b<blocks;b++){ctx.globalAlpha=.45+.55*(b+1)/blocks;ctx.beginPath();ctx.roundRect(x,cy-(b+1)*unit,bw,unit*.68,Math.min(3,bw/2));ctx.fill()}}
-     else if(style==='needles'){ctx.lineWidth=bw;ctx.globalAlpha=.75;ctx.beginPath();ctx.moveTo(x,cy+hh*.12);ctx.lineTo(x,cy-hh);ctx.stroke()}
-     else if(style==='mirror'){ctx.beginPath();ctx.roundRect(x,cy-hh,bw,hh*2,bw/2);ctx.fill()}
-     else{ctx.globalAlpha=style==='pulse'?.65+.35*pulse:1;ctx.beginPath();ctx.roundRect(x,cy-hh/2,bw,hh,bw/2);ctx.fill()}
-   }
- }
- ctx.restore();
-}
+function drawWaveBase(ctx:CanvasRenderingContext2D,samples:Float32Array|null,rate:number,t:number,w:number,h:number,style:WaveStyle,p:Palette){const ph=Math.max(110,Math.round(h*.14)),top=h-ph,bg=ctx.createLinearGradient(0,top,0,h);bg.addColorStop(0,'rgba(6,7,18,0)');bg.addColorStop(.3,'rgba(6,7,18,.55)');bg.addColorStop(1,'rgba(6,7,18,.95)');ctx.fillStyle=bg;ctx.fillRect(0,top,w,ph);const n=Math.max(42,Math.min(92,Math.round(w/14))),usable=w*.84,start=w*.08,cy=h-ph*.42,max=ph*.52,vals=Array.from({length:n},(_,i)=>Math.max(.05,amplitude(samples,rate,t,((i/(n-1))-.5)*.7))),grad=waveGradient(ctx,w,p);ctx.save();ctx.fillStyle=grad;ctx.strokeStyle=grad;ctx.shadowColor=rgb(p[1],.55);ctx.shadowBlur=12;ctx.lineCap='round';ctx.lineJoin='round';const count=n,gap=Math.max(2,w*.004),bw=Math.max(3,(usable-gap*(count-1))/count);for(let i=0;i<count;i++){const a=vals[i],x=start+i/(count-1)*usable-bw/2,pulse=.82+.18*Math.sin(t*7+i*.3),hh=Math.max(5,max*a*pulse);ctx.beginPath();ctx.roundRect(x,cy-hh/2,bw,hh,bw/2);ctx.fill()}ctx.restore()}
 function drawWave(ctx:CanvasRenderingContext2D,samples:Float32Array|null,rate:number,t:number,w:number,h:number,style:WaveStyle,p:Palette,layout?:OverlayLayout){const pos=layout?.wave||{x:50,y:86,scale:100},sx=pos.scale/100;ctx.save();ctx.translate(w*pos.x/100,h*pos.y/100);ctx.scale(sx,sx);ctx.translate(-w*.5,-h*.86);drawWaveBase(ctx,samples,rate,t,w,h,style,p);ctx.restore()}
 function withSubtitleLayout(ctx:CanvasRenderingContext2D,w:number,h:number,layout:OverlayLayout|undefined,draw:()=>void){const pos=layout?.subtitle||{x:50,y:58,scale:100},s=pos.scale/100;ctx.save();ctx.translate(w*pos.x/100,h*pos.y/100);ctx.scale(s,s);ctx.translate(-w*.5,-h*.58);draw();ctx.restore()}
-function drawProTemplate(ctx:CanvasRenderingContext2D,bmp:ImageBitmap,song:Song,w:number,h:number,t:number,level:number,template:VisualTemplate,p:Palette,preserveBackground=false){
- const portrait=h>w, margin=w*.075;
- const image=(x:number,y:number,size:number,round=0)=>{
-  ctx.save();ctx.beginPath();ctx.roundRect(x,y,size,size,round);ctx.clip();
-  const scale=Math.max(size/bmp.width,size/bmp.height);
-  ctx.drawImage(bmp,x+(size-bmp.width*scale)/2,y+(size-bmp.height*scale)/2,bmp.width*scale,bmp.height*scale);ctx.restore();
- };
- const text=(value:string,x:number,y:number,size:number,color:string)=>{ctx.font=`600 ${size}px system-ui,sans-serif`;ctx.fillStyle=color;ctx.textAlign='left';ctx.fillText(value,x,y,w-margin*2)};
- if(template==='editorial'){
-  if(!preserveBackground){ctx.fillStyle='#101714';ctx.fillRect(0,0,w,h);}
-  const side=portrait?w*.85:Math.min(h*.64,w*.43),x=portrait?margin:w*.51,y=h*.13;
-  ctx.fillStyle='#d4dfba';ctx.fillRect(x-8,y-8,side+16,side+16);image(x,y,side);
-  text('TUYỂN TẬP ÂM NHẠC',margin,h*.075,w*.017,'#d4dfba');
-  const titleX=margin,titleY=portrait?y+side+h*.06:h*.29,titleW=portrait?w*.85:w*.38;
-  ctx.fillStyle='#f1eee4';ctx.font=`italic 700 ${w*(portrait?.066:.047)}px Georgia,serif`;ctx.textAlign='left';
-  wrap(ctx,song.title,titleW,3).forEach((line,i)=>ctx.fillText(line,titleX,titleY+i*w*.064));
-  text(song.creator||'Suno',margin,portrait?h*.79:h*.67,w*.021,'#a8b6a8');
-  ctx.strokeStyle='#697a60';ctx.beginPath();ctx.moveTo(margin,h*.82);ctx.lineTo(w-margin,h*.82);ctx.stroke();return;
- }
- if(template==='spotlight'){
-  if(!preserveBackground){ctx.fillStyle='#070912';ctx.fillRect(0,0,w,h);}
-  const glow=ctx.createRadialGradient(w*.5,h*.35,0,w*.5,h*.35,w*.65);
-  glow.addColorStop(0,rgb(p[1],.32+level*.2));glow.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,w,h);
-  ctx.save();ctx.translate(w/2,h*.39);ctx.rotate(Math.sin(t*.2)*.07);
-  const size=Math.min(w*.63,h*.48);ctx.shadowColor=rgb(p[1],.65);ctx.shadowBlur=45;
-  ctx.strokeStyle=rgb(p[1],.5);ctx.lineWidth=2;ctx.strokeRect(-size*.56,-size*.56,size*1.12,size*1.12);
-  image(-size/2,-size/2,size,12);ctx.restore();
-  drawMeta(ctx,song,w,h*.72,'center',.83,'glass-card',p);return;
- }
- if(!preserveBackground){ctx.fillStyle='#11100e';ctx.fillRect(0,0,w,h);}
- const cx=portrait?w/2:w*.32,cy=portrait?h*.34:h*.42,r=Math.min(w,h)*.29;
- ctx.save();ctx.translate(cx,cy);ctx.rotate(t*.16);
- const metal=ctx.createLinearGradient(-r,-r,r,r);metal.addColorStop(0,'#bfa373');metal.addColorStop(.5,'#332b20');metal.addColorStop(1,'#e6d8ba');
- ctx.fillStyle=metal;ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();
- for(let i=0;i<18;i++){ctx.strokeStyle='rgba(0,0,0,.24)';ctx.beginPath();ctx.arc(0,0,r*(.4+i*.033),0,Math.PI*2);ctx.stroke();}
- ctx.save();ctx.beginPath();ctx.arc(0,0,r*.37,0,Math.PI*2);ctx.clip();image(-r*.37,-r*.37,r*.74);ctx.restore();
- ctx.fillStyle='#11100e';ctx.beginPath();ctx.arc(0,0,r*.045,0,Math.PI*2);ctx.fill();ctx.restore();
- const tx=portrait?margin:w*.64,ty=portrait?h*.68:h*.33;
- text('PHIÊN BẢN ĐĨA NHẠC',tx,ty-w*.04,w*.014,'#bfa373');
- ctx.fillStyle='#eee4d3';ctx.font=`700 ${w*.04}px Georgia,serif`;ctx.textAlign='left';
- wrap(ctx,song.title,portrait?w*.85:w*.29,3).forEach((line,i)=>ctx.fillText(line,tx,ty+i*w*.052));
- text(song.creator||'Suno',tx,portrait?h*.8:h*.65,w*.018,'#a99574');
-}
-
-function drawTemplate(ctx:CanvasRenderingContext2D,bmp:ImageBitmap,song:Song,w:number,h:number,t:number,level:number,template:VisualTemplate,motion:MotionIntensity,p:Palette,preserveBackground=false){if(['editorial','spotlight','gold-record'].includes(template)){drawProTemplate(ctx,bmp,song,w,h,t*MOTION_GAIN[motion],level,template,p,preserveBackground);return}const gain=MOTION_GAIN[motion];if(!preserveBackground){ctx.fillStyle='#080812';ctx.fillRect(0,0,w,h);}if(template==='vinyl'){if(!preserveBackground)coverFill(ctx,bmp,w,h,.34,42,1.08+level*.03*gain);const portrait=h>w,cx=portrait?w/2:w*.36,cy=portrait?h*.39:h*.46,r=Math.min(w,h)*(portrait?.28:.29)*(1+level*.015*gain);ctx.save();ctx.translate(cx,cy);ctx.rotate(t*(.24+.16*gain));ctx.shadowColor=rgb(p[1],.35+.25*level);ctx.shadowBlur=22+level*26;ctx.fillStyle='#111116';ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();ctx.save();ctx.beginPath();ctx.arc(0,0,r*.58,0,Math.PI*2);ctx.clip();const s=Math.max((r*1.16)/bmp.width,(r*1.16)/bmp.height),iw=bmp.width*s,ih=bmp.height*s;ctx.drawImage(bmp,-iw/2,-ih/2,iw,ih);ctx.restore();ctx.fillStyle='#0b0b10';ctx.beginPath();ctx.arc(0,0,r*.08,0,Math.PI*2);ctx.fill();ctx.restore();drawMeta(ctx,song,w,portrait?h*.72:h*.26,portrait?'center':'left',portrait?.8:.48,template,p);return}if(template==='glass-card'){if(!preserveBackground)coverFill(ctx,bmp,w,h,.52,46,1.12+level*.035*gain,Math.sin(t*.2)*w*.025*gain,Math.cos(t*.17)*h*.018*gain);const portrait=h>w,cw=w*(portrait?.78:.72),ch=h*(portrait?.54:.62),x=(w-cw)/2,y=h*(portrait?.17:.13);ctx.beginPath();ctx.roundRect(x,y,cw,ch,Math.max(22,w*.025));ctx.fillStyle='rgba(12,12,28,.52)';ctx.fill();ctx.strokeStyle=rgb(p[1],.42);ctx.stroke();ctx.save();ctx.beginPath();ctx.roundRect(x+cw*.08,y+ch*.08,cw*.84,ch*(portrait?.56:.7),Math.max(16,w*.018));ctx.clip();const aw=cw*.84,ah=ch*(portrait?.56:.7),s=Math.min(aw/bmp.width,ah/bmp.height),iw=bmp.width*s,ih=bmp.height*s;ctx.drawImage(bmp,x+cw*.08+(aw-iw)/2,y+ch*.08+(ah-ih)/2,iw,ih);ctx.restore();drawMeta(ctx,song,w,y+ch*(portrait?.72:.83),'center',.62,template,p);return}if(template==='lyrics-focus'){if(!preserveBackground)coverFill(ctx,bmp,w,h,.32,48,1.1+level*.03*gain);const r=Math.min(w,h)*(.11+level*.018*gain);ctx.save();ctx.beginPath();ctx.arc(w/2,h*.27,r,0,Math.PI*2);ctx.clip();coverFit(ctx,bmp,r*2,r*2,1);ctx.restore();drawMeta(ctx,song,w,h*.41,'center',.72,template,p);return}const zoom=1.06+.025*Math.sin(t*.45)*gain+level*.025*gain,dx=Math.sin(t*.22)*w*.018*gain,dy=Math.cos(t*.18)*h*.014*gain;if(!preserveBackground)coverFill(ctx,bmp,w,h,.5,34,zoom,dx,dy);ctx.fillStyle='rgba(3,4,12,.25)';ctx.fillRect(0,0,w,h);coverFit(ctx,bmp,w*.82,h*.72,1+.02*Math.sin(t*.5)*gain+level*.01*gain,dx*.25,dy*.25);drawMeta(ctx,song,w,h*.67,'center',.72,template,p)}
-
-export function createLiveFramePainter(bitmap: ImageBitmap) {
- const palette = extractPalette(bitmap);
- return (ctx: CanvasRenderingContext2D, song: Song, w: number, h: number, time: number, template: VisualTemplate, wave: WaveStyle, motion: MotionIntensity, lyrics: LyricsMode, preserveBackground=false, layout?:OverlayLayout) => {
-  drawTemplate(ctx, bitmap, song, w, h, time, amplitude(null, 0, time), template, motion, palette,preserveBackground);
-  withSubtitleLayout(ctx,w,h,layout,()=>drawLyrics(ctx, song, w, h, time, song.duration || 1, lyrics));
-  drawWave(ctx, null, 0, time, w, h, wave, palette,layout);
- };
-}
-
-function isMobileRenderDevice(){
-  if(typeof navigator==='undefined')return false;
-  const ua=navigator.userAgent||'';
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(ua)||(navigator.maxTouchPoints>1&&/Macintosh/i.test(ua));
-}
-
-async function yieldToBrowser(){
-  await new Promise<void>(resolve=>setTimeout(resolve,0));
-}
-
-async function loadBackgroundVideo(url:string){
- const video=document.createElement('video');video.muted=true;video.playsInline=true;video.preload='auto';video.src=url;
- await new Promise<void>((resolve,reject)=>{const done=()=>{cleanup();resolve()},fail=()=>{cleanup();reject(new Error('Trình duyệt không đọc được video này.'))},cleanup=()=>{video.removeEventListener('loadedmetadata',done);video.removeEventListener('error',fail)};video.addEventListener('loadedmetadata',done,{once:true});video.addEventListener('error',fail,{once:true});video.load()});
- return video;
-}
-
+function drawTemplate(ctx:CanvasRenderingContext2D,bmp:ImageBitmap,song:Song,w:number,h:number,t:number,level:number,template:VisualTemplate,motion:MotionIntensity,p:Palette,preserveBackground=false){const gain=MOTION_GAIN[motion];if(!preserveBackground){ctx.fillStyle='#080812';ctx.fillRect(0,0,w,h)}const zoom=1.06+.025*Math.sin(t*.45)*gain+level*.025*gain,dx=Math.sin(t*.22)*w*.018*gain,dy=Math.cos(t*.18)*h*.014*gain;if(!preserveBackground)coverFill(ctx,bmp,w,h,.5,34,zoom,dx,dy);ctx.fillStyle='rgba(3,4,12,.25)';ctx.fillRect(0,0,w,h);coverFit(ctx,bmp,w*.82,h*.72,1+.02*Math.sin(t*.5)*gain+level*.01*gain,dx*.25,dy*.25);drawMeta(ctx,song,w,h*.67,'center',.72,template,p)}
+export function createLiveFramePainter(bitmap:ImageBitmap){const palette=extractPalette(bitmap);return(ctx:CanvasRenderingContext2D,song:Song,w:number,h:number,time:number,template:VisualTemplate,wave:WaveStyle,motion:MotionIntensity,lyrics:LyricsMode,preserveBackground=false,layout?:OverlayLayout)=>{drawTemplate(ctx,bitmap,song,w,h,time,amplitude(null,0,time),template,motion,palette,preserveBackground);withSubtitleLayout(ctx,w,h,layout,()=>drawLyrics(ctx,song,w,h,time,song.duration||1,lyrics));drawWave(ctx,null,0,time,w,h,wave,palette,layout)}}
+function isMobileRenderDevice(){if(typeof navigator==='undefined')return false;const ua=navigator.userAgent||'';return /Android|iPhone|iPad|iPod|Mobile/i.test(ua)||(navigator.maxTouchPoints>1&&/Macintosh/i.test(ua))}
+async function yieldToBrowser(){await new Promise<void>(resolve=>setTimeout(resolve,0))}
+async function loadBackgroundVideo(url:string){const video=document.createElement('video');video.muted=true;video.playsInline=true;video.preload='auto';video.src=url;await new Promise<void>((resolve,reject)=>{const done=()=>{cleanup();resolve()},fail=()=>{cleanup();reject(new Error('Trình duyệt không đọc được video này.'))},cleanup=()=>{video.removeEventListener('loadedmetadata',done);video.removeEventListener('error',fail)};video.addEventListener('loadedmetadata',done,{once:true});video.addEventListener('error',fail,{once:true});video.load()});return video}
 export async function generateVisualizerVideoSafe(song:Song,aspect:VideoAspect,waveStyle:WaveStyle,template:VisualTemplate,options:SafeRenderOptions){
- if(!song.picture||!song.audio)throw new Error('Không đủ ảnh hoặc âm thanh để tạo video.');
- options.onProgress?.(1);
- const[ir,ar]=await Promise.all([fetch(song.picture,{cache:'no-store'}),fetch(song.audio,{cache:'no-store'})]);if(!ir.ok||!ar.ok)throw new Error('Không thể tải ảnh hoặc âm thanh.');
- options.onProgress?.(4);
- if(!('VideoEncoder'in window))throw new Error('Trình duyệt chưa hỗ trợ tạo video MP4.');
- const{ALL_FORMATS,BlobSource,BufferTarget,CanvasSource,EncodedAudioPacketSource,EncodedPacketSink,EncodedPacket,Input,Mp4OutputFormat,Output}=await import('mediabunny');
- const originalAudio=await ar.blob(),mobile=isMobileRenderDevice();
- let processedWav:Blob|null=null,audioBlob:Blob=originalAudio;
- if(!mobile){
-   options.onProgress?.(6);
-   processedWav=await renderTikTokLikeAudio(originalAudio);
-   options.onProgress?.(8);
-   try{audioBlob=await convertProcessedAudio(processedWav,'m4a')}catch{audioBlob=await convertProcessedAudio(processedWav,'mp3')}
- }else{
-   options.onProgress?.(8);
-   await yieldToBrowser();
- }
- const input=new Input({source:new BlobSource(audioBlob),formats:ALL_FORMATS}),track=await input.getPrimaryAudioTrack();if(!track)throw new Error('Không có luồng âm thanh hợp lệ.');
- const codec=await track.getCodec(),decoderConfig=await track.getDecoderConfig(),fullDuration=await input.computeDuration();if(!codec||!decoderConfig||!Number.isFinite(fullDuration)||fullDuration<=0)throw new Error('Không đọc được âm thanh.');
- const outputDuration=Math.max(fullDuration,Number.isFinite(options.loopDuration)?Number(options.loopDuration):fullDuration),start=Math.max(0,Math.min(options.startSeconds||0,Math.max(0,outputDuration-.05))),duration=options.previewSeconds?Math.min(options.previewSeconds,outputDuration-start):outputDuration,end=start+duration;
- let samples:Float32Array|null=null,rate=48000;if(!mobile&&processedWav){try{const ac=new AudioContext(),d=await ac.decodeAudioData(await processedWav.arrayBuffer());samples=d.getChannelData(0);rate=d.sampleRate;await ac.close()}catch{samples=null}}else{samples=null}
- const{width,height}=VIDEO_SIZES[aspect],canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw new Error('Không tạo được khung hình.');
- const bmp=await createImageBitmap(await ir.blob()),palette=extractPalette(bmp),background=options.background||DEFAULT_BACKGROUND_CONFIG;let backgroundBitmap:ImageBitmap|null=null,backgroundVideo:HTMLVideoElement|null=null;
- if(background.mode==='image'&&background.imageUrl){const r=await fetch(background.imageUrl);if(!r.ok)throw new Error('Không tải được ảnh nền.');backgroundBitmap=await createImageBitmap(await r.blob())}
- if(background.mode==='video'&&background.videoUrl){try{backgroundVideo=await loadBackgroundVideo(background.videoUrl)}catch(e){throw e instanceof Error?e:new Error('Video nền không hỗ trợ trên thiết bị này.')}}
- const target=new BufferTarget(),output=new Output({format:new Mp4OutputFormat(),target}),bitrate=width*height>=1_000_000?2_700_000:1_900_000,videoSource=new CanvasSource(canvas,{codec:'avc',bitrate}),audioSource=new EncodedAudioPacketSource(codec);output.addVideoTrack(videoSource);output.addAudioTrack(audioSource,{decoderConfig});await output.start();
- try{const fps=mobile&&background.mode==='video'?10:15,fd=1/fps,frames=Math.ceil(duration*fps);for(let i=0;i<frames;i++){const localT=i*fd,absoluteT=start+localT,songT=((absoluteT%fullDuration)+fullDuration)%fullDuration,level=amplitude(samples,rate,songT),customBackground=background.mode!=='suno';if(background.mode==='preset'){drawPresetBackground(ctx,background.presetId,width,height,absoluteT);applyBackgroundFinish(ctx,width,height,background)}else if(background.mode==='image'&&backgroundBitmap){drawMediaBackground(ctx,backgroundBitmap,backgroundBitmap.width,backgroundBitmap.height,width,height,background);applyBackgroundFinish(ctx,width,height,background)}else if(background.mode==='video'&&backgroundVideo){await seekVideoFrame(backgroundVideo,absoluteT,background.loopVideo);drawMediaBackground(ctx,backgroundVideo,backgroundVideo.videoWidth,backgroundVideo.videoHeight,width,height,background);applyBackgroundFinish(ctx,width,height,background)}drawTemplate(ctx,bmp,song,width,height,absoluteT,level,template,options.motion,palette,customBackground);withSubtitleLayout(ctx,width,height,options.layout,()=>{if(options.lyrics!=='off'&&options.karaokeTimeline?.length){drawKaraokeOverlay(ctx,options.karaokeTimeline,songT,width,height,options.subtitleStyle)}else{drawLyrics(ctx,song,width,height,songT,fullDuration,options.lyrics)}});drawWave(ctx,samples,rate,songT,width,height,waveStyle,palette,options.layout);await videoSource.add(localT,Math.min(fd,duration-localT),{keyFrame:i%(fps*2)===0});if(mobile&&i%8===0)await yieldToBrowser();if(i%3===0||i===frames-1)options.onProgress?.(Math.min(90,10+Math.round(((i+1)/frames)*80)))}
- bmp.close();backgroundBitmap?.close();if(backgroundVideo){backgroundVideo.removeAttribute('src');backgroundVideo.load()}const sink=new EncodedPacketSink(track),sourcePackets=[] as EncodedPacket[];for await(const p of sink.packets())sourcePackets.push(p);const meta={decoderConfig};let added=0;const firstLoop=Math.max(0,Math.floor(start/fullDuration)),lastLoop=Math.max(firstLoop,Math.floor((Math.max(start,end-.0001))/fullDuration));for(let loop=firstLoop;loop<=lastLoop;loop++){const loopOffset=loop*fullDuration;for(const p of sourcePackets){const globalStart=loopOffset+p.timestamp,globalEnd=globalStart+p.duration;if(globalEnd<=start)continue;if(globalStart>=end)break;const packet=new EncodedPacket(p.data,p.type,Math.max(0,globalStart-start),p.duration);await audioSource.add(packet,meta);added++;if(added%25===0)options.onProgress?.(94)}}options.onProgress?.(97);await output.finalize();options.onProgress?.(100)}catch(e){bmp.close();output.cancel();throw e}
- if(!target.buffer)throw new Error('Không xuất được MP4.');return new Blob([target.buffer],{type:'video/mp4'})
+ if(!song.picture||!song.audio)throw new Error('Không đủ ảnh hoặc âm thanh để tạo video.');options.onProgress?.(1);const[ir,ar]=await Promise.all([fetch(song.picture,{cache:'no-store'}),fetch(song.audio,{cache:'no-store'})]);if(!ir.ok||!ar.ok)throw new Error('Không thể tải ảnh hoặc âm thanh.');options.onProgress?.(4);if(!('VideoEncoder'in window))throw new Error('Trình duyệt chưa hỗ trợ tạo video MP4.');const{ALL_FORMATS,BlobSource,BufferTarget,CanvasSource,EncodedAudioPacketSource,EncodedPacketSink,EncodedPacket,Input,Mp4OutputFormat,Output}=await import('mediabunny');const originalAudio=await ar.blob(),mobile=isMobileRenderDevice();let processedWav:Blob|null=null,audioBlob:Blob=originalAudio;if(!mobile){options.onProgress?.(6);processedWav=await renderTikTokLikeAudio(originalAudio);options.onProgress?.(8);try{audioBlob=await convertProcessedAudio(processedWav,'m4a')}catch{audioBlob=await convertProcessedAudio(processedWav,'mp3')}}else{options.onProgress?.(8);await yieldToBrowser()}
+ const input=new Input({source:new BlobSource(audioBlob),formats:ALL_FORMATS}),track=await input.getPrimaryAudioTrack();if(!track)throw new Error('Không có luồng âm thanh hợp lệ.');const codec=await track.getCodec(),decoderConfig=await track.getDecoderConfig(),sourceDuration=await input.computeDuration();if(!codec||!decoderConfig||!Number.isFinite(sourceDuration)||sourceDuration<=0)throw new Error('Không đọc được âm thanh.');const trim=storedAudioTrim(sourceDuration),trimStart=trim?.start||0,trimEnd=trim?.end||sourceDuration,fullDuration=Math.max(.05,trimEnd-trimStart),outputDuration=Math.max(fullDuration,Number.isFinite(options.loopDuration)?Number(options.loopDuration):fullDuration),start=Math.max(0,Math.min(options.startSeconds||0,Math.max(0,outputDuration-.05))),duration=options.previewSeconds?Math.min(options.previewSeconds,outputDuration-start):outputDuration,end=start+duration;
+ let samples:Float32Array|null=null,rate=48000;if(!mobile&&processedWav){try{const ac=new AudioContext(),d=await ac.decodeAudioData(await processedWav.arrayBuffer());samples=d.getChannelData(0);rate=d.sampleRate;await ac.close()}catch{samples=null}}const{width,height}=VIDEO_SIZES[aspect],canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw new Error('Không tạo được khung hình.');const bmp=await createImageBitmap(await ir.blob()),palette=extractPalette(bmp),background=options.background||DEFAULT_BACKGROUND_CONFIG;let backgroundBitmap:ImageBitmap|null=null,backgroundVideo:HTMLVideoElement|null=null;if(background.mode==='image'&&background.imageUrl){const r=await fetch(background.imageUrl);if(!r.ok)throw new Error('Không tải được ảnh nền.');backgroundBitmap=await createImageBitmap(await r.blob())}if(background.mode==='video'&&background.videoUrl)backgroundVideo=await loadBackgroundVideo(background.videoUrl);const target=new BufferTarget(),output=new Output({format:new Mp4OutputFormat(),target}),bitrate=width*height>=1_000_000?2_700_000:1_900_000,videoSource=new CanvasSource(canvas,{codec:'avc',bitrate}),audioSource=new EncodedAudioPacketSource(codec);output.addVideoTrack(videoSource);output.addAudioTrack(audioSource,{decoderConfig});await output.start();
+ try{const fps=mobile&&background.mode==='video'?10:15,fd=1/fps,frames=Math.ceil(duration*fps);for(let i=0;i<frames;i++){const localT=i*fd,absoluteT=start+localT,trimT=((absoluteT%fullDuration)+fullDuration)%fullDuration,songT=trimStart+trimT,level=amplitude(samples,rate,songT),customBackground=background.mode!=='suno';if(background.mode==='preset'){drawPresetBackground(ctx,background.presetId,width,height,absoluteT);applyBackgroundFinish(ctx,width,height,background)}else if(background.mode==='image'&&backgroundBitmap){drawMediaBackground(ctx,backgroundBitmap,backgroundBitmap.width,backgroundBitmap.height,width,height,background);applyBackgroundFinish(ctx,width,height,background)}else if(background.mode==='video'&&backgroundVideo){await seekVideoFrame(backgroundVideo,absoluteT,background.loopVideo);drawMediaBackground(ctx,backgroundVideo,backgroundVideo.videoWidth,backgroundVideo.videoHeight,width,height,background);applyBackgroundFinish(ctx,width,height,background)}drawTemplate(ctx,bmp,song,width,height,absoluteT,level,template,options.motion,palette,customBackground);withSubtitleLayout(ctx,width,height,options.layout,()=>{if(options.lyrics!=='off'&&options.karaokeTimeline?.length)drawKaraokeOverlay(ctx,options.karaokeTimeline,songT,width,height,options.subtitleStyle);else drawLyrics(ctx,song,width,height,songT,sourceDuration,options.lyrics)});drawWave(ctx,samples,rate,songT,width,height,waveStyle,palette,options.layout);await videoSource.add(localT,Math.min(fd,duration-localT),{keyFrame:i%(fps*2)===0});if(mobile&&i%8===0)await yieldToBrowser();if(i%3===0||i===frames-1)options.onProgress?.(Math.min(90,10+Math.round(((i+1)/frames)*80)))}bmp.close();backgroundBitmap?.close();if(backgroundVideo){backgroundVideo.removeAttribute('src');backgroundVideo.load()}const sink=new EncodedPacketSink(track),sourcePackets=[] as EncodedPacket[];for await(const p of sink.packets())sourcePackets.push(p);const meta={decoderConfig};let added=0;const firstLoop=Math.max(0,Math.floor(start/fullDuration)),lastLoop=Math.max(firstLoop,Math.floor(Math.max(start,end-.0001)/fullDuration));for(let loop=firstLoop;loop<=lastLoop;loop++){const loopOffset=loop*fullDuration;for(const p of sourcePackets){const sourceStart=p.timestamp,sourceEnd=sourceStart+p.duration;if(sourceEnd<=trimStart)continue;if(sourceStart>=trimEnd)break;const clippedStart=Math.max(sourceStart,trimStart),clippedEnd=Math.min(sourceEnd,trimEnd),globalStart=loopOffset+(clippedStart-trimStart),globalEnd=loopOffset+(clippedEnd-trimStart);if(globalEnd<=start)continue;if(globalStart>=end)break;const packet=new EncodedPacket(p.data,p.type,Math.max(0,globalStart-start),Math.max(.001,clippedEnd-clippedStart));await audioSource.add(packet,meta);added++;if(added%25===0)options.onProgress?.(94)}}options.onProgress?.(97);await output.finalize();options.onProgress?.(100)}catch(e){bmp.close();output.cancel();throw e}if(!target.buffer)throw new Error('Không xuất được MP4.');return new Blob([target.buffer],{type:'video/mp4'})
 }
