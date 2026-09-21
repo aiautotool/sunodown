@@ -18,7 +18,7 @@
 5. [x] Batch Download
 6. [x] Render Queue
 7. [x] Download ZIP Package
-8. [ ] Filename Template
+8. [x] Filename Template
 9. [ ] Local Library / History
 10. [ ] Favorite / Collection
 11. [ ] True LUFS / True Peak Meter
@@ -77,12 +77,12 @@
 **Status: COMPLETE.**
 
 ### Roadmap #8 — Filename Template
-- [ ] Configurable filename tokens for audio/video/subtitle/package outputs
-- [ ] Preview + sanitization + persisted preference
-- [ ] Integrate with batch/ZIP/render downloads
+- [x] Configurable filename tokens for audio/video/subtitle/package outputs
+- [x] Preview + sanitization + persisted preference
+- [x] Integrate with batch/ZIP/render downloads
 - [ ] Build verification + Cloudflare deploy
 
-**Status: NEXT.** Do not start #9 until #8 is complete.
+**Status: IN PROGRESS.** Implementation complete; awaiting build/deploy verification.
 
 ### Current focus
-Roadmap #8 — Filename Template. ZIP Package is complete and verified. Do not skip to #9.
+Roadmap #8 — Filename Template. Implementation complete; verify build/deploy before starting #9.
