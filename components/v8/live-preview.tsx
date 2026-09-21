@@ -5,7 +5,7 @@ import {createLiveFramePainter, type OverlayLayout} from '../v4/renderer-safe';
 import {VIDEO_SIZES, type Song, type VideoAspect, type VisualTemplate, type WaveStyle, type MotionIntensity, type LyricsMode} from '../v4/types';
 import {getStoredEffects} from './effects-panel';
 import {drawVideoEffects, type EffectConfig} from './video-effects';
-import {drawKaraokeOverlay, type KaraokeLine} from '@/app/lib/karaoke';
+import {drawKaraokeOverlay, type KaraokeLine, type KaraokeDrawStyle} from '@/app/lib/karaoke';
 import {DEFAULT_BACKGROUND_CONFIG,applyBackgroundFinish,drawMediaBackground,drawPresetBackground,type BackgroundConfig} from './background';
 
 type Props = {
@@ -18,6 +18,7 @@ type Props = {
   karaokeTimeline?: KaraokeLine[];
   background?: BackgroundConfig;
   layout?: OverlayLayout;
+  subtitleStyle?:KaraokeDrawStyle;
   onLayoutChange?:(layout:OverlayLayout)=>void;
   start: number;
   exporting: boolean;
@@ -158,7 +159,7 @@ export function LivePreview(props: Props) {
         if(v.readyState>=2){drawMediaBackground(context,v,v.videoWidth,v.videoHeight,size.width,size.height,background);applyBackgroundFinish(context,size.width,size.height,background)}
       }
       paint(context, p.song, size.width, size.height, absoluteTime, p.template, p.wave, p.motion, hasExactLyrics ? 'off' : p.lyrics,customBackground,p.layout);
-      if (hasExactLyrics) {const q=p.layout?.subtitle||{x:50,y:58,scale:100},s=q.scale/100;context.save();context.translate(size.width*q.x/100,size.height*q.y/100);context.scale(s,s);context.translate(-size.width*.5,-size.height*.58);drawKaraokeOverlay(context,p.karaokeTimeline!,absoluteTime,size.width,size.height);context.restore();}
+      if (hasExactLyrics) {const q=p.layout?.subtitle||{x:50,y:58,scale:100},s=q.scale/100;context.save();context.translate(size.width*q.x/100,size.height*q.y/100);context.scale(s,s);context.translate(-size.width*.5,-size.height*.58);drawKaraokeOverlay(context,p.karaokeTimeline!,absoluteTime,size.width,size.height,p.subtitleStyle);context.restore();}
       drawVideoEffects(context, size.width, size.height, absoluteTime, effects.current);
     };
 
@@ -208,7 +209,7 @@ export function LivePreview(props: Props) {
         ? <video ref={video} src={props.resultUrl} controls playsInline autoPlay className="max-h-[70vh] w-full rounded-lg bg-black" />
         : <div className="relative" style={{aspectRatio:`${size.width}/${size.height}`,width:`min(100%, ${340*size.width/size.height}px)`,maxHeight:340}}>
             <canvas ref={canvas} role="img" aria-label="Xem trước video đồng bộ cùng âm thanh" className="h-full w-full" />
-            {props.layout&&props.onLayoutChange&&(['wave','subtitle'] as const).map(key=>{const p=props.layout![key],isWave=key==='wave',ww=isWave?Math.max(24,64*p.scale/100):Math.max(28,76*p.scale/100),hh=isWave?Math.max(8,18*p.scale/100):Math.max(8,16*p.scale/100);return <div key={key} role="button" tabIndex={0} aria-label={isWave?'Kéo trực tiếp vùng sóng nhạc':'Kéo trực tiếp vùng subtitle'} title={isWave?'Nắm trực tiếp sóng để kéo':'Nắm trực tiếp subtitle để kéo'} onPointerDown={e=>{e.preventDefault();const el=e.currentTarget,box=el.parentElement!.getBoundingClientRect(),startX=e.clientX,startY=e.clientY,origin={...p};el.setPointerCapture(e.pointerId);const move=(ev:PointerEvent)=>{const x=Math.max(0,Math.min(100,origin.x+(ev.clientX-startX)/box.width*100)),y=Math.max(0,Math.min(100,origin.y+(ev.clientY-startY)/box.height*100));props.onLayoutChange?.({...props.layout!,[key]:{...origin,x,y}})};const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up)};window.addEventListener('pointermove',move);window.addEventListener('pointerup',up,{once:true})}} className="absolute z-20 -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing" style={{left:`${p.x}%`,top:`${p.y}%`,width:`${ww}%`,height:`${hh}%`,touchAction:'none'}}><span className="pointer-events-none absolute inset-0 rounded-md border border-transparent transition-colors hover:border-white/25"/></div>})}
+            {props.layout&&props.onLayoutChange&&(['wave','subtitle'] as const).map(key=>{const p=props.layout![key],isWave=key==='wave',ww=isWave?Math.max(24,64*p.scale/100):Math.max(44,88*p.scale/100),hh=isWave?Math.max(8,18*p.scale/100):Math.max(14,28*p.scale/100);return <div key={key} role="button" tabIndex={0} aria-label={isWave?'Kéo trực tiếp vùng sóng nhạc':'Kéo trực tiếp vùng subtitle'} title={isWave?'Nắm trực tiếp sóng để kéo':'Nắm trực tiếp subtitle để kéo'} onPointerDown={e=>{e.preventDefault();const el=e.currentTarget,box=el.parentElement!.getBoundingClientRect(),startX=e.clientX,startY=e.clientY,origin={...p};el.setPointerCapture(e.pointerId);const move=(ev:PointerEvent)=>{const x=Math.max(0,Math.min(100,origin.x+(ev.clientX-startX)/box.width*100)),y=Math.max(0,Math.min(100,origin.y+(ev.clientY-startY)/box.height*100));props.onLayoutChange?.({...props.layout!,[key]:{...origin,x,y}})};const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up)};window.addEventListener('pointermove',move);window.addEventListener('pointerup',up,{once:true})}} className="absolute z-20 -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing" style={{left:`${p.x}%`,top:`${p.y}%`,width:`${ww}%`,height:`${hh}%`,touchAction:'none'}}><span className="pointer-events-none absolute inset-0 rounded-md border border-transparent transition-colors hover:border-white/25"/></div>})}
           </div>}
     </div>
 
