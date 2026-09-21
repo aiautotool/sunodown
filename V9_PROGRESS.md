@@ -26,7 +26,7 @@
 3. [x] Undo / Redo
 4. [x] Batch Suno Links
 5. [x] Batch Download
-6. [ ] Render Queue
+6. [x] Render Queue
 7. [ ] Download ZIP Package
 8. [ ] Filename Template
 9. [ ] Local Library / History
@@ -102,10 +102,18 @@
 - [x] Retry failed jobs, remove pending/finished jobs, clear completed jobs
 - [x] Per-job finished Blob download without retaining object URLs permanently
 - [x] Queue executes only one renderer at a time for mobile memory safety
-- [ ] Wire editor's current full-render snapshot into queue UI
+- [x] Wire editor's current full-render snapshot into queue UI, freezing song/config/layout/subtitle/karaoke/background/long-video/batch URLs at enqueue time
+- [x] Direct full/preview render is disabled while a queued job renders; wake lock covers queue work
+- [x] Build verification + Cloudflare deploy succeeded for `c613dab` (run 35570834672)
+
+**Status: COMPLETE.**
+
+### Roadmap #7 — Download ZIP Package
+- [ ] Package batch audio/video/subtitle outputs into a downloadable ZIP without loading all large media into memory at once
+- [ ] Mobile-safe failure handling and filename sanitization
 - [ ] Build verification + Cloudflare deploy
 
-**Status: IN PROGRESS.** Do not start #7.
+**Status: NEXT.** Do not start #8 until #7 is complete.
 
 ### Current focus
-Roadmap #6 — Render Queue. Next piece: wire full-render snapshots into the queue and verify/deploy. Do not skip to #7.
+Roadmap #7 — Download ZIP Package. Render Queue is complete and verified. Do not skip to #8.
