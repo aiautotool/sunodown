@@ -97,5 +97,15 @@
 
 **Status: COMPLETE.**
 
+### Roadmap #6 — Render Queue
+- [x] Sequential queue engine with pending / rendering / done / error states (`components/v9/render-queue.tsx`)
+- [x] Retry failed jobs, remove pending/finished jobs, clear completed jobs
+- [x] Per-job finished Blob download without retaining object URLs permanently
+- [x] Queue executes only one renderer at a time for mobile memory safety
+- [ ] Wire editor's current full-render snapshot into queue UI
+- [ ] Build verification + Cloudflare deploy
+
+**Status: IN PROGRESS.** Do not start #7.
+
 ### Current focus
-Roadmap #6 — Render Queue. Do not skip to #7 until #6 is implemented and verified.
+Roadmap #6 — Render Queue. Next piece: wire full-render snapshots into the queue and verify/deploy. Do not skip to #7.
