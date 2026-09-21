@@ -157,8 +157,8 @@ export function LivePreview(props: Props) {
         if(Math.abs(v.currentTime-target)>.12)try{v.currentTime=target}catch{}
         if(v.readyState>=2){drawMediaBackground(context,v,v.videoWidth,v.videoHeight,size.width,size.height,background);applyBackgroundFinish(context,size.width,size.height,background)}
       }
-      paint(context, p.song, size.width, size.height, absoluteTime, p.template, p.wave, p.motion, hasExactLyrics ? 'off' : p.lyrics,customBackground);
-      if (hasExactLyrics) drawKaraokeOverlay(context, p.karaokeTimeline!, absoluteTime, size.width, size.height);
+      paint(context, p.song, size.width, size.height, absoluteTime, p.template, p.wave, p.motion, hasExactLyrics ? 'off' : p.lyrics,customBackground,p.layout);
+      if (hasExactLyrics) {const q=p.layout?.subtitle||{x:50,y:58,scale:100},s=q.scale/100;context.save();context.translate(size.width*q.x/100,size.height*q.y/100);context.scale(s,s);context.translate(-size.width*.5,-size.height*.58);drawKaraokeOverlay(context,p.karaokeTimeline!,absoluteTime,size.width,size.height);context.restore();}
       drawVideoEffects(context, size.width, size.height, absoluteTime, effects.current);
     };
 
