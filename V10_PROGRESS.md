@@ -89,3 +89,14 @@ Roadmap #14 — TikTok Calibrated Profile. Start on the next run only. Exactly o
 - [x] Build/deploy verification — workflow 35624996890
 
 **Status: COMPLETE.** Unified redesign build/deploy succeeded. UI implementation only; roadmap #14 not started by this redesign.
+
+### Mobile fidelity correction — supplied reference
+- [x] Added reference-style compact mobile header with Menu / SunoDown v10 / Export
+- [x] Added Song / Library / Queue segmented navigation under header
+- [x] Added Video / Audio / Lyrics / BG editor navigation matching reference hierarchy
+- [x] Restyled mobile feature cards to the same dark compact panel language
+- [x] Preserved real Presets, Subtitle, Effects, Background, Long Video, LUFS, Audio Processing, A/B and render behavior
+- [x] Desktop continues to use the same visual language responsively
+- [ ] Build/deploy verification
+
+**Status: VERIFYING.** Fidelity correction only; no roadmap task skipped.
