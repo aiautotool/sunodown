@@ -226,7 +226,7 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width:
 export type KaraokeDrawStyle={color?:string;activeColor?:string;background?:string;backgroundOpacity?:number;fontSize?:number;bold?:boolean;shadow?:boolean;outline?:boolean;radius?:number};
 function drawWordLine(ctx: CanvasRenderingContext2D, line: KaraokeLine, time: number, centerX: number, baselineY: number, maxWidth: number, style:KaraokeDrawStyle={}) {
   const gap = 14,scale=Math.max(.6,Math.min(1.8,(style.fontSize||100)/100)),weight=style.bold===false?500:700;
-  ctx.font = `${weight} ${42*scale}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  ctx.font = `${weight} ${42*scale}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
   ctx.textBaseline = 'alphabetic';
   const widths = line.words.map((word) => ctx.measureText(word.text).width);
   const fullWidth = widths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, widths.length - 1);
