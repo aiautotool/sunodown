@@ -27,7 +27,7 @@
 14. [x] TikTok Calibrated Profile
 15. [x] Audio Trim Editor
 16. [x] Fade In / Fade Out
-17. [ ] Vocal / Instrumental Separation
+17. [x] Vocal / Instrumental Separation
 18. [ ] Waveform Lyrics Editor
 19. [ ] Word Tap Sync
 20. [ ] Auto Lyrics Confidence
@@ -84,8 +84,19 @@
 
 **Status: COMPLETE.** Commits 85cf1d3 + 3c63c28 + 542a62d + 356f348 + cfb1772. Workflow 35649439562 build/deploy successful.
 
+### Roadmap #17 — Vocal / Instrumental Separation
+- [x] Real Audio-tab stem separation, not mock UI
+- [x] Local stereo center/side extraction produces separate Vocal and Instrumental WAV blobs
+- [x] Per-stem playback preview and WAV download
+- [x] Cooperative chunked processing yields to the browser for mobile responsiveness
+- [x] Source audio stays on-device; no stem upload/server dependency
+- [x] Long Video Loop / multi-hour renderer paths are untouched and regression-check remains green
+- [x] Build + Cloudflare deployment verified by workflow 35655769369
+
+**Status: COMPLETE.** Commits a62c990 + d69376e. Workflow 35655769369 build/deploy successful.
+
 ### Current focus
-Roadmap #17 — Vocal / Instrumental Separation. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #18 — Waveform Lyrics Editor. Start on the next run only. Exactly one roadmap task per run.
 
 ### Unified app redesign — approved mockup
 - [x] Rebuilt shell as SunoDown v10 with shared navigation language on desktop/mobile
