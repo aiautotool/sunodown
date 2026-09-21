@@ -10,10 +10,23 @@ import {V10LibraryEnhancer} from '@/components/v10/local-library';
 import {V10LoudnessMeter} from '@/components/v10/loudness-meter';
 import {AudioProcessingPresets} from '@/components/v10/audio-processing-presets';
 import {AudioABCompare} from '@/components/v10/audio-ab-compare';
+import {BottomTools} from '@/components/v10/design-navigation';
 const faq=[{question:'Cách tải nhạc Suno về điện thoại?',answer:'Sao chép liên kết bài hát Suno, dán vào Suno Tools, chờ hệ thống nhận diện rồi chọn MP3, WAV, M4A, video, ảnh bìa hoặc lời bài hát để lưu.'},{question:'Có thể tải Suno MP3, WAV và M4A không?',answer:'Có. Công cụ hỗ trợ tải M4A và chuyển đổi sang MP3 hoặc WAV trực tiếp trên trình duyệt khi thiết bị hỗ trợ.'},{question:'Có thể tải video Suno không?',answer:'Có. Bạn có thể tải video gốc khi nguồn có video hoặc tạo video sóng nhạc từ bài hát.'},{question:'Có thể tải được ảnh bìa và lời bài hát Suno không?',answer:'Có. Khi dữ liệu có sẵn, bạn có thể lưu ảnh bìa, lời bài hát và thông tin bài hát.'},{question:'Có cần cài ứng dụng để tải nhạc Suno không?',answer:'Không. Suno Tools chạy trực tiếp trên trình duyệt điện thoại và máy tính.'}];
 const structuredData={'@context':'https://schema.org','@graph':[{'@type':'WebApplication',name:'Suno Tools',url:'https://suno.aiautotool.com/',applicationCategory:'MultimediaApplication',operatingSystem:'Web',inLanguage:'vi',description:'Công cụ tải nhạc Suno MP3, WAV, M4A, video, ảnh bìa, lời bài hát và tạo video sóng nhạc.',offers:{'@type':'Offer',price:'0',priceCurrency:'VND'},featureList:['Tải Suno MP3','Tải Suno WAV','Tải Suno M4A','Tải video Suno','Tải ảnh bìa Suno','Tải lyrics Suno','Tạo video sóng nhạc']},{'@type':'FAQPage',mainEntity:faq.map(x=>({'@type':'Question',name:x.question,acceptedAnswer:{'@type':'Answer',text:x.answer}}))}]};
 export default function Page(){return <><V8DefaultSunoSample/><V8DesignLayoutEnhancer/><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(structuredData)}}/><V7AppShell><style>{`
-.v7-workspace main{min-height:0!important;background:transparent!important}
+
+.v10-hidden-panel{display:none!important}
+.v10-segment button{display:flex;align-items:center;justify-content:center;gap:7px;min-height:42px;border-radius:9px;font-size:12px;font-weight:650;color:rgba(255,255,255,.55)}
+.v10-segment button svg,.v10-editor-nav button svg,.v10-bottom-tools button svg{width:16px;height:16px}
+.v10-segment button.active{background:linear-gradient(135deg,#4f46e5,#6d5dfc);color:#fff;box-shadow:0 7px 22px rgba(79,70,229,.28)}
+.v10-editor-nav{margin:14px 0 10px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:#0d1725;padding:4px}
+.v10-editor-nav button{display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 4px;border-bottom:2px solid transparent;font-size:10px;color:rgba(255,255,255,.55)}
+.v10-editor-nav button.active{color:#c7c5ff;border-bottom-color:#675cff;background:rgba(99,91,255,.10)}
+#studio-editor[data-editor-tab="video"]>[data-editor-panel]:not([data-editor-panel="video"]),#studio-editor[data-editor-tab="audio"]>[data-editor-panel]:not([data-editor-panel="audio"]),#studio-editor[data-editor-tab="lyrics"]>[data-editor-panel]:not([data-editor-panel="lyrics"]),#studio-editor[data-editor-tab="bg"]>[data-editor-panel]:not([data-editor-panel="bg"]){display:none!important}
+.v10-bottom-tools{position:fixed;left:0;right:0;bottom:0;z-index:60;border-top:1px solid rgba(255,255,255,.08);background:rgba(6,13,24,.97);padding:7px 8px max(7px,env(safe-area-inset-bottom));backdrop-filter:blur(18px)}
+.v10-bottom-tools button{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9px;color:rgba(255,255,255,.52)}
+.v10-bottom-tools button.active{color:#8b7cff}
+\n.v7-workspace main{min-height:0!important;background:transparent!important}
 .v7-workspace main>section{padding:0!important;max-width:none!important}
 .v7-workspace main>section>p:first-child,.v7-workspace main>section>h1{display:none!important}
 .v7-workspace article,.v7-workspace section{scroll-margin-top:78px}
@@ -24,6 +37,8 @@ export default function Page(){return <><V8DefaultSunoSample/><V8DesignLayoutEnh
 #studio-editor>section,#studio-editor>div,#render-zone,.v7-workspace [id^="v10-"]{background:linear-gradient(180deg,rgba(14,27,46,.96),rgba(8,19,33,.96))!important;border-color:rgba(148,163,184,.10)!important}
 .v5-preset-track,.v8-effects-track{scrollbar-width:none}.v5-preset-track::-webkit-scrollbar,.v8-effects-track::-webkit-scrollbar{display:none}
 @media(min-width:1180px){
+ .v10-bottom-tools{left:176px}
+
  .v10-dashboard{grid-template-columns:minmax(0,1.7fr) minmax(310px,.72fr)}
  .v10-core{min-width:0}.v10-side{min-width:0;display:flex;flex-direction:column;gap:12px}
  .v10-core article{margin-top:0!important}
@@ -58,4 +73,4 @@ export default function Page(){return <><V8DefaultSunoSample/><V8DesignLayoutEnh
  .mobile-render-zone>div.grid>button{min-width:0!important;font-size:10px!important}.mobile-render-zone>div.grid>button:last-child{grid-column:1/-1!important;height:36px!important}
  .v7-workspace details summary{min-height:44px}.v7-workspace input,.v7-workspace button{touch-action:manipulation}
 }
-`}</style><div className="v10-dashboard"><div className="v10-core"><V4SafePage/></div><aside className="v10-side"><div id="v10-audio"><V10LoudnessMeter/><AudioProcessingPresets/><AudioABCompare/></div><div id="download"><V5DownloadEnhancer/></div><div id="presets"><V5PresetGalleryEnhancer/></div><V8EffectsPanel/><V6BackgroundRenderEnhancer/><div id="library"><V10LibraryEnhancer/></div></aside></div></V7AppShell><section id="help" className="border-t border-white/[.06] bg-[#06101d] px-4 pb-24 pt-9 text-white md:pb-10"><div className="mx-auto max-w-5xl"><h2 className="text-xl font-bold">Câu hỏi thường gặp về tải nhạc Suno</h2><div className="mt-4 space-y-2">{faq.map(x=><details key={x.question} className="rounded-xl border border-white/[.07] bg-[#0a1727] p-4"><summary className="cursor-pointer text-xs font-semibold">{x.question}</summary><p className="mt-2 text-xs leading-5 text-white/40">{x.answer}</p></details>)}</div><p className="mt-8 text-[10px] text-white/25">Chỉ tải và sử dụng nội dung mà bạn có quyền lưu hoặc sử dụng.</p></div></section></>}
+`}</style><div className="v10-dashboard"><div className="v10-core"><V4SafePage/></div><aside className="v10-side"><div id="v10-audio" data-external-panel="audio"><AudioProcessingPresets/><V10LoudnessMeter/><AudioABCompare/></div><div id="download"><V5DownloadEnhancer/></div><div id="presets" data-tool-panel="presets"><V5PresetGalleryEnhancer/></div><V8EffectsPanel/><V6BackgroundRenderEnhancer/><div id="library" data-primary-panel="library"><V10LibraryEnhancer/></div><BottomTools/></aside></div></V7AppShell><section id="help" className="border-t border-white/[.06] bg-[#06101d] px-4 pb-24 pt-9 text-white md:pb-10"><div className="mx-auto max-w-5xl"><h2 className="text-xl font-bold">Câu hỏi thường gặp về tải nhạc Suno</h2><div className="mt-4 space-y-2">{faq.map(x=><details key={x.question} className="rounded-xl border border-white/[.07] bg-[#0a1727] p-4"><summary className="cursor-pointer text-xs font-semibold">{x.question}</summary><p className="mt-2 text-xs leading-5 text-white/40">{x.answer}</p></details>)}</div><p className="mt-8 text-[10px] text-white/25">Chỉ tải và sử dụng nội dung mà bạn có quyền lưu hoặc sử dụng.</p></div></section></>}
