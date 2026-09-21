@@ -24,7 +24,7 @@
 1. [x] Project / Draft — save and reopen complete editing state
 2. [x] Autosave project
 3. [x] Undo / Redo
-4. [ ] Batch Suno Links
+4. [x] Batch Suno Links
 5. [ ] Batch Download
 6. [ ] Render Queue
 7. [ ] Download ZIP Package
@@ -83,8 +83,13 @@
 Roadmap #4 — Batch Suno Links. Do not skip to #5 until #4 is implemented and verified.
 
 Progress for #4:
-- [ ] Parse/paste multiple Suno links safely
-- [ ] Validate, normalize and de-duplicate links
-- [ ] Batch list UI with per-item status/removal
-- [ ] Integrate batch input with existing single-link workflow without breaking it
-- [ ] Build verification + Cloudflare deploy
+- [x] Parse/paste multiple Suno links safely
+- [x] Validate, normalize and de-duplicate links
+- [x] Batch list UI with per-item status/removal
+- [x] Integrate batch input with existing single-link workflow without breaking it
+- [x] Build verification + Cloudflare deploy succeeded for `b85aeee` (run 35550361088)
+
+**Status: COMPLETE.**
+
+### Current focus
+Roadmap #5 — Batch Download. Do not skip to #6 until #5 is implemented and verified.
