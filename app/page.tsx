@@ -34,6 +34,17 @@ export default function Page(){return <><V8DefaultSunoSample/><V8DesignLayoutEnh
 }
 @media(max-width:1179px){.v10-side{display:contents}}
 @media(max-width:767px){
+ .v10-dashboard{display:flex!important;flex-direction:column!important;gap:10px!important}.v10-side{display:flex!important;flex-direction:column!important;gap:10px!important}
+ .v10-mobile-primary{display:grid!important}
+ .v10-editor-tabs{box-shadow:0 10px 28px rgba(0,0,0,.28)}
+ .mobile-song-card{background:#080f1b!important;border-color:rgba(148,163,184,.12)!important}
+ .mobile-song-head{padding:2px!important}.mobile-song-head>div{min-width:0!important}
+ #studio-editor>section,#studio-editor>div{background:#0b1422!important;border:1px solid rgba(148,163,184,.10)!important}
+ #video-config{order:1!important}#v5-video-preset-gallery{order:2!important}#background-config{order:5!important}#lyrics-config{order:6!important}#effects-slot{order:7!important}
+ #v10-audio{order:2!important;display:flex!important;flex-direction:column!important;gap:10px!important}
+ #presets{order:3!important}#download{order:4!important}#library{order:8!important}
+ #render-zone{background:#0a1423!important;border-color:rgba(99,102,241,.20)!important}
+
  .v7-workspace{padding-left:8px!important;padding-right:8px!important}
  .v7-workspace article{padding:11px!important;border-radius:15px!important}
  .mobile-song-head{align-items:center;gap:10px!important}.mobile-song-head>img{width:62px!important;height:62px!important;border-radius:12px!important}
@@ -47,4 +58,4 @@ export default function Page(){return <><V8DefaultSunoSample/><V8DesignLayoutEnh
  .mobile-render-zone>div.grid>button{min-width:0!important;font-size:10px!important}.mobile-render-zone>div.grid>button:last-child{grid-column:1/-1!important;height:36px!important}
  .v7-workspace details summary{min-height:44px}.v7-workspace input,.v7-workspace button{touch-action:manipulation}
 }
-`}</style><div className="v10-dashboard"><div className="v10-core"><V4SafePage/></div><aside className="v10-side"><V10LoudnessMeter/><AudioProcessingPresets/><AudioABCompare/><div id="download"><V5DownloadEnhancer/></div><div id="presets"><V5PresetGalleryEnhancer/></div><V8EffectsPanel/><V6BackgroundRenderEnhancer/><div id="library"><V10LibraryEnhancer/></div></aside></div></V7AppShell><section id="help" className="border-t border-white/[.06] bg-[#06101d] px-4 pb-24 pt-9 text-white md:pb-10"><div className="mx-auto max-w-5xl"><h2 className="text-xl font-bold">Câu hỏi thường gặp về tải nhạc Suno</h2><div className="mt-4 space-y-2">{faq.map(x=><details key={x.question} className="rounded-xl border border-white/[.07] bg-[#0a1727] p-4"><summary className="cursor-pointer text-xs font-semibold">{x.question}</summary><p className="mt-2 text-xs leading-5 text-white/40">{x.answer}</p></details>)}</div><p className="mt-8 text-[10px] text-white/25">Chỉ tải và sử dụng nội dung mà bạn có quyền lưu hoặc sử dụng.</p></div></section></>}
+`}</style><div className="v10-dashboard"><div className="v10-core"><V4SafePage/></div><aside className="v10-side"><div id="v10-audio"><V10LoudnessMeter/><AudioProcessingPresets/><AudioABCompare/></div><div id="download"><V5DownloadEnhancer/></div><div id="presets"><V5PresetGalleryEnhancer/></div><V8EffectsPanel/><V6BackgroundRenderEnhancer/><div id="library"><V10LibraryEnhancer/></div></aside></div></V7AppShell><section id="help" className="border-t border-white/[.06] bg-[#06101d] px-4 pb-24 pt-9 text-white md:pb-10"><div className="mx-auto max-w-5xl"><h2 className="text-xl font-bold">Câu hỏi thường gặp về tải nhạc Suno</h2><div className="mt-4 space-y-2">{faq.map(x=><details key={x.question} className="rounded-xl border border-white/[.07] bg-[#0a1727] p-4"><summary className="cursor-pointer text-xs font-semibold">{x.question}</summary><p className="mt-2 text-xs leading-5 text-white/40">{x.answer}</p></details>)}</div><p className="mt-8 text-[10px] text-white/25">Chỉ tải và sử dụng nội dung mà bạn có quyền lưu hoặc sử dụng.</p></div></section></>}
