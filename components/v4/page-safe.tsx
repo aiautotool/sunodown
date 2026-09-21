@@ -8,6 +8,7 @@ import {BackgroundPanel} from '../v8/background-panel';
 import {LongVideoLoopPanel} from '../v9/long-video-loop-panel';
 import {DEFAULT_LONG_VIDEO_CONFIG,generateLongVisualizerVideo,resolveLongDuration,type LongVideoConfig} from '../v9/long-video-render';
 import {ProjectPanel} from '../v9/project-panel';
+import {BatchSunoLinks} from '../v9/batch-suno-links';
 import type {V9Project,V9ProjectState} from '../v9/project-store';
 import {DEFAULT_BACKGROUND_CONFIG,sanitizeStoredBackground,type BackgroundConfig} from '../v8/background';
 import KaraokeEditor from '@/app/components/KaraokeEditor';
@@ -48,6 +49,7 @@ export default function V4SafePage(){
   return <main className="min-h-screen bg-[#080812] text-white"><section className="mx-auto max-w-6xl px-5 py-8">
     <p className="font-bold">Suno Grab <span className="text-violet-300">v9</span></p><h1 className="mt-8 text-4xl font-bold">Tải nhạc Suno & tạo video sóng nhạc</h1>
     <div className="relative mt-7"><input value={url} onChange={e=>setUrl(e.target.value)} onKeyDown={e=>{if(e.key!=='Enter'||e.nativeEvent.isComposing)return;e.preventDefault();if(!isSunoUrl(url.trim())){setError('Vui lòng nhập một liên kết Suno hợp lệ.');return}resolveNow.current?.()}} placeholder="Dán liên kết Suno..." className="h-14 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pr-24"/><button onClick={paste} className="absolute right-2 top-2 h-10 rounded-xl bg-violet-500/20 px-4 font-bold">Dán</button></div>
+    <BatchSunoLinks currentUrl={url} onSelect={value=>{lastResolved.current='';setUrl(value)}}/>
     {loading&&<p className="mt-3 text-sm text-white/50">Đang lấy bài hát…</p>}{error&&<p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm">{error}</p>}
     {song&&<article className="mt-5 rounded-3xl border border-white/10 bg-white/5 p-5">
       <div className="flex gap-4">{song.picture&&<img src={song.picture} alt="Ảnh bìa" className="size-24 rounded-2xl object-cover"/>}<div className="min-w-0 flex-1"><h2 className="truncate text-xl font-bold">{song.title}</h2><p className="text-sm text-white/50">{song.creator}</p><audio controls src={song.audio} className="mt-2 w-full"/></div></div>
