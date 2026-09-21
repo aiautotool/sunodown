@@ -16,13 +16,13 @@ export function V7AppShell({children}:{children:React.ReactNode}){
  return <div className="min-h-screen bg-[#050b15] text-white">
   <header className="sticky top-0 z-50 border-b border-white/[.07] bg-[#07101d]/95 backdrop-blur-xl">
    <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-4 px-3 sm:px-5">
-    <a href="#create" className="flex shrink-0 items-center gap-2.5">
-     <div className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-violet-500 via-indigo-500 to-blue-500 shadow-lg shadow-violet-500/20"><Music2 className="size-5"/></div>
-     <div><b className="text-base sm:text-lg">SunoDown <span className="text-violet-400">v10</span></b><p className="hidden text-[9px] text-white/35 xl:block">Turn Your Suno Music Into Stunning Videos</p></div>
+    <button aria-label="Menu" className="mr-1 rounded-lg p-1.5 text-white/65 md:hidden"><Menu className="size-5"/></button><a href="#create" className="flex shrink-0 items-center gap-2.5">
+     <div className="hidden size-9 place-items-center rounded-xl bg-gradient-to-br from-violet-500 via-indigo-500 to-blue-500 shadow-lg shadow-violet-500/20 md:grid"><Music2 className="size-5"/></div>
+     <div><b className="text-[15px] sm:text-lg">SunoDown <span className="text-violet-400">v10</span></b><p className="hidden text-[9px] text-white/35 xl:block">Turn Your Suno Music Into Stunning Videos</p></div>
     </a>
     <a href="#create" className="ml-auto hidden min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/[.08] bg-[#0b1728] px-4 py-2.5 text-xs text-white/35 md:flex md:max-w-2xl"><span className="text-violet-300">🔗</span> Dán liên kết Suno để bắt đầu…</a>
     <a href="#create" className="hidden rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-5 py-2.5 text-xs font-bold shadow-lg shadow-violet-500/15 md:block">Phân tích</a>
-    <a href="#help" className="rounded-xl border border-white/10 p-2 text-white/60"><Settings className="size-5"/></a>
+    <a href="#render-zone" className="ml-auto rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-3 py-2 text-[11px] font-bold md:hidden">↥ Xuất</a><a href="#help" className="rounded-xl border border-white/10 p-2 text-white/60"><Settings className="size-5"/></a>
    </div>
   </header>
   <div className="mx-auto flex max-w-[1600px]">
