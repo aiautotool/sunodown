@@ -41,6 +41,21 @@ function drawWave(ctx:CanvasRenderingContext2D,samples:Float32Array|null,rate:nu
  const ph=Math.max(110,Math.round(h*.14)),top=h-ph,bg=ctx.createLinearGradient(0,top,0,h);bg.addColorStop(0,'rgba(6,7,18,0)');bg.addColorStop(.3,'rgba(6,7,18,.55)');bg.addColorStop(1,'rgba(6,7,18,.95)');ctx.fillStyle=bg;ctx.fillRect(0,top,w,ph);
  const n=Math.max(42,Math.min(92,Math.round(w/14))),usable=w*.84,start=w*.08,cy=h-ph*.42,max=ph*.52,vals=Array.from({length:n},(_,i)=>Math.max(.05,amplitude(samples,rate,t,((i/(n-1))-.5)*.7))),grad=waveGradient(ctx,w,p);
  ctx.save();ctx.fillStyle=grad;ctx.strokeStyle=grad;ctx.shadowColor=rgb(p[1],.55);ctx.shadowBlur=12;ctx.lineCap='round';ctx.lineJoin='round';
+ if(style==='spiral'||style==='radial-wave'||style==='pinwheel'||style==='mandala'||style==='spectrum-rings'){
+   const cx=w/2,rcy=h-ph*.47,N=Math.min(80,n),base=Math.min(w,ph*3.2)*.075,hue=(t*30)%360;
+   ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowBlur=14;
+   if(style==='spiral'){ctx.lineWidth=Math.max(2,w*.002);ctx.beginPath();for(let i=0;i<N;i++){const a=vals[Math.round(i/(N-1)*(n-1))],ang=(i/(N-1))*Math.PI*8+t*.35,rr=base*.2+i*base*.035+a*base*.7,x=cx+Math.cos(ang)*rr,y=rcy+Math.sin(ang)*rr;ctx.strokeStyle=`hsl(${(hue+i*4)%360} 92% 65%)`;i?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.stroke()}
+   else if(style==='spectrum-rings'){for(let ring=0;ring<4;ring++){const avg=vals.slice(ring*12,ring*12+18).reduce((s,v)=>s+v,0)/18,rr=base*(.7+ring*.34)+avg*base*.32;ctx.strokeStyle=`hsla(${(hue+ring*65)%360} 95% 68% / ${.85-ring*.1})`;ctx.lineWidth=Math.max(2,w*.0025)*(1+avg);ctx.shadowColor=ctx.strokeStyle;ctx.beginPath();ctx.arc(cx,rcy,rr,0,Math.PI*2);ctx.stroke()}}
+   else{ctx.beginPath();for(let i=0;i<=N;i++){const j=i%N,a=vals[Math.round(j/(N-1)*(n-1))],ang=j/N*Math.PI*2+t*(style==='pinwheel'?.42:.08),rose=style==='mandala'?(1+.32*Math.cos(6*ang)):1,twist=style==='pinwheel'?a*1.4:0,rr=base*rose+a*base*(style==='radial-wave'?.85:.48),x=cx+Math.cos(ang+twist)*rr,y=rcy+Math.sin(ang+twist)*rr;i?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.closePath();const cg=ctx.createConicGradient(t*.15,cx,rcy);for(let k=0;k<=4;k++)cg.addColorStop(k/4,`hsl(${(hue+k*90)%360} 95% 65%)`);ctx.strokeStyle=cg;ctx.shadowColor=`hsl(${hue} 95% 65%)`;ctx.lineWidth=Math.max(2.5,w*.0028);ctx.stroke()}
+   ctx.restore();return;
+ }
+ if(style==='wave-bars'||style==='stacked-spectrum'){
+   const count=Math.min(64,n),gap=usable/count,bw=Math.max(2,gap*.62);
+   for(let i=0;i<count;i++){const a=vals[Math.round(i/(count-1)*(n-1))],x=start+i*gap,baseH=Math.max(4,a*max),wave=style==='wave-bars'?Math.sin(t*3+i*.24)*max*.16:0;
+     if(style==='stacked-spectrum'){const seg=Math.max(2,Math.round(a*10));for(let j=0;j<seg;j++){ctx.fillStyle=`hsla(${(t*28+i*5+j*8)%360} 92% 64% / ${.45+.55*j/seg})`;ctx.fillRect(x,cy-j*max*.075,bw,max*.055)}}
+     else{ctx.fillStyle=`hsl(${(t*28+i*5)%360} 92% 64%)`;ctx.beginPath();ctx.roundRect(x,cy-baseH/2+wave,bw,baseH,Math.min(4,bw/2));ctx.fill()}
+   }ctx.restore();return;
+ }
  if(style==='circle'||style==='circle-bars'||style==='orbit-dots'||style==='radial-spectrum'||style==='neon-ring'||style==='arc-burst'){
    // Radial renderer adapted from the MIT IUS Visualizer approach: fixed inner ring,
    // amplitude-driven outward tips, per-bar root->tip gradients, glow and arc bursts.
