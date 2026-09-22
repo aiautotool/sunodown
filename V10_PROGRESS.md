@@ -34,7 +34,7 @@
 21. [x] Subtitle VTT Export
 22. [x] Subtitle Styling Studio
 23. [x] Duet / Singer Colors
-24. [ ] Lyrics Translation Track
+24. [x] Lyrics Translation Track
 25. [ ] Beat/BPM Detection
 26. [ ] Beat-Synced Effects
 27. [ ] Scene Timeline
@@ -70,73 +70,35 @@
 **Status: COMPLETE.** Commits a62c990 + d69376e. Workflow 35655769369 build/deploy successful.
 
 ### Roadmap #18 — Waveform Lyrics Editor
-- [x] Real decoded-audio waveform, not a mock visualization
-- [x] Lyrics timing regions overlaid on waveform
-- [x] Click/tap waveform to seek audio and select lyric regions
-- [x] Drag line Start/End edges with pointer/touch input
-- [x] Numeric Start/End fine tuning updates the same karaoke timeline consumed by renderer
-- [x] Mobile-safe peak extraction yields periodically to the event loop and caps waveform bins/DPR
-- [x] Long Video Loop / multi-hour renderer code paths remain untouched; P0 regression inspection remains green
-- [x] vinext build + Cloudflare deployment verified by workflow 35666370543
-
 **Status: COMPLETE.** Feature commits 2c12681 + d58cf36. Workflow 35666370543 build/deploy successful.
 
 ### Roadmap #19 — Word Tap Sync
-- [x] Select a lyric line and start tap-sync playback near its first word
-- [x] One large mobile-friendly TAP control advances word-by-word
-- [x] Each tap writes real per-word start/end timing into the karaoke timeline consumed by renderer
-- [x] Previous word end is closed at the next tap; final word/line receives a safe tail
-- [x] Current target word is visibly highlighted and sync can be stopped without corrupting existing timing
-- [x] No Long Video / multi-hour render code modified; P0 regression inspection remains green
-- [x] Build and Cloudflare deployment verified by workflow 35670583104
-
 **Status: COMPLETE.** Feature commit 830a1d7. Workflow 35670583104 build/deploy successful.
 
 ### Roadmap #20 — Auto Lyrics Confidence
-- [x] Decode real song audio locally and extract capped waveform peaks
-- [x] Score each timed word using acoustic onset, local energy, duration plausibility, and timing continuity
-- [x] Aggregate word confidence into line and whole-song confidence
-- [x] Highlight low-confidence words with reason tooltips and one-tap seek back into Waveform Lyrics Editor
-- [x] Mobile-safe analysis caps bins and yields periodically to the event loop
-- [x] No Long Video / multi-hour render code modified; P0 regression inspection remains green
-- [x] Build and Cloudflare deployment verified by workflow 35674659906
-
 **Status: COMPLETE.** Feature commits b1180ef + 2c78978 + 3cb8ace. Workflow 35674659906 build/deploy successful.
 
 ### Roadmap #21 — Subtitle VTT Export
-- [x] Standards-compliant WEBVTT header and HH:MM:SS.mmm cue timestamps
-- [x] Uses the same edited karaoke line timeline consumed by renderer
-- [x] Filters invalid/empty cues and preserves Unicode lyric text
-- [x] Real .vtt Blob download from Waveform Lyrics Editor
-- [x] Restored visible Wave Type selector in Video tab with all WAVE_STYLES and active-state feedback
-- [x] Long Video / multi-hour render regression inspection remains green
-- [x] Build and Cloudflare deployment verified by workflow 35675236745
-
 **Status: COMPLETE.** Feature commits 65444d8 + 4c4496c + 1d99c49. Workflow 35675236745 build/deploy successful.
 
 ### Roadmap #22 — Subtitle Styling Studio
-- [x] Six one-tap subtitle presets with real renderer-backed values
-- [x] Live style preview inside the editor sheet
-- [x] Five font families rendered consistently in live preview and exported video canvas
-- [x] Text, karaoke-highlight and background colors plus background opacity
-- [x] Font size, background corner radius, bold, shadow and outline controls
-- [x] Reset-to-default action and mobile-friendly bottom-sheet layout
-- [x] Existing drag-to-position subtitle overlay remains available on video preview
-- [x] Long Video / multi-hour render regression inspection remains green
-- [x] Build and Cloudflare deployment verified by workflow 35678402402
-
 **Status: COMPLETE.** Feature commits bc17b70 + 36239e3. Workflow 35678402402 build/deploy successful.
 
 ### Roadmap #23 — Duet / Singer Colors
-- [x] Toggle duet singer-color mode inside Subtitle Styling Studio
-- [x] Independent Vocal A and Vocal B color pickers with immediate studio preview
-- [x] Alternating karaoke-line singer colors are applied to the actual exported canvas render path
-- [x] Existing subtitle preset/font/highlight/background controls remain compatible
-- [x] Mobile-friendly controls; no extra audio decoding or long-video memory cost
-- [x] Long Video / multi-hour render regression inspection remains green
-- [x] Build and Cloudflare deployment verified by workflow 35682200076
-
 **Status: COMPLETE.** Feature commits d6e60bd + 26f6edf; JSX repair adebfd6. Workflow 35682200076 build/deploy successful.
 
+### Roadmap #24 — Lyrics Translation Track
+- [x] Translation editor integrated into the existing Waveform Lyrics workflow
+- [x] Bulk paste maps one translated line to each karaoke line
+- [x] Per-line translation editing preserves the original karaoke Start/End timing
+- [x] Translation text is stored on the same in-memory project timeline entries without extra audio processing
+- [x] Standards-compliant standalone Translation WebVTT export
+- [x] Clear-track action and translated-line completion counter
+- [x] Mobile-safe editor with no extra decoding/render memory cost
+- [x] Long Video / multi-hour render regression inspection remains green
+- [x] Build and Cloudflare deployment verified by workflow 35689847142
+
+**Status: COMPLETE.** Feature commits 7cc32e9 + 8539c0c + 167537b. Workflow 35689847142 build/deploy successful.
+
 ### Current focus
-Roadmap #24 — Lyrics Translation Track. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #25 — Beat/BPM Detection. Start on the next run only. Exactly one roadmap task per run.
