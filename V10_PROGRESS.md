@@ -40,89 +40,22 @@
 27. [x] Scene Timeline
 28. [x] Text / Logo / Watermark Layer
 29. [x] Safe Zone TikTok/Reels/Shorts
-30. [ ] Smart Render Quality
+30. [x] Smart Render Quality
 
-### Roadmap #9 — Local Library / History
-**Status: COMPLETE.**
+### Roadmap #30 — Smart Render Quality
+- [x] Automatic quality selection is active on the real WebCodecs video encoder path
+- [x] Short desktop renders prioritize quality
+- [x] 30+ minute renders use balanced bitrate
+- [x] 2+ hour and mobile renders use data-saver bitrate to reduce memory/thermal/file-size pressure
+- [x] Resolution-aware AVC bitrate profiles for HD and smaller canvases
+- [x] Manual quality override type supported by the renderer API (`auto`, `data-saver`, `balanced`, `high`)
+- [x] Long Video / multi-hour behavior remains unchanged: loop duration, repeated audio/karaoke, absolute background/effects timeline, segmented checkpoint/resume and mobile-safe segmentation
+- [x] Build and Cloudflare deployment verified by workflow 35720291394
 
-### Roadmap #10 — Favorite / Collection
-**Status: COMPLETE.** Build/deploy verified by workflow 35603949982.
+**Status: COMPLETE.** Feature commits `94a78f1` + `698e79a`. Workflow `35720291394` build/deploy successful.
 
-### Roadmap #11 — True LUFS / True Peak Meter
-**Status: COMPLETE.** Commits c6b7e89 + 5dfa4a7; workflow 35610111970 successful.
-
-### Roadmap #12 — Audio Processing Presets
-**Status: COMPLETE.** Commits 32586b0 + 24f1a8a; workflow 35617230416 successful.
-
-### Roadmap #13 — A/B Audio Compare
-**Status: COMPLETE.** Commits 2d326f5 + 658b469. Verification recorded after green workflow.
-
-### Roadmap #14 — TikTok Calibrated Profile
-**Status: COMPLETE.** Commits b85faaa + 55e1c95 + 3fbda06. Workflow 35636774746 build/deploy successful.
-
-### Roadmap #15 — Audio Trim Editor
-**Status: COMPLETE.** Commits 9ff1b77 + d926b4c + 043a8f7. Workflow 35643166119 build/deploy successful.
-
-### Roadmap #16 — Fade In / Fade Out
-**Status: COMPLETE.** Commits 85cf1d3 + 3c63c28 + 542a62d + 356f348 + cfb1772. Workflow 35649439562 build/deploy successful.
-
-### Roadmap #17 — Vocal / Instrumental Separation
-**Status: COMPLETE.** Commits a62c990 + d69376e. Workflow 35655769369 build/deploy successful.
-
-### Roadmap #18 — Waveform Lyrics Editor
-**Status: COMPLETE.** Feature commits 2c12681 + d58cf36. Workflow 35666370543 build/deploy successful.
-
-### Roadmap #19 — Word Tap Sync
-**Status: COMPLETE.** Feature commit 830a1d7. Workflow 35670583104 build/deploy successful.
-
-### Roadmap #20 — Auto Lyrics Confidence
-**Status: COMPLETE.** Feature commits b1180ef + 2c78978 + 3cb8ace. Workflow 35674659906 build/deploy successful.
-
-### Roadmap #21 — Subtitle VTT Export
-**Status: COMPLETE.** Feature commits 65444d8 + 4c4496c + 1d99c49. Workflow 35675236745 build/deploy successful.
-
-### Roadmap #22 — Subtitle Styling Studio
-**Status: COMPLETE.** Feature commits bc17b70 + 36239e3. Workflow 35678402402 build/deploy successful.
-
-### Roadmap #23 — Duet / Singer Colors
-**Status: COMPLETE.** Feature commits d6e60bd + 26f6edf; JSX repair adebfd6. Workflow 35682200076 build/deploy successful.
-
-### Roadmap #24 — Lyrics Translation Track
-**Status: COMPLETE.** Feature commits 7cc32e9 + 8539c0c + 167537b. Workflow 35689847142 build/deploy successful.
-
-### Roadmap #25 — Beat/BPM Detection
-**Status: COMPLETE.** Feature commits aa5ea42 + 82c2476. Workflow 35693502669 build/deploy successful.
-
-### Roadmap #26 — Beat-Synced Effects
-**Status: COMPLETE.** Feature commits e4d5dab + 6578d1f + 769d795. Workflow 35698201168 build/deploy successful.
-
-### Roadmap #27 — Scene Timeline
-**Status: COMPLETE.** Feature commits 9cc898f + df49d2f + 92b0dde. Workflow 35703360103 build/deploy successful.
-
-### Roadmap #28 — Text / Logo / Watermark Layer
-- [x] Enable/disable independent watermark layer
-- [x] Text watermark with editable color, opacity and size
-- [x] Local PNG/JPEG/WebP logo import with mobile-safe 450 KB cap
-- [x] Five placement presets plus adjustable safe padding
-- [x] Immediate live-preview overlay updates without re-rendering video
-- [x] Watermark is burned into exported canvas/video frames
-- [x] Configuration persists locally and is reused by queued/long renders
-- [x] Long Video / multi-hour render regression inspection remains green
-- [x] Build and Cloudflare deployment verified by workflow 35709202178
-
-**Status: COMPLETE.** Feature commits 24438c5 + 787fcee + 5aee38d + 64143c7. Workflow 35709202178 build/deploy successful.
-
-### Roadmap #29 — Safe Zone TikTok/Reels/Shorts
-- [x] TikTok, Instagram Reels and YouTube Shorts guide presets
-- [x] Live safe-area overlay attached to the actual video preview
-- [x] Platform-specific top/bottom/action-rail exclusion zones
-- [x] Adjustable guide visibility and persistent local preference
-- [x] Preview-only guide: never burned into exported video
-- [x] Touch-safe controls and zero render/memory overhead on mobile export
-- [x] Long Video / multi-hour render regression inspection remains green
-- [x] Build and Cloudflare deployment verified by workflow 35714598329
-
-**Status: COMPLETE.** Feature commits 4249453 + a2d809c. Workflow 35714598329 build/deploy successful.
+### Completed roadmap verification history
+#10 workflow 35603949982 · #11 35610111970 · #12 35617230416 · #13 commits 2d326f5 + 658b469 · #14 35636774746 · #15 35643166119 · #16 35649439562 · #17 35655769369 · #18 35666370543 · #19 35670583104 · #20 35674659906 · #21 35675236745 · #22 35678402402 · #23 35682200076 · #24 35689847142 · #25 35693502669 · #26 35698201168 · #27 35703360103 · #28 35709202178 · #29 35714598329 · #30 35720291394.
 
 ### Current focus
-Roadmap #30 — Smart Render Quality. Start on the next run only. Exactly one roadmap task per run.
+All 30 V10 roadmap tasks are complete. Do not start an unnumbered task without adding/approving the next roadmap item first.
