@@ -33,7 +33,7 @@
 20. [x] Auto Lyrics Confidence
 21. [x] Subtitle VTT Export
 22. [x] Subtitle Styling Studio
-23. [ ] Duet / Singer Colors
+23. [x] Duet / Singer Colors
 24. [ ] Lyrics Translation Track
 25. [ ] Beat/BPM Detection
 26. [ ] Beat-Synced Effects
@@ -127,5 +127,16 @@
 
 **Status: COMPLETE.** Feature commits bc17b70 + 36239e3. Workflow 35678402402 build/deploy successful.
 
+### Roadmap #23 — Duet / Singer Colors
+- [x] Toggle duet singer-color mode inside Subtitle Styling Studio
+- [x] Independent Vocal A and Vocal B color pickers with immediate studio preview
+- [x] Alternating karaoke-line singer colors are applied to the actual exported canvas render path
+- [x] Existing subtitle preset/font/highlight/background controls remain compatible
+- [x] Mobile-friendly controls; no extra audio decoding or long-video memory cost
+- [x] Long Video / multi-hour render regression inspection remains green
+- [x] Build and Cloudflare deployment verified by workflow 35682200076
+
+**Status: COMPLETE.** Feature commits d6e60bd + 26f6edf; JSX repair adebfd6. Workflow 35682200076 build/deploy successful.
+
 ### Current focus
-Roadmap #23 — Duet / Singer Colors. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #24 — Lyrics Translation Track. Start on the next run only. Exactly one roadmap task per run.
