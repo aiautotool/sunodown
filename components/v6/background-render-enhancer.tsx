@@ -36,13 +36,20 @@ export function V6BackgroundRenderEnhancer() {
     ),
     [job, setJob] = useState<any>(null),
     [song, setSong] = useState<ResolvedSong | null>(null),
-    [aiAvailable, setAiAvailable] = useState(false);
+    [aiAvailable, setAiAvailable] = useState(false),
+    [visualizerAvailable, setVisualizerAvailable] = useState(false);
   useEffect(() => {
     navigator.serviceWorker?.register('/sw.js').catch(() => {});
     fetch('/api/render/capabilities', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { aiMusicVideo?: boolean } | null) =>
-        setAiAvailable(Boolean(d?.aiMusicVideo)),
+      .then(
+        (d: {
+          aiMusicVideo?: boolean;
+          backgroundVisualizer?: boolean;
+        } | null) => {
+          setAiAvailable(Boolean(d?.aiMusicVideo));
+          setVisualizerAvailable(Boolean(d?.backgroundVisualizer));
+        },
       )
       .catch(() => {});
     const onSong = (event: Event) =>
@@ -170,7 +177,7 @@ export function V6BackgroundRenderEnhancer() {
     }
     const mount = () => {
       const disabled = !song?.lyrics || !aiAvailable;
-      box!.innerHTML = `<div><p class="text-sm font-bold text-violet-100">Xuất video trên server <span class="ml-1 rounded-md bg-fuchsia-300/10 px-1.5 py-0.5 text-[9px]">AI MV</span></p><p class="mt-1 text-xs leading-5 text-white/45">AI Music Video đọc lời bài hát, tạo từng cảnh rồi ghép với audio gốc. Đóng web vẫn tiếp tục.</p></div><div class="mt-3 grid gap-2 sm:grid-cols-2"><button data-ai-render ${disabled ? 'disabled' : ''} class="h-11 rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-500 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">✨ Tạo AI Music Video</button><button data-bg-render class="h-11 rounded-xl border border-violet-300/20 bg-violet-500/15 font-bold text-violet-100">☁️ Visualizer nền</button><button data-notify class="h-10 rounded-xl border border-white/10 bg-white/[.05] text-xs font-bold sm:col-span-2">${permission === 'granted' ? '🔔 Đã cho phép thông báo' : '🔔 Bật thông báo khi xong'}</button></div>${!aiAvailable ? '<p class="mt-2 text-[10px] text-amber-200/70">AI renderer đang chờ cấu hình Vibes.</p>' : !song?.lyrics ? '<p class="mt-2 text-[10px] text-amber-200/70">Dán bài Suno có lyrics để bật AI Music Video.</p>' : ''}${job ? `<div class="mt-3 rounded-xl bg-black/20 p-3"><div class="flex justify-between text-xs"><span>${job.status}</span><b>${job.progress || 0}%</b></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10"><i class="block h-full rounded-full bg-violet-400" style="width:${job.progress || 0}%"></i></div>${job.resultUrl ? `<a class="mt-3 block text-xs font-bold text-cyan-300" href="${job.resultUrl}">▶ Xem video đã xuất</a>` : ''}${job.error ? `<p class="mt-2 text-xs text-red-300">${job.error}</p>` : ''}<p class="mt-2 break-all text-[10px] text-white/35">Tác vụ: ${job.id}</p></div>` : ''}`;
+      box!.innerHTML = `<div><p class="text-sm font-bold text-violet-100">Xuất video trên server <span class="ml-1 rounded-md bg-fuchsia-300/10 px-1.5 py-0.5 text-[9px]">AI MV</span></p><p class="mt-1 text-xs leading-5 text-white/45">AI Music Video đọc lời bài hát, tạo từng cảnh rồi ghép với audio gốc. Đóng web vẫn tiếp tục.</p></div><div class="mt-3 grid gap-2 sm:grid-cols-2"><button data-ai-render ${disabled ? 'disabled' : ''} class="h-11 rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-500 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">✨ Tạo AI Music Video</button><button data-bg-render ${visualizerAvailable ? '' : 'disabled'} class="h-11 rounded-xl border border-violet-300/20 bg-violet-500/15 font-bold text-violet-100 disabled:cursor-not-allowed disabled:opacity-40">☁️ ${visualizerAvailable ? 'Visualizer nền' : 'Visualizer chưa khả dụng'}</button><button data-notify class="h-10 rounded-xl border border-white/10 bg-white/[.05] text-xs font-bold sm:col-span-2">${permission === 'granted' ? '🔔 Đã cho phép thông báo' : '🔔 Bật thông báo khi xong'}</button></div>${!aiAvailable ? '<p class="mt-2 text-[10px] text-amber-200/70">AI renderer đang chờ cấu hình Vibes.</p>' : !song?.lyrics ? '<p class="mt-2 text-[10px] text-amber-200/70">Dán bài Suno có lyrics để bật AI Music Video.</p>' : ''}${job ? `<div class="mt-3 rounded-xl bg-black/20 p-3"><div class="flex justify-between text-xs"><span>${job.status}</span><b>${job.progress || 0}%</b></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10"><i class="block h-full rounded-full bg-violet-400" style="width:${job.progress || 0}%"></i></div>${job.resultUrl ? `<a class="mt-3 block text-xs font-bold text-cyan-300" href="${job.resultUrl}">▶ Xem video đã xuất</a>` : ''}${job.error ? `<p class="mt-2 text-xs text-red-300">${job.error}</p>` : ''}<p class="mt-2 break-all text-[10px] text-white/35">Tác vụ: ${job.id}</p></div>` : ''}`;
       box!
         .querySelector('[data-ai-render]')
         ?.addEventListener('click', () =>
@@ -188,6 +195,6 @@ export function V6BackgroundRenderEnhancer() {
         );
     };
     mount();
-  }, [permission, job, song, aiAvailable]);
+  }, [permission, job, song, aiAvailable, visualizerAvailable]);
   return null;
 }
