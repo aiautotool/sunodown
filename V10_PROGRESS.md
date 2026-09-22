@@ -38,7 +38,7 @@
 25. [x] Beat/BPM Detection
 26. [x] Beat-Synced Effects
 27. [x] Scene Timeline
-28. [ ] Text / Logo / Watermark Layer
+28. [x] Text / Logo / Watermark Layer
 29. [ ] Safe Zone TikTok/Reels/Shorts
 30. [ ] Smart Render Quality
 
@@ -97,17 +97,20 @@
 **Status: COMPLETE.** Feature commits e4d5dab + 6578d1f + 769d795. Workflow 35698201168 build/deploy successful.
 
 ### Roadmap #27 — Scene Timeline
-- [x] Editable ordered scene list with start/end time and scene labels
-- [x] Compact proportional scene-strip visualization
-- [x] Per-scene effect intensity and opacity automation
-- [x] Scene configuration persisted locally and applied immediately to live preview
-- [x] Export renderer consumes the same scene timeline
-- [x] Absolute render time keeps scene boundaries continuous across long-video segments
-- [x] Scene count capped and controls remain mobile-safe without extra audio/video decoding
-- [x] Long Video / multi-hour render regression inspection remains green
-- [x] Build and Cloudflare deployment verified by workflow 35703360103
-
 **Status: COMPLETE.** Feature commits 9cc898f + df49d2f + 92b0dde. Workflow 35703360103 build/deploy successful.
 
+### Roadmap #28 — Text / Logo / Watermark Layer
+- [x] Enable/disable independent watermark layer
+- [x] Text watermark with editable color, opacity and size
+- [x] Local PNG/JPEG/WebP logo import with mobile-safe 450 KB cap
+- [x] Five placement presets plus adjustable safe padding
+- [x] Immediate live-preview overlay updates without re-rendering video
+- [x] Watermark is burned into exported canvas/video frames
+- [x] Configuration persists locally and is reused by queued/long renders
+- [x] Long Video / multi-hour render regression inspection remains green
+- [x] Build and Cloudflare deployment verified by workflow 35709202178
+
+**Status: COMPLETE.** Feature commits 24438c5 + 787fcee + 5aee38d + 64143c7. Workflow 35709202178 build/deploy successful.
+
 ### Current focus
-Roadmap #28 — Text / Logo / Watermark Layer. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #29 — Safe Zone TikTok/Reels/Shorts. Start on the next run only. Exactly one roadmap task per run.
