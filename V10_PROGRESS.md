@@ -31,7 +31,7 @@
 18. [x] Waveform Lyrics Editor
 19. [x] Word Tap Sync
 20. [x] Auto Lyrics Confidence
-21. [ ] Subtitle VTT Export
+21. [x] Subtitle VTT Export
 22. [ ] Subtitle Styling Studio
 23. [ ] Duet / Singer Colors
 24. [ ] Lyrics Translation Track
@@ -103,5 +103,16 @@
 
 **Status: COMPLETE.** Feature commits b1180ef + 2c78978 + 3cb8ace. Workflow 35674659906 build/deploy successful.
 
+### Roadmap #21 — Subtitle VTT Export
+- [x] Standards-compliant WEBVTT header and HH:MM:SS.mmm cue timestamps
+- [x] Uses the same edited karaoke line timeline consumed by renderer
+- [x] Filters invalid/empty cues and preserves Unicode lyric text
+- [x] Real .vtt Blob download from Waveform Lyrics Editor
+- [x] Restored visible Wave Type selector in Video tab with all WAVE_STYLES and active-state feedback
+- [x] Long Video / multi-hour render regression inspection remains green
+- [x] Build and Cloudflare deployment verified by workflow 35675236745
+
+**Status: COMPLETE.** Feature commits 65444d8 + 4c4496c + 1d99c49. Workflow 35675236745 build/deploy successful.
+
 ### Current focus
-Roadmap #21 — Subtitle VTT Export. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #22 — Subtitle Styling Studio. Start on the next run only. Exactly one roadmap task per run.
