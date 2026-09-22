@@ -37,7 +37,7 @@
 24. [x] Lyrics Translation Track
 25. [x] Beat/BPM Detection
 26. [x] Beat-Synced Effects
-27. [ ] Scene Timeline
+27. [x] Scene Timeline
 28. [ ] Text / Logo / Watermark Layer
 29. [ ] Safe Zone TikTok/Reels/Shorts
 30. [ ] Smart Render Quality
@@ -58,7 +58,7 @@
 **Status: COMPLETE.** Commits 2d326f5 + 658b469. Verification recorded after green workflow.
 
 ### Roadmap #14 — TikTok Calibrated Profile
-**Status: COMPLETE.** Commits b85faaa + 55e1c95 + 3fbda06. Workflow 35636774746 build/deploy job successful.
+**Status: COMPLETE.** Commits b85faaa + 55e1c95 + 3fbda06. Workflow 35636774746 build/deploy successful.
 
 ### Roadmap #15 — Audio Trim Editor
 **Status: COMPLETE.** Commits 9ff1b77 + d926b4c + 043a8f7. Workflow 35643166119 build/deploy successful.
@@ -88,42 +88,26 @@
 **Status: COMPLETE.** Feature commits d6e60bd + 26f6edf; JSX repair adebfd6. Workflow 35682200076 build/deploy successful.
 
 ### Roadmap #24 — Lyrics Translation Track
-- [x] Translation editor integrated into the existing Waveform Lyrics workflow
-- [x] Bulk paste maps one translated line to each karaoke line
-- [x] Per-line translation editing preserves the original karaoke Start/End timing
-- [x] Translation text is stored on the same in-memory project timeline entries without extra audio processing
-- [x] Standards-compliant standalone Translation WebVTT export
-- [x] Clear-track action and translated-line completion counter
-- [x] Mobile-safe editor with no extra decoding/render memory cost
-- [x] Long Video / multi-hour render regression inspection remains green
-- [x] Build and Cloudflare deployment verified by workflow 35689847142
-
 **Status: COMPLETE.** Feature commits 7cc32e9 + 8539c0c + 167537b. Workflow 35689847142 build/deploy successful.
 
 ### Roadmap #25 — Beat/BPM Detection
-- [x] Real local audio decode; no server upload
-- [x] Onset-energy envelope with normalized autocorrelation across 60–200 BPM
-- [x] Tempo octave normalization and beat-grid phase detection
-- [x] BPM, beat interval, confidence, first-beat offset, and detected beat count
-- [x] Beat buttons seek the existing waveform lyrics editor to the detected beat
-- [x] Analysis frame cap plus cooperative yielding for mobile-safe processing
-- [x] Long Video / multi-hour render regression inspection remains green
-- [x] Build and Cloudflare deployment verified by workflow 35693502669
-
 **Status: COMPLETE.** Feature commits aa5ea42 + 82c2476. Workflow 35693502669 build/deploy successful.
 
 ### Roadmap #26 — Beat-Synced Effects
-- [x] Beat detector publishes BPM + first-beat offset for the current audio locally
-- [x] Effects Studio exposes real Beat Sync enable/disable and beat-strength controls
-- [x] Effect renderer applies a continuous beat envelope to opacity, particle density/size and motion
-- [x] Live preview receives beat-sync changes immediately through the existing effects event
-- [x] Export renderer consumes the same persisted beat-sync configuration
-- [x] Absolute render time keeps beat phase continuous across long-video segments
-- [x] No additional audio decode during render; mobile render cost remains bounded
-- [x] Long Video / multi-hour render regression inspection remains green
-- [x] Build and Cloudflare deployment verified by workflow 35698201168
-
 **Status: COMPLETE.** Feature commits e4d5dab + 6578d1f + 769d795. Workflow 35698201168 build/deploy successful.
 
+### Roadmap #27 — Scene Timeline
+- [x] Editable ordered scene list with start/end time and scene labels
+- [x] Compact proportional scene-strip visualization
+- [x] Per-scene effect intensity and opacity automation
+- [x] Scene configuration persisted locally and applied immediately to live preview
+- [x] Export renderer consumes the same scene timeline
+- [x] Absolute render time keeps scene boundaries continuous across long-video segments
+- [x] Scene count capped and controls remain mobile-safe without extra audio/video decoding
+- [x] Long Video / multi-hour render regression inspection remains green
+- [x] Build and Cloudflare deployment verified by workflow 35703360103
+
+**Status: COMPLETE.** Feature commits 9cc898f + df49d2f + 92b0dde. Workflow 35703360103 build/deploy successful.
+
 ### Current focus
-Roadmap #27 — Scene Timeline. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #28 — Text / Logo / Watermark Layer. Start on the next run only. Exactly one roadmap task per run.
