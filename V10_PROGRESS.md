@@ -36,7 +36,7 @@
 23. [x] Duet / Singer Colors
 24. [x] Lyrics Translation Track
 25. [x] Beat/BPM Detection
-26. [ ] Beat-Synced Effects
+26. [x] Beat-Synced Effects
 27. [ ] Scene Timeline
 28. [ ] Text / Logo / Watermark Layer
 29. [ ] Safe Zone TikTok/Reels/Shorts
@@ -112,5 +112,18 @@
 
 **Status: COMPLETE.** Feature commits aa5ea42 + 82c2476. Workflow 35693502669 build/deploy successful.
 
+### Roadmap #26 — Beat-Synced Effects
+- [x] Beat detector publishes BPM + first-beat offset for the current audio locally
+- [x] Effects Studio exposes real Beat Sync enable/disable and beat-strength controls
+- [x] Effect renderer applies a continuous beat envelope to opacity, particle density/size and motion
+- [x] Live preview receives beat-sync changes immediately through the existing effects event
+- [x] Export renderer consumes the same persisted beat-sync configuration
+- [x] Absolute render time keeps beat phase continuous across long-video segments
+- [x] No additional audio decode during render; mobile render cost remains bounded
+- [x] Long Video / multi-hour render regression inspection remains green
+- [x] Build and Cloudflare deployment verified by workflow 35698201168
+
+**Status: COMPLETE.** Feature commits e4d5dab + 6578d1f + 769d795. Workflow 35698201168 build/deploy successful.
+
 ### Current focus
-Roadmap #26 — Beat-Synced Effects. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #27 — Scene Timeline. Start on the next run only. Exactly one roadmap task per run.
