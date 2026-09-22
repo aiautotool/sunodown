@@ -30,7 +30,7 @@
 17. [x] Vocal / Instrumental Separation
 18. [x] Waveform Lyrics Editor
 19. [x] Word Tap Sync
-20. [ ] Auto Lyrics Confidence
+20. [x] Auto Lyrics Confidence
 21. [ ] Subtitle VTT Export
 22. [ ] Subtitle Styling Studio
 23. [ ] Duet / Singer Colors
@@ -92,5 +92,16 @@
 
 **Status: COMPLETE.** Feature commit 830a1d7. Workflow 35670583104 build/deploy successful.
 
+### Roadmap #20 — Auto Lyrics Confidence
+- [x] Decode real song audio locally and extract capped waveform peaks
+- [x] Score each timed word using acoustic onset, local energy, duration plausibility, and timing continuity
+- [x] Aggregate word confidence into line and whole-song confidence
+- [x] Highlight low-confidence words with reason tooltips and one-tap seek back into Waveform Lyrics Editor
+- [x] Mobile-safe analysis caps bins and yields periodically to the event loop
+- [x] No Long Video / multi-hour render code modified; P0 regression inspection remains green
+- [x] Build and Cloudflare deployment verified by workflow 35674659906
+
+**Status: COMPLETE.** Feature commits b1180ef + 2c78978 + 3cb8ace. Workflow 35674659906 build/deploy successful.
+
 ### Current focus
-Roadmap #20 — Auto Lyrics Confidence. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #21 — Subtitle VTT Export. Start on the next run only. Exactly one roadmap task per run.
