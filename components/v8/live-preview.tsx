@@ -165,7 +165,7 @@ export function LivePreview(props: Props) {
 
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
-  }, [bitmap, backgroundBitmap, props.background, props.exporting, props.resultUrl]);
+  }, [bitmap, backgroundBitmap, props.background, props.aspect, props.template, props.wave, props.motion, props.lyrics, props.karaokeTimeline, props.layout, props.subtitleStyle, props.exporting, props.resultUrl]);
 
   async function togglePlayback() {
     const player = audio.current;
