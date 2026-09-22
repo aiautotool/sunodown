@@ -2,62 +2,21 @@
 import {useEffect,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {VIDEO_EFFECTS,type EffectConfig,type VideoEffect} from './video-effects';
-
-const KEY='suno-v8-video-effects';
-const DEFAULT:EffectConfig={effects:[],intensity:1,speed:1,opacity:.7,wind:0};
+const KEY='suno-v8-video-effects',BEAT_KEY='suno-v10-beat-grid';
+const DEFAULT:EffectConfig={effects:[],intensity:1,speed:1,opacity:.7,wind:0,beatSync:false,beatStrength:.8};
 const GROUPS=[['nature','Thiên nhiên'],['light','Ánh sáng'],['mood','Không khí'],['party','Trang trí']] as const;
-
-export function getStoredEffects():EffectConfig{
-  if(typeof window==='undefined') return DEFAULT;
-  try{return {...DEFAULT,...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch{return DEFAULT}
-}
-
+type BeatGrid={bpm:number;offset:number;confidence:number};
+export function getStoredEffects():EffectConfig{if(typeof window==='undefined')return DEFAULT;try{return{...DEFAULT,...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch{return DEFAULT}}
+function storedBeat():BeatGrid|null{try{const x=JSON.parse(localStorage.getItem(BEAT_KEY)||'null');return x?.bpm?x:null}catch{return null}}
 export function V8EffectsPanel(){
-  const[c,setC]=useState<EffectConfig>(DEFAULT);
-  const[slot,setSlot]=useState<HTMLElement|null>(null);
-
-  useEffect(()=>{
-    setC(getStoredEffects());
-    const findSlot=()=>setSlot(document.getElementById('effects-slot'));
-    findSlot();
-    const observer=new MutationObserver(findSlot);
-    observer.observe(document.body,{childList:true,subtree:true});
-    return()=>observer.disconnect();
-  },[]);
-
-  function update(n:EffectConfig){
-    setC(n);
-    localStorage.setItem(KEY,JSON.stringify(n));
-    window.dispatchEvent(new CustomEvent('suno-effects-change',{detail:n}));
-  }
-  function toggle(id:VideoEffect){
-    update({...c,effects:c.effects.includes(id)?c.effects.filter(x=>x!==id):[...c.effects,id]});
-  }
-
-  const panel=<section id="video-effects" className="rounded-2xl border border-fuchsia-300/10 bg-fuchsia-400/[.035] p-4">
-    <div className="flex items-center justify-between gap-3">
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-[.14em] text-fuchsia-300">Bước 5 · Hiệu ứng</p>
-        <b>Hiệu ứng video</b>
-        <p className="mt-1 text-[11px] text-white/35">Vuốt ngang để xem, chạm để bật hoặc tắt hiệu ứng.</p>
-      </div>
-      {c.effects.length>0&&<button onClick={()=>update({...c,effects:[]})} className="rounded-lg bg-white/5 px-2 py-1 text-[10px] text-white/50">Tắt hết ({c.effects.length})</button>}
-    </div>
-    <div className="v8-effects-track mt-3" aria-label="Chọn hiệu ứng video">
-        {VIDEO_EFFECTS.map(x=><button key={x.id} aria-pressed={c.effects.includes(x.id)} onClick={()=>toggle(x.id)} className={`relative rounded-xl border px-1 py-3 text-[11px] ${c.effects.includes(x.id)?'border-fuchsia-300/60 bg-fuchsia-400/20 shadow-[0_0_20px_rgba(217,70,239,.12)]':'border-white/[.06] bg-white/[.03]'}`}>
-          <span className="mb-2 block text-[9px] uppercase text-white/35">{GROUPS.find(([group])=>group===x.group)?.[1]}</span><span className="block text-lg">{x.icon}</span><span className="mt-1 block">{x.label}</span>{c.effects.includes(x.id)&&<span className="absolute right-1 top-1 grid size-4 place-items-center rounded-full bg-fuchsia-400 text-[9px] font-black">✓</span>}
-        </button>)}
-    </div>
-    {c.effects.length > 0 && <details className="mt-4 rounded-xl border border-white/[.06] bg-black/15">
-      <summary className="cursor-pointer px-3 py-2.5 text-xs font-semibold text-white/60">Tinh chỉnh hiệu ứng</summary>
-      <div className="grid gap-3 border-t border-white/[.05] p-3 sm:grid-cols-2">
-        <label className="text-[11px] text-white/45">Cường độ <b className="float-right text-white">{Math.round(c.intensity*100)}%</b><input className="mt-2 w-full" type="range" min="20" max="180" value={c.intensity*100} onChange={e=>update({...c,intensity:+e.target.value/100})}/></label>
-        <label className="text-[11px] text-white/45">Tốc độ <b className="float-right text-white">{Math.round(c.speed*100)}%</b><input className="mt-2 w-full" type="range" min="20" max="200" value={c.speed*100} onChange={e=>update({...c,speed:+e.target.value/100})}/></label>
-        <label className="text-[11px] text-white/45">Độ trong <b className="float-right text-white">{Math.round(c.opacity*100)}%</b><input className="mt-2 w-full" type="range" min="10" max="100" value={c.opacity*100} onChange={e=>update({...c,opacity:+e.target.value/100})}/></label>
-        <label className="text-[11px] text-white/45">Gió <b className="float-right text-white">{c.wind===0?'0':c.wind>0?`→ ${c.wind.toFixed(1)}`:`← ${Math.abs(c.wind).toFixed(1)}`}</b><input className="mt-2 w-full" type="range" min="-20" max="20" value={c.wind*10} onChange={e=>update({...c,wind:+e.target.value/10})}/></label>
-      </div>
-    </details>}
-  </section>;
-
-  return slot?createPortal(panel,slot):null;
+ const[c,setC]=useState<EffectConfig>(DEFAULT),[slot,setSlot]=useState<HTMLElement|null>(null),[beat,setBeat]=useState<BeatGrid|null>(null);
+ useEffect(()=>{setC(getStoredEffects());setBeat(storedBeat());const findSlot=()=>setSlot(document.getElementById('effects-slot'));findSlot();const observer=new MutationObserver(findSlot);observer.observe(document.body,{childList:true,subtree:true});const onBeat=(e:Event)=>{const b=(e as CustomEvent<BeatGrid>).detail;setBeat(b);setC(old=>{const n={...old,beatBpm:b.bpm,beatOffset:b.offset};localStorage.setItem(KEY,JSON.stringify(n));window.dispatchEvent(new CustomEvent('suno-effects-change',{detail:n}));return n})};window.addEventListener('suno-beat-grid-change',onBeat);return()=>{observer.disconnect();window.removeEventListener('suno-beat-grid-change',onBeat)}},[]);
+ function update(n:EffectConfig){setC(n);localStorage.setItem(KEY,JSON.stringify(n));window.dispatchEvent(new CustomEvent('suno-effects-change',{detail:n}))}
+ function toggle(id:VideoEffect){update({...c,effects:c.effects.includes(id)?c.effects.filter(x=>x!==id):[...c.effects,id]})}
+ function toggleBeat(){if(!beat)return;update({...c,beatSync:!c.beatSync,beatBpm:beat.bpm,beatOffset:beat.offset})}
+ const panel=<section id="video-effects" className="rounded-2xl border border-fuchsia-300/10 bg-fuchsia-400/[.035] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-fuchsia-300">Bước 5 · Hiệu ứng</p><b>Hiệu ứng video</b><p className="mt-1 text-[11px] text-white/35">Vuốt ngang để xem, chạm để bật hoặc tắt hiệu ứng.</p></div>{c.effects.length>0&&<button onClick={()=>update({...c,effects:[]})} className="rounded-lg bg-white/5 px-2 py-1 text-[10px] text-white/50">Tắt hết ({c.effects.length})</button>}</div>
+ <div className="v8-effects-track mt-3" aria-label="Chọn hiệu ứng video">{VIDEO_EFFECTS.map(x=><button key={x.id} aria-pressed={c.effects.includes(x.id)} onClick={()=>toggle(x.id)} className={`relative rounded-xl border px-1 py-3 text-[11px] ${c.effects.includes(x.id)?'border-fuchsia-300/60 bg-fuchsia-400/20':'border-white/[.06] bg-white/[.03]'}`}><span className="mb-2 block text-[9px] uppercase text-white/35">{GROUPS.find(([group])=>group===x.group)?.[1]}</span><span className="block text-lg">{x.icon}</span><span className="mt-1 block">{x.label}</span>{c.effects.includes(x.id)&&<span className="absolute right-1 top-1 grid size-4 place-items-center rounded-full bg-fuchsia-400 text-[9px] font-black">✓</span>}</button>)}</div>
+ <div className="mt-4 rounded-xl border border-cyan-300/10 bg-cyan-300/[.035] p-3"><div className="flex items-center justify-between gap-3"><div><b className="text-xs text-cyan-100">Beat Sync</b><p className="mt-1 text-[10px] text-white/35">{beat?`${beat.bpm} BPM · confidence ${beat.confidence}%`:'Phân tích BPM trong Lyrics Editor trước.'}</p></div><button type="button" disabled={!beat||!c.effects.length} onClick={toggleBeat} className={`min-h-10 rounded-lg px-3 text-xs font-bold disabled:opacity-30 ${c.beatSync?'bg-cyan-300/20 text-cyan-100 ring-1 ring-cyan-300/30':'bg-white/5 text-white/55'}`}>{c.beatSync?'Đang sync':'Bật sync'}</button></div>{beat&&c.beatSync&&<label className="mt-3 block text-[11px] text-white/45">Độ nảy theo beat <b className="float-right text-white">{Math.round((c.beatStrength??.8)*100)}%</b><input className="mt-2 w-full accent-cyan-300" type="range" min="20" max="150" value={(c.beatStrength??.8)*100} onChange={e=>update({...c,beatStrength:+e.target.value/100,beatBpm:beat.bpm,beatOffset:beat.offset})}/></label>}</div>
+ {c.effects.length>0&&<details className="mt-4 rounded-xl border border-white/[.06] bg-black/15"><summary className="cursor-pointer px-3 py-2.5 text-xs font-semibold text-white/60">Tinh chỉnh hiệu ứng</summary><div className="grid gap-3 border-t border-white/[.05] p-3 sm:grid-cols-2"><label className="text-[11px] text-white/45">Cường độ <b className="float-right text-white">{Math.round(c.intensity*100)}%</b><input className="mt-2 w-full" type="range" min="20" max="180" value={c.intensity*100} onChange={e=>update({...c,intensity:+e.target.value/100})}/></label><label className="text-[11px] text-white/45">Tốc độ <b className="float-right text-white">{Math.round(c.speed*100)}%</b><input className="mt-2 w-full" type="range" min="20" max="200" value={c.speed*100} onChange={e=>update({...c,speed:+e.target.value/100})}/></label><label className="text-[11px] text-white/45">Độ trong <b className="float-right text-white">{Math.round(c.opacity*100)}%</b><input className="mt-2 w-full" type="range" min="10" max="100" value={c.opacity*100} onChange={e=>update({...c,opacity:+e.target.value/100})}/></label><label className="text-[11px] text-white/45">Gió <b className="float-right text-white">{c.wind===0?'0':c.wind>0?`→ ${c.wind.toFixed(1)}`:`← ${Math.abs(c.wind).toFixed(1)}`}</b><input className="mt-2 w-full" type="range" min="-20" max="20" value={c.wind*10} onChange={e=>update({...c,wind:+e.target.value/10})}/></label></div></details>}</section>;
+ return slot?createPortal(panel,slot):null;
 }
