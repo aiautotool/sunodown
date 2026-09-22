@@ -140,7 +140,9 @@ def generated_clips(scenes: list[dict[str, Any]], work: Path, title: str, aspect
             client.download_video(content["id"], str(target))
             clips.append(target)
     finally:
-        client.close()
+        close = getattr(client, "close", None)
+        if callable(close):
+            close()
     return clips
 
 

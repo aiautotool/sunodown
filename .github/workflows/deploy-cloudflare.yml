@@ -43,6 +43,8 @@ jobs:
           VIBES_META_SESSION: ${{ secrets.VIBES_META_SESSION }}
           AI_RENDER_TOKEN: ${{ secrets.AI_RENDER_TOKEN }}
       - name: Deploy AI music-video renderer
+        id: ai_renderer
+        continue-on-error: true
         if: github.ref == 'refs/heads/v12'
         run: npx wrangler deploy --config services/vibes-renderer/wrangler.jsonc
         env:
@@ -53,7 +55,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Connect SunoDown to AI renderer
-        if: github.ref == 'refs/heads/v12'
+        if: github.ref == 'refs/heads/v12' && steps.ai_renderer.outcome == 'success'
         run: |
           printf '%s' 'https://sunodown-vibes-renderer.long-wind-7153.workers.dev/render' | npx wrangler secret put AI_RENDER_SERVICE_URL --config wrangler.v6.generated.json
           printf '%s' "$AI_RENDER_TOKEN" | npx wrangler secret put RENDER_SERVICE_TOKEN --config wrangler.v6.generated.json
