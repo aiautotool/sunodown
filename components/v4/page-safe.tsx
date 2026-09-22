@@ -40,6 +40,7 @@ export default function V4SafePage(){
   useEffect(()=>()=>{if(resultUrl)URL.revokeObjectURL(resultUrl)},[resultUrl]);
   useEffect(()=>{try{const raw=localStorage.getItem('suno-v8-background');if(raw)setBackground(sanitizeStoredBackground(JSON.parse(raw)))}catch{}},[]);
   useEffect(()=>{window.dispatchEvent(new CustomEvent('suno-karaoke-timeline-change',{detail:karaokeTimeline}))},[karaokeTimeline]);
+  useEffect(()=>{if(!song)return;const timer=window.setTimeout(()=>window.dispatchEvent(new CustomEvent('suno-song-resolved',{detail:{...song,url}})),0);return()=>window.clearTimeout(timer)},[song,url]);
   useEffect(()=>{const onScene=(event:Event)=>{const detail=(event as CustomEvent<{layout?:OverlayLayout;subtitleStyle?:SubtitleStyle}>).detail;if(detail?.layout)setLayout(detail.layout);if(detail?.subtitleStyle)setSubtitleStyle(detail.subtitleStyle)};window.addEventListener('suno-v9-preset-scene',onScene);return()=>window.removeEventListener('suno-v9-preset-scene',onScene)},[]);
   useEffect(()=>{
     const input=url.trim();if(!isSunoUrl(input))return;const controller=new AbortController();let inFlight=false;
