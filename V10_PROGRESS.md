@@ -8,7 +8,7 @@
 - [x] Mobile-safe segment sizing/yielding and original renderer fallback
 - [x] Implementation re-inspected on v10
 
-**Status: COMPLETE / REGRESSION CHECK PASS (code inspection, 2026-09-21).** Rechecked duration resolution, segment/checkpoint resume path, absolute segment start time for continuous effects/background, renderer loopDuration path for repeated audio/karaoke, and 90s mobile segment cap/yield. No regression found.
+**Status: COMPLETE / REGRESSION CHECK PASS (code inspection, 2026-09-22).** Rechecked duration resolution, segment/checkpoint resume path, absolute segment start time for continuous effects/background, renderer loopDuration path for repeated audio/karaoke, and 90s mobile segment cap/yield. No regression found.
 
 ## V10 roadmap
 1. [x] Project / Draft
@@ -29,7 +29,7 @@
 16. [x] Fade In / Fade Out
 17. [x] Vocal / Instrumental Separation
 18. [x] Waveform Lyrics Editor
-19. [ ] Word Tap Sync
+19. [x] Word Tap Sync
 20. [ ] Auto Lyrics Confidence
 21. [ ] Subtitle VTT Export
 22. [ ] Subtitle Styling Studio
@@ -81,5 +81,16 @@
 
 **Status: COMPLETE.** Feature commits 2c12681 + d58cf36. Workflow 35666370543 build/deploy successful.
 
+### Roadmap #19 — Word Tap Sync
+- [x] Select a lyric line and start tap-sync playback near its first word
+- [x] One large mobile-friendly TAP control advances word-by-word
+- [x] Each tap writes real per-word start/end timing into the karaoke timeline consumed by renderer
+- [x] Previous word end is closed at the next tap; final word/line receives a safe tail
+- [x] Current target word is visibly highlighted and sync can be stopped without corrupting existing timing
+- [x] No Long Video / multi-hour render code modified; P0 regression inspection remains green
+- [x] Build and Cloudflare deployment verified by workflow 35670583104
+
+**Status: COMPLETE.** Feature commit 830a1d7. Workflow 35670583104 build/deploy successful.
+
 ### Current focus
-Roadmap #19 — Word Tap Sync. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #20 — Auto Lyrics Confidence. Start on the next run only. Exactly one roadmap task per run.
