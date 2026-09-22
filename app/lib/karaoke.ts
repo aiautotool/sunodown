@@ -164,6 +164,23 @@ function assEscape(text: string) {
   return text.replace(/[{}]/g, '').replace(/\n/g, '\\N');
 }
 
+function fmtVtt(seconds: number) {
+  const ms = Math.max(0, Math.round(seconds * 1000));
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  const milli = ms % 1000;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(milli).padStart(3,'0')}`;
+}
+
+export function exportVtt(lines: KaraokeLine[]) {
+  const cues = lines
+    .filter(line => Number.isFinite(line.start) && Number.isFinite(line.end) && line.end > line.start && line.text.trim())
+    .map((line,index) => `${index + 1}\n${fmtVtt(line.start)} --> ${fmtVtt(line.end)}\n${line.text.trim()}`)
+    .join('\n\n');
+  return `WEBVTT\n\n${cues}${cues?'\n':''}`;
+}
+
 export function exportSrt(lines: KaraokeLine[]) {
   return lines.map((line, index) => `${index + 1}\n${fmtSrt(line.start)} --> ${fmtSrt(line.end)}\n${line.text}\n`).join('\n');
 }
