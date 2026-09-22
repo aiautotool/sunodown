@@ -35,7 +35,7 @@
 22. [x] Subtitle Styling Studio
 23. [x] Duet / Singer Colors
 24. [x] Lyrics Translation Track
-25. [ ] Beat/BPM Detection
+25. [x] Beat/BPM Detection
 26. [ ] Beat-Synced Effects
 27. [ ] Scene Timeline
 28. [ ] Text / Logo / Watermark Layer
@@ -100,5 +100,17 @@
 
 **Status: COMPLETE.** Feature commits 7cc32e9 + 8539c0c + 167537b. Workflow 35689847142 build/deploy successful.
 
+### Roadmap #25 — Beat/BPM Detection
+- [x] Real local audio decode; no server upload
+- [x] Onset-energy envelope with normalized autocorrelation across 60–200 BPM
+- [x] Tempo octave normalization and beat-grid phase detection
+- [x] BPM, beat interval, confidence, first-beat offset, and detected beat count
+- [x] Beat buttons seek the existing waveform lyrics editor to the detected beat
+- [x] Analysis frame cap plus cooperative yielding for mobile-safe processing
+- [x] Long Video / multi-hour render regression inspection remains green
+- [x] Build and Cloudflare deployment verified by workflow 35693502669
+
+**Status: COMPLETE.** Feature commits aa5ea42 + 82c2476. Workflow 35693502669 build/deploy successful.
+
 ### Current focus
-Roadmap #25 — Beat/BPM Detection. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #26 — Beat-Synced Effects. Start on the next run only. Exactly one roadmap task per run.
