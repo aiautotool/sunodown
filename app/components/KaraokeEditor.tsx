@@ -2,7 +2,7 @@
 
 import {useEffect,useRef,useState} from 'react';
 import type {KaraokeLine} from '../lib/karaoke';
-import {setLineTiming} from '../lib/karaoke';
+import {exportVtt,setLineTiming} from '../lib/karaoke';
 import LyricsConfidencePanel from './LyricsConfidencePanel';
 
 type Props={audioUrl:string;lyrics:string;duration:number;timeline:KaraokeLine[];onChange:(v:KaraokeLine[])=>void};
@@ -18,6 +18,7 @@ export default function KaraokeEditor({audioUrl,duration,timeline,onChange}:Prop
   const [time,setTime]=useState(0);
   const [selected,setSelected]=useState(0);
   const [tapSync,setTapSync]=useState(false);
+  function downloadVtt(){const text=exportVtt(timeline);const blob=new Blob([text],{type:'text/vtt;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='lyrics.vtt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1200)}
 
   useEffect(()=>{let cancelled=false;let context:AudioContext|null=null;(async()=>{try{const response=await fetch(audioUrl,{cache:'no-store'});if(!response.ok)return;const AudioCtx=window.AudioContext||(window as typeof window&{webkitAudioContext?:typeof AudioContext}).webkitAudioContext;if(!AudioCtx)return;context=new AudioCtx();const buffer=await context.decodeAudioData((await response.arrayBuffer()).slice(0));const data=buffer.getChannelData(0);const bins=Math.min(720,Math.max(180,Math.floor((window.innerWidth||360)*1.5)));const step=Math.max(1,Math.floor(data.length/bins));const next:number[]=[];for(let i=0;i<bins;i++){let max=0;const from=i*step,to=Math.min(data.length,from+step);for(let j=from;j<to;j++)max=Math.max(max,Math.abs(data[j]));next.push(max);if(i%120===0)await new Promise<void>(resolve=>setTimeout(resolve,0));}if(!cancelled)setPeaks(next);}catch{}finally{if(context)void context.close().catch(()=>{})}})();return()=>{cancelled=true;if(context)void context.close().catch(()=>{})}},[audioUrl]);
 
@@ -34,7 +35,7 @@ export default function KaraokeEditor({audioUrl,duration,timeline,onChange}:Prop
 
   const activeTap=tapRef.current;
   return <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4">
-    <div className="flex items-start justify-between gap-3"><div><b>Waveform Lyrics Editor</b><p className="mt-1 text-xs text-white/45">Chạm waveform để seek. Kéo mép vùng lyric để chỉnh Start/End chính xác.</p></div><span className="shrink-0 rounded-lg bg-fuchsia-300/10 px-2 py-1 font-mono text-[10px] text-fuchsia-100">{sec(time)}s</span></div>
+    <div className="flex items-start justify-between gap-3"><div><b>Waveform Lyrics Editor</b><p className="mt-1 text-xs text-white/45">Chạm waveform để seek. Kéo mép vùng lyric để chỉnh Start/End chính xác.</p></div><div className="flex shrink-0 items-center gap-2"><button type="button" disabled={!timeline.length} onClick={downloadVtt} className="rounded-lg bg-violet-400/15 px-2.5 py-1.5 text-[10px] font-bold text-violet-100 disabled:opacity-30">↓ VTT</button><span className="rounded-lg bg-fuchsia-300/10 px-2 py-1 font-mono text-[10px] text-fuchsia-100">{sec(time)}s</span></div></div>
     <audio ref={audioRef} src={audioUrl} controls preload="metadata" onTimeUpdate={e=>setTime(e.currentTarget.currentTime)} onSeeked={e=>setTime(e.currentTarget.currentTime)} className="mt-4 h-10 w-full"/>
     <canvas ref={canvasRef} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={stopDrag} onPointerCancel={stopDrag} className="mt-4 h-[150px] w-full touch-none rounded-xl border border-white/10" aria-label="Waveform lyrics timing editor"/>
     <input type="range" min={0} max={duration||1} step="0.01" value={Math.min(time,duration||1)} onChange={e=>seek(Number(e.target.value))} className="mt-3 w-full"/>
