@@ -39,7 +39,7 @@
 26. [x] Beat-Synced Effects
 27. [x] Scene Timeline
 28. [x] Text / Logo / Watermark Layer
-29. [ ] Safe Zone TikTok/Reels/Shorts
+29. [x] Safe Zone TikTok/Reels/Shorts
 30. [ ] Smart Render Quality
 
 ### Roadmap #9 — Local Library / History
@@ -112,5 +112,17 @@
 
 **Status: COMPLETE.** Feature commits 24438c5 + 787fcee + 5aee38d + 64143c7. Workflow 35709202178 build/deploy successful.
 
+### Roadmap #29 — Safe Zone TikTok/Reels/Shorts
+- [x] TikTok, Instagram Reels and YouTube Shorts guide presets
+- [x] Live safe-area overlay attached to the actual video preview
+- [x] Platform-specific top/bottom/action-rail exclusion zones
+- [x] Adjustable guide visibility and persistent local preference
+- [x] Preview-only guide: never burned into exported video
+- [x] Touch-safe controls and zero render/memory overhead on mobile export
+- [x] Long Video / multi-hour render regression inspection remains green
+- [x] Build and Cloudflare deployment verified by workflow 35714598329
+
+**Status: COMPLETE.** Feature commits 4249453 + a2d809c. Workflow 35714598329 build/deploy successful.
+
 ### Current focus
-Roadmap #29 — Safe Zone TikTok/Reels/Shorts. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #30 — Smart Render Quality. Start on the next run only. Exactly one roadmap task per run.
