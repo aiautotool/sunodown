@@ -32,7 +32,7 @@
 19. [x] Word Tap Sync
 20. [x] Auto Lyrics Confidence
 21. [x] Subtitle VTT Export
-22. [ ] Subtitle Styling Studio
+22. [x] Subtitle Styling Studio
 23. [ ] Duet / Singer Colors
 24. [ ] Lyrics Translation Track
 25. [ ] Beat/BPM Detection
@@ -114,5 +114,18 @@
 
 **Status: COMPLETE.** Feature commits 65444d8 + 4c4496c + 1d99c49. Workflow 35675236745 build/deploy successful.
 
+### Roadmap #22 — Subtitle Styling Studio
+- [x] Six one-tap subtitle presets with real renderer-backed values
+- [x] Live style preview inside the editor sheet
+- [x] Five font families rendered consistently in live preview and exported video canvas
+- [x] Text, karaoke-highlight and background colors plus background opacity
+- [x] Font size, background corner radius, bold, shadow and outline controls
+- [x] Reset-to-default action and mobile-friendly bottom-sheet layout
+- [x] Existing drag-to-position subtitle overlay remains available on video preview
+- [x] Long Video / multi-hour render regression inspection remains green
+- [x] Build and Cloudflare deployment verified by workflow 35678402402
+
+**Status: COMPLETE.** Feature commits bc17b70 + 36239e3. Workflow 35678402402 build/deploy successful.
+
 ### Current focus
-Roadmap #22 — Subtitle Styling Studio. Start on the next run only. Exactly one roadmap task per run.
+Roadmap #23 — Duet / Singer Colors. Start on the next run only. Exactly one roadmap task per run.
