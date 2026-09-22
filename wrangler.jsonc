@@ -4,7 +4,7 @@
   "main": "worker-v6.ts",
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat"],
-  "assets": {"directory":"dist/client"},
+  "assets": {"directory":"dist/client","binding":"ASSETS","not_found_handling":"single-page-application","run_worker_first":true},
   "routes":[{"pattern":"suno.aiautotool.com","custom_domain":true}],
   "observability":{"enabled":true}
 }
