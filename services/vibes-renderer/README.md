@@ -6,14 +6,11 @@ External renderer for `ai_music_video` jobs. It turns lyrics into a bounded stor
 
 ```bash
 export VIBES_META_SESSION='cookie from vibes.ai'
-export META_AI_COOKIES='datr=...; abra_sess=...; ecto_1_sess=...'
 export RENDER_SERVICE_TOKEN='long-random-secret'
 docker compose up --build
 ```
 
 Point the Cloudflare Worker secret `RENDER_SERVICE_URL` to `https://renderer.example.com/render` and set the same `RENDER_SERVICE_TOKEN` on both services.
-
-When `META_AI_COOKIES` is configured, Meta AI is the primary video provider and keeps all scenes in one conversation for continuity. Vibes remains the automatic fallback. Without Meta cookies, the renderer uses Vibes directly.
 
 For a local end-to-end test without consuming Vibes generations, set `MOCK_VIBES=true`. Mock mode creates deterministic color clips with FFmpeg while exercising download, scene planning, concatenation, audio muxing and MP4 output.
 
