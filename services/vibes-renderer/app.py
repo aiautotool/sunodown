@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from threading import RLock
@@ -23,6 +24,25 @@ try:
     from vibes_api import VibesClient
 except ImportError:  # Allows storyboard tests without the optional provider package.
     VibesClient = None  # type: ignore
+
+try:
+    import metaai_api.utils as meta_utils
+
+    if not hasattr(meta_utils, "extract_value"):
+        def _extract_value(text: str, start_str: str, end_str: str) -> str:
+            start = text.find(start_str)
+            if start < 0:
+                raise ValueError(f"Meta token marker not found: {start_str[:20]}")
+            start += len(start_str)
+            end = text.find(end_str, start)
+            if end < 0:
+                raise ValueError("Meta token terminator not found")
+            return text[start:end]
+
+        meta_utils.extract_value = _extract_value
+    from metaai_api.video_generation import VideoGenerator
+except ImportError:
+    VideoGenerator = None  # type: ignore
 
 
 app = FastAPI(title="SunoDown AI Music Video Renderer", version="1.0.0")
@@ -173,6 +193,57 @@ def mock_clip(target: Path, index: int, aspect: str, seconds: int) -> None:
     )
 
 
+def download_generated_video(url: str, target: Path) -> None:
+    with requests.get(url, stream=True, timeout=600, headers={"User-Agent": "Mozilla/5.0"}) as response:
+        response.raise_for_status()
+        with target.open("wb") as handle:
+            for chunk in response.iter_content(1024 * 1024):
+                if chunk:
+                    handle.write(chunk)
+
+
+def media_url_key(url: str) -> str:
+    """Compare CDN media independently of expiring signatures."""
+    parsed = urlparse(url)
+    return f"{parsed.netloc}{parsed.path}"
+
+
+def meta_generated_clips(scenes: list[dict[str, Any]], work: Path, aspect: str) -> list[Path]:
+    cookies = os.getenv("META_AI_COOKIES", "").strip()
+    if not cookies or VideoGenerator is None:
+        raise RuntimeError("META_AI_COOKIES is not configured")
+    generator = VideoGenerator(cookies_str=cookies)
+    orientation = {"9:16": "VERTICAL", "16:9": "LANDSCAPE", "1:1": "SQUARE"}[aspect]
+    conversation_id: str | None = None
+    known_media: set[str] = set()
+    clips: list[Path] = []
+    for scene in scenes:
+        conversation_id = generator.create_video_generation_request(
+            prompt_text=scene["prompt"], orientation=orientation,
+            conversation_id=conversation_id, verbose=False,
+        )
+        if not conversation_id:
+            raise RuntimeError(f"Meta AI rejected scene {scene['index'] + 1}")
+        video_url = None
+        urls: list[str] = []
+        time.sleep(8)
+        for _ in range(60):
+            urls = generator.fetch_video_urls(
+                conversation_id=conversation_id, max_attempts=1, wait_seconds=0, verbose=False,
+            )
+            video_url = next((url for url in urls if media_url_key(url) not in known_media), None)
+            if video_url:
+                break
+            time.sleep(5)
+        if not video_url:
+            raise RuntimeError(f"Meta AI returned no new video for scene {scene['index'] + 1}")
+        known_media.update(media_url_key(url) for url in urls)
+        target = work / f"scene-{scene['index']:03d}.mp4"
+        download_generated_video(video_url, target)
+        clips.append(target)
+    return clips
+
+
 def generated_clips(scenes: list[dict[str, Any]], work: Path, title: str, aspect: str, resolution: str) -> list[Path]:
     if os.getenv("MOCK_VIBES", "").lower() in {"1", "true", "yes"}:
         clips = []
@@ -181,6 +252,13 @@ def generated_clips(scenes: list[dict[str, Any]], work: Path, title: str, aspect
             mock_clip(target, scene["index"], aspect, scene["duration"])
             clips.append(target)
         return clips
+    if os.getenv("META_AI_COOKIES", "").strip():
+        try:
+            return meta_generated_clips(scenes, work, aspect)
+        except Exception:
+            LOGGER.warning("Meta AI generation failed for %s; falling back to Vibes", title, exc_info=True)
+            for target in work.glob("scene-*.mp4"):
+                target.unlink(missing_ok=True)
     session = os.getenv("VIBES_META_SESSION", "")
     if not session or VibesClient is None:
         raise RuntimeError("VIBES_META_SESSION is not configured")
@@ -252,6 +330,8 @@ def health() -> dict[str, Any]:
         "ok": bool(shutil.which("ffmpeg") and shutil.which("ffprobe")),
         "ffmpeg": bool(shutil.which("ffmpeg")),
         "vibesConfigured": bool(os.getenv("VIBES_META_SESSION")),
+        "metaConfigured": bool(os.getenv("META_AI_COOKIES")),
+        "primaryProvider": "meta" if os.getenv("META_AI_COOKIES") else "vibes",
         "mock": os.getenv("MOCK_VIBES", "").lower() in {"1", "true", "yes"},
     }
 
