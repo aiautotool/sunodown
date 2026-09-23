@@ -133,6 +133,7 @@ function ToolControls(p: {
 }) {
   const rows = [
     ['style', 'Style', Sparkles],
+    ['text', 'Text & resize', FileText],
     ['wave', 'Waveform', SlidersHorizontal],
     ['lyrics', 'Lyrics', FileText],
     ['format', 'Format', SlidersHorizontal],
@@ -166,8 +167,12 @@ function ToolControls(p: {
                     {x.label}
                   </button>
                 ))}
-              {id === 'style' && (
+              {id === 'text' && (
                 <div className="sd-text-style">
+                  <p className="sd-control-hint">
+                    Chọn font, màu, kích thước hoặc bấm chữ trên video rồi kéo
+                    nút tím ở góc để resize.
+                  </p>
                   {(['title', 'creator'] as const).map((key) => (
                     <div key={key}>
                       <b>{key === 'title' ? 'Tiêu đề' : 'Tác giả'}</b>
