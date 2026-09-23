@@ -45,6 +45,7 @@ type Props = {
   exporting: boolean;
   resultUrl?: string;
   autoPlay?: boolean;
+  fullPlayback?: boolean;
 };
 
 function fmt(value: number) {
@@ -68,10 +69,9 @@ export function LivePreview(props: Props) {
   );
   const backgroundVideo = useRef<HTMLVideoElement | null>(null);
 
-  const previewEnd = Math.min(
-    props.song.duration || props.start + 10,
-    props.start + 10,
-  );
+  const previewEnd = props.fullPlayback
+    ? props.song.duration || props.start + 10
+    : Math.min(props.song.duration || props.start + 10, props.start + 10);
   const previewDuration = Math.max(0.1, previewEnd - props.start);
 
   useEffect(() => {
@@ -253,7 +253,9 @@ export function LivePreview(props: Props) {
       const p = current.current;
       const player = audio.current;
       let absoluteTime = player?.currentTime ?? p.start;
-      const end = Math.min(p.song.duration || p.start + 10, p.start + 10);
+      const end = p.fullPlayback
+        ? p.song.duration || p.start + 10
+        : Math.min(p.song.duration || p.start + 10, p.start + 10);
 
       if (player && !player.paused && absoluteTime >= end - 0.02) {
         player.currentTime = p.start;

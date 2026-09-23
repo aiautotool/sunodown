@@ -522,6 +522,7 @@ export default function CreatorStudio() {
                 start={trimStart}
                 exporting={rendering}
                 autoPlay
+                fullPlayback
               />
             </div>
             <div className="sd-player">
