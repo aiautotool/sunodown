@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import logging
 import os
 import re
 import shutil
@@ -8,7 +9,7 @@ import subprocess
 import tempfile
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
-from threading import Lock
+from threading import RLock
 from typing import Any
 from urllib.parse import urlparse
 
@@ -31,7 +32,19 @@ RESULTS = Path(tempfile.gettempdir()) / "sunodown-results"
 RESULTS.mkdir(parents=True, exist_ok=True)
 EXECUTOR = ThreadPoolExecutor(max_workers=max(1, int(os.getenv("RENDER_WORKERS", "1"))))
 JOBS: dict[str, Future[Path]] = {}
-JOBS_LOCK = Lock()
+FAILURES: dict[str, str] = {}
+JOBS_LOCK = RLock()
+LOGGER = logging.getLogger("sunodown.renderer")
+
+
+def public_error(error: Exception) -> str:
+    detail = error.detail if isinstance(error, HTTPException) else str(error)
+    message = str(detail)
+    if "RATE_LIMITED" in message or "Too many requests" in message:
+        return "Vibes đang giới hạn lượt tạo video (429). Vui lòng thử lại sau vài phút."
+    if "401 Client Error" in message:
+        return "Liên kết audio đã hết hạn. Vui lòng dán lại liên kết Suno và tạo job mới."
+    return message[:500]
 
 
 class RenderRequest(BaseModel):
@@ -203,7 +216,16 @@ def render_video(payload: RenderRequest) -> Path:
         except HTTPException:
             raise
         except Exception as error:
+            LOGGER.exception("Render %s failed", payload.jobId)
             raise HTTPException(502, str(error)) from error
+
+
+def remember_failure(job_id: str, future: Future[Path]) -> None:
+    error = future.exception()
+    if error is None:
+        return
+    with JOBS_LOCK:
+        FAILURES[job_id] = public_error(error)
 
 
 @app.post("/render", response_model=None)
@@ -228,20 +250,24 @@ def render(payload: RenderRequest, authorization: str | None = Header(default=No
             background=BackgroundTask(result.unlink, missing_ok=True),
         )
     with JOBS_LOCK:
+        failure = FAILURES.get(payload.jobId)
+    if failure:
+        return JSONResponse({"status": "failed", "jobId": payload.jobId, "error": failure})
+    with JOBS_LOCK:
         future = JOBS.get(payload.jobId)
         if future is None:
             future = EXECUTOR.submit(render_video, payload)
             JOBS[payload.jobId] = future
+            future.add_done_callback(lambda done: remember_failure(payload.jobId, done))
     if not future.done():
         return JSONResponse({"status": "rendering", "jobId": payload.jobId}, status_code=202)
     try:
         completed = future.result()
     except Exception as error:
+        detail = public_error(error)
         with JOBS_LOCK:
-            JOBS.pop(payload.jobId, None)
-        if isinstance(error, HTTPException):
-            raise error
-        raise HTTPException(502, str(error)) from error
+            FAILURES[payload.jobId] = detail
+        return JSONResponse({"status": "failed", "jobId": payload.jobId, "error": detail})
     return FileResponse(
         completed, media_type="video/mp4", filename=f"{payload.jobId}.mp4",
         background=BackgroundTask(completed.unlink, missing_ok=True),
