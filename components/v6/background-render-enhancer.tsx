@@ -94,8 +94,10 @@ export function V6BackgroundRenderEnhancer() {
     if (p !== 'granted') return;
     const keyRes = await fetch('/api/push/key'),
       { publicKey } = await keyRes.json();
-    if (!keyRes.ok || !publicKey)
-      throw new Error('Push chưa được cấu hình trên máy chủ.');
+    if (!keyRes.ok || !publicKey) {
+      setPermission('unsupported');
+      return;
+    }
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (!sub)
