@@ -62,6 +62,20 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           AI_RENDER_TOKEN: ${{ secrets.AI_RENDER_TOKEN }}
+      - name: Configure Web Push
+        if: github.ref == 'refs/heads/v12'
+        run: |
+          if [ -n "$VAPID_PUBLIC_KEY" ] && [ -n "$VAPID_PRIVATE_KEY" ]; then
+            printf '%s' "$VAPID_PUBLIC_KEY" | npx wrangler secret put VAPID_PUBLIC_KEY --config wrangler.v6.generated.json
+            printf '%s' "$VAPID_PRIVATE_KEY" | npx wrangler secret put VAPID_PRIVATE_KEY --config wrangler.v6.generated.json
+          else
+            echo "::warning::VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY are not configured; Web Push remains disabled."
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+
       - name: Deploy with background-render bindings
         if: github.ref == 'refs/heads/v6' || github.ref == 'refs/heads/v7' || github.ref == 'refs/heads/v8' || github.ref == 'refs/heads/v9' || github.ref == 'refs/heads/v10' || github.ref == 'refs/heads/v11' || github.ref == 'refs/heads/v12'
         run: npx wrangler deploy --config wrangler.v6.generated.json
