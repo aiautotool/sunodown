@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Pause, Play } from 'lucide-react';
 import {
   createLiveFramePainter,
   type OverlayLayout,
@@ -548,7 +549,7 @@ export function LivePreview(props: Props) {
         {!props.resultUrl && (
           <button
             type="button"
-            disabled={!!status || props.exporting}
+            disabled={props.exporting}
             onClick={() => void togglePlayback()}
             className="rounded-lg bg-white/10 px-3 py-1.5 text-xs disabled:opacity-40"
           >
@@ -569,7 +570,17 @@ export function LivePreview(props: Props) {
           />
         ) : (
           <div
-            className="relative"
+            className="sd-preview-click relative"
+            role="button"
+            tabIndex={0}
+            aria-label={playing ? 'Tạm dừng video' : 'Phát video'}
+            onClick={() => void togglePlayback()}
+            onKeyDown={(event) => {
+              if (event.key === ' ' || event.key === 'Enter') {
+                event.preventDefault();
+                void togglePlayback();
+              }
+            }}
             style={{
               aspectRatio: `${size.width}/${size.height}`,
               width: `min(100%, ${(340 * size.width) / size.height}px)`,
@@ -660,6 +671,7 @@ export function LivePreview(props: Props) {
                       window.addEventListener('pointermove', move);
                       window.addEventListener('pointerup', up, { once: true });
                     }}
+                    onClick={(event) => event.stopPropagation()}
                     className="absolute z-20 -translate-x-1/2 cursor-grab active:cursor-grabbing"
                     style={{
                       left: `${p.x}%`,
@@ -675,6 +687,17 @@ export function LivePreview(props: Props) {
                   </div>
                 );
               })}
+            <button
+              type="button"
+              className={`sd-center-play ${playing ? 'playing' : ''}`}
+              aria-label={playing ? 'Tạm dừng' : 'Phát'}
+              onClick={(event) => {
+                event.stopPropagation();
+                void togglePlayback();
+              }}
+            >
+              {playing ? <Pause /> : <Play />}
+            </button>
           </div>
         )}
       </div>
@@ -706,6 +729,9 @@ export function LivePreview(props: Props) {
               step=".01"
               value={Math.min(previewEnd, Math.max(props.start, time))}
               onChange={(event) => seekPreview(Number(event.target.value))}
+              onInput={(event) =>
+                seekPreview(Number(event.currentTarget.value))
+              }
               className="w-full accent-cyan-300"
               aria-label="Timeline preview có âm thanh"
             />
