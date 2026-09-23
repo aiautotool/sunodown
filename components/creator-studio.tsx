@@ -5,6 +5,7 @@ import {
   Bell,
   BookOpen,
   ChevronDown,
+  Download,
   FileText,
   Folder,
   Image as ImageIcon,
@@ -38,6 +39,12 @@ import {
   DEFAULT_OVERLAY_LAYOUT,
   type OverlayLayout,
 } from '@/components/v9/overlay-layout-panel';
+import {
+  convertProcessedAudio,
+  renderTikTokLikeAudio,
+} from '@/app/lib/audio-processing';
+import { buildEstimatedKaraokeTimeline, exportSrt } from '@/app/lib/karaoke';
+import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 
 type Song = {
   title: string;
@@ -78,6 +85,16 @@ const renderSong = (song: Song) => ({
   duration: song.duration || null,
   creator: song.creator || null,
 });
+function saveBlob(blob: Blob, filename: string) {
+  const href = URL.createObjectURL(blob),
+    a = document.createElement('a');
+  a.href = href;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(href), 2000);
+}
+const safeName = (value: string) =>
+  (value || 'suno').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120);
 
 function ToolControls(p: {
   panel: string;
@@ -290,7 +307,8 @@ export default function CreatorStudio() {
     [lyrics, setLyrics] = useState<LyricsMode>('focus'),
     [effects, setEffects] = useState<VideoEffect[]>([]),
     [rendering, setRendering] = useState(false),
-    [progress, setProgress] = useState(0);
+    [progress, setProgress] = useState(0),
+    [downloading, setDownloading] = useState('');
   const [layout, setLayout] = useState<OverlayLayout>(DEFAULT_OVERLAY_LAYOUT);
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
@@ -385,6 +403,44 @@ export default function CreatorStudio() {
       setError(e instanceof Error ? e.message : 'Không thể tạo video.');
     } finally {
       setRendering(false);
+    }
+  }
+  async function downloadAudio(format: 'm4a' | 'mp3' | 'wav') {
+    if (!song || downloading) return;
+    setDownloading(format);
+    setError('');
+    try {
+      const response = await fetch(song.audio, { cache: 'no-store' });
+      if (!response.ok) throw Error('Không tải được audio.');
+      const source = await response.blob();
+      if (format === 'm4a') saveBlob(source, `${safeName(song.title)}.m4a`);
+      else {
+        const processed = await renderTikTokLikeAudio(source),
+          blob = await convertProcessedAudio(processed, format);
+        saveBlob(blob, `${safeName(song.title)}.${format}`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Không tải được audio.');
+    } finally {
+      setDownloading('');
+    }
+  }
+  function downloadLyrics(format: 'txt' | 'srt') {
+    if (!song?.lyrics) return;
+    const clean = cleanLyricsForVideo(song.lyrics);
+    if (format === 'txt')
+      saveBlob(
+        new Blob([clean], { type: 'text/plain;charset=utf-8' }),
+        `${safeName(song.title)}-lyrics.txt`,
+      );
+    else {
+      const timeline = buildEstimatedKaraokeTimeline(clean, song.duration || 1);
+      saveBlob(
+        new Blob([exportSrt(timeline)], {
+          type: 'application/x-subrip;charset=utf-8',
+        }),
+        `${safeName(song.title)}-lyrics.srt`,
+      );
     }
   }
   useEffect(
@@ -700,36 +756,69 @@ export default function CreatorStudio() {
               setTrimStart={setTrimStart}
               setTrimEnd={setTrimEnd}
             />
-            <button
-              className="sd-export"
-              disabled={rendering}
-              onClick={() => renderVideo('cut')}
-            >
-              <Upload />{' '}
-              {rendering
-                ? `Rendering ${Math.round(progress)}%`
-                : `Export ${fmt(Math.max(0, trimEnd - trimStart))} video`}
-            </button>
-            {rendering && (
-              <div className="sd-progress">
-                <i style={{ width: `${progress}%` }} />
-              </div>
-            )}
-            <div className="sd-downloads">
-              <button disabled={rendering} onClick={() => renderVideo('30')}>
-                <Play />
-                30s video
+            <div className="sd-actions">
+              <button
+                className="sd-export"
+                disabled={rendering}
+                onClick={() => renderVideo('cut')}
+              >
+                <Upload />{' '}
+                {rendering
+                  ? `Rendering ${Math.round(progress)}%`
+                  : `Export ${fmt(Math.max(0, trimEnd - trimStart))} video`}
               </button>
-              <a href={song.audio} download>
-                <Music2 />
-                Audio
-              </a>
-              {song.picture && (
-                <a href={song.picture} download>
-                  <ImageIcon />
-                  Cover
-                </a>
+              {rendering && (
+                <div className="sd-progress">
+                  <i style={{ width: `${progress}%` }} />
+                </div>
               )}
+              <div className="sd-downloads">
+                <button disabled={rendering} onClick={() => renderVideo('30')}>
+                  <Play />
+                  30s video
+                </button>
+                <button
+                  disabled={!!downloading}
+                  onClick={() => downloadAudio('mp3')}
+                >
+                  <Download />
+                  {downloading === 'mp3' ? 'Creating…' : 'MP3'}
+                </button>
+                <button
+                  disabled={!!downloading}
+                  onClick={() => downloadAudio('wav')}
+                >
+                  <Download />
+                  {downloading === 'wav' ? 'Creating…' : 'WAV'}
+                </button>
+                <button
+                  disabled={!!downloading}
+                  onClick={() => downloadAudio('m4a')}
+                >
+                  <Music2 />
+                  M4A
+                </button>
+                <button
+                  disabled={!song.lyrics}
+                  onClick={() => downloadLyrics('txt')}
+                >
+                  <FileText />
+                  Lyrics
+                </button>
+                <button
+                  disabled={!song.lyrics}
+                  onClick={() => downloadLyrics('srt')}
+                >
+                  <FileText />
+                  SRT
+                </button>
+                {song.picture && (
+                  <a href={song.picture} download>
+                    <ImageIcon />
+                    Cover
+                  </a>
+                )}
+              </div>
             </div>
           </aside>
           <div className="sd-mobile-export">
