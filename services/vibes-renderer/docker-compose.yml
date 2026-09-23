@@ -1,0 +1,11 @@
+services:
+  renderer:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      VIBES_META_SESSION: ${VIBES_META_SESSION:-}
+      RENDER_SERVICE_TOKEN: ${RENDER_SERVICE_TOKEN:-change-me}
+      MOCK_VIBES: ${MOCK_VIBES:-false}
+    restart: unless-stopped
+

@@ -10,6 +10,12 @@
 
 # testing
 /coverage
+.pytest_cache/
+
+# python renderer
+.venv/
+__pycache__/
+*.pyc
 
 # next.js
 /.next/

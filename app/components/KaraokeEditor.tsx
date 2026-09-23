@@ -1,319 +1,46 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  KaraokeLine,
-  activeKaraokeLine,
-  buildEstimatedKaraokeTimeline,
-  exportAss,
-  exportEnhancedLrc,
-  exportSrt,
-  parseKaraokeJson,
-  alignRoughWordsToLyrics,
-  setLineTiming,
-  setWordTiming,
-  shiftTimeline,
-  timelineFromLineStarts,
-} from '../lib/karaoke';
+import {useEffect,useRef,useState} from 'react';
+import type {KaraokeLine} from '../lib/karaoke';
+import {exportVtt,setLineTiming} from '../lib/karaoke';
+import LyricsConfidencePanel from './LyricsConfidencePanel';
 
-type Props = {
-  audioUrl: string;
-  lyrics: string;
-  duration: number;
-  timeline: KaraokeLine[];
-  onChange: (timeline: KaraokeLine[]) => void;
-};
+type Props={audioUrl:string;lyrics:string;duration:number;timeline:KaraokeLine[];onChange:(v:KaraokeLine[])=>void};
+const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
+const sec=(v:number)=>Number.isFinite(v)?v.toFixed(2):'0.00';
 
-function saveText(value: string, filename: string, type = 'text/plain;charset=utf-8') {
-  const blob = new Blob([value], { type });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+export default function KaraokeEditor({audioUrl,duration,timeline,onChange}:Props){
+  const audioRef=useRef<HTMLAudioElement|null>(null);
+  const canvasRef=useRef<HTMLCanvasElement|null>(null);
+  const dragRef=useRef<{index:number;edge:'start'|'end'}|null>(null);
+  const tapRef=useRef<{line:number;word:number;started:boolean}|null>(null);
+  const [peaks,setPeaks]=useState<number[]>([]);
+  const [time,setTime]=useState(0);
+  const [selected,setSelected]=useState(0);
+  const [tapSync,setTapSync]=useState(false);
+  function downloadVtt(){const text=exportVtt(timeline);const blob=new Blob([text],{type:'text/vtt;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='lyrics.vtt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1200)}
 
-function seconds(value: number) {
-  return Number.isFinite(value) ? value.toFixed(2) : '0.00';
-}
+  useEffect(()=>{let cancelled=false;let context:AudioContext|null=null;(async()=>{try{const response=await fetch(audioUrl,{cache:'no-store'});if(!response.ok)return;const AudioCtx=window.AudioContext||(window as typeof window&{webkitAudioContext?:typeof AudioContext}).webkitAudioContext;if(!AudioCtx)return;context=new AudioCtx();const buffer=await context.decodeAudioData((await response.arrayBuffer()).slice(0));const data=buffer.getChannelData(0);const bins=Math.min(720,Math.max(180,Math.floor((window.innerWidth||360)*1.5)));const step=Math.max(1,Math.floor(data.length/bins));const next:number[]=[];for(let i=0;i<bins;i++){let max=0;const from=i*step,to=Math.min(data.length,from+step);for(let j=from;j<to;j++)max=Math.max(max,Math.abs(data[j]));next.push(max);if(i%120===0)await new Promise<void>(resolve=>setTimeout(resolve,0));}if(!cancelled)setPeaks(next);}catch{}finally{if(context)void context.close().catch(()=>{})}})();return()=>{cancelled=true;if(context)void context.close().catch(()=>{})}},[audioUrl]);
 
-export default function KaraokeEditor({ audioUrl, lyrics, duration, timeline, onChange }: Props) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const importRef = useRef<HTMLInputElement | null>(null);
-  const [time, setTime] = useState(0);
-  const [tapStarts, setTapStarts] = useState<number[]>([]);
-  const [tapMode, setTapMode] = useState(false);
-  const [selectedLine, setSelectedLine] = useState(0);
-  const [expandedWordLine, setExpandedWordLine] = useState<number | null>(null);
-  const [aligning, setAligning] = useState(false);
-  const [alignMessage, setAlignMessage] = useState('');
+  useEffect(()=>{const canvas=canvasRef.current;if(!canvas)return;const width=Math.max(280,canvas.clientWidth),height=150,dpr=Math.min(2,window.devicePixelRatio||1);canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);const ctx=canvas.getContext('2d');if(!ctx)return;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#08111f';ctx.fillRect(0,0,width,height);const mid=height/2,bar=width/Math.max(1,peaks.length);ctx.strokeStyle='rgba(148,163,184,.42)';for(let i=0;i<peaks.length;i++){const h=Math.max(1,peaks[i]*height*.42);ctx.beginPath();ctx.moveTo(i*bar,mid-h);ctx.lineTo(i*bar,mid+h);ctx.stroke();}const total=Math.max(.01,duration);timeline.forEach((line,index)=>{const x=line.start/total*width,w=Math.max(2,(line.end-line.start)/total*width);ctx.fillStyle=index===selected?'rgba(217,70,239,.24)':'rgba(99,102,241,.12)';ctx.fillRect(x,0,w,height);ctx.strokeStyle=index===selected?'#f0abfc':'#818cf8';ctx.strokeRect(x+.5,.5,Math.max(1,w-1),height-1);if(index===selected){ctx.fillStyle='#f0abfc';ctx.fillRect(x-2,0,4,height);ctx.fillRect(x+w-2,0,4,height);}});ctx.fillStyle='#22d3ee';ctx.fillRect(clamp(time/total,0,1)*width-1,0,2,height)},[peaks,duration,time,timeline,selected]);
 
-  const active = useMemo(() => activeKaraokeLine(timeline, time), [timeline, time]);
+  function eventTime(clientX:number){const canvas=canvasRef.current;if(!canvas)return 0;const rect=canvas.getBoundingClientRect();return clamp((clientX-rect.left)/Math.max(1,rect.width),0,1)*duration}
+  function seek(value:number){const next=clamp(value,0,duration);if(audioRef.current)audioRef.current.currentTime=next;setTime(next)}
+  function pointerDown(event:React.PointerEvent<HTMLCanvasElement>){const t=eventTime(event.clientX),threshold=Math.max(.12,duration*.012);let hit=-1,edge:'start'|'end'='start',distance=Infinity;timeline.forEach((line,index)=>{const ds=Math.abs(t-line.start),de=Math.abs(t-line.end);if(ds<threshold&&ds<distance){hit=index;edge='start';distance=ds}if(de<threshold&&de<distance){hit=index;edge='end';distance=de}});if(hit>=0){dragRef.current={index:hit,edge};setSelected(hit);event.currentTarget.setPointerCapture(event.pointerId);return}const inside=timeline.findIndex(line=>t>=line.start&&t<=line.end);if(inside>=0)setSelected(inside);seek(t)}
+  function pointerMove(event:React.PointerEvent<HTMLCanvasElement>){const drag=dragRef.current;if(!drag)return;const line=timeline[drag.index];if(!line)return;const t=eventTime(event.clientX);onChange(setLineTiming(timeline,drag.index,drag.edge==='start'?Math.min(t,line.end-.02):line.start,drag.edge==='end'?Math.max(t,line.start+.02):line.end))}
+  function stopDrag(){dragRef.current=null}
+  function startTapSync(){const line=timeline[selected];if(!line?.words.length)return;tapRef.current={line:selected,word:0,started:false};setTapSync(true);seek(Math.max(0,line.start-.5));void audioRef.current?.play()}
+  function stopTapSync(){setTapSync(false);tapRef.current=null}
+  function tapWord(){const state=tapRef.current,audio=audioRef.current;if(!tapSync||!state||!audio)return;const line=timeline[state.line],word=line?.words[state.word];if(!line||!word){stopTapSync();return}const t=clamp(audio.currentTime,0,duration);const previous=state.word>0?line.words[state.word-1]:null;const nextWords=line.words.map((w,i)=>i===state.word?{...w,start:previous?Math.max(previous.end,t):Math.max(line.start,t),end:Math.max(previous?previous.end:t,t+.06)}:w);if(state.word>0)nextWords[state.word-1]={...nextWords[state.word-1],end:Math.max(nextWords[state.word-1].start+.02,t)};const nextTimeline=timeline.map((l,i)=>i===state.line?{...l,start:Math.min(l.start,nextWords[0]?.start??l.start),end:Math.max(l.end,nextWords.at(-1)?.end??l.end),words:nextWords}:l);onChange(nextTimeline);state.word+=1;state.started=true;if(state.word>=line.words.length){const end=clamp(t+.25,0,duration);const finalWords=nextWords.map((w,i)=>i===nextWords.length-1?{...w,end:Math.max(w.start+.02,end)}:w);onChange(nextTimeline.map((l,i)=>i===state.line?{...l,end:Math.max(l.start+.02,end),words:finalWords}:l));stopTapSync()}}
 
-  useEffect(() => {
-    if (active.index >= 0) setSelectedLine(active.index);
-  }, [active.index]);
-
-  function estimate() {
-    onChange(buildEstimatedKaraokeTimeline(lyrics, duration));
-    setTapStarts([]);
-  }
-
-  async function decodeTo16kMono(blob: Blob) {
-    const arrayBuffer = await blob.arrayBuffer();
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) throw new Error('Trình duyệt không hỗ trợ Web Audio.');
-
-    const context = new AudioCtx();
-    try {
-      const decoded = await context.decodeAudioData(arrayBuffer.slice(0));
-      const frameCount = Math.ceil(decoded.duration * 16000);
-      const offline = new OfflineAudioContext(1, frameCount, 16000);
-      const source = offline.createBufferSource();
-      source.buffer = decoded;
-      source.connect(offline.destination);
-      source.start(0);
-      const rendered = await offline.startRendering();
-      return new Float32Array(rendered.getChannelData(0));
-    } finally {
-      await context.close();
-    }
-  }
-
-  async function autoAlign() {
-    setAligning(true);
-    setAlignMessage('Đang tải audio...');
-    try {
-      const audioResponse = await fetch(audioUrl, { cache: 'no-store' });
-      if (!audioResponse.ok) throw new Error('Không tải được audio để căn lời.');
-
-      const pcm = await decodeTo16kMono(await audioResponse.blob());
-      setAlignMessage('Đang tải model Whisper lần đầu...');
-
-      const worker = new Worker(new URL('../workers/karaoke-whisper.worker.ts', import.meta.url), { type: 'module' });
-
-      const result = await new Promise<{ chunks: Array<{ text: string; timestamp: [number | null, number | null] }> }>((resolve, reject) => {
-        worker.onmessage = (event) => {
-          const data = event.data;
-          if (data?.type === 'status' && data.message) setAlignMessage(String(data.message));
-          if (data?.type === 'progress') {
-            const raw = data.progress;
-            const percent = typeof raw?.progress === 'number' ? Math.round(raw.progress) : null;
-            const label = raw?.file ? `Đang tải model · ${raw.file}` : 'Đang tải model';
-            setAlignMessage(percent == null ? label : `${label} · ${percent}%`);
-          }
-          if (data?.type === 'result') resolve(data);
-          if (data?.type === 'error') reject(new Error(data.message || 'Whisper trong trình duyệt bị lỗi.'));
-        };
-        worker.onerror = () => reject(new Error('Web Worker chạy Whisper bị lỗi.'));
-        worker.postMessage({ type: 'transcribe', audio: pcm.buffer, language: 'vi' }, [pcm.buffer]);
-      }).finally(() => worker.terminate());
-
-      const rough = result.chunks
-        .map((chunk) => ({
-          text: chunk.text,
-          start: typeof chunk.timestamp?.[0] === 'number' ? chunk.timestamp[0] : NaN,
-          end: typeof chunk.timestamp?.[1] === 'number' ? chunk.timestamp[1] : NaN,
-        }))
-        .filter((word) => Number.isFinite(word.start) && Number.isFinite(word.end));
-
-      if (!rough.length) throw new Error('Whisper không tìm được timestamp trong bài hát.');
-
-      const aligned = alignRoughWordsToLyrics(lyrics, rough, duration);
-      if (!aligned.length) throw new Error('Không căn được lyrics với audio.');
-
-      onChange(aligned);
-      const gpu = 'gpu' in navigator ? 'WebGPU' : 'WASM';
-      setAlignMessage(`Auto Sync hoàn tất trên máy của bạn · ${gpu} · ${rough.length} mốc từ.`);
-    } catch (error) {
-      setAlignMessage(error instanceof Error ? error.message : 'Auto Sync thất bại.');
-    } finally {
-      setAligning(false);
-    }
-  }
-
-  function startTapSync() {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = 0;
-    setTime(0);
-    setTapStarts([]);
-    setSelectedLine(0);
-    setTapMode(true);
-    void audio.play();
-  }
-
-  function tapCurrentLine() {
-    const audio = audioRef.current;
-    if (!audio || !tapMode) return;
-    const current = audio.currentTime;
-    const next = [...tapStarts, current];
-    setTapStarts(next);
-    setSelectedLine(Math.min(next.length, timeline.length - 1));
-    if (next.length >= timeline.length) {
-      setTapMode(false);
-      onChange(timelineFromLineStarts(lyrics, next, duration));
-    }
-  }
-
-  function stopTapSync() {
-    const audio = audioRef.current;
-    if (audio) audio.pause();
-    setTapMode(false);
-    if (tapStarts.length) onChange(timelineFromLineStarts(lyrics, tapStarts, duration));
-  }
-
-  function seek(value: number) {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = Math.max(0, Math.min(duration || audio.duration || 0, value));
-    setTime(audio.currentTime);
-  }
-
-  function nudgeLine(index: number, delta: number) {
-    const line = timeline[index];
-    if (!line) return;
-    onChange(setLineTiming(timeline, index, Math.max(0, line.start + delta), Math.max(0.02, line.end + delta)));
-  }
-
-  async function importJson(file: File | undefined) {
-    if (!file) return;
-    try {
-      const parsed = parseKaraokeJson(await file.text());
-      onChange(parsed);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Không đọc được file timing.');
-    } finally {
-      if (importRef.current) importRef.current.value = '';
-    }
-  }
-
-  const selected = timeline[selectedLine];
-
-  return (
-    <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h4 className="font-semibold text-white/90">Karaoke timing editor</h4>
-          <p className="mt-1 text-xs text-white/45">Tap Sync theo từng câu, sau đó tinh chỉnh dòng hoặc từng từ.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={estimate} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/10">Auto estimate</button>
-          <button onClick={() => void autoAlign()} disabled={aligning} className="rounded-lg border border-fuchsia-300/20 bg-fuchsia-300/10 px-3 py-1.5 text-xs font-semibold text-fuchsia-100 hover:bg-fuchsia-300/15 disabled:opacity-50">{aligning ? 'Đang Auto Sync...' : 'Auto Sync trên máy'}</button>
-          {!tapMode ? (
-            <button onClick={startTapSync} className="rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-300/15">Bắt đầu Tap Sync</button>
-          ) : (
-            <>
-              <button onClick={tapCurrentLine} className="rounded-lg bg-amber-300 px-3 py-1.5 text-xs font-bold text-black">Tap câu hiện tại</button>
-              <button onClick={stopTapSync} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/70">Dừng</button>
-            </>
-          )}
-        </div>
-      </div>
-
-      <audio
-        ref={audioRef}
-        src={audioUrl}
-        controls
-        preload="metadata"
-        onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
-        onSeeked={(event) => setTime(event.currentTarget.currentTime)}
-        className="mt-4 h-10 w-full"
-      />
-
-      {alignMessage && <div className="mt-2 rounded-lg border border-white/[.07] bg-white/[.035] px-3 py-2 text-xs text-white/60">{alignMessage}</div>}
-
-      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
-        <input
-          type="range"
-          min={0}
-          max={duration || 1}
-          step={0.01}
-          value={Math.min(time, duration || 1)}
-          onChange={(event) => seek(Number(event.target.value))}
-          className="w-full"
-        />
-        <div className="text-right font-mono text-xs text-white/50">{seconds(time)} / {seconds(duration)}</div>
-      </div>
-
-      {tapMode && (
-        <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/[.07] p-3 text-sm text-amber-100">
-          <div className="font-semibold">Đang sync câu {tapStarts.length + 1}/{timeline.length}</div>
-          <div className="mt-1 text-amber-100/70">{timeline[tapStarts.length]?.text || 'Đã hết câu.'}</div>
-          <div className="mt-2 text-xs text-amber-100/50">Bấm “Tap câu hiện tại” đúng lúc ca sĩ bắt đầu câu. Có thể dừng giữa chừng rồi chỉnh tiếp bằng tay.</div>
-        </div>
-      )}
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button onClick={() => onChange(shiftTimeline(timeline, -0.1))} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/70">Toàn bài -100ms</button>
-        <button onClick={() => onChange(shiftTimeline(timeline, 0.1))} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/70">Toàn bài +100ms</button>
-        <button onClick={() => saveText(JSON.stringify({ lines: timeline }, null, 2), 'karaoke-timing.json', 'application/json')} className="rounded-lg border border-violet-300/20 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-100">JSON</button>
-        <button onClick={() => saveText(exportAss(timeline), 'karaoke.ass')} className="rounded-lg border border-fuchsia-300/20 bg-fuchsia-300/10 px-3 py-1.5 text-xs font-semibold text-fuchsia-100">ASS</button>
-        <button onClick={() => saveText(exportEnhancedLrc(timeline), 'karaoke.lrc')} className="rounded-lg border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-xs font-semibold text-cyan-100">LRC</button>
-        <button onClick={() => saveText(exportSrt(timeline), 'karaoke.srt')} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/70">SRT</button>
-        <button onClick={() => importRef.current?.click()} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/70">Import JSON</button>
-        <input ref={importRef} type="file" accept=".json,application/json" className="hidden" onChange={(event) => void importJson(event.target.files?.[0])} />
-      </div>
-
-      <div className="mt-4 max-h-[28rem] space-y-2 overflow-y-auto pr-1">
-        {timeline.map((line, index) => {
-          const isActive = active.index === index;
-          return (
-            <div key={index} className={`rounded-xl border p-3 ${isActive ? 'border-fuchsia-300/30 bg-fuchsia-300/[.08]' : 'border-white/[.07] bg-white/[.03]'}`}>
-              <button onClick={() => { setSelectedLine(index); seek(line.start); }} className="w-full text-left">
-                <div className="flex items-start justify-between gap-3">
-                  <span className="text-sm leading-6 text-white/80">{line.text}</span>
-                  <span className="shrink-0 font-mono text-[11px] text-white/35">{seconds(line.start)}–{seconds(line.end)}</span>
-                </div>
-              </button>
-              {selectedLine === index && (
-                <div className="mt-3 border-t border-white/[.07] pt-3">
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <label className="text-[11px] text-white/40">Start
-                      <input type="number" step="0.01" value={line.start} onChange={(e) => onChange(setLineTiming(timeline, index, Number(e.target.value), line.end))} className="mt-1 w-full rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 font-mono text-xs text-white/80" />
-                    </label>
-                    <label className="text-[11px] text-white/40">End
-                      <input type="number" step="0.01" value={line.end} onChange={(e) => onChange(setLineTiming(timeline, index, line.start, Number(e.target.value)))} className="mt-1 w-full rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 font-mono text-xs text-white/80" />
-                    </label>
-                    <button onClick={() => nudgeLine(index, -0.05)} className="self-end rounded-lg border border-white/10 px-2 py-1.5 text-xs text-white/60">-50ms</button>
-                    <button onClick={() => nudgeLine(index, 0.05)} className="self-end rounded-lg border border-white/10 px-2 py-1.5 text-xs text-white/60">+50ms</button>
-                  </div>
-                  <button onClick={() => setExpandedWordLine(expandedWordLine === index ? null : index)} className="mt-2 text-xs font-semibold text-fuchsia-200/70">
-                    {expandedWordLine === index ? 'Ẩn timing từng từ' : 'Chỉnh timing từng từ'}
-                  </button>
-                  {expandedWordLine === index && (
-                    <div className="mt-2 space-y-1.5">
-                      {line.words.map((word, wordIndex) => (
-                        <div key={wordIndex} className="grid grid-cols-[1fr_88px_88px] items-center gap-2 rounded-lg bg-black/20 px-2 py-1.5">
-                          <span className="truncate text-xs text-white/65">{word.text}</span>
-                          <input type="number" step="0.01" value={word.start} onChange={(e) => onChange(setWordTiming(timeline, index, wordIndex, Number(e.target.value), word.end))} className="rounded-md border border-white/10 bg-black/25 px-2 py-1 font-mono text-[11px] text-white/70" />
-                          <input type="number" step="0.01" value={word.end} onChange={(e) => onChange(setWordTiming(timeline, index, wordIndex, word.start, Number(e.target.value)))} className="rounded-md border border-white/10 bg-black/25 px-2 py-1 font-mono text-[11px] text-white/70" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {selected && (
-        <div className="mt-4 rounded-xl bg-white/[.035] p-3">
-          <div className="text-xs font-semibold uppercase tracking-[.12em] text-white/35">Preview câu chọn</div>
-          <div className="mt-2 flex flex-wrap gap-x-1.5 gap-y-1 text-lg font-bold">
-            {selected.words.map((word, index) => {
-              const done = time >= word.end;
-              const activeWord = time >= word.start && time < word.end;
-              return <span key={index} className={activeWord ? 'text-fuchsia-300' : done ? 'text-fuchsia-200/75' : 'text-white/35'}>{word.text}</span>;
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  const activeTap=tapRef.current;
+  return <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4">
+    <div className="flex items-start justify-between gap-3"><div><b>Waveform Lyrics Editor</b><p className="mt-1 text-xs text-white/45">Chạm waveform để seek. Kéo mép vùng lyric để chỉnh Start/End chính xác.</p></div><div className="flex shrink-0 items-center gap-2"><button type="button" disabled={!timeline.length} onClick={downloadVtt} className="rounded-lg bg-violet-400/15 px-2.5 py-1.5 text-[10px] font-bold text-violet-100 disabled:opacity-30">↓ VTT</button><span className="rounded-lg bg-fuchsia-300/10 px-2 py-1 font-mono text-[10px] text-fuchsia-100">{sec(time)}s</span></div></div>
+    <audio ref={audioRef} src={audioUrl} controls preload="metadata" onTimeUpdate={e=>setTime(e.currentTarget.currentTime)} onSeeked={e=>setTime(e.currentTarget.currentTime)} className="mt-4 h-10 w-full"/>
+    <canvas ref={canvasRef} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={stopDrag} onPointerCancel={stopDrag} className="mt-4 h-[150px] w-full touch-none rounded-xl border border-white/10" aria-label="Waveform lyrics timing editor"/>
+    <input type="range" min={0} max={duration||1} step="0.01" value={Math.min(time,duration||1)} onChange={e=>seek(Number(e.target.value))} className="mt-3 w-full"/>
+    <section className="mt-4 rounded-xl border border-cyan-300/15 bg-cyan-300/[.04] p-3"><div className="flex items-center justify-between gap-3"><div><b className="text-xs">Word Tap Sync</b><p className="mt-1 text-[10px] text-white/40">Chọn một dòng, phát nhạc rồi chạm nút TAP theo đúng lúc từng từ bắt đầu.</p></div>{tapSync?<button onClick={stopTapSync} className="rounded-lg bg-red-400/15 px-3 py-2 text-xs font-bold text-red-100">Dừng</button>:<button disabled={!timeline[selected]?.words.length} onClick={startTapSync} className="rounded-lg bg-cyan-400/15 px-3 py-2 text-xs font-bold text-cyan-100 disabled:opacity-30">Bắt đầu</button>}</div>{tapSync&&<button onPointerDown={e=>{e.preventDefault();tapWord()}} className="mt-3 h-20 w-full touch-manipulation rounded-2xl bg-cyan-400 text-lg font-black text-[#06131b] active:scale-[.98]">TAP · {timeline[activeTap?.line??selected]?.words[activeTap?.word??0]?.text||'Xong'}</button>}</section>
+    <LyricsConfidencePanel audioUrl={audioUrl} duration={duration} timeline={timeline} onSeek={(value,lineIndex)=>{setSelected(lineIndex);seek(value)}}/>
+    <div className="mt-4 max-h-80 space-y-2 overflow-y-auto pr-1">{timeline.map((line,index)=><div key={`${index}-${line.text}`} className={`rounded-xl border p-3 ${selected===index?'border-fuchsia-300/40 bg-fuchsia-300/[.07]':'border-white/[.07] bg-white/[.025]'}`}><button onClick={()=>{if(tapSync)return;setSelected(index);seek(line.start)}} className="w-full text-left"><span className="text-sm text-white/80">{line.text}</span><span className="float-right font-mono text-[10px] text-white/35">{sec(line.start)}–{sec(line.end)}</span></button>{selected===index&&<><div className="mt-2 flex flex-wrap gap-1">{line.words.map((word,wordIndex)=><span key={`${word.text}-${wordIndex}`} className={`rounded-md px-1.5 py-1 text-[10px] ${tapSync&&activeTap?.line===index&&activeTap.word===wordIndex?'bg-cyan-300 text-black':'bg-white/5 text-white/50'}`}>{word.text} <span className="font-mono opacity-60">{sec(word.start)}</span></span>)}</div><div className="mt-2 grid grid-cols-2 gap-2"><label className="text-[10px] text-white/40">Start<input type="number" min={0} max={line.end-.02} step="0.01" value={line.start} onChange={e=>onChange(setLineTiming(timeline,index,Number(e.target.value),line.end))} className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 font-mono text-xs"/></label><label className="text-[10px] text-white/40">End<input type="number" min={line.start+.02} max={duration} step="0.01" value={line.end} onChange={e=>onChange(setLineTiming(timeline,index,line.start,Number(e.target.value)))} className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 font-mono text-xs"/></label></div></>}</div>)}</div>
+  </div>
 }

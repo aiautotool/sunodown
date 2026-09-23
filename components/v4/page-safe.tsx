@@ -1,0 +1,919 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { Copy, Download, LoaderCircle, Play } from 'lucide-react';
+import { EditorTabs, PrimaryTabs, useV10Nav } from '../v10/design-navigation';
+import { generateVisualizerVideoArt } from '../v7/renderer-art';
+import { LivePreview } from '../v8/live-preview';
+import { BackgroundPanel } from '../v8/background-panel';
+import { LongVideoLoopPanel } from '../v9/long-video-loop-panel';
+import {
+  DEFAULT_LONG_VIDEO_CONFIG,
+  generateLongVisualizerVideo,
+  resolveLongDuration,
+  type LongVideoConfig,
+} from '../v9/long-video-render';
+import { ProjectPanel } from '../v9/project-panel';
+import { BatchSunoLinks, type BatchSunoItem } from '../v9/batch-suno-links';
+import {
+  generateBatchMergedVideo,
+  resolveBatchSongs,
+} from '../v9/batch-video-render';
+import { RenderQueue, type RenderQueueSnapshot } from '../v9/render-queue';
+import {
+  FilenameTemplatePanel,
+  loadFilenameTemplates,
+  renderFilenameTemplate,
+} from '../v9/filename-template';
+import {
+  DEFAULT_OVERLAY_LAYOUT,
+  type OverlayLayout,
+} from '../v9/overlay-layout-panel';
+import {
+  DEFAULT_SUBTITLE_STYLE,
+  SubtitleStylePanel,
+  type SubtitleStyle,
+} from '../v9/subtitle-style-panel';
+import type { V9Project, V9ProjectState } from '../v9/project-store';
+import {
+  DEFAULT_BACKGROUND_CONFIG,
+  sanitizeStoredBackground,
+  type BackgroundConfig,
+} from '../v8/background';
+import KaraokeEditor from '@/app/components/KaraokeEditor';
+import {
+  buildEstimatedKaraokeTimeline,
+  type KaraokeLine,
+} from '@/app/lib/karaoke';
+import { useRenderWakeLock } from '@/hooks/use-render-wake-lock';
+import {
+  LYRIC_MODES,
+  MOTION_LEVELS,
+  PLATFORM_PRESETS,
+  VIDEO_SIZES,
+  VISUAL_TEMPLATES,
+  WAVE_STYLES,
+  type LyricsMode,
+  type MotionIntensity,
+  type PlatformPreset,
+  type Song,
+  type VideoAspect,
+  type VisualTemplate,
+  type WaveStyle,
+} from './types';
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+function isSunoUrl(value: string) {
+  try {
+    const u = new URL(value);
+    return (
+      u.protocol === 'https:' &&
+      (u.hostname === 'suno.com' || u.hostname.endsWith('.suno.com'))
+    );
+  } catch {
+    return false;
+  }
+}
+function fmt(value: number) {
+  const s = Math.max(0, Math.floor(value));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+function isChordToken(token: string) {
+  return /^[A-G](?:#|b)?(?:maj|min|m|dim|aug|sus|add)?\d*(?:\/[A-G](?:#|b)?)?$/.test(
+    token,
+  );
+}
+function stripChords(lyrics: string) {
+  if (!lyrics) return '';
+  return lyrics
+    .split(/\r?\n/)
+    .map((line) => {
+      const cleaned = line
+        .replace(/\[([^\]]+)\]/g, (full, inner: string) =>
+          inner.trim().split(/\s+/).every(isChordToken) ? '' : full,
+        )
+        .replace(/\(([^)]+)\)/g, (full, inner: string) =>
+          inner.trim().split(/\s+/).every(isChordToken) ? '' : full,
+        )
+        .replace(/[ \t]{2,}/g, ' ')
+        .trimEnd();
+      const tokens = cleaned.trim().split(/\s+/).filter(Boolean);
+      return tokens.length > 0 && tokens.every(isChordToken) ? '' : cleaned;
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+export default function V4SafePage() {
+  const nav = useV10Nav();
+  const [url, setUrl] = useState('https://suno.com/s/0Uzw4fboYOyOzHjc');
+  const [song, setSong] = useState<Song | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [action, setAction] = useState<'preview' | 'full' | null>(null);
+  const [queueBusy, setQueueBusy] = useState(false);
+  const screenAwake = useRenderWakeLock(action !== null || queueBusy);
+  const [progress, setProgress] = useState(0);
+  const [aspect, setAspect] = useState<VideoAspect>('9:16');
+  const [wave, setWave] = useState<WaveStyle>('bars');
+  const [template, setTemplate] = useState<VisualTemplate>('cover-motion');
+  const [motion, setMotion] = useState<MotionIntensity>('medium');
+  const [lyrics, setLyrics] = useState<LyricsMode>('off');
+  const [preset, setPreset] = useState<PlatformPreset>('tiktok');
+  const [previewStart, setPreviewStart] = useState(0);
+  const [resultBlob, setResultBlob] = useState<Blob | null>(null);
+  const [resultUrl, setResultUrl] = useState('');
+  const [copied, setCopied] = useState<'lyrics' | 'style' | null>(null);
+  const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeLine[]>([]);
+  const [background, setBackground] = useState<BackgroundConfig>(
+    DEFAULT_BACKGROUND_CONFIG,
+  );
+  const [longVideo, setLongVideo] = useState<LongVideoConfig>(
+    DEFAULT_LONG_VIDEO_CONFIG,
+  );
+  const [activeProject, setActiveProject] = useState<V9Project | null>(null);
+  const [layout, setLayout] = useState<OverlayLayout>(DEFAULT_OVERLAY_LAYOUT);
+  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>(
+    DEFAULT_SUBTITLE_STYLE,
+  );
+  const [subtitleConfigOpen, setSubtitleConfigOpen] = useState(false);
+  const [batchItems, setBatchItems] = useState<BatchSunoItem[]>([]);
+  const [queueSnapshot, setQueueSnapshot] =
+    useState<RenderQueueSnapshot | null>(null);
+  const lastResolved = useRef('');
+  const resolveNow = useRef<(() => void) | null>(null);
+  const restoringProject = useRef(false);
+
+  useEffect(
+    () => () => {
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
+    },
+    [resultUrl],
+  );
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('suno-v8-background');
+      if (raw) setBackground(sanitizeStoredBackground(JSON.parse(raw)));
+    } catch {}
+  }, []);
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('suno-karaoke-timeline-change', {
+        detail: karaokeTimeline,
+      }),
+    );
+  }, [karaokeTimeline]);
+  useEffect(() => {
+    if (!song) return;
+    const timer = window.setTimeout(
+      () =>
+        window.dispatchEvent(
+          new CustomEvent('suno-song-resolved', { detail: { ...song, url } }),
+        ),
+      0,
+    );
+    return () => window.clearTimeout(timer);
+  }, [song, url]);
+  useEffect(() => {
+    const onScene = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          layout?: OverlayLayout;
+          subtitleStyle?: SubtitleStyle;
+        }>
+      ).detail;
+      if (detail?.layout) setLayout(detail.layout);
+      if (detail?.subtitleStyle) setSubtitleStyle(detail.subtitleStyle);
+    };
+    window.addEventListener('suno-v9-preset-scene', onScene);
+    return () => window.removeEventListener('suno-v9-preset-scene', onScene);
+  }, []);
+  useEffect(() => {
+    const input = url.trim();
+    if (!isSunoUrl(input)) return;
+    const controller = new AbortController();
+    let inFlight = false;
+    const resolve = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      setLoading(true);
+      setError('');
+      try {
+        const response = await fetch('/api/resolve', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ input }),
+          signal: controller.signal,
+        });
+        const data = await response.json();
+        if (!response.ok)
+          throw new Error(data.error || 'Không đọc được bài hát.');
+        lastResolved.current = input;
+        setSong(data);
+        setCopied(null);
+        const clean = stripChords(data?.lyrics || '');
+        if (!restoringProject.current) {
+          setPreviewStart(0);
+          setKaraokeTimeline(
+            clean && data?.duration
+              ? buildEstimatedKaraokeTimeline(clean, data.duration)
+              : [],
+          );
+        }
+        restoringProject.current = false;
+      } catch (cause) {
+        restoringProject.current = false;
+        if (!controller.signal.aborted)
+          setError(
+            cause instanceof Error ? cause.message : 'Không đọc được bài hát.',
+          );
+      } finally {
+        inFlight = false;
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+    const timer = window.setTimeout(() => {
+      if (input !== lastResolved.current) void resolve();
+    }, 300);
+    resolveNow.current = () => {
+      window.clearTimeout(timer);
+      void resolve();
+    };
+    return () => {
+      resolveNow.current = null;
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [url]);
+
+  const projectState: V9ProjectState = {
+    url,
+    aspect,
+    wave,
+    template,
+    motion,
+    lyrics,
+    preset,
+    previewStart,
+    karaokeTimeline,
+    background,
+    longVideo,
+  };
+  function openProject(project: V9Project) {
+    const s = project.state;
+    restoringProject.current = true;
+    setAspect(s.aspect);
+    setWave(s.wave);
+    setTemplate(s.template);
+    setMotion(s.motion);
+    setLyrics(s.lyrics);
+    setPreset(s.preset);
+    setPreviewStart(Math.max(0, Number(s.previewStart) || 0));
+    setKaraokeTimeline(
+      Array.isArray(s.karaokeTimeline) ? s.karaokeTimeline : [],
+    );
+    setBackground(sanitizeStoredBackground(s.background));
+    setLongVideo({ ...DEFAULT_LONG_VIDEO_CONFIG, ...s.longVideo });
+    setResultBlob(null);
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    setResultUrl('');
+    lastResolved.current = '';
+    setUrl(s.url);
+  }
+  async function paste() {
+    try {
+      setUrl((await navigator.clipboard.readText()).trim());
+    } catch {
+      setError('Không đọc được bộ nhớ tạm.');
+    }
+  }
+  async function copyText(kind: 'lyrics' | 'style', text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(kind);
+      window.setTimeout(() => setCopied((c) => (c === kind ? null : c)), 1200);
+    } catch {
+      setError('Không sao chép được nội dung.');
+    }
+  }
+  async function render(mode: 'preview' | 'full') {
+    if (!song) return;
+    setAction(mode);
+    setProgress(0);
+    setError('');
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    setResultUrl('');
+    setResultBlob(null);
+    try {
+      const opts = {
+        motion,
+        lyrics,
+        layout,
+        subtitleStyle,
+        startSeconds: mode === 'preview' ? previewStart : 0,
+        previewSeconds: mode === 'preview' ? 10 : undefined,
+        onProgress: setProgress,
+        karaokeTimeline: lyrics === 'off' ? undefined : karaokeTimeline,
+        background,
+        loopDuration: resolveLongDuration(song.duration || 0, longVideo),
+      };
+      const blob =
+        mode === 'full' && batchItems.length > 1
+          ? await generateBatchMergedVideo(
+              await resolveBatchSongs(
+                batchItems.map((x) => x.url),
+                setProgress,
+              ),
+              aspect,
+              wave,
+              template,
+              opts,
+            )
+          : mode === 'full' && longVideo.enabled
+            ? await generateLongVisualizerVideo(
+                song,
+                aspect,
+                wave,
+                template,
+                opts,
+                longVideo,
+              )
+            : await generateVisualizerVideoArt(
+                song,
+                aspect,
+                wave,
+                template,
+                opts,
+              );
+      setProgress(100);
+      setResultBlob(blob);
+      setResultUrl(URL.createObjectURL(blob));
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Không xuất được video.',
+      );
+    } finally {
+      setAction(null);
+    }
+  }
+  function enqueueFullRender() {
+    if (!song) return;
+    const songSnap = { ...song },
+      aspectSnap = aspect,
+      waveSnap = wave,
+      templateSnap = template,
+      motionSnap = motion,
+      lyricsSnap = lyrics,
+      layoutSnap = {
+        wave: { ...layout.wave },
+        subtitle: { ...layout.subtitle },
+      },
+      subtitleSnap = { ...subtitleStyle },
+      karaokeSnap = karaokeTimeline.map((x) => ({ ...x })),
+      backgroundSnap = { ...background },
+      longSnap = { ...longVideo },
+      batchUrls = batchItems.map((x) => x.url);
+    const duration = resolveLongDuration(songSnap.duration || 0, longSnap);
+    const filename = `${renderFilenameTemplate(loadFilenameTemplates().video, { title: songSnap.title || 'suno', creator: songSnap.creator, template: templateSnap, aspect: aspectSnap })}.mp4`;
+    setQueueSnapshot({
+      title: `${songSnap.title || 'Suno'} · ${fmt(duration)} · ${aspectSnap}`,
+      filename,
+      run: async (onProgress = () => {}) => {
+        const opts = {
+          motion: motionSnap,
+          lyrics: lyricsSnap,
+          layout: layoutSnap,
+          subtitleStyle: subtitleSnap,
+          startSeconds: 0,
+          onProgress,
+          karaokeTimeline: lyricsSnap === 'off' ? undefined : karaokeSnap,
+          background: backgroundSnap,
+          loopDuration: duration,
+        };
+        if (batchUrls.length > 1)
+          return generateBatchMergedVideo(
+            await resolveBatchSongs(batchUrls, onProgress),
+            aspectSnap,
+            waveSnap,
+            templateSnap,
+            opts,
+          );
+        if (longSnap.enabled)
+          return generateLongVisualizerVideo(
+            songSnap,
+            aspectSnap,
+            waveSnap,
+            templateSnap,
+            opts,
+            longSnap,
+          );
+        return generateVisualizerVideoArt(
+          songSnap,
+          aspectSnap,
+          waveSnap,
+          templateSnap,
+          opts,
+        );
+      },
+    });
+  }
+
+  const size = VIDEO_SIZES[aspect],
+    totalOutputDuration = resolveLongDuration(song?.duration || 0, longVideo),
+    previewMax = Math.max(0, (song?.duration || 10) - 10),
+    previewEnd = Math.min(
+      song?.duration || previewStart + 10,
+      previewStart + 10,
+    ),
+    cleanLyrics = stripChords(song?.lyrics || '');
+  return (
+    <main className="min-h-screen bg-[#080812] text-white">
+      <section className="mx-auto max-w-6xl px-5 py-8">
+        <p className="font-bold">
+          Suno Grab <span className="text-violet-300">v10</span>
+        </p>
+        <h1 className="mt-8 text-4xl font-bold">
+          Tải nhạc Suno & tạo video sóng nhạc
+        </h1>
+        <PrimaryTabs value={nav.primary} onChange={nav.setPrimary} />
+        <div className="relative mt-3 md:mt-7">
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+              e.preventDefault();
+              if (!isSunoUrl(url.trim())) {
+                setError('Vui lòng nhập một liên kết Suno hợp lệ.');
+                return;
+              }
+              resolveNow.current?.();
+            }}
+            placeholder="Dán liên kết Suno..."
+            className="h-14 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pr-24"
+          />
+          <button
+            onClick={paste}
+            className="absolute right-2 top-2 h-10 rounded-xl bg-violet-500/20 px-4 font-bold"
+          >
+            Dán
+          </button>
+        </div>
+        <BatchSunoLinks
+          currentUrl={url}
+          onSelect={(value) => {
+            lastResolved.current = '';
+            setUrl(value);
+          }}
+          onItemsChange={setBatchItems}
+        />
+        {loading && (
+          <p className="mt-3 text-sm text-white/50">Đang lấy bài hát…</p>
+        )}
+        {error && (
+          <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm">
+            {error}
+          </p>
+        )}
+        {song && (
+          <article className="mobile-song-card mt-5 rounded-3xl border border-white/10 bg-white/5 p-5">
+            <div className="mobile-song-head flex gap-4">
+              {song.picture && (
+                <img
+                  src={song.picture}
+                  alt="Ảnh bìa"
+                  className="size-24 rounded-2xl object-cover"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-xl font-bold">{song.title}</h2>
+                <p className="text-sm text-white/50">{song.creator}</p>
+                <audio controls src={song.audio} className="mt-2 w-full" />
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2">
+              {song.lyrics && (
+                <details className="group rounded-2xl border border-white/[.07] bg-black/15">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-bold">Lời bài hát</p>
+                      <p className="text-[11px] text-white/35">
+                        Nhấn để mở / thu gọn lời bài hát
+                      </p>
+                    </div>
+                    <span className="text-xs text-white/35 transition-transform group-open:rotate-180">
+                      ⌄
+                    </span>
+                  </summary>
+                  <div className="border-t border-white/[.06] px-4 py-4">
+                    <div className="mb-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => copyText('lyrics', cleanLyrics)}
+                        className="rounded-lg bg-white/[.07] px-3 py-2 text-xs font-semibold text-white/70"
+                      >
+                        <Copy className="mr-1 inline size-3.5" />
+                        {copied === 'lyrics' ? 'Đã sao chép' : 'Sao chép'}
+                      </button>
+                    </div>
+                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-sans text-xs leading-6 text-white/65">
+                      {cleanLyrics}
+                    </pre>
+                    {song.duration && (
+                      <KaraokeEditor
+                        audioUrl={song.audio}
+                        lyrics={cleanLyrics}
+                        duration={song.duration}
+                        timeline={karaokeTimeline}
+                        onChange={setKaraokeTimeline}
+                      />
+                    )}
+                  </div>
+                </details>
+              )}
+              {(song.style || song.tags) && (
+                <details className="group rounded-2xl border border-white/[.07] bg-black/15">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-bold">Phong cách</p>
+                      <p className="text-[11px] text-white/35">
+                        Nhấn để mở / thu gọn phong cách bài hát
+                      </p>
+                    </div>
+                    <span className="text-xs text-white/35 transition-transform group-open:rotate-180">
+                      ⌄
+                    </span>
+                  </summary>
+                  <div className="border-t border-white/[.06] px-4 py-4">
+                    <div className="mb-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyText('style', song.style || song.tags || '')
+                        }
+                        className="rounded-lg bg-white/[.07] px-3 py-2 text-xs font-semibold text-white/70"
+                      >
+                        <Copy className="mr-1 inline size-3.5" />
+                        {copied === 'style' ? 'Đã sao chép' : 'Sao chép'}
+                      </button>
+                    </div>
+                    <p className="whitespace-pre-wrap text-xs leading-6 text-white/65">
+                      {song.style || song.tags}
+                    </p>
+                    {song.style && song.tags && song.tags !== song.style && (
+                      <p className="mt-3 border-t border-white/[.05] pt-3 text-[11px] leading-5 text-white/40">
+                        {song.tags}
+                      </p>
+                    )}
+                  </div>
+                </details>
+              )}
+            </div>
+            <EditorTabs value={nav.editor} onChange={nav.setEditor} />
+            <div
+              id="studio-editor"
+              data-editor-tab={nav.editor}
+              className="mobile-studio mt-3 grid gap-4"
+            >
+              <div data-tool-panel="project">
+                <ProjectPanel
+                  state={projectState}
+                  defaultName={song.title || 'Dự án Suno'}
+                  activeProjectId={activeProject?.id || null}
+                  onActiveProject={setActiveProject}
+                  onOpen={openProject}
+                />
+              </div>
+              <section
+                data-editor-panel="video"
+                id="video-config"
+                className="rounded-2xl border border-white/[.06] bg-white/[.02] p-4"
+              >
+                <p className="mb-3 text-[10px] font-bold uppercase tracking-[.14em] text-violet-300">
+                  Bước 1 · Mẫu thiết lập
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {PLATFORM_PRESETS.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setPreset(item.id);
+                        if (item.id !== 'custom') setAspect(item.aspect);
+                      }}
+                      className={`rounded-lg px-3 py-2 text-xs ${preset === item.id ? 'bg-emerald-400/20 ring-1 ring-emerald-300/30' : 'bg-white/5'}`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+              <section
+                data-editor-panel="video"
+                className="rounded-2xl border border-white/[.06] bg-white/[.02] p-4"
+              >
+                <p className="mb-3 text-[10px] font-bold uppercase tracking-[.14em] text-cyan-300">
+                  Bước 2 · Tùy chỉnh
+                </p>
+                <div className="grid gap-4">
+                  <div>
+                    <b className="text-sm">Kiểu trình bày</b>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {VISUAL_TEMPLATES.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => setTemplate(item.id)}
+                          className={`rounded-lg px-3 py-2 text-xs ${template === item.id ? 'bg-fuchsia-400/20' : 'bg-white/5'}`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <b className="text-sm">Tỉ lệ</b>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(Object.keys(VIDEO_SIZES) as VideoAspect[]).map(
+                        (item) => (
+                          <button
+                            key={item}
+                            onClick={() => setAspect(item)}
+                            className={`rounded-lg px-3 py-2 text-xs ${aspect === item ? 'bg-violet-400/20' : 'bg-white/5'}`}
+                          >
+                            {item}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-cyan-300/10 bg-cyan-300/[.035] p-3">
+                    <div className="flex items-center justify-between">
+                      <b className="text-sm">Loại sóng</b>
+                      <span className="rounded-md bg-cyan-300/10 px-2 py-1 text-[10px] font-semibold text-cyan-100">
+                        {WAVE_STYLES.find((item) => item.id === wave)?.label}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[10px] text-white/35">
+                      Vuốt ngang để xem đủ các kiểu sóng.
+                    </p>
+                    <div className="mt-2 flex snap-x snap-mandatory gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      {WAVE_STYLES.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          aria-pressed={wave === item.id}
+                          onClick={() => setWave(item.id)}
+                          className={`min-h-11 shrink-0 snap-start rounded-xl border px-4 py-2.5 text-xs font-semibold whitespace-nowrap ${wave === item.id ? 'border-cyan-300/40 bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/25' : 'border-white/[.07] bg-white/5 text-white/60'}`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <b className="text-sm">Chuyển động</b>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {MOTION_LEVELS.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => setMotion(item.id)}
+                          className={`rounded-lg px-3 py-2 text-xs ${motion === item.id ? 'bg-amber-400/20' : 'bg-white/5'}`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <div data-editor-panel="video">
+                <FilenameTemplatePanel />
+                <LongVideoLoopPanel
+                  songDuration={song.duration || 0}
+                  value={longVideo}
+                  onChange={setLongVideo}
+                />
+              </div>
+              <div data-editor-panel="bg" id="background-config">
+                <BackgroundPanel
+                  value={background}
+                  onChange={setBackground}
+                  onError={setError}
+                />
+              </div>
+              <section
+                data-editor-panel="lyrics"
+                id="lyrics-config"
+                className="rounded-2xl border border-white/[.06] bg-white/[.02] p-4"
+              >
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[.14em] text-pink-300">
+                    Bước 4 · Lời bài hát
+                  </p>
+                  {lyrics !== 'off' && (
+                    <button
+                      type="button"
+                      onClick={() => setSubtitleConfigOpen(true)}
+                      className="rounded-lg bg-fuchsia-300/10 px-3 py-2 text-xs font-semibold text-fuchsia-100"
+                    >
+                      ⚙ Edit style
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {LYRIC_MODES.map((item) => (
+                    <button
+                      key={item.id}
+                      disabled={!song.lyrics && item.id !== 'off'}
+                      onClick={() => {
+                        setLyrics(item.id);
+                        if (item.id === 'off') setSubtitleConfigOpen(false);
+                      }}
+                      className={`rounded-lg px-3 py-2 text-xs ${lyrics === item.id ? 'bg-pink-400/20' : 'bg-white/5'} disabled:opacity-30`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+                {lyrics !== 'off' && (
+                  <p className="mt-2 text-[10px] text-white/35">
+                    Bật subtitle rồi mới có thể chỉnh style. Nắm trực tiếp
+                    subtitle trên preview để kéo vị trí.
+                  </p>
+                )}
+              </section>
+              {lyrics !== 'off' && subtitleConfigOpen && (
+                <SubtitleStylePanel
+                  value={subtitleStyle}
+                  onChange={setSubtitleStyle}
+                  onClose={() => setSubtitleConfigOpen(false)}
+                />
+              )}{' '}
+              <div id="effects-slot" data-tool-panel="effects" />
+            </div>
+            <section
+              id="render-zone"
+              className="mobile-render-zone mt-5 rounded-2xl border border-violet-300/15 bg-violet-400/[.045] p-4"
+            >
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[.14em] text-violet-300">
+                    Bước 6 · Xem trước và xuất video
+                  </p>
+                  <b>Kiểm tra trước khi xuất video</b>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] text-white/40">
+                    {size.width}×{size.height}
+                  </span>
+                  {longVideo.enabled && (
+                    <span className="rounded-full bg-amber-300/10 px-2 py-1 text-[10px] text-amber-100">
+                      {fmt(totalOutputDuration)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <LivePreview
+                song={song}
+                aspect={aspect}
+                template={template}
+                wave={wave}
+                motion={motion}
+                lyrics={lyrics}
+                karaokeTimeline={karaokeTimeline}
+                background={background}
+                layout={layout}
+                onLayoutChange={setLayout}
+                subtitleStyle={subtitleStyle}
+                start={previewStart}
+                exporting={!!action || queueBusy}
+                resultUrl={resultUrl}
+              />
+              <div className="mb-4 rounded-xl border border-cyan-300/10 bg-black/20 p-3">
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className="font-semibold text-white/65">
+                    Chọn đoạn xem trước 10 giây
+                  </span>
+                  <span className="rounded-full bg-cyan-300/10 px-2 py-1 font-mono text-cyan-100">
+                    {fmt(previewStart)} → {fmt(previewEnd)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max={previewMax}
+                  step="0.1"
+                  value={Math.min(previewStart, previewMax)}
+                  onChange={(e) => setPreviewStart(Number(e.target.value))}
+                  disabled={previewMax <= 0}
+                  className="mt-3 w-full accent-cyan-300 disabled:opacity-30"
+                  aria-label="Vị trí bắt đầu xem trước 10 giây"
+                />
+                <div className="mt-1 flex justify-between text-[10px] text-white/30">
+                  <span>0:00</span>
+                  <span>{fmt(song.duration || 0)}</span>
+                </div>
+              </div>
+              {(action || queueBusy) && (
+                <div className="mb-4 rounded-xl border border-violet-300/15 bg-violet-300/[.055] p-3">
+                  <p role="status" className="mb-2 text-[11px] text-amber-100">
+                    {screenAwake
+                      ? 'Đang giữ màn hình sáng trong lúc render · có thể chuyển tab trong app.'
+                      : 'Đang render · thiết bị không hỗ trợ giữ màn hình sáng hoặc quyền chưa được cấp.'}
+                  </p>
+                  <div className="flex justify-between text-xs">
+                    <span>
+                      {queueBusy
+                        ? 'Đang render trong hàng đợi'
+                        : action === 'preview'
+                          ? `Đang xuất 10 giây · ${fmt(previewStart)} → ${fmt(previewEnd)}`
+                          : 'Đang xuất toàn bộ video'}
+                    </span>
+                    <b>
+                      {queueBusy ? 'Xem % ở Queue' : `${Math.round(progress)}%`}
+                    </b>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-violet-400 transition-[width] duration-200"
+                      style={{
+                        width: `${Math.max(0, Math.min(100, progress))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="grid gap-2 sm:grid-cols-3">
+                <button
+                  disabled={!!action || queueBusy}
+                  onClick={() => render('preview')}
+                  className="h-11 rounded-xl bg-cyan-400/10 text-sm font-bold disabled:opacity-40"
+                >
+                  <Play className="mr-2 inline size-4" />
+                  Preview 10 giây
+                </button>
+                <button
+                  data-full-render-anchor
+                  disabled={!!action || queueBusy}
+                  onClick={() => render('full')}
+                  className="h-11 rounded-xl bg-violet-500 text-sm font-bold disabled:opacity-40"
+                >
+                  {action === 'full' && (
+                    <LoaderCircle className="mr-2 inline size-4 animate-spin" />
+                  )}
+                  {batchItems.length > 1
+                    ? `Ghép ${batchItems.length} bài → 1 video`
+                    : longVideo.enabled
+                      ? 'Xuất video dài'
+                      : 'Xuất toàn bộ'}
+                </button>
+                <button
+                  disabled={!!action}
+                  onClick={enqueueFullRender}
+                  className="h-11 rounded-xl border border-violet-300/20 bg-violet-300/10 text-sm font-bold text-violet-100 disabled:opacity-40"
+                >
+                  + Thêm vào hàng đợi
+                </button>
+              </div>
+              <RenderQueue
+                enqueue={queueSnapshot}
+                onBusyChange={setQueueBusy}
+              />
+              {resultUrl && resultBlob && (
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-emerald-300/15 bg-emerald-300/[.06] px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-emerald-200">
+                      Video đã xuất xong
+                    </p>
+                    <p className="truncate text-[10px] text-white/35">
+                      Xem trực tiếp ở khung preview phía trên.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() =>
+                      saveBlob(
+                        resultBlob,
+                        `${renderFilenameTemplate(loadFilenameTemplates().video, { title: song.title || 'suno', creator: song.creator, template, aspect })}.mp4`,
+                      )
+                    }
+                    className="shrink-0 rounded-lg bg-emerald-300/10 px-3 py-2 text-xs font-bold text-emerald-100"
+                  >
+                    <Download className="mr-1 inline size-3.5" />
+                    Tải video
+                  </button>
+                </div>
+              )}
+            </section>
+          </article>
+        )}
+      </section>
+    </main>
+  );
+}

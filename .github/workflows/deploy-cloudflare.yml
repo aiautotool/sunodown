@@ -2,7 +2,7 @@ name: Deploy Cloudflare Worker
 
 on:
   push:
-    branches: [main, v12]
+    branches: [main, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12]
   workflow_dispatch:
 
 permissions:
@@ -20,48 +20,77 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Mark deploy pending
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context=sunodown/cloudflare-deploy -f description="Build and deploy in progress"
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22.13.0'
           cache: npm
-
       - name: Install dependencies
         run: npm ci
-
       - name: Build
         run: npm run build
-
+      - name: Configure AI renderer secrets
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v12'
+        run: |
+          printf '%s' "$VIBES_META_SESSION" | npx wrangler secret put VIBES_META_SESSION --config services/vibes-renderer/wrangler.jsonc
+          printf '%s' "$AI_RENDER_TOKEN" | npx wrangler secret put RENDER_SERVICE_TOKEN --config services/vibes-renderer/wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          VIBES_META_SESSION: ${{ secrets.VIBES_META_SESSION }}
+          AI_RENDER_TOKEN: ${{ secrets.AI_RENDER_TOKEN }}
+      - name: Deploy AI music-video renderer
+        id: ai_renderer
+        continue-on-error: true
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v12'
+        run: npx wrangler deploy --config services/vibes-renderer/wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Provision background-render resources
-        if: github.ref == 'refs/heads/v12'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v6' || github.ref == 'refs/heads/v7' || github.ref == 'refs/heads/v8' || github.ref == 'refs/heads/v9' || github.ref == 'refs/heads/v10' || github.ref == 'refs/heads/v11' || github.ref == 'refs/heads/v12'
         run: node scripts/provision-v6-cloudflare.mjs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Connect SunoDown to AI renderer
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v12') && steps.ai_renderer.outcome == 'success'
+        run: |
+          printf '%s' 'https://sunodown-vibes-renderer.long-wind-7153.workers.dev/render' | npx wrangler secret put AI_RENDER_SERVICE_URL --config wrangler.v6.generated.json
+          printf '%s' "$AI_RENDER_TOKEN" | npx wrangler secret put RENDER_SERVICE_TOKEN --config wrangler.v6.generated.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AI_RENDER_TOKEN: ${{ secrets.AI_RENDER_TOKEN }}
+      - name: Configure Web Push
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v12'
+        run: |
+          if [ -n "$VAPID_PUBLIC_KEY" ] && [ -n "$VAPID_PRIVATE_KEY" ]; then
+            printf '%s' "$VAPID_PUBLIC_KEY" | npx wrangler secret put VAPID_PUBLIC_KEY --config wrangler.v6.generated.json
+            printf '%s' "$VAPID_PRIVATE_KEY" | npx wrangler secret put VAPID_PRIVATE_KEY --config wrangler.v6.generated.json
+          else
+            echo "::warning::VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY are not configured; Web Push remains disabled."
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
 
-      - name: Deploy v12 with background-render bindings
-        if: github.ref == 'refs/heads/v12'
+      - name: Deploy with background-render bindings
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v6' || github.ref == 'refs/heads/v7' || github.ref == 'refs/heads/v8' || github.ref == 'refs/heads/v9' || github.ref == 'refs/heads/v10' || github.ref == 'refs/heads/v11' || github.ref == 'refs/heads/v12'
         run: npx wrangler deploy --config wrangler.v6.generated.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Deploy main
-        if: github.ref == 'refs/heads/main'
+      - name: Deploy standard branches
+        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/v6' && github.ref != 'refs/heads/v7' && github.ref != 'refs/heads/v8' && github.ref != 'refs/heads/v9' && github.ref != 'refs/heads/v10' && github.ref != 'refs/heads/v11' && github.ref != 'refs/heads/v12'
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
       - name: Mark deploy success
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context=sunodown/cloudflare-deploy -f description="Build and Cloudflare deploy succeeded"
-
       - name: Mark deploy failure
         if: failure()
         env:
