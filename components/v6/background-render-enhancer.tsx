@@ -37,7 +37,8 @@ export function V6BackgroundRenderEnhancer() {
     [job, setJob] = useState<any>(null),
     [song, setSong] = useState<ResolvedSong | null>(null),
     [aiAvailable, setAiAvailable] = useState(false),
-    [visualizerAvailable, setVisualizerAvailable] = useState(false);
+    [visualizerAvailable, setVisualizerAvailable] = useState(false),
+    [activityTick, setActivityTick] = useState(0);
   useEffect(() => {
     navigator.serviceWorker?.register('/sw.js').catch(() => {});
     fetch('/api/render/capabilities', { cache: 'no-store' })
@@ -65,6 +66,7 @@ export function V6BackgroundRenderEnhancer() {
   }, []);
   useEffect(() => {
     if (!job || ['completed', 'failed'].includes(job.status)) return;
+    const activity = setInterval(() => setActivityTick((tick) => tick + 1), 900);
     const t = setInterval(async () => {
       try {
         const r = await fetch(`/api/render/jobs/${job.id}`, {
@@ -73,7 +75,10 @@ export function V6BackgroundRenderEnhancer() {
         if (r.ok) setJob(await r.json());
       } catch {}
     }, 3000);
-    return () => clearInterval(t);
+    return () => {
+      clearInterval(t);
+      clearInterval(activity);
+    };
   }, [job?.id, job?.status]);
   async function enableNotify() {
     if (
@@ -177,7 +182,7 @@ export function V6BackgroundRenderEnhancer() {
     }
     const mount = () => {
       const disabled = !song?.lyrics || !aiAvailable;
-      box!.innerHTML = `<div><p class="text-sm font-bold text-violet-100">Xuất video trên server <span class="ml-1 rounded-md bg-fuchsia-300/10 px-1.5 py-0.5 text-[9px]">AI MV</span></p><p class="mt-1 text-xs leading-5 text-white/45">AI Music Video đọc lời bài hát, tạo từng cảnh rồi ghép với audio gốc. Đóng web vẫn tiếp tục.</p></div><div class="mt-3 grid gap-2 sm:grid-cols-2"><button data-ai-render ${disabled ? 'disabled' : ''} class="h-11 rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-500 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">✨ Tạo AI Music Video</button><button data-bg-render ${visualizerAvailable ? '' : 'disabled'} class="h-11 rounded-xl border border-violet-300/20 bg-violet-500/15 font-bold text-violet-100 disabled:cursor-not-allowed disabled:opacity-40">☁️ ${visualizerAvailable ? 'Visualizer nền' : 'Visualizer chưa khả dụng'}</button><button data-notify class="h-10 rounded-xl border border-white/10 bg-white/[.05] text-xs font-bold sm:col-span-2">${permission === 'granted' ? '🔔 Đã cho phép thông báo' : '🔔 Bật thông báo khi xong'}</button></div>${!aiAvailable ? '<p class="mt-2 text-[10px] text-amber-200/70">AI renderer đang chờ cấu hình Vibes.</p>' : !song?.lyrics ? '<p class="mt-2 text-[10px] text-amber-200/70">Dán bài Suno có lyrics để bật AI Music Video.</p>' : ''}${job ? `<div class="mt-3 rounded-xl bg-black/20 p-3"><div class="flex justify-between text-xs"><span>${job.status}</span><b>${job.progress || 0}%</b></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10"><i class="block h-full rounded-full bg-violet-400" style="width:${job.progress || 0}%"></i></div>${job.resultUrl ? `<a class="mt-3 block text-xs font-bold text-cyan-300" href="${job.resultUrl}">▶ Xem video đã xuất</a>` : ''}${job.error ? `<p class="mt-2 text-xs text-red-300">${job.error}</p>` : ''}<p class="mt-2 break-all text-[10px] text-white/35">Tác vụ: ${job.id}</p></div>` : ''}`;
+      box!.innerHTML = `<div><p class="text-sm font-bold text-violet-100">Xuất video trên server <span class="ml-1 rounded-md bg-fuchsia-300/10 px-1.5 py-0.5 text-[9px]">AI MV</span></p><p class="mt-1 text-xs leading-5 text-white/45">AI Music Video đọc lời bài hát, tạo từng cảnh rồi ghép với audio gốc. Đóng web vẫn tiếp tục.</p></div><div class="mt-3 grid gap-2 sm:grid-cols-2"><button data-ai-render ${disabled ? 'disabled' : ''} class="h-11 rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-500 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">✨ Tạo AI Music Video</button><button data-bg-render ${visualizerAvailable ? '' : 'disabled'} class="h-11 rounded-xl border border-violet-300/20 bg-violet-500/15 font-bold text-violet-100 disabled:cursor-not-allowed disabled:opacity-40">☁️ ${visualizerAvailable ? 'Visualizer nền' : 'Visualizer chưa khả dụng'}</button><button data-notify class="h-10 rounded-xl border border-white/10 bg-white/[.05] text-xs font-bold sm:col-span-2">${permission === 'granted' ? '🔔 Đã cho phép thông báo' : '🔔 Bật thông báo khi xong'}</button></div>${!aiAvailable ? '<p class="mt-2 text-[10px] text-amber-200/70">AI renderer đang chờ cấu hình Vibes.</p>' : !song?.lyrics ? '<p class="mt-2 text-[10px] text-amber-200/70">Dán bài Suno có lyrics để bật AI Music Video.</p>' : ''}${job ? `<div class="mt-3 rounded-xl bg-black/20 p-3"><div class="flex items-center justify-between gap-3 text-xs"><span class="flex items-center gap-2"><i class="${['completed','failed'].includes(job.status) ? '' : 'animate-spin'} inline-block size-3 rounded-full border-2 border-violet-300/30 border-t-violet-300"></i><span>${job.status}</span><span class="text-white/35">${['completed','failed'].includes(job.status) ? '' : '· server đang xử lý'}</span></span><b>${job.progress || 0}%</b></div><div class="relative mt-2 h-2 overflow-hidden rounded-full bg-white/10"><i class="block h-full rounded-full bg-violet-400 transition-[width] duration-500" style="width:${job.progress || 0}%"></i>${['completed','failed'].includes(job.status) ? '' : `<i class="absolute inset-y-0 w-1/3 animate-pulse rounded-full bg-white/20" style="left:${(activityTick * 11) % 100 - 30}%"></i>`}</div>${!['completed','failed'].includes(job.status) ? `<div class="mt-2 flex items-center gap-1.5 text-[10px] text-violet-200/70"><span class="inline-flex gap-0.5"><i class="size-1 animate-bounce rounded-full bg-violet-300"></i><i class="size-1 animate-bounce rounded-full bg-violet-300 [animation-delay:120ms]"></i><i class="size-1 animate-bounce rounded-full bg-violet-300 [animation-delay:240ms]"></i></span><span>Vẫn đang chạy · cập nhật trạng thái mỗi 3 giây</span></div>` : ''}${job.resultUrl ? `<a class="mt-3 block text-xs font-bold text-cyan-300" href="${job.resultUrl}">▶ Xem video đã xuất</a>` : ''}${job.error ? `<p class="mt-2 text-xs text-red-300">${job.error}</p>` : ''}<p class="mt-2 break-all text-[10px] text-white/35">Tác vụ: ${job.id}</p></div>` : ''}`;
       box!
         .querySelector('[data-ai-render]')
         ?.addEventListener('click', () =>
@@ -195,6 +200,6 @@ export function V6BackgroundRenderEnhancer() {
         );
     };
     mount();
-  }, [permission, job, song, aiAvailable, visualizerAvailable]);
+  }, [permission, job, song, aiAvailable, visualizerAvailable, activityTick]);
   return null;
 }
