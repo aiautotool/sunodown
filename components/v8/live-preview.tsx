@@ -463,7 +463,7 @@ export function LivePreview(props: Props) {
         context.save();
         context.translate((size.width * q.x) / 100, (size.height * q.y) / 100);
         context.scale(s, s);
-        context.translate(-size.width * 0.5, -size.height * 0.58);
+        context.translate(-size.width * 0.5, -(size.height - 119));
         drawKaraokeOverlay(
           context,
           p.karaokeTimeline!,

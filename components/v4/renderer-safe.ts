@@ -554,7 +554,7 @@ function withSubtitleLayout(
   ctx.save();
   ctx.translate((w * pos.x) / 100, (h * pos.y) / 100);
   ctx.scale(s, s);
-  ctx.translate(-w * 0.5, -h * 0.58);
+  ctx.translate(-w * 0.5, -(h - 119));
   draw();
   ctx.restore();
 }
