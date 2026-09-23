@@ -61,6 +61,9 @@ export function LivePreview(props: Props) {
   current.current = props;
   const effects = useRef<EffectConfig>(getStoredEffects());
   const [playing, setPlaying] = useState(false);
+  const [selectedOverlay, setSelectedOverlay] = useState<
+    'wave' | 'subtitle' | 'title' | 'creator' | null
+  >(null);
   const [time, setTime] = useState(props.start);
   const [status, setStatus] = useState('Đang tải ảnh xem trước…');
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
@@ -461,37 +464,50 @@ export function LivePreview(props: Props) {
               role="img"
               aria-label="Xem trước video đồng bộ cùng âm thanh"
               className="h-full w-full"
+              onPointerDown={() => setSelectedOverlay(null)}
             />
             {props.layout &&
               props.onLayoutChange &&
-              (['wave', 'subtitle'] as const).map((key) => {
+              (['wave', 'subtitle', 'title', 'creator'] as const).map((key) => {
                 if (key === 'subtitle' && props.lyrics === 'off') return null;
-                const p = props.layout![key],
+                const p =
+                    props.layout?.[key] ||
+                    (key === 'title'
+                      ? { x: 50, y: 67, scale: 100 }
+                      : key === 'creator'
+                        ? { x: 50, y: 75, scale: 100 }
+                        : key === 'subtitle'
+                          ? { x: 50, y: 70, scale: 100 }
+                          : { x: 50, y: 82, scale: 100 }),
                   isWave = key === 'wave',
+                  isText = key === 'title' || key === 'creator',
                   ww = isWave
                     ? Math.max(24, (64 * p.scale) / 100)
-                    : Math.max(34, (72 * p.scale) / 100),
+                    : isText
+                      ? Math.max(
+                          24,
+                          ((key === 'title' ? 52 : 34) * p.scale) / 100,
+                        )
+                      : Math.max(34, (72 * p.scale) / 100),
                   hh = isWave
                     ? Math.max(8, (18 * p.scale) / 100)
-                    : Math.max(10, (18 * p.scale) / 100);
+                    : isText
+                      ? Math.max(
+                          7,
+                          ((key === 'title' ? 13 : 9) * p.scale) / 100,
+                        )
+                      : Math.max(10, (18 * p.scale) / 100);
                 return (
                   <div
                     key={key}
                     role="button"
                     tabIndex={0}
-                    aria-label={
-                      isWave
-                        ? 'Kéo trực tiếp vùng sóng nhạc'
-                        : 'Kéo trực tiếp subtitle'
-                    }
-                    title={
-                      isWave
-                        ? 'Nắm trực tiếp sóng để kéo'
-                        : 'Nắm ngay trên chữ subtitle để kéo'
-                    }
+                    aria-label={`Kéo trực tiếp ${key}`}
+                    title={`Nắm trực tiếp ${key} để kéo`}
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      setSelectedOverlay(key);
                       const el = e.currentTarget,
                         box = el.parentElement!.getBoundingClientRect(),
                         startX = e.clientX,
@@ -530,15 +546,15 @@ export function LivePreview(props: Props) {
                     className="absolute z-20 -translate-x-1/2 cursor-grab active:cursor-grabbing"
                     style={{
                       left: `${p.x}%`,
-                      top: isWave
-                        ? `calc(${p.y}% - ${hh / 2}%)`
-                        : `calc(${p.y}% - ${(58 / 100) * hh}%)`,
+                      top: `calc(${p.y}% - ${hh / 2}%)`,
                       width: `${ww}%`,
                       height: `${hh}%`,
                       touchAction: 'none',
                     }}
                   >
-                    <span className="pointer-events-none absolute inset-0 rounded-md border border-transparent transition-colors hover:border-white/25" />
+                    <span
+                      className={`pointer-events-none absolute inset-0 rounded-md border transition-colors ${selectedOverlay === key ? 'border-violet-400 bg-violet-400/[.06]' : 'border-transparent'}`}
+                    />
                   </div>
                 );
               })}
