@@ -15,6 +15,7 @@ import {
   Music2,
   Play,
   Plus,
+  Save,
   Settings,
   SlidersHorizontal,
   Sparkles,
@@ -47,6 +48,11 @@ import { buildEstimatedKaraokeTimeline, exportSrt } from '@/app/lib/karaoke';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 import type { KaraokeLine } from '@/app/lib/karaoke';
 import { EditorTimeline, type MediaClip } from '@/components/editor-timeline';
+import {
+  clearProjectData,
+  loadProjectData,
+  saveProjectData,
+} from '@/components/project-store';
 
 type Song = {
   title: string;
@@ -303,7 +309,9 @@ export default function CreatorStudio() {
     [playbackStart, setPlaybackStart] = useState(0),
     [previewTime, setPreviewTime] = useState(0),
     [panel, setPanel] = useState('style'),
-    [mobileTools, setMobileTools] = useState(false);
+    [mobileTools, setMobileTools] = useState(false),
+    [savingProject, setSavingProject] = useState(false),
+    [savedProject, setSavedProject] = useState(false);
   const [wave, setWave] = useState<WaveStyle>('bars'),
     [template, setTemplate] = useState<VisualTemplate>('cover-motion'),
     [aspect, setAspect] = useState<VideoAspect>('16:9'),
@@ -321,10 +329,10 @@ export default function CreatorStudio() {
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
   const timer = useRef<number | undefined>(undefined);
-  async function resolve(value = url) {
+  async function resolve(value = url): Promise<Song | null> {
     if (!valid(value)) {
       setError('Paste a valid Suno link.');
-      return;
+      return null;
     }
     setBusy(true);
     setError('');
@@ -347,8 +355,10 @@ export default function CreatorStudio() {
           : [],
       );
       setMediaClips([]);
+      return data as Song;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to load this song.');
+      return null;
     } finally {
       setBusy(false);
     }
@@ -501,18 +511,67 @@ export default function CreatorStudio() {
       setProjects(JSON.parse(localStorage.getItem('sundown-projects') || '[]'));
     } catch {}
   }, []);
-  function saveProject() {
+  async function saveProject() {
     if (!song || !url) return;
-    const next = [
-      { url, title: song.title },
-      ...projects.filter((x) => x.url !== url),
-    ].slice(0, 30);
-    setProjects(next);
-    localStorage.setItem('sundown-projects', JSON.stringify(next));
+    setSavingProject(true);
+    setSavedProject(false);
+    try {
+      const media = await Promise.all(
+        mediaClips.map(async ({ url: clipUrl, ...clip }) => ({
+          ...clip,
+          blob: await (await fetch(clipUrl)).blob(),
+        })),
+      );
+      await saveProjectData({
+        url,
+        title: song.title,
+        updatedAt: Date.now(),
+        wave,
+        template,
+        aspect,
+        lyrics,
+        effects,
+        layout,
+        trimStart,
+        trimEnd,
+        karaokeTimeline,
+        media,
+      });
+      const next = [
+        { url, title: song.title },
+        ...projects.filter((x) => x.url !== url),
+      ].slice(0, 30);
+      setProjects(next);
+      localStorage.setItem('sundown-projects', JSON.stringify(next));
+      setSavedProject(true);
+      window.setTimeout(() => setSavedProject(false), 1800);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Không lưu được dự án.');
+    } finally {
+      setSavingProject(false);
+    }
   }
-  function openProject(item: { url: string; title: string }) {
+  async function openProject(item: { url: string; title: string }) {
     setView('create');
-    change(item.url);
+    setUrl(item.url);
+    if (!(await resolve(item.url))) return;
+    const project = await loadProjectData(item.url);
+    if (!project) return;
+    setWave(project.wave);
+    setTemplate(project.template);
+    setAspect(project.aspect);
+    setLyrics(project.lyrics);
+    setEffects(project.effects);
+    setLayout(project.layout);
+    setTrimStart(project.trimStart);
+    setTrimEnd(project.trimEnd);
+    setKaraokeTimeline(project.karaokeTimeline);
+    setMediaClips(
+      project.media.map(({ blob, ...clip }) => ({
+        ...clip,
+        url: URL.createObjectURL(blob),
+      })),
+    );
   }
   return (
     <div className="sd-app">
@@ -564,7 +623,9 @@ export default function CreatorStudio() {
               <h1>{view[0].toUpperCase() + view.slice(1)}</h1>
             </div>
             {view === 'projects' && song && (
-              <button onClick={saveProject}>+ Save current project</button>
+              <button onClick={() => void saveProject()}>
+                + Save current project
+              </button>
             )}
           </div>
           {view === 'projects' && (
@@ -626,6 +687,7 @@ export default function CreatorStudio() {
                 onClick={() => {
                   localStorage.removeItem('sundown-projects');
                   setProjects([]);
+                  void clearProjectData();
                 }}
               >
                 Clear saved projects
@@ -757,6 +819,18 @@ export default function CreatorStudio() {
                 <span>{fmt(song.duration)}</span>
               </div>
             </div>
+            <button
+              className={`sd-save-project ${savedProject ? 'saved' : ''}`}
+              disabled={savingProject}
+              onClick={() => void saveProject()}
+            >
+              <Save />
+              {savingProject
+                ? 'Đang lưu dự án…'
+                : savedProject
+                  ? 'Đã lưu dự án'
+                  : 'Lưu dự án'}
+            </button>
             <hr />
             <h3>Recommended</h3>
             <div className="sd-presets">
