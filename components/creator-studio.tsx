@@ -309,6 +309,9 @@ export default function CreatorStudio() {
     [rendering, setRendering] = useState(false),
     [progress, setProgress] = useState(0),
     [downloading, setDownloading] = useState('');
+  const [resultBlob, setResultBlob] = useState<Blob | null>(null),
+    [resultUrl, setResultUrl] = useState(''),
+    [resultName, setResultName] = useState('');
   const [layout, setLayout] = useState<OverlayLayout>(DEFAULT_OVERLAY_LAYOUT);
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
@@ -393,17 +396,33 @@ export default function CreatorStudio() {
           effects: config,
         },
       );
-      const object = URL.createObjectURL(blob),
-        a = document.createElement('a');
-      a.href = object;
-      a.download = `${(song.title || 'suno').replace(/[\\/:*?"<>|]/g, '-')}.mp4`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(object), 2000);
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
+      const name = `${safeName(song.title)}${mode === '30' ? '-30s' : ''}.mp4`;
+      setResultBlob(blob);
+      setResultUrl(URL.createObjectURL(blob));
+      setResultName(name);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Không thể tạo video.');
     } finally {
       setRendering(false);
     }
+  }
+  async function saveVideo() {
+    if (!resultBlob) return;
+    const file = new File([resultBlob], resultName || 'suno-video.mp4', {
+      type: 'video/mp4',
+    });
+    if (
+      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) &&
+      navigator.share &&
+      navigator.canShare?.({ files: [file] })
+    ) {
+      try {
+        await navigator.share({ files: [file], title: resultName });
+        return;
+      } catch {}
+    }
+    saveBlob(resultBlob, resultName || 'suno-video.mp4');
   }
   async function downloadAudio(format: 'm4a' | 'mp3' | 'wav') {
     if (!song || downloading) return;
@@ -448,6 +467,12 @@ export default function CreatorStudio() {
       if (timer.current) clearTimeout(timer.current);
     },
     [],
+  );
+  useEffect(
+    () => () => {
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
+    },
+    [resultUrl],
   );
   useEffect(() => {
     const config: EffectConfig = {
@@ -681,8 +706,22 @@ export default function CreatorStudio() {
                 exporting={rendering}
                 autoPlay={autoPreview}
                 fullPlayback
+                resultUrl={resultUrl || undefined}
               />
             </div>
+            {resultUrl && (
+              <div className="sd-result-actions">
+                <div>
+                  <b>Video ready</b>
+                  <span>Play the exported video above or save it now.</span>
+                </div>
+                <button onClick={saveVideo}>
+                  <Download />
+                  <span className="sd-save-desktop">Download video</span>
+                  <span className="sd-save-mobile">Save to Photos</span>
+                </button>
+              </div>
+            )}
             <div className="sd-timeline">
               <div className="sd-ruler">
                 <span>00:00</span>
