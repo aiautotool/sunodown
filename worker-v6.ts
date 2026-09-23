@@ -8,6 +8,10 @@ async function dispatch(env:Env,id:string):Promise<'done'|'pending'>{const row=a
 async function safeFetch(request:Request,env:Env,ctx:ExecutionContext){
   const url=new URL(request.url);
   if(request.method==='GET'&&env.ASSETS&&(url.pathname.startsWith('/_next/static/')||url.pathname==='/favicon.svg'||url.pathname==='/apple-touch-icon.png'||url.pathname==='/og.png'||url.pathname==='/sw.js')){
+    if(url.pathname.startsWith('/_next/static/')){
+      const assetUrl=new URL(request.url);assetUrl.pathname=url.pathname.replace('/_next/','/assets-next/');
+      return env.ASSETS.fetch(new Request(assetUrl,request));
+    }
     return env.ASSETS.fetch(request);
   }
   try{return await app.fetch(request,env,ctx)}catch(error){
