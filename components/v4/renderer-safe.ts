@@ -580,6 +580,7 @@ function drawTemplate(
   p: Palette,
   preserveBackground = false,
   layout?: OverlayLayout,
+  textStyles?: OverlayTextStyles,
 ) {
   if (preserveBackground) {
     drawMeta(
