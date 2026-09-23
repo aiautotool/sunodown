@@ -268,6 +268,7 @@ function drawMeta(
   layout?: OverlayLayout,
   textStyles?: OverlayTextStyles,
 ) {
+  if (song.title === '__HIDE_META__') return;
   ctx.save();
   const fs = Math.max(26, Math.min(54, Math.round(w * 0.039))),
     art = titleTypography(template, fs);

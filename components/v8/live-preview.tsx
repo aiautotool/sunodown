@@ -448,7 +448,7 @@ export function LivePreview(props: Props) {
       if (!bitmap.width) return;
       paint(
         context,
-        p.song,
+        { ...p.song, title: '__HIDE_META__', creator: null },
         size.width,
         size.height,
         absoluteTime,
@@ -684,6 +684,23 @@ export function LivePreview(props: Props) {
                       touchAction: 'none',
                     }}
                   >
+                    {(key === 'title' || key === 'creator') && (
+                      <strong
+                        className={`sd-dom-overlay-text ${key}`}
+                        style={{
+                          color:
+                            p.overlayTextStyles?.[key].color ||
+                            (key === 'title' ? '#ffffff' : '#d1d5db'),
+                          fontFamily:
+                            p.overlayTextStyles?.[key].font || 'system-ui',
+                          fontSize: `${Math.max(10, p.scale * (key === 'title' ? 0.28 : 0.15))}px`,
+                        }}
+                      >
+                        {key === 'title'
+                          ? props.song.title
+                          : props.song.creator || 'Suno'}
+                      </strong>
+                    )}
                     <span
                       className={`pointer-events-none absolute inset-0 rounded-md border transition-colors ${selectedOverlay === key ? 'border-violet-400 bg-violet-400/[.06]' : 'border-transparent'}`}
                     />
