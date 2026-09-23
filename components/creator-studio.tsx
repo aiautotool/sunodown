@@ -12,14 +12,12 @@ import {
   ListMusic,
   Menu,
   Music2,
-  Pause,
   Play,
   Plus,
   Settings,
   SlidersHorizontal,
   Sparkles,
   Upload,
-  Volume2,
 } from 'lucide-react';
 import { generateVisualizerVideoArt } from '@/components/v7/renderer-art';
 import {
@@ -276,8 +274,7 @@ export default function CreatorStudio() {
     [song, setSong] = useState<Song | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
-    [playing, setPlaying] = useState(false),
-    [time, setTime] = useState(0),
+    [playbackStart, setPlaybackStart] = useState(0),
     [panel, setPanel] = useState('style'),
     [mobileTools, setMobileTools] = useState(false);
   const [wave, setWave] = useState<WaveStyle>('bars'),
@@ -290,7 +287,7 @@ export default function CreatorStudio() {
   const [layout, setLayout] = useState<OverlayLayout>(DEFAULT_OVERLAY_LAYOUT);
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
-  const audio = useRef<HTMLAudioElement>(null),
+  const timeline = useRef<HTMLDivElement>(null),
     timer = useRef<number | undefined>(undefined);
   async function resolve(value = url) {
     if (!valid(value)) {
@@ -308,7 +305,7 @@ export default function CreatorStudio() {
         data = await r.json();
       if (!r.ok) throw Error(data.error || 'Unable to load this song.');
       setSong(data);
-      setTime(0);
+      setPlaybackStart(0);
       setTrimStart(0);
       setTrimEnd(data.duration || 30);
     } catch (e) {
@@ -328,19 +325,17 @@ export default function CreatorStudio() {
     const value = await navigator.clipboard.readText();
     change(value);
   }
-  async function toggle() {
-    if (!audio.current) return;
-    if (audio.current.paused) {
-      await audio.current.play();
-      setPlaying(true);
-    } else {
-      audio.current.pause();
-      setPlaying(false);
-    }
-  }
-  function seek(value: number) {
-    if (audio.current) audio.current.currentTime = value;
-    setTime(value);
+  function seekTimeline(clientX: number) {
+    if (!song?.duration || !timeline.current) return;
+    const box = timeline.current.getBoundingClientRect(),
+      next = Math.max(
+        0,
+        Math.min(
+          song.duration,
+          ((clientX - box.left) / box.width) * song.duration,
+        ),
+      );
+    setPlaybackStart(next);
   }
   async function renderVideo(mode: 'cut' | '30' = 'cut') {
     if (!song || rendering) return;
@@ -519,51 +514,38 @@ export default function CreatorStudio() {
                 lyrics={lyrics}
                 layout={layout}
                 onLayoutChange={setLayout}
-                start={trimStart}
+                start={playbackStart}
                 exporting={rendering}
                 autoPlay
                 fullPlayback
               />
             </div>
-            <div className="sd-player">
-              <button onClick={toggle}>{playing ? <Pause /> : <Play />}</button>
-              <span>
-                {fmt(time)} / {fmt(song.duration)}
-              </span>
-              <input
-                type="range"
-                min="0"
-                max={song.duration || 1}
-                value={time}
-                onChange={(e) => seek(+e.target.value)}
-              />
-              <Volume2 />
-              <SlidersHorizontal />
-            </div>
-            <audio
-              ref={audio}
-              src={song.audio}
-              onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
-              onEnded={() => setPlaying(false)}
-            />
             <div className="sd-timeline">
               <div className="sd-ruler">
                 <span>00:00</span>
-                <span>00:30</span>
-                <span>01:00</span>
-                <span>01:30</span>
-                <span>02:00</span>
-                <span>02:30</span>
-                <span>03:00</span>
+                <span>{fmt((song.duration || 0) / 6)}</span>
+                <span>{fmt(((song.duration || 0) * 2) / 6)}</span>
+                <span>{fmt(((song.duration || 0) * 3) / 6)}</span>
+                <span>{fmt(((song.duration || 0) * 4) / 6)}</span>
+                <span>{fmt(((song.duration || 0) * 5) / 6)}</span>
+                <span>{fmt(song.duration)}</span>
               </div>
-              <div className="sd-film">
+              <div
+                className="sd-film"
+                ref={timeline}
+                onPointerDown={(e) => seekTimeline(e.clientX)}
+              >
                 {[0, 1, 2, 3, 4, 5].map((i) => (
                   <div
                     key={i}
                     style={{ backgroundImage: `url(${song.picture})` }}
                   />
                 ))}
-                <i />
+                <i
+                  style={{
+                    left: `${song.duration ? (playbackStart / song.duration) * 100 : 0}%`,
+                  }}
+                />
               </div>
             </div>
           </section>
