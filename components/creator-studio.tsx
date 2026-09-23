@@ -270,6 +270,13 @@ function ToolControls(p: {
 }
 
 export default function CreatorStudio() {
+  const [view, setView] = useState<
+    'create' | 'projects' | 'library' | 'jobs' | 'settings'
+  >('create');
+  const [autoPreview, setAutoPreview] = useState(true);
+  const [projects, setProjects] = useState<{ url: string; title: string }[]>(
+    [],
+  );
   const [url, setUrl] = useState(''),
     [song, setSong] = useState<Song | null>(null),
     [busy, setBusy] = useState(false),
@@ -399,6 +406,24 @@ export default function CreatorStudio() {
       new CustomEvent('suno-effects-change', { detail: config }),
     );
   }, [effects]);
+  useEffect(() => {
+    try {
+      setProjects(JSON.parse(localStorage.getItem('sundown-projects') || '[]'));
+    } catch {}
+  }, []);
+  function saveProject() {
+    if (!song || !url) return;
+    const next = [
+      { url, title: song.title },
+      ...projects.filter((x) => x.url !== url),
+    ].slice(0, 30);
+    setProjects(next);
+    localStorage.setItem('sundown-projects', JSON.stringify(next));
+  }
+  function openProject(item: { url: string; title: string }) {
+    setView('create');
+    change(item.url);
+  }
   return (
     <div className="sd-app">
       <header className="sd-header">
@@ -424,19 +449,101 @@ export default function CreatorStudio() {
       <aside className="sd-sidebar">
         <nav>
           {[
-            [Plus, 'Create'],
-            [Folder, 'Projects'],
-            [BookOpen, 'Library'],
-            [ListMusic, 'Jobs'],
-            [Settings, 'Settings'],
-          ].map(([Icon, label], i) => (
-            <button key={String(label)} className={i === 0 ? 'active' : ''}>
+            [Plus, 'Create', 'create'],
+            [Folder, 'Projects', 'projects'],
+            [BookOpen, 'Library', 'library'],
+            [ListMusic, 'Jobs', 'jobs'],
+            [Settings, 'Settings', 'settings'],
+          ].map(([Icon, label, id]) => (
+            <button
+              key={String(id)}
+              onClick={() => setView(id as typeof view)}
+              className={view === id ? 'active' : ''}
+            >
               {<Icon />}
               <span>{String(label)}</span>
             </button>
           ))}
         </nav>
       </aside>
+      {view !== 'create' && (
+        <section className="sd-section-panel">
+          <div className="sd-section-head">
+            <div>
+              <small>SUNODOWN</small>
+              <h1>{view[0].toUpperCase() + view.slice(1)}</h1>
+            </div>
+            {view === 'projects' && song && (
+              <button onClick={saveProject}>+ Save current project</button>
+            )}
+          </div>
+          {view === 'projects' && (
+            <div className="sd-section-grid">
+              {projects.length ? (
+                projects.map((x) => (
+                  <button key={x.url} onClick={() => openProject(x)}>
+                    <Folder />
+                    <b>{x.title}</b>
+                    <span>{x.url}</span>
+                  </button>
+                ))
+              ) : (
+                <p>No saved projects yet.</p>
+              )}
+            </div>
+          )}
+          {view === 'library' && (
+            <div className="sd-section-grid">
+              {song ? (
+                <button onClick={() => setView('create')}>
+                  <img src={song.picture} />
+                  <b>{song.title}</b>
+                  <span>{song.creator || 'Suno'}</span>
+                </button>
+              ) : (
+                <p>Paste a Suno link to add a song to your library.</p>
+              )}
+            </div>
+          )}
+          {view === 'jobs' && (
+            <div className="sd-job-card">
+              <ListMusic />
+              <div>
+                <b>{rendering ? 'Rendering video' : 'No active render job'}</b>
+                <span>
+                  {rendering
+                    ? `${Math.round(progress)}% complete`
+                    : 'Completed videos download automatically.'}
+                </span>
+              </div>
+              {rendering && <i style={{ width: `${progress}%` }} />}
+            </div>
+          )}
+          {view === 'settings' && (
+            <div className="sd-settings">
+              <label>
+                <span>
+                  <b>Auto-play preview</b>
+                  <small>Play the full song when media is ready.</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={autoPreview}
+                  onChange={(e) => setAutoPreview(e.target.checked)}
+                />
+              </label>
+              <button
+                onClick={() => {
+                  localStorage.removeItem('sundown-projects');
+                  setProjects([]);
+                }}
+              >
+                Clear saved projects
+              </button>
+            </div>
+          )}
+        </section>
+      )}
       {!song ? (
         <main className="sd-empty">
           <div className="sd-mobile-brand">
@@ -516,7 +623,7 @@ export default function CreatorStudio() {
                 onLayoutChange={setLayout}
                 start={playbackStart}
                 exporting={rendering}
-                autoPlay
+                autoPlay={autoPreview}
                 fullPlayback
               />
             </div>
