@@ -114,7 +114,7 @@ function stripChords(lyrics: string) {
 
 export default function V4SafePage() {
   const nav = useV10Nav();
-  const [url, setUrl] = useState('https://suno.com/s/0Uzw4fboYOyOzHjc');
+  const [url, setUrl] = useState('');
   const [song, setSong] = useState<Song | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -437,14 +437,13 @@ export default function V4SafePage() {
   return (
     <main className="min-h-screen bg-[#080812] text-white">
       <section className="mx-auto max-w-6xl px-5 py-8">
-        <p className="font-bold">
-          Suno Grab <span className="text-violet-300">v10</span>
-        </p>
-        <h1 className="mt-8 text-4xl font-bold">
-          Tải nhạc Suno & tạo video sóng nhạc
-        </h1>
+        <div className="creator-intro mx-auto max-w-3xl py-7 text-center sm:py-11">
+          <span className="rounded-full border border-violet-400/20 bg-violet-400/[.08] px-3 py-1 text-[10px] font-bold uppercase tracking-[.18em] text-violet-200">Music creator studio</span>
+          <h1 className="mt-5 text-3xl font-semibold tracking-tight sm:text-5xl">Biến bài hát thành nội dung sẵn sàng chia sẻ.</h1>
+          <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-white/40">Dán liên kết Suno để nghe thử, tải âm thanh hoặc tạo video âm nhạc trong cùng một quy trình.</p>
+        </div>
         <PrimaryTabs value={nav.primary} onChange={nav.setPrimary} />
-        <div className="relative mt-3 md:mt-7">
+        <div className="creator-source relative mx-auto mt-3 max-w-3xl md:mt-4">
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
@@ -458,11 +457,11 @@ export default function V4SafePage() {
               resolveNow.current?.();
             }}
             placeholder="Dán liên kết Suno..."
-            className="h-14 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pr-24"
+            className="h-16 w-full rounded-2xl border border-white/10 bg-[#111118] px-5 pr-24 text-sm shadow-2xl shadow-black/30 outline-none focus:border-violet-400/45 focus:ring-4 focus:ring-violet-500/10"
           />
           <button
             onClick={paste}
-            className="absolute right-2 top-2 h-10 rounded-xl bg-violet-500/20 px-4 font-bold"
+            className="absolute right-2 top-2 h-12 rounded-xl bg-violet-500 px-5 text-sm font-bold shadow-lg shadow-violet-500/20"
           >
             Dán
           </button>

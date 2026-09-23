@@ -4,7 +4,6 @@ import {V5PresetGalleryEnhancer} from '@/components/v5/preset-gallery-enhancer';
 import {V6BackgroundRenderEnhancer} from '@/components/v6/background-render-enhancer';
 import {V7AppShell} from '@/components/v7/app-shell';
 import {V8EffectsPanel} from '@/components/v8/effects-panel';
-import {V8DefaultSunoSample} from '@/components/v8/default-suno-sample';
 import {V8DesignLayoutEnhancer} from '@/components/v8/design-layout-enhancer';
 import {V10LibraryEnhancer} from '@/components/v10/local-library';
 import {V10LoudnessMeter} from '@/components/v10/loudness-meter';
@@ -17,7 +16,7 @@ import {BottomTools} from '@/components/v10/design-navigation';
 import {SafeZoneOverlay} from '@/components/v10/safe-zone-overlay';
 const faq=[{question:'Cách tải nhạc Suno về điện thoại?',answer:'Sao chép liên kết bài hát Suno, dán vào Suno Tools, chờ hệ thống nhận diện rồi chọn MP3, WAV, M4A, video, ảnh bìa hoặc lời bài hát để lưu.'},{question:'Có thể tải Suno MP3, WAV và M4A không?',answer:'Có. Công cụ hỗ trợ tải M4A và chuyển đổi sang MP3 hoặc WAV trực tiếp trên trình duyệt khi thiết bị hỗ trợ.'},{question:'Có thể tải video Suno không?',answer:'Có. Bạn có thể tải video gốc khi nguồn có video hoặc tạo video sóng nhạc từ bài hát.'},{question:'Có thể tải được ảnh bìa và lời bài hát Suno không?',answer:'Có. Khi dữ liệu có sẵn, bạn có thể lưu ảnh bìa, lời bài hát và thông tin bài hát.'},{question:'Có cần cài ứng dụng để tải nhạc Suno không?',answer:'Không. Suno Tools chạy trực tiếp trên trình duyệt điện thoại và máy tính.'}];
 const structuredData={'@context':'https://schema.org','@graph':[{'@type':'WebApplication',name:'Suno Tools',url:'https://suno.aiautotool.com/',applicationCategory:'MultimediaApplication',operatingSystem:'Web',inLanguage:'vi',description:'Công cụ tải nhạc Suno MP3, WAV, M4A, video, ảnh bìa, lời bài hát và tạo video sóng nhạc.',offers:{'@type':'Offer',price:'0',priceCurrency:'VND'},featureList:['Tải Suno MP3','Tải Suno WAV','Tải Suno M4A','Tải video Suno','Tải ảnh bìa Suno','Tải lyrics Suno','Tạo video sóng nhạc']},{'@type':'FAQPage',mainEntity:faq.map(x=>({'@type':'Question',name:x.question,acceptedAnswer:{'@type':'Answer',text:x.answer}}))}]};
-export default function Page(){return <><V8DefaultSunoSample/><V8DesignLayoutEnhancer/><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(structuredData)}}/><V7AppShell><style>{`
+export default function Page(){return <><V8DesignLayoutEnhancer/><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(structuredData)}}/><V7AppShell><style>{`
 html[data-v10-primary="song"] [data-primary-panel="library"],html[data-v10-primary="song"] #render-zone .v10-queue-only{display:none!important}
 html[data-v10-primary="library"] .v10-core,html[data-v10-primary="library"] .v10-side>*:not([data-primary-panel="library"]):not(.v10-bottom-tools){display:none!important}
 html[data-v10-primary="queue"] #studio-editor,html[data-v10-primary="queue"] .mobile-song-head,html[data-v10-primary="queue"] .v10-editor-nav{display:none!important}
