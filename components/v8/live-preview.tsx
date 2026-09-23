@@ -80,6 +80,9 @@ export function LivePreview(props: Props) {
     new Map<string, { bitmap?: ImageBitmap; video?: HTMLVideoElement }>(),
   );
   const [sceneVersion, setSceneVersion] = useState(0);
+  const mediaSourceKey = (props.mediaClips || [])
+    .map((clip) => `${clip.id}:${clip.type}:${clip.url}`)
+    .join('|');
 
   useEffect(() => {
     let cancelled = false;
@@ -117,8 +120,7 @@ export function LivePreview(props: Props) {
     )
       .then(() => {
         if (cancelled) return;
-        sceneMedia.current.forEach(({ bitmap, video }) => {
-          bitmap?.close();
+        sceneMedia.current.forEach(({ video }) => {
           if (video) {
             video.pause();
             video.removeAttribute('src');
@@ -139,8 +141,8 @@ export function LivePreview(props: Props) {
       );
     return () => {
       cancelled = true;
-      loaded.forEach(({ bitmap, video }) => {
-        bitmap?.close();
+      if (sceneMedia.current === loaded) sceneMedia.current = new Map();
+      loaded.forEach(({ video }) => {
         if (video) {
           video.pause();
           video.removeAttribute('src');
@@ -148,7 +150,7 @@ export function LivePreview(props: Props) {
         }
       });
     };
-  }, [props.mediaClips]);
+  }, [mediaSourceKey]);
 
   const previewEnd = props.fullPlayback
     ? props.song.duration || props.start + 10
@@ -181,7 +183,6 @@ export function LivePreview(props: Props) {
           );
         image = await createImageBitmap(await response.blob());
         if (controller.signal.aborted) {
-          image.close();
           return;
         }
         setBitmap(image);
@@ -197,7 +198,6 @@ export function LivePreview(props: Props) {
     })();
     return () => {
       controller.abort();
-      image?.close();
     };
   }, [props.song.picture]);
 
@@ -220,7 +220,6 @@ export function LivePreview(props: Props) {
           if (!response.ok) throw new Error('Không tải được ảnh nền.');
           createdBitmap = await createImageBitmap(await response.blob());
           if (cancelled) {
-            createdBitmap.close();
             return;
           }
           setBackgroundBitmap(createdBitmap);
@@ -266,7 +265,6 @@ export function LivePreview(props: Props) {
     })();
     return () => {
       cancelled = true;
-      if (createdBitmap) createdBitmap.close();
       if (createdVideo) {
         createdVideo.pause();
         createdVideo.removeAttribute('src');
@@ -369,7 +367,7 @@ export function LivePreview(props: Props) {
           ? sceneMedia.current.get(activeClip.id)
           : undefined,
         customBackground = Boolean(activeMedia) || background.mode !== 'suno';
-      if (activeMedia?.bitmap) {
+      if (activeMedia?.bitmap?.width) {
         drawMediaBackground(
           context,
           activeMedia.bitmap,
@@ -406,7 +404,7 @@ export function LivePreview(props: Props) {
           absoluteTime,
         );
         applyBackgroundFinish(context, size.width, size.height, background);
-      } else if (background.mode === 'image' && backgroundBitmap) {
+      } else if (background.mode === 'image' && backgroundBitmap?.width) {
         drawMediaBackground(
           context,
           backgroundBitmap,
@@ -445,6 +443,7 @@ export function LivePreview(props: Props) {
           applyBackgroundFinish(context, size.width, size.height, background);
         }
       }
+      if (!bitmap.width) return;
       paint(
         context,
         p.song,
