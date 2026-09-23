@@ -96,6 +96,11 @@ function ToolControls(p: {
   setEffects: (v: VideoEffect[]) => void;
   layout: OverlayLayout;
   setLayout: (v: OverlayLayout) => void;
+  trimStart: number;
+  trimEnd: number;
+  duration: number;
+  setTrimStart: (v: number) => void;
+  setTrimEnd: (v: number) => void;
 }) {
   const rows = [
     ['style', 'Style', Sparkles],
@@ -103,6 +108,7 @@ function ToolControls(p: {
     ['lyrics', 'Lyrics', FileText],
     ['format', 'Format', SlidersHorizontal],
     ['effects', 'Effects', Sparkles],
+    ['trim', 'Cut & duration', SlidersHorizontal],
   ] as const;
   const toggle = (id: VideoEffect) =>
     p.setEffects(
@@ -224,6 +230,39 @@ function ToolControls(p: {
                     {x.icon} {x.label}
                   </button>
                 ))}
+              {id === 'trim' && (
+                <div className="sd-trim">
+                  <label>
+                    Start{' '}
+                    <input
+                      type="range"
+                      min="0"
+                      max={Math.max(0, p.duration - 1)}
+                      step=".1"
+                      value={p.trimStart}
+                      onChange={(e) =>
+                        p.setTrimStart(Math.min(+e.target.value, p.trimEnd - 1))
+                      }
+                    />
+                    <span>{fmt(p.trimStart)}</span>
+                  </label>
+                  <label>
+                    End{' '}
+                    <input
+                      type="range"
+                      min="1"
+                      max={p.duration}
+                      step=".1"
+                      value={p.trimEnd}
+                      onChange={(e) =>
+                        p.setTrimEnd(Math.max(+e.target.value, p.trimStart + 1))
+                      }
+                    />
+                    <span>{fmt(p.trimEnd)}</span>
+                  </label>
+                  <p>Output: {fmt(p.trimEnd - p.trimStart)}</p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -249,6 +288,8 @@ export default function CreatorStudio() {
     [rendering, setRendering] = useState(false),
     [progress, setProgress] = useState(0);
   const [layout, setLayout] = useState<OverlayLayout>(DEFAULT_OVERLAY_LAYOUT);
+  const [trimStart, setTrimStart] = useState(0),
+    [trimEnd, setTrimEnd] = useState(0);
   const audio = useRef<HTMLAudioElement>(null),
     timer = useRef<number | undefined>(undefined);
   async function resolve(value = url) {
@@ -268,6 +309,8 @@ export default function CreatorStudio() {
       if (!r.ok) throw Error(data.error || 'Unable to load this song.');
       setSong(data);
       setTime(0);
+      setTrimStart(0);
+      setTrimEnd(data.duration || 30);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to load this song.');
     } finally {
@@ -299,7 +342,7 @@ export default function CreatorStudio() {
     if (audio.current) audio.current.currentTime = value;
     setTime(value);
   }
-  async function renderVideo() {
+  async function renderVideo(mode: 'cut' | '30' = 'cut') {
     if (!song || rendering) return;
     setRendering(true);
     setProgress(0);
@@ -312,6 +355,9 @@ export default function CreatorStudio() {
         opacity: 0.75,
         wind: 0,
       };
+      const startSeconds = trimStart,
+        available = Math.max(1, (trimEnd || song.duration || 30) - trimStart),
+        previewSeconds = mode === '30' ? Math.min(30, available) : available;
       const blob = await generateVisualizerVideoArt(
         renderSong(song),
         aspect,
@@ -321,6 +367,8 @@ export default function CreatorStudio() {
           motion: 'medium',
           lyrics,
           layout,
+          startSeconds,
+          previewSeconds,
           onProgress: setProgress,
           effects: config,
         },
@@ -471,8 +519,9 @@ export default function CreatorStudio() {
                 lyrics={lyrics}
                 layout={layout}
                 onLayoutChange={setLayout}
-                start={0}
+                start={trimStart}
                 exporting={rendering}
+                autoPlay
               />
             </div>
             <div className="sd-player">
@@ -555,16 +604,21 @@ export default function CreatorStudio() {
               setEffects={setEffects}
               layout={layout}
               setLayout={setLayout}
+              trimStart={trimStart}
+              trimEnd={trimEnd}
+              duration={song.duration || 0}
+              setTrimStart={setTrimStart}
+              setTrimEnd={setTrimEnd}
             />
             <button
               className="sd-export"
               disabled={rendering}
-              onClick={renderVideo}
+              onClick={() => renderVideo('cut')}
             >
               <Upload />{' '}
               {rendering
                 ? `Rendering ${Math.round(progress)}%`
-                : 'Create & export video'}
+                : `Export ${fmt(Math.max(0, trimEnd - trimStart))} video`}
             </button>
             {rendering && (
               <div className="sd-progress">
@@ -572,6 +626,10 @@ export default function CreatorStudio() {
               </div>
             )}
             <div className="sd-downloads">
+              <button disabled={rendering} onClick={() => renderVideo('30')}>
+                <Play />
+                30s video
+              </button>
               <a href={song.audio} download>
                 <Music2 />
                 Audio
@@ -585,7 +643,7 @@ export default function CreatorStudio() {
             </div>
           </aside>
           <div className="sd-mobile-export">
-            <button disabled={rendering} onClick={renderVideo}>
+            <button disabled={rendering} onClick={() => renderVideo('cut')}>
               <Upload />
               {rendering
                 ? `Rendering ${Math.round(progress)}%`
@@ -619,7 +677,7 @@ export default function CreatorStudio() {
                 <Music2 />
                 Wave
               </button>
-              <button onClick={renderVideo}>
+              <button onClick={() => renderVideo('30')}>
                 <Upload />
                 Export
               </button>
@@ -648,6 +706,11 @@ export default function CreatorStudio() {
             setEffects={setEffects}
             layout={layout}
             setLayout={setLayout}
+            trimStart={trimStart}
+            trimEnd={trimEnd}
+            duration={song.duration || 0}
+            setTrimStart={setTrimStart}
+            setTrimEnd={setTrimEnd}
           />
         </div>
       )}
