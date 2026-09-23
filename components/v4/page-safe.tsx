@@ -112,9 +112,9 @@ function stripChords(lyrics: string) {
     .trim();
 }
 
-export default function V4SafePage() {
+export default function V4SafePage({initialUrl=''}:{initialUrl?:string}) {
   const nav = useV10Nav();
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState(initialUrl);
   const [song, setSong] = useState<Song | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
