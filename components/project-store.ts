@@ -8,6 +8,8 @@ import type {
   WaveStyle,
 } from '@/components/v4/types';
 import type { VideoEffect } from '@/components/v8/video-effects';
+import type { OverlayTextStyles } from '@/components/v4/renderer-safe';
+import type { KaraokeDrawStyle } from '@/app/lib/karaoke';
 
 export type SavedProject = {
   url: string;
@@ -19,6 +21,8 @@ export type SavedProject = {
   lyrics: LyricsMode;
   effects: VideoEffect[];
   layout: OverlayLayout;
+  textStyles?: OverlayTextStyles;
+  subtitleStyle?: KaraokeDrawStyle;
   trimStart: number;
   trimEnd: number;
   karaokeTimeline: KaraokeLine[];

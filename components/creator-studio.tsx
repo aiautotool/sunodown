@@ -22,6 +22,8 @@ import {
   Upload,
 } from 'lucide-react';
 import { generateVisualizerVideoArt } from '@/components/v7/renderer-art';
+import type { OverlayTextStyles } from '@/components/v4/renderer-safe';
+import type { KaraokeDrawStyle } from '@/app/lib/karaoke';
 import {
   VIDEO_EFFECTS,
   type EffectConfig,
@@ -119,6 +121,10 @@ function ToolControls(p: {
   setEffects: (v: VideoEffect[]) => void;
   layout: OverlayLayout;
   setLayout: (v: OverlayLayout) => void;
+  textStyles: OverlayTextStyles;
+  setTextStyles: (v: OverlayTextStyles) => void;
+  subtitleStyle: KaraokeDrawStyle;
+  setSubtitleStyle: (v: KaraokeDrawStyle) => void;
   trimStart: number;
   trimEnd: number;
   duration: number;
@@ -160,6 +166,60 @@ function ToolControls(p: {
                     {x.label}
                   </button>
                 ))}
+              {id === 'style' && (
+                <div className="sd-text-style">
+                  {(['title', 'creator'] as const).map((key) => (
+                    <div key={key}>
+                      <b>{key === 'title' ? 'Tiêu đề' : 'Tác giả'}</b>
+                      <select
+                        value={p.textStyles[key].font}
+                        onChange={(e) =>
+                          p.setTextStyles({
+                            ...p.textStyles,
+                            [key]: {
+                              ...p.textStyles[key],
+                              font: e.target.value,
+                            },
+                          })
+                        }
+                      >
+                        <option value="system-ui, sans-serif">Modern</option>
+                        <option value="Georgia, serif">Cinematic</option>
+                        <option value="'Trebuchet MS', sans-serif">
+                          Rounded
+                        </option>
+                        <option value="'Courier New', monospace">Mono</option>
+                        <option value="Impact, sans-serif">Impact</option>
+                      </select>
+                      <input
+                        type="color"
+                        value={p.textStyles[key].color}
+                        onChange={(e) =>
+                          p.setTextStyles({
+                            ...p.textStyles,
+                            [key]: {
+                              ...p.textStyles[key],
+                              color: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                      <input
+                        type="range"
+                        min="40"
+                        max="220"
+                        value={p.layout[key].scale}
+                        onChange={(e) =>
+                          p.setLayout({
+                            ...p.layout,
+                            [key]: { ...p.layout[key], scale: +e.target.value },
+                          })
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
               {id === 'wave' && (
                 <p className="sd-control-hint">
                   Chọn kiểu sóng rồi kéo trực tiếp vùng sóng trên preview.
@@ -213,25 +273,57 @@ function ToolControls(p: {
                   </button>
                 ))}
               {id === 'lyrics' && p.lyrics !== 'off' && (
-                <label className="sd-scale">
-                  Kích thước chữ
-                  <input
-                    type="range"
-                    min="60"
-                    max="180"
-                    value={p.layout.subtitle.scale}
-                    onChange={(e) =>
-                      p.setLayout({
-                        ...p.layout,
-                        subtitle: {
-                          ...p.layout.subtitle,
-                          scale: +e.target.value,
-                        },
-                      })
-                    }
-                  />
-                  <span>{p.layout.subtitle.scale}%</span>
-                </label>
+                <>
+                  <div className="sd-text-style">
+                    <div>
+                      <b>Kiểu subtitle</b>
+                      <select
+                        value={p.subtitleStyle.font || 'system'}
+                        onChange={(e) =>
+                          p.setSubtitleStyle({
+                            ...p.subtitleStyle,
+                            font: e.target.value as KaraokeDrawStyle['font'],
+                          })
+                        }
+                      >
+                        <option value="system">Modern</option>
+                        <option value="serif">Serif</option>
+                        <option value="rounded">Rounded</option>
+                        <option value="mono">Mono</option>
+                        <option value="impact">Impact</option>
+                      </select>
+                      <input
+                        type="color"
+                        value={p.subtitleStyle.color || '#ffffff'}
+                        onChange={(e) =>
+                          p.setSubtitleStyle({
+                            ...p.subtitleStyle,
+                            color: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <label className="sd-scale">
+                    Kích thước chữ
+                    <input
+                      type="range"
+                      min="60"
+                      max="180"
+                      value={p.layout.subtitle.scale}
+                      onChange={(e) =>
+                        p.setLayout({
+                          ...p.layout,
+                          subtitle: {
+                            ...p.layout.subtitle,
+                            scale: +e.target.value,
+                          },
+                        })
+                      }
+                    />
+                    <span>{p.layout.subtitle.scale}%</span>
+                  </label>
+                </>
               )}
               {id === 'format' &&
                 (['16:9', '9:16', '1:1', '4:5'] as VideoAspect[]).map((x) => (
@@ -324,6 +416,15 @@ export default function CreatorStudio() {
     [resultUrl, setResultUrl] = useState(''),
     [resultName, setResultName] = useState('');
   const [layout, setLayout] = useState<OverlayLayout>(DEFAULT_OVERLAY_LAYOUT);
+  const [textStyles, setTextStyles] = useState<OverlayTextStyles>({
+    title: { font: 'Georgia, serif', color: '#ffffff' },
+    creator: { font: 'system-ui, sans-serif', color: '#d1d5db' },
+  });
+  const [subtitleStyle, setSubtitleStyle] = useState<KaraokeDrawStyle>({
+    font: 'system',
+    color: '#ffffff',
+    activeColor: '#f0abfc',
+  });
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeLine[]>([]);
   const [mediaClips, setMediaClips] = useState<MediaClip[]>([]);
   const [trimStart, setTrimStart] = useState(0),
@@ -405,6 +506,8 @@ export default function CreatorStudio() {
           effects: config,
           karaokeTimeline,
           mediaClips,
+          overlayTextStyles: textStyles,
+          subtitleStyle,
         },
       );
       if (resultUrl) URL.revokeObjectURL(resultUrl);
@@ -532,6 +635,8 @@ export default function CreatorStudio() {
         lyrics,
         effects,
         layout,
+        textStyles,
+        subtitleStyle,
         trimStart,
         trimEnd,
         karaokeTimeline,
@@ -563,6 +668,8 @@ export default function CreatorStudio() {
     setLyrics(project.lyrics);
     setEffects(project.effects);
     setLayout(project.layout);
+    if (project.textStyles) setTextStyles(project.textStyles);
+    if (project.subtitleStyle) setSubtitleStyle(project.subtitleStyle);
     setTrimStart(project.trimStart);
     setTrimEnd(project.trimEnd);
     setKaraokeTimeline(project.karaokeTimeline);
@@ -780,6 +887,8 @@ export default function CreatorStudio() {
                 onTimeChange={setPreviewTime}
                 karaokeTimeline={karaokeTimeline}
                 mediaClips={mediaClips}
+                overlayTextStyles={textStyles}
+                subtitleStyle={subtitleStyle}
                 resultUrl={resultUrl || undefined}
               />
             </div>
@@ -860,6 +969,10 @@ export default function CreatorStudio() {
               setEffects={setEffects}
               layout={layout}
               setLayout={setLayout}
+              textStyles={textStyles}
+              setTextStyles={setTextStyles}
+              subtitleStyle={subtitleStyle}
+              setSubtitleStyle={setSubtitleStyle}
               trimStart={trimStart}
               trimEnd={trimEnd}
               duration={song.duration || 0}
@@ -995,6 +1108,10 @@ export default function CreatorStudio() {
             setEffects={setEffects}
             layout={layout}
             setLayout={setLayout}
+            textStyles={textStyles}
+            setTextStyles={setTextStyles}
+            subtitleStyle={subtitleStyle}
+            setSubtitleStyle={setSubtitleStyle}
             trimStart={trimStart}
             trimEnd={trimEnd}
             duration={song.duration || 0}

@@ -45,11 +45,16 @@ export type OverlayLayout = {
   title: { x: number; y: number; scale: number };
   creator: { x: number; y: number; scale: number };
 };
+export type OverlayTextStyles = {
+  title: { font: string; color: string };
+  creator: { font: string; color: string };
+};
 export type SafeRenderOptions = {
   motion: MotionIntensity;
   lyrics: LyricsMode;
   layout?: OverlayLayout;
   subtitleStyle?: KaraokeDrawStyle;
+  overlayTextStyles?: OverlayTextStyles;
   karaokeTimeline?: KaraokeLine[];
   background?: BackgroundConfig;
   mediaClips?: MediaClip[];
@@ -261,14 +266,17 @@ function drawMeta(
   p?: Palette,
   h = w,
   layout?: OverlayLayout,
+  textStyles?: OverlayTextStyles,
 ) {
   ctx.save();
   const fs = Math.max(26, Math.min(54, Math.round(w * 0.039))),
     art = titleTypography(template, fs);
-  ctx.font = art.font;
+  ctx.font = textStyles?.title.font
+    ? `700 ${fs}px ${textStyles.title.font}`
+    : art.font;
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = 'rgba(255,255,255,.98)';
+  ctx.fillStyle = textStyles?.title.color || 'rgba(255,255,255,.98)';
   ctx.strokeStyle = 'rgba(0,0,0,.28)';
   ctx.lineWidth = art.stroke;
   ctx.shadowColor =
@@ -291,8 +299,8 @@ function drawMeta(
   ctx.restore();
   if (song.creator) {
     ctx.shadowBlur = 7;
-    ctx.font = `600 ${Math.max(15, Math.round(fs * 0.4))}px system-ui,-apple-system,'Segoe UI',sans-serif`;
-    ctx.fillStyle = 'rgba(255,255,255,.7)';
+    ctx.font = `600 ${Math.max(15, Math.round(fs * 0.4))}px ${textStyles?.creator.font || "system-ui,-apple-system,'Segoe UI',sans-serif"}`;
+    ctx.fillStyle = textStyles?.creator.color || 'rgba(255,255,255,.7)';
     ctx.textAlign = align;
     ctx.save();
     ctx.translate((w * creatorPos.x) / 100, (h * creatorPos.y) / 100);
@@ -532,6 +540,7 @@ function drawWave(
   style: WaveStyle,
   p: Palette,
   layout?: OverlayLayout,
+  textStyles?: OverlayTextStyles,
 ) {
   const pos = layout?.wave || { x: 50, y: 86, scale: 100 },
     sx = pos.scale / 100;
@@ -572,7 +581,22 @@ function drawTemplate(
   preserveBackground = false,
   layout?: OverlayLayout,
 ) {
-  if (preserveBackground) return;
+  if (preserveBackground) {
+    drawMeta(
+      ctx,
+      song,
+      w,
+      h * 0.67,
+      'center',
+      0.72,
+      template,
+      p,
+      h,
+      layout,
+      textStyles,
+    );
+    return;
+  }
   const gain = MOTION_GAIN[motion];
   ctx.fillStyle = '#080812';
   ctx.fillRect(0, 0, w, h);
@@ -592,7 +616,19 @@ function drawTemplate(
   );
   ctx.fillStyle = 'rgba(3,4,12,.18)';
   ctx.fillRect(0, 0, w, h);
-  drawMeta(ctx, song, w, h * 0.67, 'center', 0.72, template, p, h, layout);
+  drawMeta(
+    ctx,
+    song,
+    w,
+    h * 0.67,
+    'center',
+    0.72,
+    template,
+    p,
+    h,
+    layout,
+    textStyles,
+  );
 }
 export function createLiveFramePainter(bitmap: ImageBitmap) {
   const palette = extractPalette(bitmap);
@@ -608,6 +644,7 @@ export function createLiveFramePainter(bitmap: ImageBitmap) {
     lyrics: LyricsMode,
     preserveBackground = false,
     layout?: OverlayLayout,
+    textStyles?: OverlayTextStyles,
   ) => {
     drawTemplate(
       ctx,
@@ -622,6 +659,7 @@ export function createLiveFramePainter(bitmap: ImageBitmap) {
       palette,
       preserveBackground,
       layout,
+      textStyles,
     );
     withSubtitleLayout(ctx, w, h, layout, () =>
       drawLyrics(ctx, song, w, h, time, song.duration || 1, lyrics),
@@ -876,6 +914,7 @@ export async function generateVisualizerVideoSafe(
         palette,
         customBackground,
         options.layout,
+        options.overlayTextStyles,
       );
       withSubtitleLayout(ctx, width, height, options.layout, () => {
         if (options.lyrics !== 'off' && options.karaokeTimeline?.length)

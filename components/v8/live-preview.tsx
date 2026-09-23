@@ -5,6 +5,7 @@ import { Pause, Play } from 'lucide-react';
 import {
   createLiveFramePainter,
   type OverlayLayout,
+  type OverlayTextStyles,
 } from '../v4/renderer-safe';
 import {
   VIDEO_SIZES,
@@ -43,6 +44,7 @@ type Props = {
   mediaClips?: MediaClip[];
   layout?: OverlayLayout;
   subtitleStyle?: KaraokeDrawStyle;
+  overlayTextStyles?: OverlayTextStyles;
   onLayoutChange?: (layout: OverlayLayout) => void;
   start: number;
   exporting: boolean;
@@ -456,6 +458,7 @@ export function LivePreview(props: Props) {
         hasExactLyrics ? 'off' : p.lyrics,
         customBackground,
         p.layout,
+        p.overlayTextStyles,
       );
       if (hasExactLyrics) {
         const q = p.layout?.subtitle || { x: 50, y: 58, scale: 100 },
@@ -499,6 +502,7 @@ export function LivePreview(props: Props) {
     props.karaokeTimeline,
     props.layout,
     props.subtitleStyle,
+    props.overlayTextStyles,
     props.exporting,
     props.resultUrl,
   ]);
@@ -682,6 +686,42 @@ export function LivePreview(props: Props) {
                   >
                     <span
                       className={`pointer-events-none absolute inset-0 rounded-md border transition-colors ${selectedOverlay === key ? 'border-violet-400 bg-violet-400/[.06]' : 'border-transparent'}`}
+                    />
+                    <i
+                      className={`sd-overlay-resize ${selectedOverlay === key ? 'show' : ''}`}
+                      title="Kéo để thay đổi kích thước"
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setSelectedOverlay(key);
+                        const startX = event.clientX,
+                          startY = event.clientY,
+                          startScale = p.scale;
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        const move = (e: PointerEvent) => {
+                          const delta =
+                            (e.clientX - startX + e.clientY - startY) * 0.75;
+                          props.onLayoutChange?.({
+                            ...props.layout!,
+                            [key]: {
+                              ...p,
+                              scale: Math.max(
+                                40,
+                                Math.min(220, startScale + delta),
+                              ),
+                            },
+                          });
+                        };
+                        const up = () => {
+                          window.removeEventListener('pointermove', move);
+                          window.removeEventListener('pointerup', up);
+                        };
+                        window.addEventListener('pointermove', move);
+                        window.addEventListener('pointerup', up, {
+                          once: true,
+                        });
+                      }}
+                      onClick={(event) => event.stopPropagation()}
                     />
                   </div>
                 );
