@@ -6,13 +6,15 @@ import re
 import shutil
 import subprocess
 import tempfile
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
+from threading import Lock
 from typing import Any
 from urllib.parse import urlparse
 
 import requests
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
@@ -25,6 +27,11 @@ except ImportError:  # Allows storyboard tests without the optional provider pac
 app = FastAPI(title="SunoDown AI Music Video Renderer", version="1.0.0")
 SECTION = re.compile(r"^\s*\[[^\]]+\]\s*$")
 SAFE_ASPECTS = {"9:16", "16:9", "1:1"}
+RESULTS = Path(tempfile.gettempdir()) / "sunodown-results"
+RESULTS.mkdir(parents=True, exist_ok=True)
+EXECUTOR = ThreadPoolExecutor(max_workers=max(1, int(os.getenv("RENDER_WORKERS", "1"))))
+JOBS: dict[str, Future[Path]] = {}
+JOBS_LOCK = Lock()
 
 
 class RenderRequest(BaseModel):
@@ -170,17 +177,11 @@ def health() -> dict[str, Any]:
     }
 
 
-@app.post("/render")
-def render(payload: RenderRequest, authorization: str | None = Header(default=None)) -> FileResponse:
-    authorize(authorization)
+def render_video(payload: RenderRequest) -> Path:
     data = payload.input
-    if data.get("mode") != "ai_music_video":
-        raise HTTPException(422, "This renderer only accepts ai_music_video jobs")
     song = data.get("song") or {}
     audio_url = song.get("audio")
     lyrics = data.get("lyrics") or song.get("lyrics") or ""
-    if not isinstance(audio_url, str) or not audio_url.startswith("https://"):
-        raise HTTPException(422, "A public HTTPS audio URL is required")
     aspect = data.get("aspect") if data.get("aspect") in SAFE_ASPECTS else "9:16"
     resolution = data.get("resolution") if data.get("resolution") in {"480p", "720p"} else "720p"
     with tempfile.TemporaryDirectory(prefix=f"sunodown-{payload.jobId[:8]}-") as temp:
@@ -196,13 +197,52 @@ def render(payload: RenderRequest, authorization: str | None = Header(default=No
             )
             clips = generated_clips(scenes, work, str(data.get("title") or song.get("title") or "Suno"), aspect, resolution)
             compose(clips, audio, output, duration)
-            persistent = Path(tempfile.gettempdir()) / f"sunodown-result-{payload.jobId}.mp4"
+            persistent = RESULTS / f"{payload.jobId}.mp4"
             shutil.copy2(output, persistent)
-            return FileResponse(
-                persistent, media_type="video/mp4", filename=f"{payload.jobId}.mp4",
-                background=BackgroundTask(persistent.unlink, missing_ok=True),
-            )
+            return persistent
         except HTTPException:
             raise
         except Exception as error:
             raise HTTPException(502, str(error)) from error
+
+
+@app.post("/render", response_model=None)
+def render(payload: RenderRequest, authorization: str | None = Header(default=None)):
+    authorize(authorization)
+    data = payload.input
+    if data.get("mode") != "ai_music_video":
+        raise HTTPException(422, "This renderer only accepts ai_music_video jobs")
+    song = data.get("song") or {}
+    audio_url = song.get("audio")
+    lyrics = data.get("lyrics") or song.get("lyrics") or ""
+    if not isinstance(audio_url, str) or not audio_url.startswith("https://"):
+        raise HTTPException(422, "A public HTTPS audio URL is required")
+    if not isinstance(lyrics, str) or not lyrics.strip():
+        raise HTTPException(422, "Lyrics are required")
+    result = RESULTS / f"{payload.jobId}.mp4"
+    if result.exists():
+        with JOBS_LOCK:
+            JOBS.pop(payload.jobId, None)
+        return FileResponse(
+            result, media_type="video/mp4", filename=f"{payload.jobId}.mp4",
+            background=BackgroundTask(result.unlink, missing_ok=True),
+        )
+    with JOBS_LOCK:
+        future = JOBS.get(payload.jobId)
+        if future is None:
+            future = EXECUTOR.submit(render_video, payload)
+            JOBS[payload.jobId] = future
+    if not future.done():
+        return JSONResponse({"status": "rendering", "jobId": payload.jobId}, status_code=202)
+    try:
+        completed = future.result()
+    except Exception as error:
+        with JOBS_LOCK:
+            JOBS.pop(payload.jobId, None)
+        if isinstance(error, HTTPException):
+            raise error
+        raise HTTPException(502, str(error)) from error
+    return FileResponse(
+        completed, media_type="video/mp4", filename=f"{payload.jobId}.mp4",
+        background=BackgroundTask(completed.unlink, missing_ok=True),
+    )
