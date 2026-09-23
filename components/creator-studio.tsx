@@ -45,6 +45,8 @@ import {
 } from '@/app/lib/audio-processing';
 import { buildEstimatedKaraokeTimeline, exportSrt } from '@/app/lib/karaoke';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
+import type { KaraokeLine } from '@/app/lib/karaoke';
+import { EditorTimeline, type MediaClip } from '@/components/editor-timeline';
 
 type Song = {
   title: string;
@@ -299,6 +301,7 @@ export default function CreatorStudio() {
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [playbackStart, setPlaybackStart] = useState(0),
+    [previewTime, setPreviewTime] = useState(0),
     [panel, setPanel] = useState('style'),
     [mobileTools, setMobileTools] = useState(false);
   const [wave, setWave] = useState<WaveStyle>('bars'),
@@ -313,10 +316,11 @@ export default function CreatorStudio() {
     [resultUrl, setResultUrl] = useState(''),
     [resultName, setResultName] = useState('');
   const [layout, setLayout] = useState<OverlayLayout>(DEFAULT_OVERLAY_LAYOUT);
+  const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeLine[]>([]);
+  const [mediaClips, setMediaClips] = useState<MediaClip[]>([]);
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
-  const timeline = useRef<HTMLDivElement>(null),
-    timer = useRef<number | undefined>(undefined);
+  const timer = useRef<number | undefined>(undefined);
   async function resolve(value = url) {
     if (!valid(value)) {
       setError('Paste a valid Suno link.');
@@ -334,8 +338,15 @@ export default function CreatorStudio() {
       if (!r.ok) throw Error(data.error || 'Unable to load this song.');
       setSong(data);
       setPlaybackStart(0);
+      setPreviewTime(0);
       setTrimStart(0);
       setTrimEnd(data.duration || 30);
+      setKaraokeTimeline(
+        data.lyrics
+          ? buildEstimatedKaraokeTimeline(data.lyrics, data.duration || 30)
+          : [],
+      );
+      setMediaClips([]);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to load this song.');
     } finally {
@@ -352,18 +363,6 @@ export default function CreatorStudio() {
   async function paste() {
     const value = await navigator.clipboard.readText();
     change(value);
-  }
-  function seekTimeline(clientX: number) {
-    if (!song?.duration || !timeline.current) return;
-    const box = timeline.current.getBoundingClientRect(),
-      next = Math.max(
-        0,
-        Math.min(
-          song.duration,
-          ((clientX - box.left) / box.width) * song.duration,
-        ),
-      );
-    setPlaybackStart(next);
   }
   async function renderVideo(mode: 'cut' | '30' = 'cut') {
     if (!song || rendering) return;
@@ -394,6 +393,8 @@ export default function CreatorStudio() {
           previewSeconds,
           onProgress: setProgress,
           effects: config,
+          karaokeTimeline,
+          mediaClips,
         },
       );
       if (resultUrl) URL.revokeObjectURL(resultUrl);
@@ -453,11 +454,19 @@ export default function CreatorStudio() {
         `${safeName(song.title)}-lyrics.txt`,
       );
     else {
-      const timeline = buildEstimatedKaraokeTimeline(clean, song.duration || 1);
       saveBlob(
-        new Blob([exportSrt(timeline)], {
-          type: 'application/x-subrip;charset=utf-8',
-        }),
+        new Blob(
+          [
+            exportSrt(
+              karaokeTimeline.length
+                ? karaokeTimeline
+                : buildEstimatedKaraokeTimeline(clean, song.duration || 1),
+            ),
+          ],
+          {
+            type: 'application/x-subrip;charset=utf-8',
+          },
+        ),
         `${safeName(song.title)}-lyrics.srt`,
       );
     }
@@ -706,6 +715,9 @@ export default function CreatorStudio() {
                 exporting={rendering}
                 autoPlay={autoPreview}
                 fullPlayback
+                onTimeChange={setPreviewTime}
+                karaokeTimeline={karaokeTimeline}
+                mediaClips={mediaClips}
                 resultUrl={resultUrl || undefined}
               />
             </div>
@@ -722,34 +734,19 @@ export default function CreatorStudio() {
                 </button>
               </div>
             )}
-            <div className="sd-timeline">
-              <div className="sd-ruler">
-                <span>00:00</span>
-                <span>{fmt((song.duration || 0) / 6)}</span>
-                <span>{fmt(((song.duration || 0) * 2) / 6)}</span>
-                <span>{fmt(((song.duration || 0) * 3) / 6)}</span>
-                <span>{fmt(((song.duration || 0) * 4) / 6)}</span>
-                <span>{fmt(((song.duration || 0) * 5) / 6)}</span>
-                <span>{fmt(song.duration)}</span>
-              </div>
-              <div
-                className="sd-film"
-                ref={timeline}
-                onPointerDown={(e) => seekTimeline(e.clientX)}
-              >
-                {[0, 1, 2, 3, 4, 5].map((i) => (
-                  <div
-                    key={i}
-                    style={{ backgroundImage: `url(${song.picture})` }}
-                  />
-                ))}
-                <i
-                  style={{
-                    left: `${song.duration ? (playbackStart / song.duration) * 100 : 0}%`,
-                  }}
-                />
-              </div>
-            </div>
+            <EditorTimeline
+              duration={song.duration || 1}
+              picture={song.picture}
+              playhead={previewTime}
+              onSeek={(time) => {
+                setPlaybackStart(time);
+                setPreviewTime(time);
+              }}
+              subtitles={karaokeTimeline}
+              onSubtitlesChange={setKaraokeTimeline}
+              clips={mediaClips}
+              onClipsChange={setMediaClips}
+            />
           </section>
           <aside className="sd-inspector">
             <div className="sd-song">

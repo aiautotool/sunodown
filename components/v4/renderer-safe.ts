@@ -27,6 +27,7 @@ import {
   seekVideoFrame,
   type BackgroundConfig,
 } from '@/components/v8/background';
+import type { MediaClip } from '@/components/editor-timeline';
 
 const MOTION_GAIN: Record<MotionIntensity, number> = {
   low: 0.45,
@@ -51,6 +52,7 @@ export type SafeRenderOptions = {
   subtitleStyle?: KaraokeDrawStyle;
   karaokeTimeline?: KaraokeLine[];
   background?: BackgroundConfig;
+  mediaClips?: MediaClip[];
   loopDuration?: number;
   startSeconds?: number;
   previewSeconds?: number;
@@ -775,6 +777,16 @@ export async function generateVisualizerVideoSafe(
   }
   if (background.mode === 'video' && background.videoUrl)
     backgroundVideo = await loadBackgroundVideo(background.videoUrl);
+  const sceneMedia = await Promise.all(
+    (options.mediaClips || []).map(async (clip) => ({
+      clip,
+      bitmap:
+        clip.type === 'image'
+          ? await createImageBitmap(await (await fetch(clip.url)).blob())
+          : null,
+      video: clip.type === 'video' ? await loadBackgroundVideo(clip.url) : null,
+    })),
+  );
   const target = new BufferTarget(),
     output = new Output({ format: new Mp4OutputFormat(), target }),
     bitrate = width * height >= 1_000_000 ? 2_700_000 : 1_900_000,
@@ -793,8 +805,32 @@ export async function generateVisualizerVideoSafe(
         trimT = ((absoluteT % fullDuration) + fullDuration) % fullDuration,
         songT = trimStart + trimT,
         level = amplitude(samples, rate, songT),
-        customBackground = background.mode !== 'suno';
-      if (background.mode === 'preset') {
+        scene = sceneMedia.find(
+          ({ clip }) => absoluteT >= clip.start && absoluteT < clip.end,
+        ),
+        customBackground = Boolean(scene) || background.mode !== 'suno';
+      if (scene?.bitmap) {
+        drawMediaBackground(
+          ctx,
+          scene.bitmap,
+          scene.bitmap.width,
+          scene.bitmap.height,
+          width,
+          height,
+          background,
+        );
+      } else if (scene?.video) {
+        await seekVideoFrame(scene.video, absoluteT - scene.clip.start, true);
+        drawMediaBackground(
+          ctx,
+          scene.video,
+          scene.video.videoWidth,
+          scene.video.videoHeight,
+          width,
+          height,
+          background,
+        );
+      } else if (background.mode === 'preset') {
         drawPresetBackground(
           ctx,
           background.presetId,
@@ -884,6 +920,13 @@ export async function generateVisualizerVideoSafe(
     }
     bmp.close();
     backgroundBitmap?.close();
+    sceneMedia.forEach(({ bitmap, video }) => {
+      bitmap?.close();
+      if (video) {
+        video.removeAttribute('src');
+        video.load();
+      }
+    });
     if (backgroundVideo) {
       backgroundVideo.removeAttribute('src');
       backgroundVideo.load();

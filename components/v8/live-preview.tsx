@@ -28,6 +28,7 @@ import {
   drawPresetBackground,
   type BackgroundConfig,
 } from './background';
+import type { MediaClip } from '@/components/editor-timeline';
 
 type Props = {
   song: Song;
@@ -38,6 +39,7 @@ type Props = {
   lyrics: LyricsMode;
   karaokeTimeline?: KaraokeLine[];
   background?: BackgroundConfig;
+  mediaClips?: MediaClip[];
   layout?: OverlayLayout;
   subtitleStyle?: KaraokeDrawStyle;
   onLayoutChange?: (layout: OverlayLayout) => void;
@@ -46,6 +48,7 @@ type Props = {
   resultUrl?: string;
   autoPlay?: boolean;
   fullPlayback?: boolean;
+  onTimeChange?: (time: number) => void;
 };
 
 function fmt(value: number) {
@@ -71,6 +74,80 @@ export function LivePreview(props: Props) {
     null,
   );
   const backgroundVideo = useRef<HTMLVideoElement | null>(null);
+  const lastTimeNotify = useRef(0);
+  const sceneMedia = useRef(
+    new Map<string, { bitmap?: ImageBitmap; video?: HTMLVideoElement }>(),
+  );
+  const [sceneVersion, setSceneVersion] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loaded = new Map<
+      string,
+      { bitmap?: ImageBitmap; video?: HTMLVideoElement }
+    >();
+    void Promise.all(
+      (props.mediaClips || []).map(async (clip) => {
+        if (clip.type === 'image') {
+          const bitmap = await createImageBitmap(
+            await (await fetch(clip.url)).blob(),
+          );
+          loaded.set(clip.id, { bitmap });
+        } else {
+          const video = document.createElement('video');
+          video.src = clip.url;
+          video.muted = true;
+          video.playsInline = true;
+          video.preload = 'auto';
+          await new Promise<void>((resolve, reject) => {
+            video.addEventListener('loadeddata', () => resolve(), {
+              once: true,
+            });
+            video.addEventListener(
+              'error',
+              () => reject(new Error('Không đọc được video trong timeline.')),
+              { once: true },
+            );
+            video.load();
+          });
+          loaded.set(clip.id, { video });
+        }
+      }),
+    )
+      .then(() => {
+        if (cancelled) return;
+        sceneMedia.current.forEach(({ bitmap, video }) => {
+          bitmap?.close();
+          if (video) {
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+          }
+        });
+        sceneMedia.current = loaded;
+        setSceneVersion((value) => value + 1);
+      })
+      .catch(
+        (error) =>
+          !cancelled &&
+          setStatus(
+            error instanceof Error
+              ? error.message
+              : 'Không đọc được media timeline.',
+          ),
+      );
+    return () => {
+      cancelled = true;
+      loaded.forEach(({ bitmap, video }) => {
+        bitmap?.close();
+        if (video) {
+          video.pause();
+          video.removeAttribute('src');
+          video.load();
+        }
+      });
+    };
+  }, [props.mediaClips]);
 
   const previewEnd = props.fullPlayback
     ? props.song.duration || props.start + 10
@@ -267,6 +344,10 @@ export function LivePreview(props: Props) {
       }
 
       setTime(absoluteTime);
+      if (now - lastTimeNotify.current > 90) {
+        lastTimeNotify.current = now;
+        p.onTimeChange?.(absoluteTime);
+      }
       const size = VIDEO_SIZES[p.aspect];
       const surface = context.canvas;
       const scale = Math.min(1, 640 / Math.max(size.width, size.height));
@@ -280,8 +361,42 @@ export function LivePreview(props: Props) {
       context.setTransform(scale, 0, 0, scale, 0, 0);
       const hasExactLyrics = p.lyrics !== 'off' && !!p.karaokeTimeline?.length;
       const background = p.background || DEFAULT_BACKGROUND_CONFIG,
-        customBackground = background.mode !== 'suno';
-      if (background.mode === 'preset') {
+        activeClip = p.mediaClips?.find(
+          (clip) => absoluteTime >= clip.start && absoluteTime < clip.end,
+        ),
+        activeMedia = activeClip
+          ? sceneMedia.current.get(activeClip.id)
+          : undefined,
+        customBackground = Boolean(activeMedia) || background.mode !== 'suno';
+      if (activeMedia?.bitmap) {
+        drawMediaBackground(
+          context,
+          activeMedia.bitmap,
+          activeMedia.bitmap.width,
+          activeMedia.bitmap.height,
+          size.width,
+          size.height,
+          background,
+        );
+      } else if (activeMedia?.video && activeClip) {
+        const v = activeMedia.video,
+          duration = v.duration || 1,
+          target = (absoluteTime - activeClip.start) % duration;
+        if (Math.abs(v.currentTime - target) > 0.1)
+          try {
+            v.currentTime = target;
+          } catch {}
+        if (v.readyState >= 2)
+          drawMediaBackground(
+            context,
+            v,
+            v.videoWidth,
+            v.videoHeight,
+            size.width,
+            size.height,
+            background,
+          );
+      } else if (background.mode === 'preset') {
         drawPresetBackground(
           context,
           background.presetId,
@@ -379,6 +494,8 @@ export function LivePreview(props: Props) {
     props.wave,
     props.motion,
     props.lyrics,
+    props.mediaClips,
+    sceneVersion,
     props.karaokeTimeline,
     props.layout,
     props.subtitleStyle,
