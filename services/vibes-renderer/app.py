@@ -26,7 +26,10 @@ except ImportError:  # Allows storyboard tests without the optional provider pac
 
 
 app = FastAPI(title="SunoDown AI Music Video Renderer", version="1.0.0")
-SECTION = re.compile(r"^\s*\[[^\]]+\]\s*$")
+SECTION = re.compile(
+    r"^\s*(?:\[[^\]]+\]|(?:verse|chorus|pre-chorus|bridge|outro|intro|hook|refrain|đoạn|điệp khúc|kết)(?:\s+\d+)?:?)\s*$",
+    re.IGNORECASE,
+)
 SAFE_ASPECTS = {"9:16", "16:9", "1:1"}
 RESULTS = Path(tempfile.gettempdir()) / "sunodown-results"
 RESULTS.mkdir(parents=True, exist_ok=True)
@@ -66,12 +69,41 @@ def clean_lines(lyrics: str) -> list[str]:
     ]
 
 
+def visual_bible(title: str, lyrics: str, style: str) -> dict[str, str]:
+    source = f"{title} {lyrics} {style}".lower()
+    vietnamese = "vietnamese" in source or any(word in source for word in (" anh ", " em ", "mình", "bình yên"))
+    cast = (
+        "the same Vietnamese couple in their late twenties in every scene: "
+        "a lean man with an oval face, short side-parted black hair and a charcoal linen shirt; "
+        "a woman with a heart-shaped face, warm brown eyes, long straight black hair, an ivory blouse and muted-blue skirt"
+        if vietnamese
+        else "the same two adult protagonists in every scene: a lean man with an oval face, short dark hair and a charcoal linen shirt; "
+        "a woman with a heart-shaped face, warm brown eyes, long dark hair, an ivory blouse and muted-blue skirt"
+    )
+    if any(word in source for word in ("rain", "mưa", "sad", "buồn", "đêm", "night")):
+        world = "a quiet rain-washed city apartment and nearby streets at blue hour"
+        palette = "deep blue, soft amber practical lights, gentle rain reflections"
+    elif any(word in source for word in ("ocean", "sea", "biển", "shore", "sóng")):
+        world = "a modest coastal home, wind-swept grass and a calm shoreline"
+        palette = "sea blue, sand beige, warm late-afternoon sunlight"
+    elif any(word in source for word in ("party", "dance", "club", "nhảy")):
+        world = "one coherent contemporary neon city district and intimate music venue"
+        palette = "magenta and cyan neon with controlled cinematic contrast"
+    else:
+        world = "one quiet lived-in home with a sunlit window, a small garden and the same nearby meadow"
+        palette = "warm cream, muted blue, soft green and golden natural light"
+    look = "cinematic live-action realism, natural skin texture, 35mm lens, shallow depth of field, restrained handheld camera"
+    style_hint = " ".join((style or "").replace("\n", " ").split())[:220]
+    return {"cast": cast, "world": world, "palette": palette, "look": look, "style": style_hint}
+
+
 def build_storyboard(
     lyrics: str,
     style: str = "",
     duration: float = 0,
     scene_seconds: int = 5,
     max_unique_scenes: int = 12,
+    title: str = "Suno music video",
 ) -> list[dict[str, Any]]:
     lines = clean_lines(lyrics)
     if not lines:
@@ -79,7 +111,12 @@ def build_storyboard(
     scene_seconds = max(3, min(8, int(scene_seconds or 5)))
     wanted = max(1, math.ceil(max(duration, scene_seconds) / scene_seconds))
     unique = min(max(1, int(max_unique_scenes or 12)), wanted, len(lines))
-    visual_style = (style or "cinematic music video, coherent visual story").strip()[:600]
+    bible = visual_bible(title, lyrics, style)
+    reference_prompt = (
+        f"Character reference portrait for {title}. {bible['cast']}. "
+        f"They stand together in {bible['world']}. {bible['palette']}. {bible['look']}. "
+        "Full facial visibility, neutral natural expressions, clear wardrobe details, one coherent frame, no text, no logo."
+    )
     scenes: list[dict[str, Any]] = []
     for index in range(unique):
         start_line = math.floor(index * len(lines) / unique)
@@ -87,13 +124,16 @@ def build_storyboard(
         excerpt = " / ".join(lines[start_line:end_line])
         if not excerpt:
             break
+        continuity = "Establish the recurring characters and location" if index == 0 else "Continue directly in the same story world with the exact same identities and wardrobe"
         prompt = (
-            f"Cinematic music video scene inspired by these lyrics: {excerpt}. "
-            f"Visual direction: {visual_style}. Express the emotion visually without text, logos, "
-            "captions or watermarks. Natural motion, intentional camera movement, consistent characters "
-            "and color palette, seamless ending suitable for cutting to the next scene."
+            f"Scene {index + 1} of {unique} for the music video {title}. CONTINUITY LOCK: {bible['cast']}. "
+            f"Never change their facial identity, age, hairstyle, body type or clothing. STORY WORLD: {bible['world']}. "
+            f"Keep this exact palette: {bible['palette']}. Visual treatment: {bible['look']}. {bible['style']}. "
+            f"{continuity}. Narrative beat inspired by these lyrics: {excerpt}. Translate the emotion into one simple, "
+            "physically believable action and one intentional camera move. End on calm motion suitable for a seamless cut. "
+            "No new lead characters, no face morphing, no wardrobe changes, no location reset, without text, logos, captions or watermarks."
         )
-        scenes.append({"index": index, "start": index * scene_seconds, "duration": scene_seconds, "lyrics": excerpt, "prompt": prompt})
+        scenes.append({"index": index, "start": index * scene_seconds, "duration": scene_seconds, "lyrics": excerpt, "prompt": prompt, "reference_prompt": reference_prompt})
     return scenes
 
 
@@ -147,11 +187,32 @@ def generated_clips(scenes: list[dict[str, Any]], work: Path, title: str, aspect
     client = VibesClient(meta_session=session, auto_refresh=True, background_refresh=True)
     project = client.create_project(name=f"SunoDown - {title[:60]}")
     clips: list[Path] = []
+    ingredient: dict[str, Any] | None = None
+    ingredient_id: str | None = None
     try:
+        try:
+            reference = client.generate_image(
+                project_id=project["id"], prompt=scenes[0]["reference_prompt"],
+                aspect_ratio="1:1", resolution="720p", variations=1,
+            )
+            image = next(iter(reference.get("data") or []), None)
+            if image and image.get("imageEntId") and image.get("url"):
+                created = client.create_ingredient(
+                    name=f"SunoDown cast {project['id'][-8:]}", ingredient_type="CHARACTER",
+                    source_image_ent_id=image["imageEntId"], image_url=image["url"],
+                    description=scenes[0]["reference_prompt"],
+                )
+                saved = created.get("ingredient") or created
+                ingredient_id = saved.get("ingredientId") or saved.get("id")
+                if ingredient_id:
+                    ingredient = {"ingredientId": ingredient_id, "ingredientType": "CHARACTER", "name": saved.get("name") or "Recurring cast", "imageUrl": saved.get("imageUrl") or image["url"]}
+        except Exception:
+            LOGGER.warning("Could not create cast reference for %s; using prompt continuity", title, exc_info=True)
         for scene in scenes:
             batch = client.generate_video(
                 project_id=project["id"], prompt=scene["prompt"], aspect_ratio=aspect,
-                resolution=resolution, variations=1, poll=True, poll_timeout=420,
+                resolution=resolution, variations=1, ingredients=[ingredient] if ingredient else None,
+                poll=True, poll_timeout=420,
             )
             content = next((item for item in batch.get("content", []) if item.get("videoUrl")), None)
             if not content:
@@ -160,6 +221,11 @@ def generated_clips(scenes: list[dict[str, Any]], work: Path, title: str, aspect
             client.download_video(content["id"], str(target))
             clips.append(target)
     finally:
+        if ingredient_id:
+            try:
+                client.delete_ingredient(ingredient_id)
+            except Exception:
+                LOGGER.warning("Could not delete temporary cast ingredient %s", ingredient_id)
         close = getattr(client, "close", None)
         if callable(close):
             close()
@@ -207,6 +273,7 @@ def render_video(payload: RenderRequest) -> Path:
             scenes = build_storyboard(
                 lyrics, data.get("style") or song.get("style") or song.get("tags") or "",
                 duration, data.get("sceneSeconds", 5), data.get("maxUniqueScenes", 12),
+                str(data.get("title") or song.get("title") or "Suno music video"),
             )
             clips = generated_clips(scenes, work, str(data.get("title") or song.get("title") or "Suno"), aspect, resolution)
             compose(clips, audio, output, duration)
