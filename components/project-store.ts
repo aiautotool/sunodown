@@ -23,6 +23,7 @@ export type SavedProject = {
   lyrics: LyricsMode;
   motion?: MotionIntensity;
   selectedPresetId?: string | null;
+  presetModified?: boolean;
   effects: VideoEffect[];
   layout: OverlayLayout;
   textStyles?: OverlayTextStyles;
