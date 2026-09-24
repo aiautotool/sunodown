@@ -11,6 +11,7 @@ import type {
 import type { VideoEffect } from '@/components/v8/video-effects';
 import type { OverlayTextStyles } from '@/components/v4/renderer-safe';
 import type { KaraokeDrawStyle } from '@/app/lib/karaoke';
+import type { BackgroundConfig } from '@/components/v8/background';
 
 export type SavedProject = {
   url: string;
@@ -26,6 +27,7 @@ export type SavedProject = {
   layout: OverlayLayout;
   textStyles?: OverlayTextStyles;
   subtitleStyle?: KaraokeDrawStyle;
+  background?: BackgroundConfig;
   trimStart: number;
   trimEnd: number;
   karaokeTimeline: KaraokeLine[];
