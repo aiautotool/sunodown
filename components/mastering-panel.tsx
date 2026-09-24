@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Download, Headphones, ShieldCheck, SlidersHorizontal, Sparkles, Waves } from 'lucide-react';
-import { StudioBadge, StudioButton, StudioControlRow, StudioPanel, StudioSegmented, StudioSlider, StudioStatus, StudioToggle } from '@/components/studio-ui';
+import { StudioBadge, StudioButton, StudioControlRow, StudioPanel, StudioSegmented, StudioSlider, StudioStatus, StudioToggle, StudioModal } from '@/components/studio-ui';
 import { MASTER_PROFILES, masterAudio, render5DAudio, type AdvancedMasterSettings, type EqBand, type MasterMetrics, type MasterProfileId, type Spatial5DMode } from '@/app/lib/audio-processing';
 
 const MODE_INFO:Record<Spatial5DMode,{label:string;desc:string}> = {
@@ -44,9 +44,11 @@ export function MasteringPanel({audio,binary,title}:{audio:string;binary?:Blob|n
   {audioSection==='master'&&<><StudioSegmented value={profile} options={MASTER_PROFILES.map(x=>({value:x.id,label:x.label}))} onChange={v=>{setProfile(v);setMetrics(null);previewProfile(v)}}/>
   <p className="sd-master-desc">{MASTER_PROFILES.find(p=>p.id===profile)?.description}</p><StudioStatus tone="success">Chất âm được áp dụng trực tiếp lên bài đang phát · đổi chế độ để A/B ngay</StudioStatus>
   <StudioPanel className="sd-master-advanced">
-    <button type="button" className="sd-advanced-toggle" onClick={()=>setAdvancedOpen(v=>!v)}><span><SlidersHorizontal/> Tinh chỉnh nâng cao</span><small>{custom?'Custom':'Theo preset'} · {advancedOpen?'Thu gọn':'Mở'}</small></button>
-    {advancedOpen&&<div className="sd-advanced-body">
-      <StudioStatus tone="success">Không thay đổi mặc định. Chỉ dùng Custom sau khi bạn chỉnh một thông số.</StudioStatus>
+    <button type="button" className="sd-advanced-toggle" onClick={()=>setAdvancedOpen(true)}><span><SlidersHorizontal/> Tinh chỉnh nâng cao</span><small>{custom?'Custom':'Theo preset'} · Mở toàn màn hình</small></button>
+  </StudioPanel>
+  <StudioModal open={advancedOpen} title="Tinh chỉnh Audio nâng cao" description="Mastering chuyên sâu · thay đổi chỉ dùng khi bạn chỉnh" onClose={()=>setAdvancedOpen(false)} footer={<><StudioButton onClick={resetAdvanced} disabled={!custom}>Reset preset</StudioButton><StudioButton tone="accent" onClick={()=>setAdvancedOpen(false)}>Xong</StudioButton></>}>
+    <div className="sd-advanced-full">
+      <StudioStatus tone="success">Mặc định vẫn giữ nguyên. Chỉnh thông số bên dưới để chuyển sang Custom.</StudioStatus>
       <div className="sd-advanced-grid">
        <StudioControlRow label="Target loudness" value={settings.targetLufs.toFixed(1)+' LUFS'}><StudioSlider label="Target LUFS" min={-18} max={-6} step={0.5} value={settings.targetLufs} onChange={v=>change({targetLufs:v})}/></StudioControlRow>
        <StudioControlRow label="Peak ceiling" value={settings.ceilingDb.toFixed(1)+' dB'}><StudioSlider label="Ceiling" min={-3} max={-0.5} step={0.1} value={settings.ceilingDb} onChange={v=>change({ceilingDb:v})}/></StudioControlRow>
@@ -56,10 +58,8 @@ export function MasteringPanel({audio,binary,title}:{audio:string;binary?:Blob|n
        <StudioControlRow label="Release" value={settings.releaseMs+' ms'}><StudioSlider label="Release" min={40} max={500} step={5} value={settings.releaseMs} onChange={v=>change({releaseMs:v})}/></StudioControlRow>
        <StudioControlRow label="Drive" value={Math.round(settings.drive*100)+'%'}><StudioSlider label="Drive" min={0} max={0.4} step={0.01} value={settings.drive} onChange={v=>change({drive:v})}/></StudioControlRow>
       </div>
-
-      <StudioButton onClick={resetAdvanced} disabled={!custom}>Reset về preset {MASTER_PROFILES.find(x=>x.id===profile)?.label}</StudioButton>
-    </div>}
-  </StudioPanel></>}
+    </div>
+  </StudioModal></>}
   {audioSection==='eq'&&<StudioPanel className="sd-eq-workspace"><div className="sd-section-kicker">ADVANCED EQ</div>      <div className="sd-channel-eq"><div className="sd-eq-title"><div><b>8-Band Parametric EQ</b><small>Precision EQ · ±12 dB · Frequency / Gain / Q</small></div><StudioBadge>STEREO EQ</StudioBadge></div>
        <div className="sd-eq-curve" aria-label="Đường cong EQ"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="eqFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="currentColor" stopOpacity=".22"/><stop offset="1" stopColor="currentColor" stopOpacity="0"/></linearGradient></defs>{[20,35,50,65,80].map(y=><line key={'y'+y} x1="0" y1={y} x2="100" y2={y}/>) }{[12,28,44,60,76,92].map(x=><line key={'x'+x} x1={x} y1="0" x2={x} y2="100"/>)}<path d={eqPath+' L92 50 L8 50 Z'} className="sd-eq-fill"/><path d={eqPath} className="sd-eq-line"/></svg>{settings.eqBands.map((b,i)=>{const left=8+(Math.log10(b.frequency/20)/Math.log10(1000))*84,top=50-(b.enabled?b.gain:0)*3.2;return <button key={i} type="button" className={'sd-eq-node '+(!b.enabled?'off':'')} style={{left:Math.max(4,Math.min(96,left))+'%',top:Math.max(8,Math.min(92,top))+'%'}} onClick={()=>changeBand(i,{enabled:!b.enabled})}>{i+1}</button>})}<span className="sd-eq-zero">0 dB</span></div>
        <div className="sd-eq-bands">{settings.eqBands.map((b,i)=><div className={'sd-eq-band '+(!b.enabled?'is-off':'')} key={i}><div className="sd-eq-band-head"><button type="button" onClick={()=>changeBand(i,{enabled:!b.enabled})}>{b.enabled?'ON':'OFF'}</button><b>Band {i+1}</b><em>{b.frequency>=1000?(b.frequency/1000).toFixed(b.frequency%1000?1:0)+'k':Math.round(b.frequency)} Hz</em></div><StudioControlRow label="Gain" value={(b.gain>0?'+':'')+b.gain.toFixed(1)+' dB'}><StudioSlider label={'Band '+(i+1)+' gain'} min={-12} max={12} step={.5} value={b.gain} onChange={v=>changeBand(i,{gain:v})}/></StudioControlRow><StudioControlRow label="Frequency" value={Math.round(b.frequency)+' Hz'}><StudioSlider label={'Band '+(i+1)+' frequency'} min={20} max={20000} step={10} value={b.frequency} onChange={v=>changeBand(i,{frequency:v})}/></StudioControlRow><StudioControlRow label="Q" value={b.q.toFixed(2)}><StudioSlider label={'Band '+(i+1)+' Q'} min={.3} max={8} step={.1} value={b.q} onChange={v=>changeBand(i,{q:v})}/></StudioControlRow></div>)}</div>
