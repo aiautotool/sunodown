@@ -147,27 +147,28 @@ function wrap(
   if (line && lines.length < maxLines) lines.push(line);
   return lines;
 }
-type SpectrumBands={bass:number;lowMid:number;vocal:number;high:number};
-function spectrumBands(samples:Float32Array|null,rate:number,t:number):SpectrumBands{
- if(!samples||!rate)return{bass:.035,lowMid:.035,vocal:.035,high:.035};
- const N=256,center=Math.max(N/2,Math.min(samples.length-N/2-1,Math.floor(t*rate))),start=Math.floor(center-N/2);
- let bass=0,lowMid=0,vocal=0,high=0,bc=0,lc=0,vc=0,hc=0;
- // Small DFT focused on the visual bands. Hann window prevents one transient leaking across every column.
- for(let k=1;k<N/2;k++){const hz=k*rate/N;if(hz>12000)break;let re=0,im=0;
-  for(let n=0;n<N;n++){const idx=start+n;if(idx<0||idx>=samples.length)continue;const win=.5-.5*Math.cos(2*Math.PI*n/(N-1)),v=samples[idx]*win,a=2*Math.PI*k*n/N;re+=v*Math.cos(a);im-=v*Math.sin(a)}
-  const mag=Math.sqrt(re*re+im*im)/N;
-  if(hz<180){bass+=mag;bc++}else if(hz<800){lowMid+=mag;lc++}else if(hz<4000){vocal+=mag;vc++}else{high+=mag;hc++}
- }
- const norm=(v:number,n:number,g:number)=>Math.min(1,Math.max(.025,(n?v/n:0)*g));
- return{bass:norm(bass,bc,28),lowMid:norm(lowMid,lc,42),vocal:norm(vocal,vc,62),high:norm(high,hc,95)};
-}
-function spectrumValue(samples:Float32Array|null,rate:number,t:number,column:number,total:number){
- const b=spectrumBands(samples,rate,t),x=column/Math.max(1,total-1);
- // Left→right maps low→high frequency while softly blending neighboring musical bands.
- const centers=[0,.31,.61,1],vals=[b.bass,b.lowMid,b.vocal,b.high];
- let j=0;while(j<centers.length-2&&x>centers[j+1])j++;
- const q=(x-centers[j])/(centers[j+1]-centers[j]),v=vals[j]*(1-q)+vals[j+1]*q;
- return Math.min(1,Math.max(.035,v*2.35));
+function amplitude(
+  samples: Float32Array | null,
+  rate: number,
+  t: number,
+  off = 0,
+) {
+  // Never fake musical motion when analysis is unavailable: a flat idle wave is less misleading.
+  if (!samples || !rate) return 0.06;
+  const c = Math.max(0, Math.min(samples.length - 1, Math.floor((t + off) * rate))),
+    r = Math.max(128, Math.floor(rate * 0.022)),
+    from = Math.max(0, c - r),
+    to = Math.min(samples.length, c + r),
+    stride = Math.max(1, Math.floor((to - from) / 96));
+  let energy = 0, peak = 0, n = 0;
+  for (let i = from; i < to; i += stride) {
+    const v = Math.abs(samples[i]);
+    energy += v * v; peak = Math.max(peak, v); n++;
+  }
+  if (!n) return 0.04;
+  // RMS follows perceived musical energy; peak adds transient response for kick/snare.
+  const rms = Math.sqrt(energy / n);
+  return Math.min(1, Math.max(0.035, rms * 6.6 + peak * 0.22));
 }
 function extractPalette(bmp: ImageBitmap): Palette {
   const c = document.createElement('canvas');
@@ -397,7 +398,7 @@ function drawWaveBase(
     cy = h - ph * 0.42,
     max = ph * 0.52,
     vals = Array.from({ length: n }, (_, i) =>
-      spectrumValue(samples, rate, t, i, n),
+      Math.max(0.05, amplitude(samples, rate, t, (i / (n - 1) - 0.5) * 0.7)),
     ),
     grad = waveGradient(ctx, w, p);
   const radial = [
