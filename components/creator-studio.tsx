@@ -166,6 +166,7 @@ function ToolControls(p: {
   setTrimStart: (v: number) => void;
   setTrimEnd: (v: number) => void;
 }) {
+  const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
   const rows = [
     ['style', 'Style', Sparkles],
     ['text', 'Text & resize', FileText],
@@ -403,10 +404,10 @@ function ToolControls(p: {
               {id === 'background' && (
                 <>
                   <button
-                    className={p.background.mode === 'suno' ? 'active' : ''}
+                    className={safeBackground.mode === 'suno' ? 'active' : ''}
                     onClick={() =>
                       p.setBackground({
-                        ...p.background,
+                        ...safeBackground,
                         mode: 'suno',
                         presetId: undefined,
                       })
@@ -418,14 +419,14 @@ function ToolControls(p: {
                     <button
                       key={item.id}
                       className={
-                        p.background.mode === 'preset' &&
-                        p.background.presetId === item.id
+                        safeBackground.mode === 'preset' &&
+                        safeBackground.presetId === item.id
                           ? 'active'
                           : ''
                       }
                       onClick={() =>
                         p.setBackground({
-                          ...p.background,
+                          ...safeBackground,
                           mode: 'preset',
                           presetId: item.id,
                         })
@@ -440,15 +441,15 @@ function ToolControls(p: {
                       type="range"
                       min="0"
                       max="80"
-                      value={p.background.dim}
+                      value={safeBackground.dim}
                       onChange={(e) =>
                         p.setBackground({
-                          ...p.background,
+                          ...safeBackground,
                           dim: Number(e.target.value),
                         })
                       }
                     />
-                    <span>{p.background.dim}%</span>
+                    <span>{safeBackground.dim}%</span>
                   </label>
                   <label className="sd-scale">
                     Overlay
@@ -456,15 +457,15 @@ function ToolControls(p: {
                       type="range"
                       min="0"
                       max="80"
-                      value={p.background.overlayOpacity}
+                      value={safeBackground.overlayOpacity}
                       onChange={(e) =>
                         p.setBackground({
-                          ...p.background,
+                          ...safeBackground,
                           overlayOpacity: Number(e.target.value),
                         })
                       }
                     />
-                    <span>{p.background.overlayOpacity}%</span>
+                    <span>{safeBackground.overlayOpacity}%</span>
                   </label>
                   <label className="sd-scale">
                     Blur
@@ -472,15 +473,15 @@ function ToolControls(p: {
                       type="range"
                       min="0"
                       max="20"
-                      value={p.background.blur}
+                      value={safeBackground.blur}
                       onChange={(e) =>
                         p.setBackground({
-                          ...p.background,
+                          ...safeBackground,
                           blur: Number(e.target.value),
                         })
                       }
                     />
-                    <span>{p.background.blur}</span>
+                    <span>{safeBackground.blur}</span>
                   </label>
                 </>
               )}
@@ -1620,6 +1621,8 @@ export default function CreatorStudio() {
             setTextStyles={(value) => { markPresetModified(); setTextStyles(value); }}
             subtitleStyle={subtitleStyle}
             setSubtitleStyle={(value) => { markPresetModified(); setSubtitleStyle(value); }}
+            background={background}
+            setBackground={(value) => { markPresetModified(); setBackground(value); }}
             trimStart={trimStart}
             trimEnd={trimEnd}
             duration={song.duration || 0}
