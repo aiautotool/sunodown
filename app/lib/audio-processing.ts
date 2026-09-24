@@ -24,3 +24,34 @@ export async function convertProcessedAudio(source: Blob, format: ProcessedForma
   const conversion = await Conversion.init({input,output,video:{discard:true},audio:format==='mp3'?{bitrate:192_000,numberOfChannels:2,sampleRate:48_000,forceTranscode:true}:format==='wav'?{numberOfChannels:2,sampleRate:48_000,sampleFormat:'s16',forceTranscode:true}:{codec:'aac',bitrate:128_000,numberOfChannels:2,sampleRate:48_000,forceTranscode:true},copy:false,showWarnings:false});
   if (!conversion.isValid) throw new Error(`Không hỗ trợ ${format.toUpperCase()} trên thiết bị này.`); await conversion.execute(); if (!target.buffer) throw new Error(`Không tạo được ${format.toUpperCase()}.`); return new Blob([target.buffer], { type: format === 'mp3' ? 'audio/mpeg' : format === 'wav' ? 'audio/wav' : 'audio/mp4' });
 }
+
+
+export type MasterProfileId = 'clean' | 'tiktok-loud' | 'punchy' | 'max-loud';
+export type MasterProfile = {id:MasterProfileId;label:string;targetLufs:number;ceilingDb:number;ratio:number;drive:number;description:string};
+export type MasterMetrics = {beforeLufs:number;beforePeak:number;crestDb:number;requestedLufs:number;safeTargetLufs:number;afterLufs:number;afterPeak:number;gainDb:number;risk:'Safe'|'Aggressive'|'Distortion risk'};
+export const MASTER_PROFILES:MasterProfile[]=[
+ {id:'clean',label:'Clean',targetLufs:-11,ceilingDb:-1,ratio:1.8,drive:.08,description:'Giữ transient và độ mở, chỉ làm bản mix chắc hơn.'},
+ {id:'tiktok-loud',label:'TikTok Loud',targetLufs:-8,ceilingDb:-1,ratio:2.6,drive:.18,description:'Dày và tiến về phía trước cho loa điện thoại.'},
+ {id:'punchy',label:'Punchy',targetLufs:-9,ceilingDb:-1,ratio:2.2,drive:.13,description:'Ưu tiên kick/snare và cảm giác đập, ít bóp transient.'},
+ {id:'max-loud',label:'Max Loud',targetLufs:-7,ceilingDb:-1,ratio:3.2,drive:.26,description:'Đẩy loudness cao; Auto Guard tự lùi target nếu nguồn quá chật.'},
+];
+export function getMasterProfile(id:MasterProfileId){return MASTER_PROFILES.find(x=>x.id===id)||MASTER_PROFILES[0]}
+function masterRisk(target:number,crest:number){return target>-7.5||crest<5?'Distortion risk':target>-9||crest<7?'Aggressive':'Safe'}
+export async function masterAudio(source:Blob,profileId:MasterProfileId){
+ const decoded=await decode(source),before=measure(decoded),profile=getMasterProfile(profileId),crest=Math.max(0,before.peak-before.lufs);
+ // Auto Guard: dense sources get less requested gain; dynamic sources may use the full target.
+ const guardFloor=crest<5?-9:crest<7?-8:profile.targetLufs;
+ const safeTarget=Math.min(profile.targetLufs,guardFloor),sampleRate=48000,frames=Math.ceil(decoded.duration*sampleRate);
+ const offline=new OfflineAudioContext(Math.min(2,Math.max(1,decoded.numberOfChannels)),frames,sampleRate),src=offline.createBufferSource();src.buffer=decoded;
+ const hp=offline.createBiquadFilter();hp.type='highpass';hp.frequency.value=28;hp.Q.value=.707;
+ const mud=offline.createBiquadFilter();mud.type='peaking';mud.frequency.value=260;mud.Q.value=.9;mud.gain.value=profileId==='clean'?-0.4:-.9;
+ const presence=offline.createBiquadFilter();presence.type='peaking';presence.frequency.value=3200;presence.Q.value=.8;presence.gain.value=profileId==='punchy'?.7:1;
+ const comp=offline.createDynamicsCompressor();comp.threshold.value=profileId==='clean'?-15:-19;comp.knee.value=9;comp.ratio.value=profile.ratio;comp.attack.value=profileId==='punchy'?.018:.009;comp.release.value=.12;
+ const drive=offline.createWaveShaper(),curve=new Float32Array(65536),k=1+profile.drive*8;for(let i=0;i<curve.length;i++){const x=i*2/(curve.length-1)-1;curve[i]=Math.tanh(k*x)/Math.tanh(k)}drive.curve=curve;drive.oversample='4x';
+ src.connect(hp).connect(mud).connect(presence).connect(comp).connect(drive).connect(offline.destination);src.start();
+ const shaped=await offline.startRendering(),pre=measure(shaped),ceiling=Math.pow(10,profile.ceilingDb/20),wanted=Math.pow(10,(safeTarget-pre.lufs)/20),peakLimited=pre.linearPeak?ceiling/pre.linearPeak:1,gain=Math.max(.2,Math.min(5,wanted,peakLimited*1.06));
+ const out=new AudioBuffer({length:shaped.length,numberOfChannels:shaped.numberOfChannels,sampleRate:shaped.sampleRate});
+ for(let ch=0;ch<out.numberOfChannels;ch++){const input=shaped.getChannelData(ch),dest=out.getChannelData(ch);for(let i=0;i<input.length;i++){const x=input[i]*gain;dest[i]=Math.max(-ceiling,Math.min(ceiling,x));}}
+ const after=measure(out),risk=masterRisk(safeTarget,crest);
+ return {blob:wavBlob(out),metrics:{beforeLufs:before.lufs,beforePeak:before.peak,crestDb:crest,requestedLufs:profile.targetLufs,safeTargetLufs:safeTarget,afterLufs:after.lufs,afterPeak:after.peak,gainDb:db(gain),risk} satisfies MasterMetrics};
+}

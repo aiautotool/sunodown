@@ -60,6 +60,7 @@ import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 import type { KaraokeLine } from '@/app/lib/karaoke';
 import { EditorTimeline, type MediaClip } from '@/components/editor-timeline';
 import { PresetGallery } from '@/components/presets/preset-gallery';
+import { MasteringPanel } from '@/components/mastering-panel';
 import {
   BUILTIN_STUDIO_PRESETS,
   PRESET_SCHEMA_VERSION,
@@ -1439,6 +1440,7 @@ export default function CreatorStudio() {
               <span>Visual sync</span>
               <b>{visualHash}</b>
             </div>
+            <MasteringPanel audio={song.audio} title={song.title} />
             <div className="sd-actions">
               <button
                 className="sd-export"
