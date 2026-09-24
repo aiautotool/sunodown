@@ -1145,6 +1145,66 @@ export default function CreatorStudio() {
       })),
     );
   }
+  const toolControlsProps: Parameters<typeof ToolControls>[0] = {
+    panel,
+    setPanel,
+    wave,
+    setWave: (value) => {
+      markPresetModified();
+      setWave(value);
+    },
+    template,
+    setTemplate: (value) => {
+      markPresetModified();
+      setTemplate(value);
+    },
+    aspect,
+    setAspect: (value) => {
+      markPresetModified();
+      setAspect(value);
+    },
+    lyrics,
+    setLyrics: (value) => {
+      markPresetModified();
+      setLyrics(value);
+    },
+    motion,
+    setMotion: (value) => {
+      markPresetModified();
+      setMotion(value);
+    },
+    effects,
+    setEffects: (value) => {
+      markPresetModified();
+      setEffects(value);
+    },
+    layout,
+    setLayout: (value) => {
+      markPresetModified();
+      setLayout(value);
+    },
+    textStyles,
+    setTextStyles: (value) => {
+      markPresetModified();
+      setTextStyles(value);
+    },
+    subtitleStyle,
+    setSubtitleStyle: (value) => {
+      markPresetModified();
+      setSubtitleStyle(value);
+    },
+    background,
+    setBackground: (value) => {
+      markPresetModified();
+      setBackground(value);
+    },
+    trimStart,
+    trimEnd,
+    duration: song?.duration || 0,
+    setTrimStart,
+    setTrimEnd,
+  };
+
   return (
     <div className="sd-app">
       <header className="sd-header">
@@ -1429,35 +1489,7 @@ export default function CreatorStudio() {
               onImportPreset={importPreset}
               onUndo={restorePresetSnapshot}
             />
-            <ToolControls
-              panel={panel}
-              setPanel={setPanel}
-              wave={wave}
-              setWave={(value) => { markPresetModified(); setWave(value); }}
-              template={template}
-              setTemplate={(value) => { markPresetModified(); setTemplate(value); }}
-              aspect={aspect}
-              setAspect={(value) => { markPresetModified(); setAspect(value); }}
-              lyrics={lyrics}
-              setLyrics={(value) => { markPresetModified(); setLyrics(value); }}
-              motion={motion}
-              setMotion={(value) => { markPresetModified(); setMotion(value); }}
-              effects={effects}
-              setEffects={(value) => { markPresetModified(); setEffects(value); }}
-              layout={layout}
-              setLayout={(value) => { markPresetModified(); setLayout(value); }}
-              textStyles={textStyles}
-              setTextStyles={(value) => { markPresetModified(); setTextStyles(value); }}
-              subtitleStyle={subtitleStyle}
-              setSubtitleStyle={(value) => { markPresetModified(); setSubtitleStyle(value); }}
-              background={background}
-              setBackground={(value) => { markPresetModified(); setBackground(value); }}
-              trimStart={trimStart}
-              trimEnd={trimEnd}
-              duration={song.duration || 0}
-              setTrimStart={setTrimStart}
-              setTrimEnd={setTrimEnd}
-            />
+            <ToolControls {...toolControlsProps} />
             <div className="sd-visual-sync" title="Preview/render visual fingerprint">
               <span>Visual sync</span>
               <b>{visualHash}</b>
@@ -1600,35 +1632,7 @@ export default function CreatorStudio() {
               onUndo={restorePresetSnapshot}
             />
           )}
-          <ToolControls
-            panel={panel}
-            setPanel={setPanel}
-            wave={wave}
-            setWave={(value) => { markPresetModified(); setWave(value); }}
-            template={template}
-            setTemplate={(value) => { markPresetModified(); setTemplate(value); }}
-            aspect={aspect}
-            setAspect={(value) => { markPresetModified(); setAspect(value); }}
-            lyrics={lyrics}
-            setLyrics={(value) => { markPresetModified(); setLyrics(value); }}
-            motion={motion}
-            setMotion={(value) => { markPresetModified(); setMotion(value); }}
-            effects={effects}
-            setEffects={(value) => { markPresetModified(); setEffects(value); }}
-            layout={layout}
-            setLayout={(value) => { markPresetModified(); setLayout(value); }}
-            textStyles={textStyles}
-            setTextStyles={(value) => { markPresetModified(); setTextStyles(value); }}
-            subtitleStyle={subtitleStyle}
-            setSubtitleStyle={(value) => { markPresetModified(); setSubtitleStyle(value); }}
-            background={background}
-            setBackground={(value) => { markPresetModified(); setBackground(value); }}
-            trimStart={trimStart}
-            trimEnd={trimEnd}
-            duration={song.duration || 0}
-            setTrimStart={setTrimStart}
-            setTrimEnd={setTrimEnd}
-          />
+          <ToolControls {...toolControlsProps} />
         </div>
       )}
     </div>
