@@ -69,6 +69,20 @@ export function PresetGallery({
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
   const [pendingPreset, setPendingPreset] = useState<StudioPreset | null>(null);
+  const [notice, setNotice] = useState('');
+  const flash = (message: string) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(''), 1800);
+  };
+  const saveNamedPreset = () => {
+    const nextName = name.trim();
+    if (!nextName) return;
+    onSaveCurrent(nextName);
+    setName('');
+    setSaving(false);
+    setCategory('My Presets');
+    flash(`Saved “${nextName}” to My Presets`);
+  };
   const selectedPreset = presets.find((preset) => preset.id === selectedId) || null;
 
   const requestApply = (preset: StudioPreset) => {
@@ -106,7 +120,7 @@ export function PresetGallery({
         <div className="sd-preset-head-actions">
           {modified && selectedPreset && (
             <button
-              onClick={() => onResetSelected(selectedPreset)}
+              onClick={() => { onResetSelected(selectedPreset); flash(`Reset to “${selectedPreset.name}”`); }}
               title="Reset to saved preset"
             >
               <RefreshCw /> Reset
@@ -115,14 +129,14 @@ export function PresetGallery({
           {modified && selectedPreset && !selectedPreset.builtin && (
             <button
               className="primary"
-              onClick={() => onUpdateCurrent(selectedPreset)}
+              onClick={() => { onUpdateCurrent(selectedPreset); flash(`Updated “${selectedPreset.name}”`); }}
               title="Update this custom preset"
             >
               <Save /> Update
             </button>
           )}
           {canUndo && (
-            <button onClick={onUndo} title="Undo preset">
+            <button onClick={() => { onUndo(); flash('Preset change undone'); }} title="Undo preset">
               <RotateCcw /> Undo
             </button>
           )}
@@ -138,43 +152,46 @@ export function PresetGallery({
               accept=".json,application/json"
               onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) onImportPreset(file);
+                if (file) { onImportPreset(file); setCategory('My Presets'); flash('Preset imported to My Presets'); }
                 event.currentTarget.value = '';
               }}
             />
           </label>
-          <button onClick={() => setSaving((value) => !value)}>
+          <button onClick={() => setSaving(true)}>
             <Save /> Save new
           </button>
         </div>
       </div>
 
       {saving && (
-        <div className="sd-preset-save">
-          <input
-            autoFocus
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Preset name"
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && name.trim()) {
-                onSaveCurrent(name.trim());
-                setName('');
-                setSaving(false);
-              }
-            }}
-          />
-          <button
-            disabled={!name.trim()}
-            onClick={() => {
-              if (!name.trim()) return;
-              onSaveCurrent(name.trim());
-              setName('');
-              setSaving(false);
-            }}
-          >
-            Save preset
-          </button>
+        <div className="sd-preset-save-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setSaving(false);
+        }}>
+          <div className="sd-preset-save-dialog" role="dialog" aria-modal="true" aria-labelledby="sd-save-preset-title">
+            <button className="sd-preset-dialog-close" aria-label="Close" onClick={() => setSaving(false)}>×</button>
+            <div className="sd-preset-save-preview" style={picture ? { backgroundImage: `url("${picture}")` } : undefined}>
+              <span><Sparkles /> Current video style</span>
+            </div>
+            <div className="sd-preset-save-copy">
+              <small>MY PRESETS</small>
+              <b id="sd-save-preset-title">Save current style</b>
+              <span>Save the current video look so you can apply it again with one tap.</span>
+            </div>
+            <input
+              autoFocus
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Preset name"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') saveNamedPreset();
+                if (event.key === 'Escape') setSaving(false);
+              }}
+            />
+            <div className="sd-preset-save-actions">
+              <button onClick={() => setSaving(false)}>Cancel</button>
+              <button className="primary" disabled={!name.trim()} onClick={saveNamedPreset}><Save /> Save preset</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -210,6 +227,7 @@ export function PresetGallery({
               <button
                 onClick={() => {
                   onApply(pendingPreset, 'preserve-custom');
+                  flash(`Applied “${pendingPreset.name}” · kept custom layout/background`);
                   setPendingPreset(null);
                 }}
               >
@@ -220,6 +238,7 @@ export function PresetGallery({
                 autoFocus
                 onClick={() => {
                   onApply(pendingPreset, 'replace-all');
+                  flash(`Applied “${pendingPreset.name}”`);
                   setPendingPreset(null);
                 }}
               >
@@ -232,6 +251,8 @@ export function PresetGallery({
           </div>
         </div>
       )}
+
+      {notice && <div className="sd-preset-toast" role="status"><span>✓</span>{notice}</div>}
 
       <div className="sd-preset-tabs">
         {CATEGORIES.map((item) => (
@@ -285,12 +306,12 @@ export function PresetGallery({
               <footer className={preset.builtin ? '' : 'custom'}>
                 <button
                   className={favorite ? 'active' : ''}
-                  onClick={() => onToggleFavorite(preset.id)}
+                  onClick={() => { onToggleFavorite(preset.id); flash(favorite ? `Removed “${preset.name}” from Favorites` : `Added “${preset.name}” to Favorites`); }}
                   title="Favorite"
                 >
                   <Heart />
                 </button>
-                <button onClick={() => onDuplicate(preset)} title="Duplicate">
+                <button onClick={() => { onDuplicate(preset); setCategory('My Presets'); flash(`Duplicated “${preset.name}” to My Presets`); }} title="Duplicate">
                   <Copy />
                 </button>
                 {!preset.builtin && (
