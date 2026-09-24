@@ -3,6 +3,7 @@ import type { StudioPreset, StudioPresetConfig } from './studio-presets';
 export type VisualParityReport = {
   ok: boolean;
   fingerprint: string;
+  renderFingerprint: string;
   issues: string[];
 };
 
@@ -31,6 +32,10 @@ function fingerprint(value: unknown) {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
+/**
+ * Clone the exact visual state consumed by preview/render. Effect order is
+ * deliberately preserved because compositing order changes the final frame.
+ */
 export function normalizeVisualSnapshot(config: StudioPresetConfig): StudioPresetConfig {
   return {
     template: config.template,
@@ -38,7 +43,7 @@ export function normalizeVisualSnapshot(config: StudioPresetConfig): StudioPrese
     motion: config.motion,
     aspect: config.aspect,
     lyrics: config.lyrics,
-    effects: [...config.effects].sort(),
+    effects: [...config.effects],
     layout: structuredClone(config.layout),
     textStyles: structuredClone(config.textStyles),
     subtitleStyle: structuredClone(config.subtitleStyle),
@@ -59,6 +64,10 @@ function comparePath(
   if (stable(preview) !== stable(render)) issues.push(path);
 }
 
+/**
+ * End-to-end visual contract between LivePreview and renderer. Keep paths
+ * granular so a production mismatch points to the exact state that drifted.
+ */
 export function comparePreviewAndRender(
   preview: StudioPresetConfig,
   render: StudioPresetConfig,
@@ -73,14 +82,35 @@ export function comparePreviewAndRender(
   comparePath(issues, 'aspect', a.aspect, b.aspect);
   comparePath(issues, 'lyrics', a.lyrics, b.lyrics);
   comparePath(issues, 'effects', a.effects, b.effects);
-  comparePath(issues, 'layout', a.layout, b.layout);
-  comparePath(issues, 'textStyles', a.textStyles, b.textStyles);
+
+  for (const key of REQUIRED_LAYOUT_KEYS) {
+    comparePath(issues, `layout.${key}`, a.layout[key], b.layout[key]);
+  }
+  for (const key of REQUIRED_TEXT_KEYS) {
+    comparePath(issues, `textStyles.${key}`, a.textStyles[key], b.textStyles[key]);
+  }
   comparePath(issues, 'subtitleStyle', a.subtitleStyle, b.subtitleStyle);
-  comparePath(issues, 'background', a.background, b.background);
+
+  comparePath(issues, 'background.mode', a.background.mode, b.background.mode);
+  comparePath(issues, 'background.presetId', a.background.presetId, b.background.presetId);
+  comparePath(issues, 'background.imageUrl', a.background.imageUrl, b.background.imageUrl);
+  comparePath(issues, 'background.videoUrl', a.background.videoUrl, b.background.videoUrl);
+  comparePath(issues, 'background.fit', a.background.fit, b.background.fit);
+  comparePath(issues, 'background.blur', a.background.blur, b.background.blur);
+  comparePath(issues, 'background.dim', a.background.dim, b.background.dim);
+  comparePath(issues, 'background.overlayOpacity', a.background.overlayOpacity, b.background.overlayOpacity);
+  comparePath(issues, 'background.loopVideo', a.background.loopVideo, b.background.loopVideo);
+
+  const previewFingerprint = visualFingerprint(a);
+  const renderFingerprint = visualFingerprint(b);
+  if (previewFingerprint !== renderFingerprint && issues.length === 0) {
+    issues.push('fingerprint');
+  }
 
   return {
     ok: issues.length === 0,
-    fingerprint: visualFingerprint(a),
+    fingerprint: previewFingerprint,
+    renderFingerprint,
     issues,
   };
 }
