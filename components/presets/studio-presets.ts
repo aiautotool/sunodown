@@ -34,7 +34,10 @@ export type StudioPresetConfig = {
   background: BackgroundConfig;
 };
 
+export const PRESET_SCHEMA_VERSION = 2;
+
 export type StudioPreset = {
+  schemaVersion?: number;
   id: string;
   name: string;
   description: string;
@@ -73,6 +76,7 @@ const text = (
 
 export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
   {
+    schemaVersion: PRESET_SCHEMA_VERSION,
     id: 'social-hook',
     name: 'Social Hook',
     description: 'Hook mạnh cho TikTok, Reels và Shorts. Chữ lớn, pulse rõ, bắt mắt ngay 3 giây đầu.',
@@ -99,6 +103,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
     },
   },
   {
+    schemaVersion: PRESET_SCHEMA_VERSION,
     id: 'sad-lyrics',
     name: 'Sad Lyrics',
     description: 'Ballad và ca khúc cảm xúc. Bố cục tối, lyric tập trung, chuyển động chậm và hạt phim nhẹ.',
@@ -125,6 +130,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
     },
   },
   {
+    schemaVersion: PRESET_SCHEMA_VERSION,
     id: 'cinematic-story',
     name: 'Cinema Story',
     description: 'Video kể chuyện điện ảnh, title thanh lịch, ánh sáng dịu và bố cục rộng.',
@@ -151,6 +157,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
     },
   },
   {
+    schemaVersion: PRESET_SCHEMA_VERSION,
     id: 'album-motion',
     name: 'Album Motion',
     description: 'Cover art là trung tâm, waveform vòng tròn và chuyển động vừa đủ cho music visualizer.',
@@ -177,6 +184,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
     },
   },
   {
+    schemaVersion: PRESET_SCHEMA_VERSION,
     id: 'neon-pulse',
     name: 'Neon Pulse',
     description: 'EDM, synthwave và electronic. Neon ring, glow, chuyển động mạnh và màu tương phản cao.',
@@ -203,6 +211,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
     },
   },
   {
+    schemaVersion: PRESET_SCHEMA_VERSION,
     id: 'minimal-clean',
     name: 'Minimal Clean',
     description: 'Tối giản, sạch, ít hiệu ứng. Phù hợp acoustic, chill, podcast music và portfolio.',
@@ -229,6 +238,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
     },
   },
   {
+    schemaVersion: PRESET_SCHEMA_VERSION,
     id: 'karaoke-pop',
     name: 'Karaoke Pop',
     description: 'Lyric rõ, highlight từng câu, bố cục cân bằng cho video hát theo và social clips.',
@@ -255,6 +265,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
     },
   },
   {
+    schemaVersion: PRESET_SCHEMA_VERSION,
     id: 'gold-premiere',
     name: 'Gold Premiere',
     description: 'Luxury music launch: gold record, chữ serif, glow nhẹ và hạt phim cao cấp.',
@@ -282,10 +293,100 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
   },
 ];
 
+const VALID_TEMPLATES = new Set<VisualTemplate>([
+  'cover-motion',
+  'vinyl',
+  'glass-card',
+  'lyrics-focus',
+  'editorial',
+  'spotlight',
+  'gold-record',
+]);
+const VALID_ASPECTS = new Set<VideoAspect>(['16:9', '9:16', '1:1', '4:5', '4:3']);
+const VALID_LYRICS = new Set<LyricsMode>(['off', 'scroll', 'focus']);
+const VALID_MOTION = new Set<MotionIntensity>(['low', 'medium', 'high']);
+
+const fallbackConfig = (): StudioPresetConfig =>
+  clonePresetConfig(BUILTIN_STUDIO_PRESETS[0].config);
+
 export function clonePresetConfig(config: StudioPresetConfig): StudioPresetConfig {
   const cloned = structuredClone(config) as StudioPresetConfig;
   cloned.background = structuredClone(
     config.background || DEFAULT_BACKGROUND_CONFIG,
   );
   return cloned;
+}
+
+export function normalizePresetConfig(value: Partial<StudioPresetConfig> | null | undefined): StudioPresetConfig {
+  if (!value) return fallbackConfig();
+  const fallback = BUILTIN_STUDIO_PRESETS[0].config;
+  const template = VALID_TEMPLATES.has(value.template as VisualTemplate)
+    ? (value.template as VisualTemplate)
+    : fallback.template;
+  const aspect = VALID_ASPECTS.has(value.aspect as VideoAspect)
+    ? (value.aspect as VideoAspect)
+    : fallback.aspect;
+  const lyrics = VALID_LYRICS.has(value.lyrics as LyricsMode)
+    ? (value.lyrics as LyricsMode)
+    : fallback.lyrics;
+  const motion = VALID_MOTION.has(value.motion as MotionIntensity)
+    ? (value.motion as MotionIntensity)
+    : fallback.motion;
+
+  return {
+    template,
+    wave: (value.wave || fallback.wave) as WaveStyle,
+    motion,
+    aspect,
+    lyrics,
+    effects: Array.isArray(value.effects)
+      ? value.effects.filter(Boolean) as VideoEffect[]
+      : [...fallback.effects],
+    layout: structuredClone(value.layout || fallback.layout),
+    textStyles: structuredClone(value.textStyles || fallback.textStyles),
+    subtitleStyle: structuredClone(value.subtitleStyle || fallback.subtitleStyle),
+    background: structuredClone(value.background || DEFAULT_BACKGROUND_CONFIG),
+  };
+}
+
+export function normalizeStudioPreset(value: Partial<StudioPreset> | null | undefined): StudioPreset | null {
+  if (!value || typeof value.id !== 'string' || typeof value.name !== 'string') return null;
+  const categories: StudioPresetCategory[] = ['Social', 'Lyrics', 'Cinematic', 'Album', 'Visualizer'];
+  const category = categories.includes(value.category as StudioPresetCategory)
+    ? (value.category as StudioPresetCategory)
+    : 'Social';
+  return {
+    schemaVersion: PRESET_SCHEMA_VERSION,
+    id: value.id,
+    name: value.name.trim() || 'Untitled preset',
+    description:
+      typeof value.description === 'string' && value.description.trim()
+        ? value.description
+        : 'Custom Creator Studio preset.',
+    category,
+    badge: typeof value.badge === 'string' ? value.badge : 'My preset',
+    accent:
+      typeof value.accent === 'string' && /^#[0-9a-f]{6}$/i.test(value.accent)
+        ? value.accent
+        : '#8b5cf6',
+    secondary:
+      typeof value.secondary === 'string' && /^#[0-9a-f]{6}$/i.test(value.secondary)
+        ? value.secondary
+        : '#ffffff',
+    builtin: value.builtin === true,
+    config: normalizePresetConfig(value.config),
+  };
+}
+
+export function normalizeStoredPresets(input: unknown): StudioPreset[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const result: StudioPreset[] = [];
+  for (const item of input) {
+    const preset = normalizeStudioPreset(item as Partial<StudioPreset>);
+    if (!preset || preset.builtin || seen.has(preset.id)) continue;
+    seen.add(preset.id);
+    result.push(preset);
+  }
+  return result;
 }
