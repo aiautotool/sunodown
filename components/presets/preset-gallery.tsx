@@ -21,6 +21,7 @@ export function PresetGallery({
   picture,
   favoriteIds,
   canUndo,
+  modified,
   onApply,
   onToggleFavorite,
   onDuplicate,
@@ -34,7 +35,8 @@ export function PresetGallery({
   picture?: string;
   favoriteIds: string[];
   canUndo: boolean;
-  onApply: (preset: StudioPreset) => void;
+  modified: boolean;
+  onApply: (preset: StudioPreset, mode: 'replace-all' | 'preserve-custom') => void;
   onToggleFavorite: (id: string) => void;
   onDuplicate: (preset: StudioPreset) => void;
   onRename: (preset: StudioPreset, name: string) => void;
@@ -45,6 +47,15 @@ export function PresetGallery({
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('All');
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
+  const [pendingPreset, setPendingPreset] = useState<StudioPreset | null>(null);
+
+  const requestApply = (preset: StudioPreset) => {
+    if (modified && selectedId) {
+      setPendingPreset(preset);
+      return;
+    }
+    onApply(preset, 'replace-all');
+  };
   const visible = useMemo(
     () =>
       presets
@@ -69,7 +80,7 @@ export function PresetGallery({
       <div className="sd-preset-head">
         <div>
           <span><Sparkles /> Smart Presets</span>
-          <b>One tap changes the whole video</b>
+          <b>One tap changes the whole video {modified && selectedId ? '· Modified' : ''}</b>
         </div>
         <div className="sd-preset-head-actions">
           {canUndo && (
@@ -112,6 +123,37 @@ export function PresetGallery({
         </div>
       )}
 
+      {pendingPreset && (
+        <div className="sd-preset-apply-choice">
+          <div>
+            <b>Apply {pendingPreset.name}?</b>
+            <span>You have manual changes on the current preset.</span>
+          </div>
+          <div>
+            <button
+              onClick={() => {
+                onApply(pendingPreset, 'preserve-custom');
+                setPendingPreset(null);
+              }}
+            >
+              Keep layout, text & background
+            </button>
+            <button
+              className="replace"
+              onClick={() => {
+                onApply(pendingPreset, 'replace-all');
+                setPendingPreset(null);
+              }}
+            >
+              Replace everything
+            </button>
+            <button className="cancel" onClick={() => setPendingPreset(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="sd-preset-tabs">
         {CATEGORIES.map((item) => (
           <button
@@ -137,7 +179,7 @@ export function PresetGallery({
                 ['--preset-secondary' as string]: preset.secondary,
               }}
             >
-              <button className="sd-preset-preview" onClick={() => onApply(preset)}>
+              <button className="sd-preset-preview" onClick={() => requestApply(preset)}>
                 <span
                   className={`sd-preset-art${preset.thumbnail ? ' saved-thumb' : ''}`}
                   style={
@@ -189,8 +231,8 @@ export function PresetGallery({
                     <Trash2 />
                   </button>
                 )}
-                <button className="apply" onClick={() => onApply(preset)}>
-                  {selected ? 'Applied' : 'Apply'}
+                <button className="apply" onClick={() => requestApply(preset)}>
+                  {selected ? (modified ? 'Modified' : 'Applied') : 'Apply'}
                 </button>
               </footer>
             </article>
