@@ -215,3 +215,5 @@ body { font-family: var(--font-app), Arial, Helvetica, sans-serif; }
 }
 
 .sd-preset-grid article footer.custom{grid-template-columns:29px 29px 29px 29px 1fr}
+
+.sd-preset-art.saved-thumb i{display:none}.sd-preset-art.saved-thumb:after{background:linear-gradient(180deg,rgba(7,10,16,.02),rgba(7,10,16,.46))}
