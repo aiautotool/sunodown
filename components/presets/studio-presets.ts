@@ -47,6 +47,7 @@ export type StudioPreset = {
   badge?: string;
   accent: string;
   secondary: string;
+  thumbnail?: string;
   builtin?: boolean;
   config: StudioPresetConfig;
 };
@@ -403,6 +404,11 @@ export function normalizeStudioPreset(value: Partial<StudioPreset> | null | unde
       typeof value.secondary === 'string' && /^#[0-9a-f]{6}$/i.test(value.secondary)
         ? value.secondary
         : '#ffffff',
+    thumbnail:
+      typeof value.thumbnail === 'string' &&
+      (value.thumbnail.startsWith('data:image/') || value.thumbnail.startsWith('https://'))
+        ? value.thumbnail
+        : undefined,
     builtin: value.builtin === true,
     config: normalizePresetConfig(value.config),
   };
