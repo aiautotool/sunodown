@@ -73,6 +73,27 @@ export function BackgroundPanel({value,onChange,onError}:Props){
    {modes.map(([id,label,hint])=><button key={id} type="button" onClick={()=>chooseMode(id)} className={`shrink-0 rounded-xl border px-3 py-2.5 text-left ${value.mode===id?'border-sky-300/40 bg-sky-300/10':'border-white/10 bg-black/20'}`}><span className="block text-xs font-bold">{label}</span><span className="mt-0.5 block text-[10px] text-white/40">{hint}</span></button>)}
   </div>
 
+  <div className="sd-bg-upload-actions">
+    <button
+      type="button"
+      className="sd-bg-upload-btn"
+      onClick={()=>imageInput.current?.click()}
+    >
+      <span>＋</span>
+      <b>{value.mode==='image'&&value.imageUrl?'Thay ảnh khác':'Thay ảnh nền'}</b>
+      <small>JPG · PNG · WebP</small>
+    </button>
+    <button
+      type="button"
+      className="sd-bg-upload-btn"
+      onClick={()=>videoInput.current?.click()}
+    >
+      <span>▶</span>
+      <b>{value.mode==='video'&&value.videoUrl?'Thay video khác':'Thay video nền'}</b>
+      <small>MP4 · WebM · MOV</small>
+    </button>
+  </div>
+
   {value.mode==='preset'&&<div className="mt-3 flex gap-2 overflow-x-auto overscroll-x-contain pb-2">
    {BACKGROUND_PRESETS.map((p,i)=><button key={p.id} type="button" onClick={()=>onChange({...value,mode:'preset',presetId:p.id})} className={`shrink-0 w-28 overflow-hidden rounded-xl border text-left ${value.presetId===p.id?'border-fuchsia-300/50':'border-white/10'}`}>
     <span className={`block h-14 ${['bg-gradient-to-br from-violet-950 via-purple-700 to-slate-900','bg-gradient-to-br from-cyan-950 via-slate-900 to-fuchsia-900','bg-gradient-to-br from-slate-950 via-indigo-950 to-purple-950','bg-gradient-to-br from-fuchsia-100 via-blue-100 to-amber-100','bg-gradient-to-br from-zinc-950 via-zinc-800 to-slate-950','bg-gradient-to-br from-black via-purple-950 to-fuchsia-950','bg-gradient-to-br from-cyan-950 via-blue-950 to-indigo-900','bg-gradient-to-br from-purple-950 via-rose-900 to-fuchsia-950'][i]}`}/>
@@ -80,8 +101,8 @@ export function BackgroundPanel({value,onChange,onError}:Props){
    </button>)}
   </div>}
 
-  {value.mode==='image'&&value.imageUrl&&<div className="mt-3 flex items-center gap-3 rounded-xl border border-white/[.07] bg-black/20 p-2.5"><img src={value.imageUrl} alt="Preview ảnh nền" className="size-16 rounded-lg object-cover"/><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{imageName||'Ảnh nền đã chọn'}</p><p className="mt-1 text-[10px] text-white/40">Xử lý hoàn toàn trên thiết bị.</p></div></div>}
-  {value.mode==='video'&&value.videoUrl&&<div className="mt-3 flex items-center gap-3 rounded-xl border border-white/[.07] bg-black/20 p-2.5"><video src={value.videoUrl} muted playsInline preload="metadata" className="h-16 w-24 rounded-lg bg-black object-cover"/><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{videoName||'Video nền'}</p><p className="mt-1 text-[10px] text-white/40">{fmtBytes(videoSize)} · {fmtTime(videoDuration||0)}</p></div></div>}
+  {value.mode==='image'&&value.imageUrl&&<div className="sd-bg-selected"><img src={value.imageUrl} alt="Preview ảnh nền"/><div className="sd-bg-selected-copy"><b>{imageName||'Ảnh nền đã chọn'}</b><small>Xử lý hoàn toàn trên thiết bị.</small></div><div className="sd-bg-selected-actions"><button type="button" onClick={()=>imageInput.current?.click()}>Thay ảnh</button><button type="button" onClick={remove}>Xóa</button></div></div>}
+  {value.mode==='video'&&value.videoUrl&&<div className="sd-bg-selected"><video src={value.videoUrl} muted playsInline preload="metadata"/><div className="sd-bg-selected-copy"><b>{videoName||'Video nền'}</b><small>{fmtBytes(videoSize)} · {fmtTime(videoDuration||0)}</small></div><div className="sd-bg-selected-actions"><button type="button" onClick={()=>videoInput.current?.click()}>Thay video</button><button type="button" onClick={remove}>Xóa</button></div></div>}
   {warning&&<p className="mt-2 rounded-lg bg-amber-300/10 px-3 py-2 text-[11px] text-amber-100">{warning}</p>}
 
   {value.mode!=='suno'&&<details className="mt-3 rounded-xl border border-white/[.07] bg-black/15">
