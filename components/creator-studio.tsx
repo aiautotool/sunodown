@@ -172,6 +172,7 @@ function ToolControls(p: {
   audioUrl: string;
   audioBinary: Blob | null;
   songTitle: string;
+  presetContent?: React.ReactNode;
 }) {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
   const rows = [
@@ -198,6 +199,7 @@ function ToolControls(p: {
       {rows.map(([id]) => p.panel === id && (
         <div className="sd-tab-panel" key={id}>
           <div className="sd-options">
+              {id === 'presets' && p.presetContent}
               {id === 'style' && (
                 <p className="sd-control-hint">
                   Preset thay đổi toàn bộ video. Các nút dưới đây dùng để tinh chỉnh thủ công sau khi chọn preset.
@@ -1423,7 +1425,7 @@ export default function CreatorStudio() {
                   : 'Lưu dự án'}
             </button>
             <hr />
-            {panel === 'presets' && <PresetGallery
+            <ToolControls {...toolControlsProps} presetContent={<PresetGallery
               presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
               selectedId={selectedPresetId}
               picture={song.picture}
@@ -1441,8 +1443,7 @@ export default function CreatorStudio() {
               onExportPreset={exportPreset}
               onImportPreset={importPreset}
               onUndo={restorePresetSnapshot}
-            />}
-            <ToolControls {...toolControlsProps} />
+            />} />
             <div className="sd-visual-sync" title="Preview/render visual fingerprint">
               <span>Visual sync</span>
               <b>{visualHash}</b>
@@ -1560,8 +1561,7 @@ export default function CreatorStudio() {
       )}
       {song && mobileTools && (
         <StudioSheet title="Điều khiển video" onClose={() => setMobileTools(false)} className="sd-tool-sheet">
-          {panel === 'presets' && (
-            <PresetGallery
+          <ToolControls {...toolControlsProps} presetContent={<PresetGallery
               presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
               selectedId={selectedPresetId}
               picture={song.picture}
@@ -1579,9 +1579,7 @@ export default function CreatorStudio() {
               onExportPreset={exportPreset}
               onImportPreset={importPreset}
               onUndo={restorePresetSnapshot}
-            />
-          )}
-          <ToolControls {...toolControlsProps} />
+            />} />
         </StudioSheet>
       )}
     </div>
