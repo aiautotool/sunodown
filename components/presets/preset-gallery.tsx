@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Copy, Heart, RotateCcw, Save, Sparkles } from 'lucide-react';
+import { Copy, Heart, Pencil, RotateCcw, Save, Sparkles, Trash2 } from 'lucide-react';
 import type { StudioPreset, StudioPresetCategory } from './studio-presets';
 
 const CATEGORIES: Array<'All' | StudioPresetCategory | 'My Presets'> = [
@@ -23,6 +23,8 @@ export function PresetGallery({
   onApply,
   onToggleFavorite,
   onDuplicate,
+  onRename,
+  onDelete,
   onSaveCurrent,
   onUndo,
 }: {
@@ -34,6 +36,8 @@ export function PresetGallery({
   onApply: (preset: StudioPreset) => void;
   onToggleFavorite: (id: string) => void;
   onDuplicate: (preset: StudioPreset) => void;
+  onRename: (preset: StudioPreset, name: string) => void;
+  onDelete: (preset: StudioPreset) => void;
   onSaveCurrent: (name: string) => void;
   onUndo: () => void;
 }) {
@@ -139,7 +143,7 @@ export function PresetGallery({
                   <small>{preset.description}</small>
                 </span>
               </button>
-              <footer>
+              <footer className={preset.builtin ? '' : 'custom'}>
                 <button
                   className={favorite ? 'active' : ''}
                   onClick={() => onToggleFavorite(preset.id)}
@@ -150,6 +154,27 @@ export function PresetGallery({
                 <button onClick={() => onDuplicate(preset)} title="Duplicate">
                   <Copy />
                 </button>
+                {!preset.builtin && (
+                  <button
+                    onClick={() => {
+                      const next = window.prompt('Rename preset', preset.name)?.trim();
+                      if (next) onRename(preset, next);
+                    }}
+                    title="Rename"
+                  >
+                    <Pencil />
+                  </button>
+                )}
+                {!preset.builtin && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`Delete preset "${preset.name}"?`)) onDelete(preset);
+                    }}
+                    title="Delete"
+                  >
+                    <Trash2 />
+                  </button>
+                )}
                 <button className="apply" onClick={() => onApply(preset)}>
                   {selected ? 'Applied' : 'Apply'}
                 </button>
