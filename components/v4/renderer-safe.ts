@@ -148,6 +148,17 @@ function wrap(
   if (line && lines.length < maxLines) lines.push(line);
   return lines;
 }
+function amplitude(samples: Float32Array | null, rate: number, t: number) {
+  if (!samples || !rate) return 0.06;
+  const c = Math.max(0, Math.min(samples.length - 1, Math.floor(t * rate)));
+  const r = Math.max(128, Math.floor(rate * 0.022));
+  const from = Math.max(0, c - r), to = Math.min(samples.length, c + r);
+  const stride = Math.max(1, Math.floor((to - from) / 96));
+  let energy = 0, peak = 0, n = 0;
+  for (let i = from; i < to; i += stride) { const v = Math.abs(samples[i]); energy += v * v; peak = Math.max(peak, v); n++; }
+  if (!n) return 0.04;
+  return Math.min(1, Math.max(0.035, Math.sqrt(energy / n) * 6.6 + peak * 0.22));
+}
 type SpectrumBands={bass:number;lowMid:number;vocal:number;high:number};
 function spectrumBands(samples:Float32Array|null,rate:number,t:number):SpectrumBands{
  if(!samples||!rate)return{bass:.035,lowMid:.035,vocal:.035,high:.035};
