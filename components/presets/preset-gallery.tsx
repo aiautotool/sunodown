@@ -260,30 +260,16 @@ export function PresetGallery({
             >
               <button className="sd-preset-preview" onClick={() => requestApply(preset)}>
                 <span
-                  className={`sd-preset-art preset-${preset.config.background.mode}${preset.thumbnail ? ' saved-thumb' : ''}`}
-                  style={{
-                    ['--preset-aspect' as string]: aspectRatio(preset.config.aspect),
-                    ['--preset-dim' as string]: String(preset.config.background.dim ?? 0),
-                    ['--preset-overlay' as string]: String(preset.config.background.overlayOpacity ?? 0),
-                    ...(preset.thumbnail || (preset.config.background.mode === 'suno' && picture)
+                  className={`sd-preset-art${preset.thumbnail ? ' saved-thumb' : ''}`}
+                  style={
+                    preset.thumbnail || picture
                       ? { backgroundImage: `url("${preset.thumbnail || picture}")` }
-                      : {}),
-                  }}
+                      : undefined
+                  }
                 >
-                  <span className="sd-preset-scene">
-                    <i className={`wave wave-${preset.config.wave}`} />
-                    <span className={`template template-${preset.config.template}`}>
-                      <b />
-                      {preset.config.lyrics !== 'off' && <small />}
-                    </span>
-                  </span>
+                  <i />
                   <em>{preset.category}</em>
                   {preset.badge && <strong>{preset.badge}</strong>}
-                  <span className="sd-preset-specs">
-                    <span>{preset.config.aspect}</span>
-                    <span>{waveLabel(preset.config.wave)}</span>
-                    <span>{backgroundLabel(preset)}</span>
-                  </span>
                   {selected && (
                     <span className={`sd-preset-state ${modified ? 'modified' : 'applied'}`}>
                       {modified ? 'Modified' : 'Applied'}
