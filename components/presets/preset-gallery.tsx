@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Copy, Heart, Pencil, RefreshCw, RotateCcw, Save, Sparkles, Trash2 } from 'lucide-react';
+import { Copy, Download, Heart, Pencil, RefreshCw, RotateCcw, Save, Sparkles, Trash2, Upload } from 'lucide-react';
 import type { StudioPreset, StudioPresetCategory } from './studio-presets';
 
 const CATEGORIES: Array<'All' | 'Favorites' | StudioPresetCategory | 'My Presets'> = [
@@ -30,6 +30,8 @@ export function PresetGallery({
   onSaveCurrent,
   onUpdateCurrent,
   onResetSelected,
+  onExportPreset,
+  onImportPreset,
   onUndo,
 }: {
   presets: StudioPreset[];
@@ -46,6 +48,8 @@ export function PresetGallery({
   onSaveCurrent: (name: string) => void;
   onUpdateCurrent: (preset: StudioPreset) => void;
   onResetSelected: (preset: StudioPreset) => void;
+  onExportPreset: (preset: StudioPreset) => void;
+  onImportPreset: (file: File) => void;
   onUndo: () => void;
 }) {
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('All');
@@ -110,6 +114,23 @@ export function PresetGallery({
               <RotateCcw /> Undo
             </button>
           )}
+          {selectedPreset && (
+            <button onClick={() => onExportPreset(selectedPreset)} title="Export preset">
+              <Download /> Export
+            </button>
+          )}
+          <label className="sd-preset-import" title="Import preset">
+            <Upload /> Import
+            <input
+              type="file"
+              accept=".json,application/json"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onImportPreset(file);
+                event.currentTarget.value = '';
+              }}
+            />
+          </label>
           <button onClick={() => setSaving((value) => !value)}>
             <Save /> Save new
           </button>
