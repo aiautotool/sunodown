@@ -174,6 +174,7 @@ function ToolControls(p: {
 }) {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
   const rows = [
+    ['audio', 'Âm thanh', Music2],
     ['style', 'Kiểu', Sparkles],
     ['text', 'Văn bản', FileText],
     ['wave', 'Sóng nhạc', SlidersHorizontal],
@@ -181,7 +182,6 @@ function ToolControls(p: {
     ['format', 'Định dạng', SlidersHorizontal],
     ['background', 'Nền', ImageIcon],
     ['effects', 'Hiệu ứng', Sparkles],
-    ['audio', 'Âm thanh', Music2],
     ['trim', 'Cắt', SlidersHorizontal],
   ] as const;
   const toggle = (id: VideoEffect) =>
@@ -192,7 +192,7 @@ function ToolControls(p: {
     );
   return (
     <>
-      <StudioTabs value={(p.panel || 'style') as string} tabs={rows.map(([id,label,Icon])=>({value:id,label,icon:<Icon/>}))} onChange={id=>p.setPanel(id)} />
+      <StudioTabs value={(p.panel || 'audio') as string} tabs={rows.map(([id,label,Icon])=>({value:id,label,icon:<Icon/>}))} onChange={id=>p.setPanel(id)} />
       {rows.map(([id]) => p.panel === id && (
         <div className="sd-tab-panel" key={id}>
           <div className="sd-options">
@@ -472,7 +472,7 @@ export default function CreatorStudio() {
     [error, setError] = useState(''),
     [playbackStart, setPlaybackStart] = useState(0),
     [previewTime, setPreviewTime] = useState(0),
-    [panel, setPanel] = useState('style'),
+    [panel, setPanel] = useState('audio'),
     [mobileTools, setMobileTools] = useState(false),
     [savingProject, setSavingProject] = useState(false),
     [savedProject, setSavedProject] = useState(false);
