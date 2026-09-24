@@ -9,7 +9,10 @@ import type {
   WaveStyle,
 } from '@/components/v4/types';
 import type { VideoEffect } from '@/components/v8/video-effects';
-import type { BackgroundConfig } from '@/components/v8/background';
+import {
+  DEFAULT_BACKGROUND_CONFIG,
+  type BackgroundConfig,
+} from '@/components/v8/background';
 
 export type StudioPresetCategory =
   | 'Social'
@@ -280,5 +283,9 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
 ];
 
 export function clonePresetConfig(config: StudioPresetConfig): StudioPresetConfig {
-  return structuredClone(config);
+  const cloned = structuredClone(config) as StudioPresetConfig;
+  cloned.background = structuredClone(
+    config.background || DEFAULT_BACKGROUND_CONFIG,
+  );
+  return cloned;
 }
