@@ -17,6 +17,16 @@ export function BackgroundPanel({value,onChange,onError}:Props){
  // Keep object URLs alive when this accordion panel closes; Creator Studio owns the active background lifecycle.
 
  useEffect(()=>{
+  if(value.mode!=='video'||!value.videoUrl)return;
+  let cancelled=false;
+  const probe=document.createElement('video');
+  probe.muted=true;probe.playsInline=true;probe.preload='metadata';probe.src=value.videoUrl;
+  const done=()=>{if(!cancelled&&Number.isFinite(probe.duration)){setVideoDuration(probe.duration);if(!value.videoEnd||value.videoEnd>probe.duration)onChange({...value,videoEnd:probe.duration})}};
+  probe.addEventListener('loadedmetadata',done,{once:true});probe.load();
+  return()=>{cancelled=true;probe.removeEventListener('loadedmetadata',done);probe.removeAttribute('src');probe.load()};
+ },[value.mode,value.videoUrl]);
+
+ useEffect(()=>{
   const stored={...value,imageUrl:undefined,videoUrl:undefined,imageFingerprint:undefined,videoFingerprint:undefined,mode:value.mode==='image'||value.mode==='video'?'suno':value.mode};
   try{localStorage.setItem('suno-v8-background',JSON.stringify(stored))}catch{}
   document.documentElement.dataset.sunoBackground=backgroundFingerprint(value);
