@@ -1,0 +1,101 @@
+name: Deploy V14 to sunoapp.aiautotool.com
+
+on:
+  push:
+    branches: [v14]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: sunodown-v14-sunoapp
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout v14
+        uses: actions/checkout@v4
+
+      - name: Mark deploy pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context=sunodown/v14-sunoapp -f description="Build and deploy to sunoapp.aiautotool.com"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.13.0"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify Worker entrypoint
+        run: test -f dist/server/index.js
+
+      - name: Provision shared background-render resources
+        run: node scripts/provision-v6-cloudflare.mjs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Configure isolated v14 Worker and custom domain
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const path = 'wrangler.v6.generated.json';
+          const cfg = JSON.parse(readFileSync(path, 'utf8'));
+          cfg.name = 'sunoapp-aiautotool';
+          cfg.routes = [{ pattern: 'sunoapp.aiautotool.com', custom_domain: true }];
+          writeFileSync(path, JSON.stringify(cfg, null, 2));
+          NODE
+          cat wrangler.v6.generated.json
+
+      - name: Configure AI renderer connection
+        run: |
+          if [ -n "$AI_RENDER_TOKEN" ]; then
+            printf '%s' 'https://sunodown-vibes-renderer.long-wind-7153.workers.dev/render' | npx wrangler secret put AI_RENDER_SERVICE_URL --config wrangler.v6.generated.json
+            printf '%s' "$AI_RENDER_TOKEN" | npx wrangler secret put RENDER_SERVICE_TOKEN --config wrangler.v6.generated.json
+          else
+            echo "::warning::AI_RENDER_TOKEN is not configured; AI renderer integration will remain disabled."
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AI_RENDER_TOKEN: ${{ secrets.AI_RENDER_TOKEN }}
+
+      - name: Configure Web Push
+        run: |
+          if [ -n "$VAPID_PUBLIC_KEY" ] && [ -n "$VAPID_PRIVATE_KEY" ]; then
+            printf '%s' "$VAPID_PUBLIC_KEY" | npx wrangler secret put VAPID_PUBLIC_KEY --config wrangler.v6.generated.json
+            printf '%s' "$VAPID_PRIVATE_KEY" | npx wrangler secret put VAPID_PRIVATE_KEY --config wrangler.v6.generated.json
+          else
+            echo "::warning::VAPID keys are not configured; Web Push remains disabled."
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+
+      - name: Deploy v14 to sunoapp.aiautotool.com
+        run: npx wrangler deploy --config wrangler.v6.generated.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Mark deploy success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context=sunodown/v14-sunoapp -f description="v14 deployed to sunoapp.aiautotool.com"
+
+      - name: Mark deploy failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context=sunodown/v14-sunoapp -f description="v14 sunoapp deploy failed"
