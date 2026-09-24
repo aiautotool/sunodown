@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRenderWakeLock } from '@/hooks/use-render-wake-lock';
 import {
   Bell,
   BookOpen,
@@ -417,6 +418,8 @@ export default function CreatorStudio() {
     [rendering, setRendering] = useState(false),
     [progress, setProgress] = useState(0),
     [downloading, setDownloading] = useState('');
+  useRenderWakeLock(rendering);
+
   const [resultBlob, setResultBlob] = useState<Blob | null>(null),
     [resultUrl, setResultUrl] = useState(''),
     [resultName, setResultName] = useState('');
