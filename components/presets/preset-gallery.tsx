@@ -140,7 +140,13 @@ export function PresetGallery({
               <button className="sd-preset-preview" onClick={() => onApply(preset)}>
                 <span
                   className="sd-preset-art"
-                  style={picture ? { backgroundImage: `url("${picture}")` } : undefined}
+                  style={
+                    preset.thumbnail || picture
+                      ? {
+                          backgroundImage: `url("${preset.thumbnail || picture}")`,
+                        }
+                      : undefined
+                  }
                 >
                   <i />
                   <em>{preset.category}</em>
