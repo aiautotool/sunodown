@@ -7,10 +7,12 @@ import type {
   VideoAspect,
   VisualTemplate,
   WaveStyle,
+  WAVE_STYLES,
 } from '@/components/v4/types';
-import type { VideoEffect } from '@/components/v8/video-effects';
+import { VIDEO_EFFECTS, type VideoEffect } from '@/components/v8/video-effects';
 import {
   DEFAULT_BACKGROUND_CONFIG,
+  sanitizeStoredBackground,
   type BackgroundConfig,
 } from '@/components/v8/background';
 
@@ -305,6 +307,28 @@ const VALID_TEMPLATES = new Set<VisualTemplate>([
 const VALID_ASPECTS = new Set<VideoAspect>(['16:9', '9:16', '1:1', '4:5', '4:3']);
 const VALID_LYRICS = new Set<LyricsMode>(['off', 'scroll', 'focus']);
 const VALID_MOTION = new Set<MotionIntensity>(['low', 'medium', 'high']);
+const VALID_WAVES = new Set<WaveStyle>(WAVE_STYLES.map((item) => item.id));
+const VALID_EFFECTS = new Set<VideoEffect>(VIDEO_EFFECTS.map((item) => item.id));
+
+const clamp = (value: unknown, min: number, max: number, fallback: number) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+};
+
+const normalizeLayout = (value: Partial<OverlayLayout> | undefined, fallback: OverlayLayout): OverlayLayout => {
+  const source = value || {};
+  const item = (key: keyof OverlayLayout) => ({
+    x: clamp(source[key]?.x, 0, 100, fallback[key].x),
+    y: clamp(source[key]?.y, 0, 100, fallback[key].y),
+    scale: clamp(source[key]?.scale, 40, 180, fallback[key].scale),
+  });
+  return {
+    wave: item('wave'),
+    subtitle: item('subtitle'),
+    title: item('title'),
+    creator: item('creator'),
+  };
+};
 
 const fallbackConfig = (): StudioPresetConfig =>
   clonePresetConfig(BUILTIN_STUDIO_PRESETS[0].config);
@@ -335,17 +359,23 @@ export function normalizePresetConfig(value: Partial<StudioPresetConfig> | null 
 
   return {
     template,
-    wave: (value.wave || fallback.wave) as WaveStyle,
+    wave: VALID_WAVES.has(value.wave as WaveStyle)
+      ? (value.wave as WaveStyle)
+      : fallback.wave,
     motion,
     aspect,
     lyrics,
     effects: Array.isArray(value.effects)
-      ? value.effects.filter(Boolean) as VideoEffect[]
+      ? value.effects.filter((effect): effect is VideoEffect =>
+          VALID_EFFECTS.has(effect as VideoEffect),
+        )
       : [...fallback.effects],
-    layout: structuredClone(value.layout || fallback.layout),
+    layout: normalizeLayout(value.layout, fallback.layout),
     textStyles: structuredClone(value.textStyles || fallback.textStyles),
     subtitleStyle: structuredClone(value.subtitleStyle || fallback.subtitleStyle),
-    background: structuredClone(value.background || DEFAULT_BACKGROUND_CONFIG),
+    background: sanitizeStoredBackground(
+      value.background || DEFAULT_BACKGROUND_CONFIG,
+    ),
   };
 }
 
