@@ -551,9 +551,14 @@ export default function CreatorStudio() {
   useRenderWakeLock(rendering);
 
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [presetModified, setPresetModified] = useState(false);
   const [customPresets, setCustomPresets] = useState<StudioPreset[]>([]);
   const [favoritePresetIds, setFavoritePresetIds] = useState<string[]>([]);
-  const [presetUndo, setPresetUndo] = useState<StudioPresetConfig | null>(null);
+  const [presetUndo, setPresetUndo] = useState<{
+    config: StudioPresetConfig;
+    selectedId: string | null;
+    modified: boolean;
+  } | null>(null);
 
   const [resultBlob, setResultBlob] = useState<Blob | null>(null),
     [resultUrl, setResultUrl] = useState(''),
@@ -590,9 +595,27 @@ export default function CreatorStudio() {
     background: structuredClone(background),
   });
 
-  const applyPreset = (preset: StudioPreset) => {
-    setPresetUndo(currentPresetConfig());
+  const markPresetModified = () => {
+    if (selectedPresetId) setPresetModified(true);
+  };
+
+  const applyPreset = (
+    preset: StudioPreset,
+    mode: 'replace-all' | 'preserve-custom' = 'replace-all',
+  ) => {
+    const current = currentPresetConfig();
+    setPresetUndo({
+      config: current,
+      selectedId: selectedPresetId,
+      modified: presetModified,
+    });
     const next = clonePresetConfig(preset.config);
+    if (mode === 'preserve-custom') {
+      next.layout = structuredClone(current.layout);
+      next.textStyles = structuredClone(current.textStyles);
+      next.subtitleStyle = structuredClone(current.subtitleStyle);
+      next.background = structuredClone(current.background);
+    }
     setTemplate(next.template);
     setWave(next.wave);
     setMotion(next.motion);
@@ -604,6 +627,7 @@ export default function CreatorStudio() {
     setSubtitleStyle(next.subtitleStyle);
     setBackground(next.background);
     setSelectedPresetId(preset.id);
+    setPresetModified(mode === 'preserve-custom');
     setResultBlob(null);
     if (resultUrl) {
       URL.revokeObjectURL(resultUrl);
@@ -613,7 +637,7 @@ export default function CreatorStudio() {
 
   const restorePresetSnapshot = () => {
     if (!presetUndo) return;
-    const next = clonePresetConfig(presetUndo);
+    const next = clonePresetConfig(presetUndo.config);
     setTemplate(next.template);
     setWave(next.wave);
     setMotion(next.motion);
@@ -624,7 +648,8 @@ export default function CreatorStudio() {
     setTextStyles(next.textStyles);
     setSubtitleStyle(next.subtitleStyle);
     setBackground(next.background);
-    setSelectedPresetId(null);
+    setSelectedPresetId(presetUndo.selectedId);
+    setPresetModified(presetUndo.modified);
     setPresetUndo(null);
   };
 
@@ -672,6 +697,7 @@ export default function CreatorStudio() {
     };
     persistCustomPresets([preset, ...customPresets]);
     setSelectedPresetId(preset.id);
+    setPresetModified(false);
   };
 
   const duplicatePreset = (source: StudioPreset) => {
@@ -699,7 +725,10 @@ export default function CreatorStudio() {
 
   const deleteCustomPreset = (preset: StudioPreset) => {
     persistCustomPresets(customPresets.filter((item) => item.id !== preset.id));
-    if (selectedPresetId === preset.id) setSelectedPresetId(null);
+    if (selectedPresetId === preset.id) {
+      setSelectedPresetId(null);
+      setPresetModified(false);
+    }
     if (favoritePresetIds.includes(preset.id)) {
       const nextFavorites = favoritePresetIds.filter((id) => id !== preset.id);
       setFavoritePresetIds(nextFavorites);
@@ -933,6 +962,7 @@ export default function CreatorStudio() {
         lyrics,
         motion,
         selectedPresetId,
+        presetModified,
         effects,
         layout,
         textStyles,
@@ -969,6 +999,7 @@ export default function CreatorStudio() {
     setLyrics(project.lyrics);
     setMotion(project.motion || 'medium');
     setSelectedPresetId(project.selectedPresetId || null);
+    setPresetModified(Boolean(project.presetModified));
     setEffects(project.effects);
     setLayout(project.layout);
     if (project.textStyles) setTextStyles(project.textStyles);
@@ -1184,7 +1215,7 @@ export default function CreatorStudio() {
                 motion={motion}
                 lyrics={lyrics}
                 layout={layout}
-                onLayoutChange={(value) => { setSelectedPresetId(null); setLayout(value); }}
+                onLayoutChange={(value) => { markPresetModified(); setLayout(value); }}
                 start={playbackStart}
                 exporting={rendering}
                 autoPlay={autoPreview}
@@ -1253,6 +1284,7 @@ export default function CreatorStudio() {
               picture={song.picture}
               favoriteIds={favoritePresetIds}
               canUndo={Boolean(presetUndo)}
+              modified={presetModified}
               onApply={applyPreset}
               onToggleFavorite={toggleFavoritePreset}
               onDuplicate={duplicatePreset}
@@ -1265,25 +1297,25 @@ export default function CreatorStudio() {
               panel={panel}
               setPanel={setPanel}
               wave={wave}
-              setWave={(value) => { setSelectedPresetId(null); setWave(value); }}
+              setWave={(value) => { markPresetModified(); setWave(value); }}
               template={template}
-              setTemplate={(value) => { setSelectedPresetId(null); setTemplate(value); }}
+              setTemplate={(value) => { markPresetModified(); setTemplate(value); }}
               aspect={aspect}
-              setAspect={(value) => { setSelectedPresetId(null); setAspect(value); }}
+              setAspect={(value) => { markPresetModified(); setAspect(value); }}
               lyrics={lyrics}
-              setLyrics={(value) => { setSelectedPresetId(null); setLyrics(value); }}
+              setLyrics={(value) => { markPresetModified(); setLyrics(value); }}
               motion={motion}
-              setMotion={(value) => { setSelectedPresetId(null); setMotion(value); }}
+              setMotion={(value) => { markPresetModified(); setMotion(value); }}
               effects={effects}
-              setEffects={(value) => { setSelectedPresetId(null); setEffects(value); }}
+              setEffects={(value) => { markPresetModified(); setEffects(value); }}
               layout={layout}
-              setLayout={(value) => { setSelectedPresetId(null); setLayout(value); }}
+              setLayout={(value) => { markPresetModified(); setLayout(value); }}
               textStyles={textStyles}
-              setTextStyles={(value) => { setSelectedPresetId(null); setTextStyles(value); }}
+              setTextStyles={(value) => { markPresetModified(); setTextStyles(value); }}
               subtitleStyle={subtitleStyle}
-              setSubtitleStyle={(value) => { setSelectedPresetId(null); setSubtitleStyle(value); }}
+              setSubtitleStyle={(value) => { markPresetModified(); setSubtitleStyle(value); }}
               background={background}
-              setBackground={(value) => { setSelectedPresetId(null); setBackground(value); }}
+              setBackground={(value) => { markPresetModified(); setBackground(value); }}
               trimStart={trimStart}
               trimEnd={trimEnd}
               duration={song.duration || 0}
@@ -1411,6 +1443,7 @@ export default function CreatorStudio() {
               picture={song.picture}
               favoriteIds={favoritePresetIds}
               canUndo={Boolean(presetUndo)}
+              modified={presetModified}
               onApply={applyPreset}
               onToggleFavorite={toggleFavoritePreset}
               onDuplicate={duplicatePreset}
@@ -1424,23 +1457,23 @@ export default function CreatorStudio() {
             panel={panel}
             setPanel={setPanel}
             wave={wave}
-            setWave={(value) => { setSelectedPresetId(null); setWave(value); }}
+            setWave={(value) => { markPresetModified(); setWave(value); }}
             template={template}
-            setTemplate={(value) => { setSelectedPresetId(null); setTemplate(value); }}
+            setTemplate={(value) => { markPresetModified(); setTemplate(value); }}
             aspect={aspect}
-            setAspect={(value) => { setSelectedPresetId(null); setAspect(value); }}
+            setAspect={(value) => { markPresetModified(); setAspect(value); }}
             lyrics={lyrics}
-            setLyrics={(value) => { setSelectedPresetId(null); setLyrics(value); }}
+            setLyrics={(value) => { markPresetModified(); setLyrics(value); }}
             motion={motion}
-            setMotion={(value) => { setSelectedPresetId(null); setMotion(value); }}
+            setMotion={(value) => { markPresetModified(); setMotion(value); }}
             effects={effects}
-            setEffects={(value) => { setSelectedPresetId(null); setEffects(value); }}
+            setEffects={(value) => { markPresetModified(); setEffects(value); }}
             layout={layout}
-            setLayout={(value) => { setSelectedPresetId(null); setLayout(value); }}
+            setLayout={(value) => { markPresetModified(); setLayout(value); }}
             textStyles={textStyles}
-            setTextStyles={(value) => { setSelectedPresetId(null); setTextStyles(value); }}
+            setTextStyles={(value) => { markPresetModified(); setTextStyles(value); }}
             subtitleStyle={subtitleStyle}
-            setSubtitleStyle={(value) => { setSelectedPresetId(null); setSubtitleStyle(value); }}
+            setSubtitleStyle={(value) => { markPresetModified(); setSubtitleStyle(value); }}
             trimStart={trimStart}
             trimEnd={trimEnd}
             duration={song.duration || 0}
