@@ -38,6 +38,8 @@ import {
   type VisualTemplate,
   type VideoAspect,
   type LyricsMode,
+  type MotionIntensity,
+  MOTION_LEVELS,
 } from '@/components/v4/types';
 import {
   DEFAULT_OVERLAY_LAYOUT,
@@ -51,6 +53,13 @@ import { buildEstimatedKaraokeTimeline, exportSrt } from '@/app/lib/karaoke';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 import type { KaraokeLine } from '@/app/lib/karaoke';
 import { EditorTimeline, type MediaClip } from '@/components/editor-timeline';
+import { PresetGallery } from '@/components/presets/preset-gallery';
+import {
+  BUILTIN_STUDIO_PRESETS,
+  clonePresetConfig,
+  type StudioPreset,
+  type StudioPresetConfig,
+} from '@/components/presets/studio-presets';
 import {
   clearProjectData,
   loadProjectData,
@@ -118,6 +127,8 @@ function ToolControls(p: {
   setAspect: (v: VideoAspect) => void;
   lyrics: LyricsMode;
   setLyrics: (v: LyricsMode) => void;
+  motion: MotionIntensity;
+  setMotion: (v: MotionIntensity) => void;
   effects: VideoEffect[];
   setEffects: (v: VideoEffect[]) => void;
   layout: OverlayLayout;
@@ -158,6 +169,11 @@ function ToolControls(p: {
           </button>
           {p.panel === id && (
             <div className="sd-options">
+              {id === 'style' && (
+                <p className="sd-control-hint">
+                  Preset thay đổi toàn bộ video. Các nút dưới đây dùng để tinh chỉnh thủ công sau khi chọn preset.
+                </p>
+              )}
               {id === 'style' &&
                 VISUAL_TEMPLATES.map((x) => (
                   <button
@@ -168,6 +184,20 @@ function ToolControls(p: {
                     {x.label}
                   </button>
                 ))}
+              {id === 'style' && (
+                <div className="sd-motion-row">
+                  <span>Motion</span>
+                  {MOTION_LEVELS.map((x) => (
+                    <button
+                      key={x.id}
+                      className={p.motion === x.id ? 'active' : ''}
+                      onClick={() => p.setMotion(x.id)}
+                    >
+                      {x.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               {id === 'text' && (
                 <div className="sd-text-style">
                   <p className="sd-control-hint">
@@ -414,11 +444,17 @@ export default function CreatorStudio() {
     [template, setTemplate] = useState<VisualTemplate>('cover-motion'),
     [aspect, setAspect] = useState<VideoAspect>('16:9'),
     [lyrics, setLyrics] = useState<LyricsMode>('focus'),
+    [motion, setMotion] = useState<MotionIntensity>('medium'),
     [effects, setEffects] = useState<VideoEffect[]>([]),
     [rendering, setRendering] = useState(false),
     [progress, setProgress] = useState(0),
     [downloading, setDownloading] = useState('');
   useRenderWakeLock(rendering);
+
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [customPresets, setCustomPresets] = useState<StudioPreset[]>([]);
+  const [favoritePresetIds, setFavoritePresetIds] = useState<string[]>([]);
+  const [presetUndo, setPresetUndo] = useState<StudioPresetConfig | null>(null);
 
   const [resultBlob, setResultBlob] = useState<Blob | null>(null),
     [resultUrl, setResultUrl] = useState(''),
@@ -438,6 +474,101 @@ export default function CreatorStudio() {
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
   const timer = useRef<number | undefined>(undefined);
+
+  const currentPresetConfig = (): StudioPresetConfig => ({
+    template,
+    wave,
+    motion,
+    aspect,
+    lyrics,
+    effects: [...effects],
+    layout: structuredClone(layout),
+    textStyles: structuredClone(textStyles),
+    subtitleStyle: structuredClone(subtitleStyle),
+  });
+
+  const applyPreset = (preset: StudioPreset) => {
+    setPresetUndo(currentPresetConfig());
+    const next = clonePresetConfig(preset.config);
+    setTemplate(next.template);
+    setWave(next.wave);
+    setMotion(next.motion);
+    setAspect(next.aspect);
+    setLyrics(next.lyrics);
+    setEffects(next.effects);
+    setLayout(next.layout);
+    setTextStyles(next.textStyles);
+    setSubtitleStyle(next.subtitleStyle);
+    setSelectedPresetId(preset.id);
+    setResultBlob(null);
+    if (resultUrl) {
+      URL.revokeObjectURL(resultUrl);
+      setResultUrl('');
+    }
+  };
+
+  const restorePresetSnapshot = () => {
+    if (!presetUndo) return;
+    const next = clonePresetConfig(presetUndo);
+    setTemplate(next.template);
+    setWave(next.wave);
+    setMotion(next.motion);
+    setAspect(next.aspect);
+    setLyrics(next.lyrics);
+    setEffects(next.effects);
+    setLayout(next.layout);
+    setTextStyles(next.textStyles);
+    setSubtitleStyle(next.subtitleStyle);
+    setSelectedPresetId(null);
+    setPresetUndo(null);
+  };
+
+  const persistCustomPresets = (items: StudioPreset[]) => {
+    setCustomPresets(items);
+    localStorage.setItem('sunodown-v14-custom-presets', JSON.stringify(items));
+  };
+
+  const saveCurrentAsPreset = (name: string) => {
+    const preset: StudioPreset = {
+      id: `user-${Date.now()}`,
+      name,
+      description: 'Preset cá nhân lưu từ cấu hình hiện tại của Creator Studio.',
+      category:
+        [...BUILTIN_STUDIO_PRESETS, ...customPresets].find(
+          (item) => item.id === selectedPresetId,
+        )?.category || 'Social',
+      badge: 'My preset',
+      accent: subtitleStyle.activeColor || '#8b5cf6',
+      secondary: textStyles.title.color || '#ffffff',
+      builtin: false,
+      config: currentPresetConfig(),
+    };
+    persistCustomPresets([preset, ...customPresets]);
+    setSelectedPresetId(preset.id);
+  };
+
+  const duplicatePreset = (source: StudioPreset) => {
+    const copy: StudioPreset = {
+      ...source,
+      id: `user-${Date.now()}`,
+      name: `${source.name} Copy`,
+      description: `Bản sao tùy chỉnh từ ${source.name}.`,
+      badge: 'My preset',
+      builtin: false,
+      config: clonePresetConfig(source.config),
+    };
+    persistCustomPresets([copy, ...customPresets]);
+    applyPreset(copy);
+  };
+
+  const toggleFavoritePreset = (id: string) => {
+    const next = favoritePresetIds.includes(id)
+      ? favoritePresetIds.filter((item) => item !== id)
+      : [...favoritePresetIds, id];
+    setFavoritePresetIds(next);
+    localStorage.setItem('sunodown-v14-favorite-presets', JSON.stringify(next));
+  };
+
   async function resolve(value = url): Promise<Song | null> {
     if (!valid(value)) {
       setError('Paste a valid Suno link.');
@@ -503,7 +634,7 @@ export default function CreatorStudio() {
         wave,
         template,
         {
-          motion: 'medium',
+          motion,
           lyrics,
           layout,
           startSeconds,
@@ -618,6 +749,12 @@ export default function CreatorStudio() {
   useEffect(() => {
     try {
       setProjects(JSON.parse(localStorage.getItem('sundown-projects') || '[]'));
+      setCustomPresets(
+        JSON.parse(localStorage.getItem('sunodown-v14-custom-presets') || '[]'),
+      );
+      setFavoritePresetIds(
+        JSON.parse(localStorage.getItem('sunodown-v14-favorite-presets') || '[]'),
+      );
     } catch {}
   }, []);
   async function saveProject() {
@@ -639,6 +776,8 @@ export default function CreatorStudio() {
         template,
         aspect,
         lyrics,
+        motion,
+        selectedPresetId,
         effects,
         layout,
         textStyles,
@@ -672,6 +811,8 @@ export default function CreatorStudio() {
     setTemplate(project.template);
     setAspect(project.aspect);
     setLyrics(project.lyrics);
+    setMotion(project.motion || 'medium');
+    setSelectedPresetId(project.selectedPresetId || null);
     setEffects(project.effects);
     setLayout(project.layout);
     if (project.textStyles) setTextStyles(project.textStyles);
@@ -882,10 +1023,10 @@ export default function CreatorStudio() {
                 aspect={aspect}
                 template={template}
                 wave={wave}
-                motion="medium"
+                motion={motion}
                 lyrics={lyrics}
                 layout={layout}
-                onLayoutChange={setLayout}
+                onLayoutChange={(value) => { setSelectedPresetId(null); setLayout(value); }}
                 start={playbackStart}
                 exporting={rendering}
                 autoPlay={autoPreview}
@@ -947,38 +1088,39 @@ export default function CreatorStudio() {
                   : 'Lưu dự án'}
             </button>
             <hr />
-            <h3>Recommended</h3>
-            <div className="sd-presets">
-              {VISUAL_TEMPLATES.slice(0, 4).map((x, i) => (
-                <button
-                  onClick={() => setTemplate(x.id)}
-                  className={template === x.id ? 'active' : ''}
-                  key={x.id}
-                >
-                  <span style={{ backgroundImage: `url(${song.picture})` }} />
-                  <small>{x.label}</small>
-                </button>
-              ))}
-            </div>
+            <PresetGallery
+              presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
+              selectedId={selectedPresetId}
+              picture={song.picture}
+              favoriteIds={favoritePresetIds}
+              canUndo={Boolean(presetUndo)}
+              onApply={applyPreset}
+              onToggleFavorite={toggleFavoritePreset}
+              onDuplicate={duplicatePreset}
+              onSaveCurrent={saveCurrentAsPreset}
+              onUndo={restorePresetSnapshot}
+            />
             <ToolControls
               panel={panel}
               setPanel={setPanel}
               wave={wave}
-              setWave={setWave}
+              setWave={(value) => { setSelectedPresetId(null); setWave(value); }}
               template={template}
-              setTemplate={setTemplate}
+              setTemplate={(value) => { setSelectedPresetId(null); setTemplate(value); }}
               aspect={aspect}
-              setAspect={setAspect}
+              setAspect={(value) => { setSelectedPresetId(null); setAspect(value); }}
               lyrics={lyrics}
-              setLyrics={setLyrics}
+              setLyrics={(value) => { setSelectedPresetId(null); setLyrics(value); }}
+              motion={motion}
+              setMotion={(value) => { setSelectedPresetId(null); setMotion(value); }}
               effects={effects}
-              setEffects={setEffects}
+              setEffects={(value) => { setSelectedPresetId(null); setEffects(value); }}
               layout={layout}
-              setLayout={setLayout}
+              setLayout={(value) => { setSelectedPresetId(null); setLayout(value); }}
               textStyles={textStyles}
-              setTextStyles={setTextStyles}
+              setTextStyles={(value) => { setSelectedPresetId(null); setTextStyles(value); }}
               subtitleStyle={subtitleStyle}
-              setSubtitleStyle={setSubtitleStyle}
+              setSubtitleStyle={(value) => { setSelectedPresetId(null); setSubtitleStyle(value); }}
               trimStart={trimStart}
               trimEnd={trimEnd}
               duration={song.duration || 0}
