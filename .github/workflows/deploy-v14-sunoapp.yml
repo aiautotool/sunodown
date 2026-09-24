@@ -71,6 +71,23 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           AI_RENDER_TOKEN: ${{ secrets.AI_RENDER_TOKEN }}
 
+      - name: Configure media token secret
+        run: |
+          if [ -n "$MEDIA_TOKEN_SECRET" ]; then
+            printf '%s' "$MEDIA_TOKEN_SECRET" | npx wrangler secret put MEDIA_TOKEN_SECRET --config wrangler.v6.generated.json
+          elif [ -n "$AI_RENDER_TOKEN" ]; then
+            DERIVED_SECRET="$(printf 'sunodown-media-token-v14:%s' "$AI_RENDER_TOKEN" | sha256sum | awk '{print $1}')"
+            printf '%s' "$DERIVED_SECRET" | npx wrangler secret put MEDIA_TOKEN_SECRET --config wrangler.v6.generated.json
+            echo "::warning::MEDIA_TOKEN_SECRET repo secret is not configured; using a stable derived secret."
+          else
+            echo "::error::Neither MEDIA_TOKEN_SECRET nor AI_RENDER_TOKEN is available."
+            exit 1
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          MEDIA_TOKEN_SECRET: ${{ secrets.MEDIA_TOKEN_SECRET }}
+          AI_RENDER_TOKEN: ${{ secrets.AI_RENDER_TOKEN }}
+
       - name: Configure Web Push
         run: |
           if [ -n "$VAPID_PUBLIC_KEY" ] && [ -n "$VAPID_PRIVATE_KEY" ]; then
