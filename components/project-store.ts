@@ -3,6 +3,7 @@ import type { MediaClip } from '@/components/editor-timeline';
 import type { OverlayLayout } from '@/components/v9/overlay-layout-panel';
 import type {
   LyricsMode,
+  MotionIntensity,
   VideoAspect,
   VisualTemplate,
   WaveStyle,
@@ -19,6 +20,8 @@ export type SavedProject = {
   template: VisualTemplate;
   aspect: VideoAspect;
   lyrics: LyricsMode;
+  motion?: MotionIntensity;
+  selectedPresetId?: string | null;
   effects: VideoEffect[];
   layout: OverlayLayout;
   textStyles?: OverlayTextStyles;
