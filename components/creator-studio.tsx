@@ -786,21 +786,42 @@ export default function CreatorStudio() {
         }),
         data = await r.json();
       if (!r.ok) throw Error(data.error || 'Không thể tải bài hát này.');
-      setSong(data);
-      // Load the media once as binary. Analysis/mastering/FFT reuse this Blob instead of re-fetching a fragile URL.
+      // Hydrate the complete song first: title/cover/lyrics/caption metadata must survive UI component migrations.
+      const hydrated: Song = {
+        ...data,
+        title: data.title || 'Suno song',
+        creator: data.creator || 'Suno',
+        picture: data.picture || '',
+        lyrics: typeof data.lyrics === 'string' ? data.lyrics : '',
+        style: typeof data.style === 'string' ? data.style : '',
+        tags: typeof data.tags === 'string' ? data.tags : '',
+      };
+      setSong(hydrated);
+      // One remote load per media URL per session. Everything downstream reuses the binary.
       setAudioBinary(null);
-      try { const audioResponse = await fetch(data.audio, { cache: 'no-store' }); if (audioResponse.ok) setAudioBinary(await audioResponse.blob()); } catch {}
+      try {
+        let source = mediaCache.current.get(hydrated.audio);
+        if (!source) {
+          const audioResponse = await fetch(hydrated.audio, { cache: 'no-store' });
+          if (!audioResponse.ok) throw new Error('Không tải được binary audio.');
+          source = await audioResponse.blob();
+          mediaCache.current.set(hydrated.audio, source);
+        }
+        setAudioBinary(source);
+      } catch (mediaError) {
+        setError(mediaError instanceof Error ? mediaError.message : 'Không tải được binary audio.');
+      }
       setPlaybackStart(0);
       setPreviewTime(0);
       setTrimStart(0);
-      setTrimEnd(data.duration || 30);
+      setTrimEnd(hydrated.duration || 30);
       setKaraokeTimeline(
-        data.lyrics
-          ? buildEstimatedKaraokeTimeline(data.lyrics, data.duration || 30)
+        hydrated.lyrics
+          ? buildEstimatedKaraokeTimeline(hydrated.lyrics, hydrated.duration || 30)
           : [],
       );
       setMediaClips([]);
-      return data as Song;
+      return hydrated;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Không thể tải bài hát này.');
       return null;
@@ -908,9 +929,8 @@ export default function CreatorStudio() {
     setDownloading(format);
     setError('');
     try {
-      const response = await fetch(song.audio, { cache: 'no-store' });
-      if (!response.ok) throw Error('Không tải được audio.');
-      const source = await response.blob();
+      let source = audioBinary || mediaCache.current.get(song.audio);
+      if (!source) { const response = await fetch(song.audio, { cache: 'no-store' }); if (!response.ok) throw Error('Không tải được audio.'); source = await response.blob(); mediaCache.current.set(song.audio, source); setAudioBinary(source); }
       if (format === 'm4a') saveBlob(source, `${safeName(song.title)}.m4a`);
       else {
         const processed = await renderTikTokLikeAudio(source),
@@ -1150,6 +1170,9 @@ export default function CreatorStudio() {
     trimStart,
     trimEnd,
     duration: song?.duration || 0,
+    audioUrl: song?.audio || '',
+    audioBinary,
+    songTitle: song?.title || 'suno',
     setTrimStart: (value) => {
       invalidateRenderedResult();
       setTrimStart(value);
