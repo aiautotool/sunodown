@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRenderWakeLock } from '@/hooks/use-render-wake-lock';
 import {
   Bell,
@@ -123,6 +123,14 @@ function saveBlob(blob: Blob, filename: string) {
 }
 const safeName = (value: string) =>
   (value || 'suno').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120);
+
+const makeEffectConfig = (effects: VideoEffect[]): EffectConfig => ({
+  effects,
+  intensity: 1,
+  speed: 1,
+  opacity: 0.75,
+  wind: 0,
+});
 
 function ToolControls(p: {
   panel: string;
@@ -579,6 +587,7 @@ export default function CreatorStudio() {
   });
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeLine[]>([]);
   const [mediaClips, setMediaClips] = useState<MediaClip[]>([]);
+  const effectConfig = useMemo(() => makeEffectConfig(effects), [effects]);
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
   const timer = useRef<number | undefined>(undefined);
@@ -859,13 +868,7 @@ export default function CreatorStudio() {
     setProgress(0);
     setError('');
     try {
-      const config: EffectConfig = {
-        effects,
-        intensity: 1,
-        speed: 1,
-        opacity: 0.75,
-        wind: 0,
-      };
+      const config = effectConfig;
       const startSeconds = trimStart,
         available = Math.max(1, (trimEnd || song.duration || 30) - trimStart),
         previewSeconds = mode === '30' ? Math.min(30, available) : available;
@@ -1288,6 +1291,7 @@ export default function CreatorStudio() {
                 mediaClips={mediaClips}
                 overlayTextStyles={textStyles}
                 subtitleStyle={subtitleStyle}
+                effects={effectConfig}
                 background={background}
                 resultUrl={resultUrl || undefined}
               />
