@@ -172,6 +172,9 @@ function ToolControls(p: {
   audioUrl: string;
   audioBinary: Blob | null;
   songTitle: string;
+  songLyrics: string;
+  karaokeTimeline: KaraokeLine[];
+  setKaraokeTimeline: (v: KaraokeLine[]) => void;
   presetContent?: React.ReactNode;
 }) {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
@@ -321,9 +324,16 @@ function ToolControls(p: {
                 </label>
               )}
               {id === 'lyrics' && (
-                <p className="sd-control-hint">
-                  Bật subtitle rồi kéo trực tiếp chữ trên preview.
-                </p>
+                <div className="sd-lyrics-source">
+                  <p className="sd-control-hint">Lyrics được lấy một lần khi tải bài và dùng lại cho subtitle, timeline, SRT và render. Có thể sửa trực tiếp tại đây.</p>
+                  <textarea
+                    rows={7}
+                    value={p.songLyrics}
+                    placeholder="Chưa nhận được lyrics từ nguồn."
+                    onChange={(e) => p.setKaraokeTimeline(buildEstimatedKaraokeTimeline(e.target.value, p.duration || 1))}
+                  />
+                  <small>{p.karaokeTimeline.length ? `${p.karaokeTimeline.length} dòng subtitle đã nhận` : 'Chưa có subtitle'}</small>
+                </div>
               )}
               {id === 'lyrics' &&
                 (['off', 'scroll', 'focus'] as LyricsMode[]).map((x) => (
@@ -1173,6 +1183,9 @@ export default function CreatorStudio() {
     audioUrl: song?.audio || '',
     audioBinary,
     songTitle: song?.title || 'suno',
+    songLyrics: song?.lyrics || '',
+    karaokeTimeline,
+    setKaraokeTimeline,
     setTrimStart: (value) => {
       invalidateRenderedResult();
       setTrimStart(value);
@@ -1376,6 +1389,7 @@ export default function CreatorStudio() {
             <div className="sd-stage sd-live-preview">
               <LivePreview
                 song={renderSong(song)}
+                audioBinary={audioBinary}
                 aspect={aspect}
                 template={template}
                 wave={wave}
