@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Copy, Download, Heart, Pencil, RefreshCw, RotateCcw, Save, Sparkles, Trash2, Upload } from 'lucide-react';
 import type { StudioPreset, StudioPresetCategory } from './studio-presets';
+import type { PresetApplyMode } from './preset-apply-engine';
 
 const CATEGORIES: Array<'All' | 'Favorites' | StudioPresetCategory | 'My Presets'> = [
   'All',
@@ -40,7 +41,7 @@ export function PresetGallery({
   favoriteIds: string[];
   canUndo: boolean;
   modified: boolean;
-  onApply: (preset: StudioPreset, mode: 'replace-all' | 'preserve-custom') => void;
+  onApply: (preset: StudioPreset, mode: PresetApplyMode) => void;
   onToggleFavorite: (id: string) => void;
   onDuplicate: (preset: StudioPreset) => void;
   onRename: (preset: StudioPreset, name: string) => void;
@@ -59,11 +60,10 @@ export function PresetGallery({
   const selectedPreset = presets.find((preset) => preset.id === selectedId) || null;
 
   const requestApply = (preset: StudioPreset) => {
-    if (modified && selectedId) {
-      setPendingPreset(preset);
-      return;
-    }
-    onApply(preset, 'replace-all');
+    if (selectedId === preset.id && !modified) return;
+    // Always make the destructive boundary explicit. This also protects a
+    // manually uploaded image/video background when no preset is marked modified.
+    setPendingPreset(preset);
   };
   const visible = useMemo(
     () =>
@@ -170,7 +170,7 @@ export function PresetGallery({
         <div className="sd-preset-apply-choice">
           <div>
             <b>Apply {pendingPreset.name}?</b>
-            <span>You have manual changes on the current preset.</span>
+            <span>Choose whether this preset may replace your positioned text and custom background media.</span>
           </div>
           <div>
             <button
