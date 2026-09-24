@@ -50,6 +50,10 @@ export type OverlayTextStyles = {
   title: { font: string; color: string };
   creator: { font: string; color: string };
 };
+export type PreviewAudioAnalysis = {
+  samples: Float32Array;
+  rate: number;
+};
 export type SafeRenderOptions = {
   motion: MotionIntensity;
   lyrics: LyricsMode;
@@ -649,6 +653,7 @@ export function createLiveFramePainter(bitmap: ImageBitmap) {
     preserveBackground = false,
     layout?: OverlayLayout,
     textStyles?: OverlayTextStyles,
+    audioAnalysis?: PreviewAudioAnalysis | null,
   ) => {
     drawTemplate(
       ctx,
@@ -657,7 +662,7 @@ export function createLiveFramePainter(bitmap: ImageBitmap) {
       w,
       h,
       time,
-      amplitude(null, 0, time),
+      amplitude(audioAnalysis?.samples || null, audioAnalysis?.rate || 0, time),
       template,
       motion,
       palette,
@@ -668,7 +673,17 @@ export function createLiveFramePainter(bitmap: ImageBitmap) {
     withSubtitleLayout(ctx, w, h, layout, () =>
       drawLyrics(ctx, song, w, h, time, song.duration || 1, lyrics),
     );
-    drawWave(ctx, null, 0, time, w, h, wave, palette, layout);
+    drawWave(
+      ctx,
+      audioAnalysis?.samples || null,
+      audioAnalysis?.rate || 0,
+      time,
+      w,
+      h,
+      wave,
+      palette,
+      layout,
+    );
   };
 }
 function isMobileRenderDevice() {
