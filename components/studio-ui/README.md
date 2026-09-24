@@ -1,13 +1,24 @@
 # SunoDown Studio UI System
 
-Use `components/studio-ui` for product UI. Do not create one-off buttons, panels, toggles, accordions or sheets in feature code.
+Stable product-facing component layer for Creator Studio. Feature code should compose these components instead of inventing local UI patterns.
 
-## Rules
-- Theme values live in `tokens.ts`; client branding changes start there or in the CSS variables.
-- Components expose variants through props/data attributes. Feature components compose them; they do not duplicate their CSS.
-- Keep business/DSP logic outside the UI primitives.
-- New controls should prefer: `StudioButton`, `StudioPanel`, `StudioBadge`, `StudioToggle`, `StudioControlRow`, `StudioAccordion`, `StudioSheet`.
-- Existing shadcn/base-ui components remain available for low-level accessibility behavior; Studio UI is the stable product-facing layer above them.
+## Foundation
+Tokens/theme: `tokens.ts` + global `--studio-*` CSS variables. Client rebranding changes tokens, not every feature.
 
-## Client update path
-Change the `--studio-*` variables to rebrand radius, surfaces, borders, text and accent globally without editing each feature. Component APIs stay stable.
+## Components
+Actions: StudioButton, StudioIconButton, StudioToolbar.
+Containers: StudioPanel, StudioCard, StudioSheet, StudioModal, StudioStack, StudioDivider.
+Navigation: StudioTabs, StudioSegmented, StudioAccordion.
+Forms: StudioField, StudioInput, StudioTextarea, StudioSelect, StudioSlider, StudioToggle, StudioControlRow.
+Feedback: StudioBadge, StudioStatus, StudioProgress, StudioToast, StudioSkeleton, StudioEmpty.
+
+## Contract
+1. New product UI imports from `@/components/studio-ui`.
+2. Business, renderer and DSP logic never belongs in primitives.
+3. Variants are props/data attributes; do not fork components just to change colors/radius.
+4. All user-facing text must be supplied by the feature/i18n layer; primitives do not own product copy except accessibility defaults.
+5. Mobile behavior is part of the primitive contract.
+6. Breaking prop changes require a Studio UI version bump.
+
+## Client update
+Override `--studio-bg`, `--studio-surface`, `--studio-surface-2`, `--studio-border`, `--studio-text`, `--studio-muted`, `--studio-accent`, status colors, `--studio-radius` and `--studio-control-h`. Feature markup remains unchanged.
