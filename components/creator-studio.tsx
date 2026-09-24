@@ -400,7 +400,7 @@ export default function CreatorStudio() {
   const [projects, setProjects] = useState<{ url: string; title: string }[]>(
     [],
   );
-  const [url, setUrl] = useState(''),
+  const [url, setUrl] = useState('https://suno.com/s/tszo0jGdVUua4rT4'),
     [song, setSong] = useState<Song | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
@@ -476,8 +476,6 @@ export default function CreatorStudio() {
     setUrl(value);
     setError('');
     if (timer.current) clearTimeout(timer.current);
-    if (valid(value.trim()))
-      timer.current = window.setTimeout(() => void resolve(value.trim()), 350);
   }
   async function paste() {
     const value = await navigator.clipboard.readText();
