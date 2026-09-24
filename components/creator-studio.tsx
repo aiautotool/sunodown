@@ -1282,7 +1282,8 @@ export default function CreatorStudio() {
                 lyrics={lyrics}
                 layout={layout}
                 onLayoutChange={rendering ? undefined : (value) => { markPresetModified(); setLayout(value); }}
-                start={playbackStart}
+                start={Math.max(trimStart, playbackStart)}
+                end={trimEnd || song.duration || undefined}
                 exporting={rendering}
                 autoPlay={autoPreview}
                 fullPlayback
