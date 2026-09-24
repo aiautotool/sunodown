@@ -43,7 +43,7 @@ export function BackgroundPanel({value,onChange,onError}:Props){
   if(!file)return;
   if(file.size>20*1024*1024){onError('File ảnh quá lớn. Vui lòng chọn ảnh dưới 20MB.');if(imageInput.current)imageInput.current.value='';return}
   clearOwned('image');const url=URL.createObjectURL(file);ownedImage.current=url;setImageName(`${file.name} · ${fmtBytes(file.size)}`);setWarning('');
-  onChange({...value,mode:'image',imageUrl:url,videoUrl:undefined,imageFingerprint:fingerprint(file),videoFingerprint:undefined});
+  onChange({...value,mode:'image',imageUrl:url,videoUrl:undefined,imageFingerprint:fingerprint(file),videoFingerprint:undefined,positionX:value.positionX??50,positionY:value.positionY??50,zoom:value.zoom??100});
  }
 
  async function selectVideo(file?:File){
@@ -55,7 +55,7 @@ export function BackgroundPanel({value,onChange,onError}:Props){
   try{
    await new Promise<void>((resolve,reject)=>{const done=()=>{cleanup();resolve()},fail=()=>{cleanup();reject(new Error('Trình duyệt không đọc được video này.'))},cleanup=()=>{probe.removeEventListener('loadedmetadata',done);probe.removeEventListener('error',fail)};probe.addEventListener('loadedmetadata',done,{once:true});probe.addEventListener('error',fail,{once:true})});
    setVideoDuration(probe.duration);
-   onChange({...value,mode:'video',videoUrl:url,imageUrl:undefined,videoFingerprint:fingerprint(file),imageFingerprint:undefined,loopVideo:true});
+   onChange({...value,mode:'video',videoUrl:url,imageUrl:undefined,videoFingerprint:fingerprint(file),imageFingerprint:undefined,loopVideo:true,videoStart:0,videoEnd:probe.duration,positionX:value.positionX??50,positionY:value.positionY??50,zoom:value.zoom??100});
   }catch(e){clearOwned('video');onError(e instanceof Error?e.message:'Video nền không hỗ trợ trên thiết bị này.')}
   finally{probe.removeAttribute('src');probe.load();if(videoInput.current)videoInput.current.value=''}
  }
@@ -109,6 +109,15 @@ export function BackgroundPanel({value,onChange,onError}:Props){
    <summary className="cursor-pointer px-3 py-2.5 text-xs font-semibold text-white/70">Background settings</summary>
    <div className="grid gap-3 border-t border-white/[.06] p-3 sm:grid-cols-2">
     <div><span className="text-[10px] text-white/40">Fit</span><div className="mt-1 flex gap-1.5">{(['cover','contain'] as const).map(x=><button type="button" key={x} onClick={()=>onChange({...value,fit:x})} className={`rounded-lg px-2.5 py-1.5 text-[11px] ${value.fit===x?'bg-sky-300/15 text-sky-100':'bg-white/5 text-white/50'}`}>{x==='cover'?'Cover':'Contain'}</button>)}</div></div>
+    {(value.mode==='image'||value.mode==='video')&&<>
+     <label className="text-[10px] text-white/40">Vị trí ngang · {Math.round(value.positionX??50)}%<input type="range" min="0" max="100" value={value.positionX??50} onChange={e=>onChange({...value,positionX:Number(e.target.value)})} className="mt-1 block w-full accent-sky-300"/></label>
+     <label className="text-[10px] text-white/40">Vị trí dọc · {Math.round(value.positionY??50)}%<input type="range" min="0" max="100" value={value.positionY??50} onChange={e=>onChange({...value,positionY:Number(e.target.value)})} className="mt-1 block w-full accent-sky-300"/></label>
+     <label className="text-[10px] text-white/40">Zoom · {Math.round(value.zoom??100)}%<input type="range" min="50" max="250" value={value.zoom??100} onChange={e=>onChange({...value,zoom:Number(e.target.value)})} className="mt-1 block w-full accent-sky-300"/></label>
+    </>}
+    {value.mode==='video'&&videoDuration&&<>
+     <label className="text-[10px] text-white/40">Video start · {fmtTime(value.videoStart||0)}<input type="range" min="0" max={Math.max(0,videoDuration-.1)} step=".1" value={Math.min(value.videoStart||0,Math.max(0,videoDuration-.1))} onChange={e=>{const start=Number(e.target.value);onChange({...value,videoStart:start,videoEnd:Math.max(start+.1,Math.min(value.videoEnd??videoDuration,videoDuration))})}} className="mt-1 block w-full accent-sky-300"/></label>
+     <label className="text-[10px] text-white/40">Video end · {fmtTime(value.videoEnd??videoDuration)}<input type="range" min={Math.min(videoDuration,Math.max(.1,(value.videoStart||0)+.1))} max={videoDuration} step=".1" value={Math.min(value.videoEnd??videoDuration,videoDuration)} onChange={e=>onChange({...value,videoEnd:Number(e.target.value)})} className="mt-1 block w-full accent-sky-300"/></label>
+    </>}
     <label className="text-[10px] text-white/40">Blur · {value.blur}<input type="range" min="0" max="20" value={value.blur} onChange={e=>onChange({...value,blur:Number(e.target.value)})} className="mt-1 block w-full accent-sky-300"/></label>
     <label className="text-[10px] text-white/40">Dim · {value.dim}%<input type="range" min="0" max="100" value={value.dim} onChange={e=>onChange({...value,dim:Number(e.target.value)})} className="mt-1 block w-full accent-sky-300"/></label>
     <label className="text-[10px] text-white/40">Overlay · {value.overlayOpacity}%<input type="range" min="0" max="80" value={value.overlayOpacity} onChange={e=>onChange({...value,overlayOpacity:Number(e.target.value)})} className="mt-1 block w-full accent-sky-300"/></label>
