@@ -9,6 +9,7 @@ import type {
   WaveStyle,
 } from '@/components/v4/types';
 import type { VideoEffect } from '@/components/v8/video-effects';
+import type { BackgroundConfig } from '@/components/v8/background';
 
 export type StudioPresetCategory =
   | 'Social'
@@ -27,6 +28,7 @@ export type StudioPresetConfig = {
   layout: OverlayLayout;
   textStyles: OverlayTextStyles;
   subtitleStyle: KaraokeDrawStyle;
+  background: BackgroundConfig;
 };
 
 export type StudioPreset = {
@@ -90,6 +92,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
         color: '#ffffff',
         activeColor: '#c4b5fd',
       },
+      background: { mode: 'preset', presetId: 'neon-blur', fit: 'cover', blur: 0, dim: 12, overlayOpacity: 18, loopVideo: true },
     },
   },
   {
@@ -115,6 +118,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
         color: '#f8fafc',
         activeColor: '#a5b4fc',
       },
+      background: { mode: 'preset', presetId: 'dark-film', fit: 'cover', blur: 0, dim: 30, overlayOpacity: 8, loopVideo: true },
     },
   },
   {
@@ -140,6 +144,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
         color: '#fff7ed',
         activeColor: '#fbbf24',
       },
+      background: { mode: 'preset', presetId: 'concert-light', fit: 'cover', blur: 0, dim: 20, overlayOpacity: 10, loopVideo: true },
     },
   },
   {
@@ -165,6 +170,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
         color: '#ffffff',
         activeColor: '#86efac',
       },
+      background: { mode: 'suno', fit: 'cover', blur: 8, dim: 18, overlayOpacity: 8, loopVideo: true },
     },
   },
   {
@@ -190,6 +196,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
         color: '#ecfeff',
         activeColor: '#e879f9',
       },
+      background: { mode: 'preset', presetId: 'neon-blur', fit: 'cover', blur: 0, dim: 8, overlayOpacity: 28, loopVideo: true },
     },
   },
   {
@@ -215,6 +222,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
         color: '#ffffff',
         activeColor: '#cbd5e1',
       },
+      background: { mode: 'preset', presetId: 'soft-light', fit: 'cover', blur: 0, dim: 10, overlayOpacity: 3, loopVideo: true },
     },
   },
   {
@@ -240,6 +248,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
         color: '#ffffff',
         activeColor: '#fb7185',
       },
+      background: { mode: 'preset', presetId: 'romantic-glow', fit: 'cover', blur: 0, dim: 18, overlayOpacity: 18, loopVideo: true },
     },
   },
   {
@@ -265,6 +274,7 @@ export const BUILTIN_STUDIO_PRESETS: StudioPreset[] = [
         color: '#fff7ed',
         activeColor: '#fbbf24',
       },
+      background: { mode: 'preset', presetId: 'bokeh-night', fit: 'cover', blur: 0, dim: 26, overlayOpacity: 10, loopVideo: true },
     },
   },
 ];
