@@ -173,15 +173,15 @@ function ToolControls(p: {
 }) {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
   const rows = [
-    ['style', 'Style', Sparkles],
-    ['text', 'Text & resize', FileText],
-    ['wave', 'Waveform', SlidersHorizontal],
-    ['lyrics', 'Lyrics', FileText],
-    ['format', 'Format', SlidersHorizontal],
-    ['background', 'Background', ImageIcon],
-    ['effects', 'Effects', Sparkles],
-    ['audio', 'Audio', Music2],
-    ['trim', 'Cut & duration', SlidersHorizontal],
+    ['style', 'Kiểu', Sparkles],
+    ['text', 'Văn bản', FileText],
+    ['wave', 'Sóng nhạc', SlidersHorizontal],
+    ['lyrics', 'Lời bài hát', FileText],
+    ['format', 'Định dạng', SlidersHorizontal],
+    ['background', 'Nền', ImageIcon],
+    ['effects', 'Hiệu ứng', Sparkles],
+    ['audio', 'Âm thanh', Music2],
+    ['trim', 'Cắt', SlidersHorizontal],
   ] as const;
   const toggle = (id: VideoEffect) =>
     p.setEffects(
@@ -191,15 +191,16 @@ function ToolControls(p: {
     );
   return (
     <>
-      {rows.map(([id, label, Icon]) => (
-        <div className="sd-fold" key={id}>
-          <button onClick={() => p.setPanel(p.panel === id ? '' : id)}>
-            <Icon />
-            <b>{label}</b>
-            <ChevronDown />
+      <nav className="sd-tool-tabs" aria-label="Công cụ chỉnh sửa">
+        {rows.map(([id, label, Icon]) => (
+          <button key={id} className={p.panel === id ? 'active' : ''} onClick={() => p.setPanel(id)}>
+            <Icon /><span>{label}</span>
           </button>
-          {p.panel === id && (
-            <div className="sd-options">
+        ))}
+      </nav>
+      {rows.map(([id]) => p.panel === id && (
+        <div className="sd-tab-panel" key={id}>
+          <div className="sd-options">
               {id === 'style' && (
                 <p className="sd-control-hint">
                   Preset thay đổi toàn bộ video. Các nút dưới đây dùng để tinh chỉnh thủ công sau khi chọn preset.
@@ -455,8 +456,7 @@ function ToolControls(p: {
                   <p>Output: {fmt(p.trimEnd - p.trimStart)}</p>
                 </div>
               )}
-            </div>
-          )}
+          </div>
         </div>
       ))}
     </>
@@ -774,7 +774,7 @@ export default function CreatorStudio() {
 
   async function resolve(value = url): Promise<Song | null> {
     if (!valid(value)) {
-      setError('Paste a valid Suno link.');
+      setError('Hãy dán liên kết Suno hợp lệ.');
       return null;
     }
     setBusy(true);
@@ -786,7 +786,7 @@ export default function CreatorStudio() {
           body: JSON.stringify({ input: value }),
         }),
         data = await r.json();
-      if (!r.ok) throw Error(data.error || 'Unable to load this song.');
+      if (!r.ok) throw Error(data.error || 'Không thể tải bài hát này.');
       setSong(data);
       setPlaybackStart(0);
       setPreviewTime(0);
@@ -800,7 +800,7 @@ export default function CreatorStudio() {
       setMediaClips([]);
       return data as Song;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unable to load this song.');
+      setError(e instanceof Error ? e.message : 'Không thể tải bài hát này.');
       return null;
     } finally {
       setBusy(false);
@@ -1304,7 +1304,7 @@ export default function CreatorStudio() {
                 value={url}
                 onChange={(e) => change(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && void resolve()}
-                placeholder="Paste a Suno link"
+                placeholder="Dán liên kết Suno"
               />
               <button onClick={paste}>Paste</button>
             </div>
@@ -1313,10 +1313,10 @@ export default function CreatorStudio() {
               disabled={busy}
               onClick={() => resolve()}
             >
-              {busy ? 'Analyzing…' : 'Analyze'}
+              {busy ? 'Đang phân tích…' : 'Phân tích'}
             </button>
             {error && <div className="sd-error">{error}</div>}
-            <span className="sd-choose">Choose what to create</span>
+            <span className="sd-choose">Chọn nội dung muốn tạo</span>
             <div className="sd-intents">
               <button className="active">
                 <Play />
@@ -1560,7 +1560,7 @@ export default function CreatorStudio() {
       {song && mobileTools && (
         <div className="sd-tool-sheet">
           <div className="sd-sheet-head">
-            <b>Video controls</b>
+            <b>Điều khiển video</b>
             <button onClick={() => setMobileTools(false)}>×</button>
           </div>
           {panel === 'style' && (
