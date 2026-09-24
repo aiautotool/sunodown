@@ -28,6 +28,7 @@ import {
   type BackgroundConfig,
 } from '@/components/v8/background';
 import type { MediaClip } from '@/components/editor-timeline';
+import { drawVideoEffects, type EffectConfig } from '@/components/v8/video-effects';
 
 const MOTION_GAIN: Record<MotionIntensity, number> = {
   low: 0.45,
@@ -58,6 +59,7 @@ export type SafeRenderOptions = {
   karaokeTimeline?: KaraokeLine[];
   background?: BackgroundConfig;
   mediaClips?: MediaClip[];
+  effects?: EffectConfig;
   loopDuration?: number;
   startSeconds?: number;
   previewSeconds?: number;
@@ -950,6 +952,15 @@ export async function generateVisualizerVideoSafe(
         palette,
         options.layout,
       );
+      if (options.effects?.effects?.length) {
+        drawVideoEffects(
+          ctx,
+          width,
+          height,
+          songT,
+          options.effects,
+        );
+      }
       await videoSource.add(localT, Math.min(fd, duration - localT), {
         keyFrame: i % (fps * 2) === 0,
       });
