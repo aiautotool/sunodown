@@ -633,6 +633,26 @@ export default function CreatorStudio() {
     localStorage.setItem('sunodown-v14-custom-presets', JSON.stringify(items));
   };
 
+  const capturePresetThumbnail = () => {
+    const source = document.querySelector(
+      '.sd-live-preview canvas',
+    ) as HTMLCanvasElement | null;
+    if (!source || !source.width || !source.height) return undefined;
+    try {
+      const width = 240;
+      const height = Math.max(120, Math.round((source.height / source.width) * width));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) return undefined;
+      context.drawImage(source, 0, 0, width, height);
+      return canvas.toDataURL('image/webp', 0.68);
+    } catch {
+      return undefined;
+    }
+  };
+
   const saveCurrentAsPreset = (name: string) => {
     const preset: StudioPreset = {
       schemaVersion: PRESET_SCHEMA_VERSION,
@@ -646,6 +666,7 @@ export default function CreatorStudio() {
       badge: 'My preset',
       accent: subtitleStyle.activeColor || '#8b5cf6',
       secondary: textStyles.title.color || '#ffffff',
+      thumbnail: capturePresetThumbnail(),
       builtin: false,
       config: currentPresetConfig(),
     };
@@ -661,6 +682,7 @@ export default function CreatorStudio() {
       name: `${source.name} Copy`,
       description: `Bản sao tùy chỉnh từ ${source.name}.`,
       badge: 'My preset',
+      thumbnail: source.thumbnail || capturePresetThumbnail(),
       builtin: false,
       config: clonePresetConfig(source.config),
     };
