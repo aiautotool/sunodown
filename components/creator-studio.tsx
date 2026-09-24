@@ -561,6 +561,26 @@ export default function CreatorStudio() {
     applyPreset(copy);
   };
 
+  const renameCustomPreset = (preset: StudioPreset, name: string) => {
+    const next = customPresets.map((item) =>
+      item.id === preset.id ? { ...item, name } : item,
+    );
+    persistCustomPresets(next);
+  };
+
+  const deleteCustomPreset = (preset: StudioPreset) => {
+    persistCustomPresets(customPresets.filter((item) => item.id !== preset.id));
+    if (selectedPresetId === preset.id) setSelectedPresetId(null);
+    if (favoritePresetIds.includes(preset.id)) {
+      const nextFavorites = favoritePresetIds.filter((id) => id !== preset.id);
+      setFavoritePresetIds(nextFavorites);
+      localStorage.setItem(
+        'sunodown-v14-favorite-presets',
+        JSON.stringify(nextFavorites),
+      );
+    }
+  };
+
   const toggleFavoritePreset = (id: string) => {
     const next = favoritePresetIds.includes(id)
       ? favoritePresetIds.filter((item) => item !== id)
@@ -1097,6 +1117,8 @@ export default function CreatorStudio() {
               onApply={applyPreset}
               onToggleFavorite={toggleFavoritePreset}
               onDuplicate={duplicatePreset}
+              onRename={renameCustomPreset}
+              onDelete={deleteCustomPreset}
               onSaveCurrent={saveCurrentAsPreset}
               onUndo={restorePresetSnapshot}
             />
@@ -1241,25 +1263,43 @@ export default function CreatorStudio() {
             <b>Video controls</b>
             <button onClick={() => setMobileTools(false)}>×</button>
           </div>
+          {panel === 'style' && (
+            <PresetGallery
+              presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
+              selectedId={selectedPresetId}
+              picture={song.picture}
+              favoriteIds={favoritePresetIds}
+              canUndo={Boolean(presetUndo)}
+              onApply={applyPreset}
+              onToggleFavorite={toggleFavoritePreset}
+              onDuplicate={duplicatePreset}
+              onRename={renameCustomPreset}
+              onDelete={deleteCustomPreset}
+              onSaveCurrent={saveCurrentAsPreset}
+              onUndo={restorePresetSnapshot}
+            />
+          )}
           <ToolControls
             panel={panel}
             setPanel={setPanel}
             wave={wave}
-            setWave={setWave}
+            setWave={(value) => { setSelectedPresetId(null); setWave(value); }}
             template={template}
-            setTemplate={setTemplate}
+            setTemplate={(value) => { setSelectedPresetId(null); setTemplate(value); }}
             aspect={aspect}
-            setAspect={setAspect}
+            setAspect={(value) => { setSelectedPresetId(null); setAspect(value); }}
             lyrics={lyrics}
-            setLyrics={setLyrics}
+            setLyrics={(value) => { setSelectedPresetId(null); setLyrics(value); }}
+            motion={motion}
+            setMotion={(value) => { setSelectedPresetId(null); setMotion(value); }}
             effects={effects}
-            setEffects={setEffects}
+            setEffects={(value) => { setSelectedPresetId(null); setEffects(value); }}
             layout={layout}
-            setLayout={setLayout}
+            setLayout={(value) => { setSelectedPresetId(null); setLayout(value); }}
             textStyles={textStyles}
-            setTextStyles={setTextStyles}
+            setTextStyles={(value) => { setSelectedPresetId(null); setTextStyles(value); }}
             subtitleStyle={subtitleStyle}
-            setSubtitleStyle={setSubtitleStyle}
+            setSubtitleStyle={(value) => { setSelectedPresetId(null); setSubtitleStyle(value); }}
             trimStart={trimStart}
             trimEnd={trimEnd}
             duration={song.duration || 0}
