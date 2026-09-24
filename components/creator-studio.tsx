@@ -31,6 +31,7 @@ import {
   type VideoEffect,
 } from '@/components/v8/video-effects';
 import { LivePreview } from '@/components/v8/live-preview';
+import { BackgroundPanel } from '@/components/v8/background-panel';
 import {
   BACKGROUND_PRESETS,
   DEFAULT_BACKGROUND_CONFIG,
@@ -160,6 +161,7 @@ function ToolControls(p: {
   setSubtitleStyle: (v: KaraokeDrawStyle) => void;
   background: BackgroundConfig;
   setBackground: (v: BackgroundConfig) => void;
+  onError: (message: string) => void;
   trimStart: number;
   trimEnd: number;
   duration: number;
@@ -397,93 +399,11 @@ function ToolControls(p: {
                   </button>
                 ))}
               {id === 'background' && (
-                <p className="sd-control-hint">
-                  Preset có thể thay toàn bộ nền. Bạn vẫn có thể chỉnh nền thủ công sau khi apply.
-                </p>
-              )}
-              {id === 'background' && (
-                <>
-                  <button
-                    className={safeBackground.mode === 'suno' ? 'active' : ''}
-                    onClick={() =>
-                      p.setBackground({
-                        ...safeBackground,
-                        mode: 'suno',
-                        presetId: undefined,
-                      })
-                    }
-                  >
-                    Suno cover
-                  </button>
-                  {BACKGROUND_PRESETS.map((item) => (
-                    <button
-                      key={item.id}
-                      className={
-                        safeBackground.mode === 'preset' &&
-                        safeBackground.presetId === item.id
-                          ? 'active'
-                          : ''
-                      }
-                      onClick={() =>
-                        p.setBackground({
-                          ...safeBackground,
-                          mode: 'preset',
-                          presetId: item.id,
-                        })
-                      }
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                  <label className="sd-scale">
-                    Dim
-                    <input
-                      type="range"
-                      min="0"
-                      max="80"
-                      value={safeBackground.dim}
-                      onChange={(e) =>
-                        p.setBackground({
-                          ...safeBackground,
-                          dim: Number(e.target.value),
-                        })
-                      }
-                    />
-                    <span>{safeBackground.dim}%</span>
-                  </label>
-                  <label className="sd-scale">
-                    Overlay
-                    <input
-                      type="range"
-                      min="0"
-                      max="80"
-                      value={safeBackground.overlayOpacity}
-                      onChange={(e) =>
-                        p.setBackground({
-                          ...safeBackground,
-                          overlayOpacity: Number(e.target.value),
-                        })
-                      }
-                    />
-                    <span>{safeBackground.overlayOpacity}%</span>
-                  </label>
-                  <label className="sd-scale">
-                    Blur
-                    <input
-                      type="range"
-                      min="0"
-                      max="20"
-                      value={safeBackground.blur}
-                      onChange={(e) =>
-                        p.setBackground({
-                          ...safeBackground,
-                          blur: Number(e.target.value),
-                        })
-                      }
-                    />
-                    <span>{safeBackground.blur}</span>
-                  </label>
-                </>
+                <BackgroundPanel
+                  value={safeBackground}
+                  onChange={p.setBackground}
+                  onError={p.onError}
+                />
               )}
               {id === 'effects' &&
                 VIDEO_EFFECTS.map((x) => (
@@ -1081,6 +1001,20 @@ export default function CreatorStudio() {
           blob: await (await fetch(clipUrl)).blob(),
         })),
       );
+      const backgroundAsset =
+        background.mode === 'image' && background.imageUrl
+          ? {
+              kind: 'image' as const,
+              blob: await (await fetch(background.imageUrl)).blob(),
+              fingerprint: background.imageFingerprint,
+            }
+          : background.mode === 'video' && background.videoUrl
+            ? {
+                kind: 'video' as const,
+                blob: await (await fetch(background.videoUrl)).blob(),
+                fingerprint: background.videoFingerprint,
+              }
+            : undefined;
       await saveProjectData({
         url,
         title: song.title,
@@ -1097,6 +1031,7 @@ export default function CreatorStudio() {
         textStyles,
         subtitleStyle,
         background,
+        backgroundAsset,
         trimStart,
         trimEnd,
         karaokeTimeline,
@@ -1133,8 +1068,26 @@ export default function CreatorStudio() {
     setLayout(project.layout);
     if (project.textStyles) setTextStyles(project.textStyles);
     if (project.subtitleStyle) setSubtitleStyle(project.subtitleStyle);
-    if (project.background) setBackground(project.background);
-    else setBackground(structuredClone(DEFAULT_BACKGROUND_CONFIG));
+    if (project.background) {
+      const restoredBackground = structuredClone(project.background);
+      if (project.backgroundAsset) {
+        const assetUrl = URL.createObjectURL(project.backgroundAsset.blob);
+        if (project.backgroundAsset.kind === 'image') {
+          restoredBackground.mode = 'image';
+          restoredBackground.imageUrl = assetUrl;
+          restoredBackground.videoUrl = undefined;
+          restoredBackground.imageFingerprint =
+            project.backgroundAsset.fingerprint;
+        } else {
+          restoredBackground.mode = 'video';
+          restoredBackground.videoUrl = assetUrl;
+          restoredBackground.imageUrl = undefined;
+          restoredBackground.videoFingerprint =
+            project.backgroundAsset.fingerprint;
+        }
+      }
+      setBackground(restoredBackground);
+    } else setBackground(structuredClone(DEFAULT_BACKGROUND_CONFIG));
     setTrimStart(project.trimStart);
     setTrimEnd(project.trimEnd);
     setKaraokeTimeline(project.karaokeTimeline);
@@ -1183,6 +1136,7 @@ export default function CreatorStudio() {
     setSubtitleStyle: (value) => changeVisual(() => setSubtitleStyle(value)),
     background,
     setBackground: (value) => changeVisual(() => setBackground(value)),
+    onError: setError,
     trimStart,
     trimEnd,
     duration: song?.duration || 0,
