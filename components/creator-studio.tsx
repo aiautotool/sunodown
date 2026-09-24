@@ -723,6 +723,28 @@ export default function CreatorStudio() {
     persistCustomPresets(next);
   };
 
+  const updateCurrentPreset = (preset: StudioPreset) => {
+    if (preset.builtin) return;
+    const nextPreset: StudioPreset = {
+      ...preset,
+      schemaVersion: PRESET_SCHEMA_VERSION,
+      accent: subtitleStyle.activeColor || preset.accent,
+      secondary: textStyles.title.color || preset.secondary,
+      thumbnail: capturePresetThumbnail() || preset.thumbnail,
+      config: currentPresetConfig(),
+    };
+    const next = customPresets.map((item) =>
+      item.id === preset.id ? nextPreset : item,
+    );
+    persistCustomPresets(next);
+    setSelectedPresetId(preset.id);
+    setPresetModified(false);
+  };
+
+  const resetSelectedPreset = (preset: StudioPreset) => {
+    applyPreset(preset, 'replace-all');
+  };
+
   const deleteCustomPreset = (preset: StudioPreset) => {
     persistCustomPresets(customPresets.filter((item) => item.id !== preset.id));
     if (selectedPresetId === preset.id) {
@@ -1291,6 +1313,8 @@ export default function CreatorStudio() {
               onRename={renameCustomPreset}
               onDelete={deleteCustomPreset}
               onSaveCurrent={saveCurrentAsPreset}
+              onUpdateCurrent={updateCurrentPreset}
+              onResetSelected={resetSelectedPreset}
               onUndo={restorePresetSnapshot}
             />
             <ToolControls
@@ -1450,6 +1474,8 @@ export default function CreatorStudio() {
               onRename={renameCustomPreset}
               onDelete={deleteCustomPreset}
               onSaveCurrent={saveCurrentAsPreset}
+              onUpdateCurrent={updateCurrentPreset}
+              onResetSelected={resetSelectedPreset}
               onUndo={restorePresetSnapshot}
             />
           )}
