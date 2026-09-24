@@ -309,13 +309,15 @@ export function LivePreview(props: Props) {
       try {
         if (!props.song.picture)
           throw new Error('Bài hát chưa có ảnh bìa để xem trước.');
-        const response = await fetch(props.song.picture, {
-          signal: controller.signal,
-        });
+        const pictureUrl = /^https:\/\//i.test(props.song.picture)
+          ? `/api/image?source=${encodeURIComponent(props.song.picture)}`
+          : props.song.picture;
+        let response = await fetch(pictureUrl, { signal: controller.signal, cache: 'no-store' });
+        // Compatibility fallback for already same-origin/blob cover URLs.
+        if (!response.ok && pictureUrl !== props.song.picture)
+          response = await fetch(props.song.picture, { signal: controller.signal, cache: 'no-store' });
         if (!response.ok)
-          throw new Error(
-            'Không tải được ảnh xem trước. Hãy tải lại thông tin bài hát.',
-          );
+          throw new Error('Không tải được ảnh xem trước. Hãy tải lại thông tin bài hát.');
         image = await createImageBitmap(await response.blob());
         if (controller.signal.aborted) {
           return;
