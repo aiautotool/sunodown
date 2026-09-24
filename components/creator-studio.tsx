@@ -474,7 +474,8 @@ export default function CreatorStudio() {
     [panel, setPanel] = useState('style'),
     [mobileTools, setMobileTools] = useState(false),
     [savingProject, setSavingProject] = useState(false),
-    [savedProject, setSavedProject] = useState(false);
+    [savedProject, setSavedProject] = useState(false),
+    [studioMode, setStudioMode] = useState<'video' | 'audio'>('video');
   const [wave, setWave] = useState<WaveStyle>('bars'),
     [template, setTemplate] = useState<VisualTemplate>('cover-motion'),
     [aspect, setAspect] = useState<VideoAspect>('16:9'),
@@ -782,6 +783,7 @@ export default function CreatorStudio() {
         data = await r.json();
       if (!r.ok) throw Error(data.error || 'Unable to load this song.');
       setSong(data);
+      setStudioMode('video');
       setPlaybackStart(0);
       setPreviewTime(0);
       setTrimStart(0);
@@ -1331,6 +1333,17 @@ export default function CreatorStudio() {
         </main>
       ) : (
         <main className={`sd-studio ${rendering ? 'sd-render-locked' : ''}`}>
+          <div className="sd-mode-tabs">
+            <button className={studioMode==='video'?'active':''} onClick={()=>setStudioMode('video')}><Play/> Video</button>
+            <button className={studioMode==='audio'?'active':''} onClick={()=>setStudioMode('audio')}><Music2/> Audio</button>
+          </div>
+          {studioMode==='audio' ? (
+            <section className="sd-audio-workspace">
+              <header><button onClick={()=>setSong(null)}>‹</button><img src={song.picture}/><div><small>AUDIO LAB</small><h2>{song.title}</h2><p>{fmt(song.duration)} · Mastering & spatial processing</p></div></header>
+              <MasteringPanel audio={song.audio} title={song.title}/>
+            </section>
+          ) : (<>
+          
           <section className="sd-canvas-column">
             <div className="sd-mobile-title">
               <button onClick={() => setSong(null)}>‹</button>
@@ -1440,7 +1453,6 @@ export default function CreatorStudio() {
               <span>Visual sync</span>
               <b>{visualHash}</b>
             </div>
-            <MasteringPanel audio={song.audio} title={song.title} />
             <div className="sd-actions">
               <button
                 className="sd-export"
@@ -1550,6 +1562,7 @@ export default function CreatorStudio() {
               </button>
             </nav>
           </div>
+          </>)}
         </main>
       )}
       {song && mobileTools && (
