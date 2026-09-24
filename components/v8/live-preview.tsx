@@ -37,6 +37,7 @@ import type { MediaClip } from '@/components/editor-timeline';
 
 type Props = {
   song: Song;
+  audioBinary?: Blob | null;
   aspect: VideoAspect;
   template: VisualTemplate;
   wave: WaveStyle;
@@ -79,6 +80,8 @@ export function LivePreview(props: Props) {
   const masterEqPresence = useRef<BiquadFilterNode | null>(null);
   const masterComp = useRef<DynamicsCompressorNode | null>(null);
   const masterGain = useRef<GainNode | null>(null);
+  const spectrumAnalyser = useRef<AnalyserNode | null>(null);
+  const realtimeBands = useRef({ bass: .04, lowMid: .04, vocal: .04, high: .04 });
   const video = useRef<HTMLVideoElement>(null);
   const current = useRef(props);
   current.current = props;
@@ -204,9 +207,10 @@ export function LivePreview(props: Props) {
           spatialSource.current = ctx.createMediaElementSource(element);
           spatialPan.current = ctx.createStereoPanner();
           masterEqLow.current = ctx.createBiquadFilter(); masterEqLow.current.type='lowshelf'; masterEqLow.current.frequency.value=180;
+          spectrumAnalyser.current = ctx.createAnalyser(); spectrumAnalyser.current.fftSize=1024; spectrumAnalyser.current.smoothingTimeConstant=.18;
           masterEqPresence.current = ctx.createBiquadFilter(); masterEqPresence.current.type='peaking'; masterEqPresence.current.frequency.value=3200; masterEqPresence.current.Q.value=.8;
           masterComp.current = ctx.createDynamicsCompressor(); masterGain.current = ctx.createGain();
-          spatialSource.current.connect(masterEqLow.current).connect(masterEqPresence.current).connect(masterComp.current).connect(masterGain.current).connect(spatialPan.current).connect(ctx.destination);
+          spatialSource.current.connect(masterEqLow.current).connect(masterEqPresence.current).connect(masterComp.current).connect(masterGain.current).connect(spectrumAnalyser.current).connect(spatialPan.current).connect(ctx.destination);
         }
         if (ctx.state === 'suspended') await ctx.resume();
         const pan = spatialPan.current;
@@ -256,6 +260,7 @@ export function LivePreview(props: Props) {
         masterComp.current!.threshold.setTargetAtTime(cfg.threshold,ctx.currentTime,.025);masterComp.current!.ratio.setTargetAtTime(cfg.ratio,ctx.currentTime,.025);
         masterComp.current!.attack.setTargetAtTime(detail.profile==='punchy'?.025:.006,ctx.currentTime,.025);masterComp.current!.release.setTargetAtTime(.12,ctx.currentTime,.025);
         masterGain.current!.gain.setTargetAtTime(cfg.gain,ctx.currentTime,.025);
+        if(!spectrumAnalyser.current){spectrumAnalyser.current=ctx.createAnalyser();spectrumAnalyser.current.fftSize=1024;spectrumAnalyser.current.smoothingTimeConstant=.18;masterGain.current!.disconnect();masterGain.current!.connect(spectrumAnalyser.current).connect(spatialPan.current!);}
       }catch{}
     };
     window.addEventListener('suno-master-preview',updateMaster);
@@ -268,24 +273,16 @@ export function LivePreview(props: Props) {
     setAudioAnalysisVersion((value) => value + 1);
     (async () => {
       try {
-        const sourceUrl = /^https:\/\//i.test(props.song.audio)
-          ? `/api/audio?source=${encodeURIComponent(props.song.audio)}`
-          : props.song.audio;
-        const response = await fetch(sourceUrl, { cache: 'no-store' });
-        if (!response.ok) return;
+        let binary = props.audioBinary;
+        if (!binary) { const response = await fetch(props.song.audio, { cache: 'no-store' }); if (!response.ok) return; binary = await response.blob(); }
         const context = new AudioContext();
         try {
-          const decoded = await context.decodeAudioData(
-            await response.arrayBuffer(),
-          );
+          const decoded = await context.decodeAudioData(await binary.arrayBuffer());
           if (cancelled) return;
-          const channel = decoded.getChannelData(0);
-          const samples = new Float32Array(channel.length);
-          samples.set(channel);
-          audioAnalysis.current = {
-            samples,
-            rate: decoded.sampleRate,
-          };
+          const left = decoded.getChannelData(0), right = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : left;
+          const samples = new Float32Array(left.length);
+          for (let i=0;i<samples.length;i++) samples[i]=(left[i]+right[i])*.5;
+          audioAnalysis.current = { samples, rate: decoded.sampleRate };
           setAudioAnalysisVersion((value) => value + 1);
         } finally {
           await context.close();
@@ -301,7 +298,7 @@ export function LivePreview(props: Props) {
       cancelled = true;
       audioAnalysis.current = null;
     };
-  }, [props.song.audio]);
+  }, [props.song.audio, props.audioBinary]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -312,13 +309,15 @@ export function LivePreview(props: Props) {
       try {
         if (!props.song.picture)
           throw new Error('Bài hát chưa có ảnh bìa để xem trước.');
-        const response = await fetch(props.song.picture, {
-          signal: controller.signal,
-        });
+        const pictureUrl = /^https:\/\//i.test(props.song.picture)
+          ? `/api/image?source=${encodeURIComponent(props.song.picture)}`
+          : props.song.picture;
+        let response = await fetch(pictureUrl, { signal: controller.signal, cache: 'no-store' });
+        // Compatibility fallback for already same-origin/blob cover URLs.
+        if (!response.ok && pictureUrl !== props.song.picture)
+          response = await fetch(props.song.picture, { signal: controller.signal, cache: 'no-store' });
         if (!response.ok)
-          throw new Error(
-            'Không tải được ảnh xem trước. Hãy tải lại thông tin bài hát.',
-          );
+          throw new Error('Không tải được ảnh xem trước. Hãy tải lại thông tin bài hát.');
         image = await createImageBitmap(await response.blob());
         if (controller.signal.aborted) {
           return;
@@ -487,6 +486,12 @@ export function LivePreview(props: Props) {
 
       const p = current.current;
       const player = audio.current;
+      const analyser=spectrumAnalyser.current;
+      if(analyser&&player&&!player.paused){const bins=new Uint8Array(analyser.frequencyBinCount);analyser.getByteFrequencyData(bins);const hz=(spatialContext.current?.sampleRate||48000)/analyser.fftSize;
+        const avg=(lo:number,hi:number)=>{let s=0,n=0;for(let k=Math.max(1,Math.floor(lo/hz));k<Math.min(bins.length,Math.ceil(hi/hz));k++){s+=bins[k];n++}return n?s/n/255:0};
+        const q={bass:avg(35,180),lowMid:avg(180,800),vocal:avg(800,4000),high:avg(4000,12000)},o=realtimeBands.current;
+        const env=(a:number,b:number,attack:number,release:number)=>a+(b-a)*(b>a?attack:release);
+        realtimeBands.current={bass:env(o.bass,q.bass,.86,.14),lowMid:env(o.lowMid,q.lowMid,.58,.11),vocal:env(o.vocal,q.vocal,.38,.065),high:env(o.high,q.high,.76,.24)};}
       let absoluteTime = player?.currentTime ?? p.start;
       const end = p.fullPlayback
         ? p.song.duration || p.start + 10
@@ -611,6 +616,7 @@ export function LivePreview(props: Props) {
         p.layout,
         p.overlayTextStyles,
         audioAnalysis.current,
+        realtimeBands.current,
       );
       if (hasExactLyrics) {
         withSubtitleLayout(context, size.width, size.height, p.layout, () =>

@@ -172,10 +172,12 @@ function ToolControls(p: {
   audioUrl: string;
   audioBinary: Blob | null;
   songTitle: string;
+  presetContent?: React.ReactNode;
 }) {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
   const rows = [
     ['audio', 'Âm thanh', Music2],
+    ['presets', 'Preset', Sparkles],
     ['style', 'Kiểu', Sparkles],
     ['text', 'Văn bản', FileText],
     ['wave', 'Sóng nhạc', SlidersHorizontal],
@@ -197,6 +199,7 @@ function ToolControls(p: {
       {rows.map(([id]) => p.panel === id && (
         <div className="sd-tab-panel" key={id}>
           <div className="sd-options">
+              {id === 'presets' && p.presetContent}
               {id === 'style' && (
                 <p className="sd-control-hint">
                   Preset thay đổi toàn bộ video. Các nút dưới đây dùng để tinh chỉnh thủ công sau khi chọn preset.
@@ -417,7 +420,7 @@ function ToolControls(p: {
                   </button>
                 ))}
               {id === 'audio' && (
-                <MasteringPanel audio={p.audioUrl} audioBinary={p.audioBinary} title={p.songTitle} />
+                <MasteringPanel audio={p.audioUrl} binary={p.audioBinary} title={p.songTitle} />
               )}
               {id === 'trim' && (
                 <div className="sd-trim">
@@ -515,8 +518,6 @@ export default function CreatorStudio() {
     activeColor: '#f0abfc',
   });
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeLine[]>([]);
-  const [audioBinary, setAudioBinary] = useState<Blob | null>(null);
-  const mediaCache = useRef(new Map<string, Blob>());
   const [mediaClips, setMediaClips] = useState<MediaClip[]>([]);
   const effectConfig = useMemo(() => makeEffectConfig(effects), [effects]);
   const visualSnapshot = useMemo<StudioPresetConfig>(
@@ -552,29 +553,6 @@ export default function CreatorStudio() {
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
   const timer = useRef<number | undefined>(undefined);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!song?.audio) { setAudioBinary(null); return; }
-    const cached = mediaCache.current.get(song.audio);
-    if (cached) { setAudioBinary(cached); return; }
-    void (async () => {
-      const candidates = [/^https:\/\//i.test(song.audio) ? `/api/audio?source=${encodeURIComponent(song.audio)}` : song.audio, song.audio];
-      for (const source of [...new Set(candidates)]) {
-        try {
-          const response = await fetch(source, { cache: 'no-store' });
-          if (!response.ok) continue;
-          const blob = await response.blob();
-          if (!blob.size) continue;
-          mediaCache.current.set(song.audio, blob);
-          if (!cancelled) setAudioBinary(blob);
-          return;
-        } catch {}
-      }
-      if (!cancelled) setAudioBinary(null);
-    })();
-    return () => { cancelled = true; };
-  }, [song?.audio]);
 
   const currentPresetConfig = (): StudioPresetConfig =>
     structuredClone(visualSnapshot);
@@ -808,18 +786,42 @@ export default function CreatorStudio() {
         }),
         data = await r.json();
       if (!r.ok) throw Error(data.error || 'Không thể tải bài hát này.');
-      setSong(data);
+      // Hydrate the complete song first: title/cover/lyrics/caption metadata must survive UI component migrations.
+      const hydrated: Song = {
+        ...data,
+        title: data.title || 'Suno song',
+        creator: data.creator || 'Suno',
+        picture: data.picture || '',
+        lyrics: typeof data.lyrics === 'string' ? data.lyrics : '',
+        style: typeof data.style === 'string' ? data.style : '',
+        tags: typeof data.tags === 'string' ? data.tags : '',
+      };
+      setSong(hydrated);
+      // One remote load per media URL per session. Everything downstream reuses the binary.
+      setAudioBinary(null);
+      try {
+        let source = mediaCache.current.get(hydrated.audio);
+        if (!source) {
+          const audioResponse = await fetch(hydrated.audio, { cache: 'no-store' });
+          if (!audioResponse.ok) throw new Error('Không tải được binary audio.');
+          source = await audioResponse.blob();
+          mediaCache.current.set(hydrated.audio, source);
+        }
+        setAudioBinary(source);
+      } catch (mediaError) {
+        setError(mediaError instanceof Error ? mediaError.message : 'Không tải được binary audio.');
+      }
       setPlaybackStart(0);
       setPreviewTime(0);
       setTrimStart(0);
-      setTrimEnd(data.duration || 30);
+      setTrimEnd(hydrated.duration || 30);
       setKaraokeTimeline(
-        data.lyrics
-          ? buildEstimatedKaraokeTimeline(data.lyrics, data.duration || 30)
+        hydrated.lyrics
+          ? buildEstimatedKaraokeTimeline(hydrated.lyrics, hydrated.duration || 30)
           : [],
       );
       setMediaClips([]);
-      return data as Song;
+      return hydrated;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Không thể tải bài hát này.');
       return null;
@@ -927,9 +929,8 @@ export default function CreatorStudio() {
     setDownloading(format);
     setError('');
     try {
-      const response = await fetch(song.audio, { cache: 'no-store' });
-      if (!response.ok) throw Error('Không tải được audio.');
-      const source = await response.blob();
+      let source = audioBinary || mediaCache.current.get(song.audio);
+      if (!source) { const response = await fetch(song.audio, { cache: 'no-store' }); if (!response.ok) throw Error('Không tải được audio.'); source = await response.blob(); mediaCache.current.set(song.audio, source); setAudioBinary(source); }
       if (format === 'm4a') saveBlob(source, `${safeName(song.title)}.m4a`);
       else {
         const processed = await renderTikTokLikeAudio(source),
@@ -1446,7 +1447,7 @@ export default function CreatorStudio() {
                   : 'Lưu dự án'}
             </button>
             <hr />
-            <PresetGallery
+            <ToolControls {...toolControlsProps} presetContent={<PresetGallery
               presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
               selectedId={selectedPresetId}
               picture={song.picture}
@@ -1464,8 +1465,7 @@ export default function CreatorStudio() {
               onExportPreset={exportPreset}
               onImportPreset={importPreset}
               onUndo={restorePresetSnapshot}
-            />
-            <ToolControls {...toolControlsProps} />
+            />} />
             <div className="sd-visual-sync" title="Preview/render visual fingerprint">
               <span>Visual sync</span>
               <b>{visualHash}</b>
@@ -1583,8 +1583,7 @@ export default function CreatorStudio() {
       )}
       {song && mobileTools && (
         <StudioSheet title="Điều khiển video" onClose={() => setMobileTools(false)} className="sd-tool-sheet">
-          {panel === 'style' && (
-            <PresetGallery
+          <ToolControls {...toolControlsProps} presetContent={<PresetGallery
               presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
               selectedId={selectedPresetId}
               picture={song.picture}
@@ -1602,9 +1601,7 @@ export default function CreatorStudio() {
               onExportPreset={exportPreset}
               onImportPreset={importPreset}
               onUndo={restorePresetSnapshot}
-            />
-          )}
-          <ToolControls {...toolControlsProps} />
+            />} />
         </StudioSheet>
       )}
     </div>
