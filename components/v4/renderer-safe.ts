@@ -908,7 +908,13 @@ export async function generateVisualizerVideoSafe(
         );
         applyBackgroundFinish(ctx, width, height, background);
       } else if (background.mode === 'video' && backgroundVideo) {
-        await seekVideoFrame(backgroundVideo, absoluteT, background.loopVideo);
+        await seekVideoFrame(
+          backgroundVideo,
+          absoluteT,
+          background.loopVideo,
+          background.videoStart || 0,
+          background.videoEnd,
+        );
         drawMediaBackground(
           ctx,
           backgroundVideo,
