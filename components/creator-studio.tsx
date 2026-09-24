@@ -328,7 +328,7 @@ function ToolControls(p: {
                   <p className="sd-control-hint">Lyrics được lấy một lần khi tải bài và dùng lại cho subtitle, timeline, SRT và render. Có thể sửa trực tiếp tại đây.</p>
                   <textarea
                     rows={7}
-                    value={p.songLyrics}
+                    value={p.karaokeTimeline.map((line) => line.text).join('\n')}
                     placeholder="Chưa nhận được lyrics từ nguồn."
                     onChange={(e) => p.setKaraokeTimeline(buildEstimatedKaraokeTimeline(e.target.value, p.duration || 1))}
                   />
