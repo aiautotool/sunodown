@@ -24,6 +24,7 @@ export function MasteringPanel({audio,title}:{audio:string;title:string}){
  const [profile,setProfile]=useState<MasterProfileId>('tiktok-loud'),[spatial,setSpatial]=useState(false),[spatialMode,setSpatialMode]=useState<Spatial5DMode>('immersive'),[spatialAmount,setSpatialAmount]=useState(65),[busy,setBusy]=useState(false),[progress,setProgress]=useState(''),[metrics,setMetrics]=useState<MasterMetrics|null>(null),[mastered,setMastered]=useState<string|null>(null),[blob,setBlob]=useState<Blob|null>(null),[error,setError]=useState('');
  useEffect(()=>()=>{if(mastered)URL.revokeObjectURL(mastered)},[mastered]);
  const livePreview=(enabled=spatial,mode=spatialMode,amount=spatialAmount)=>window.dispatchEvent(new CustomEvent('suno-spatial-change',{detail:{enabled,mode,amount}}));
+ const previewProfile=(next:MasterProfileId)=>window.dispatchEvent(new CustomEvent('suno-master-preview',{detail:{profile:next}}));
  const changeSpatial=(v:boolean)=>{setSpatial(v);livePreview(v,spatialMode,spatialAmount)};
  const changeMode=(v:Spatial5DMode)=>{setSpatialMode(v);livePreview(spatial,v,spatialAmount)};
  const changeDepth=(v:number)=>{setSpatialAmount(v);livePreview(spatial,spatialMode,v)};
@@ -31,8 +32,8 @@ export function MasteringPanel({audio,title}:{audio:string;title:string}){
  const download=()=>{if(!blob)return;const a=document.createElement('a'),u=URL.createObjectURL(blob);a.href=u;a.download=(title||'suno').replace(/[\\/:*?"<>|]+/g,'-')+'-'+profile+(spatial?'-5d':'')+'.wav';a.click();setTimeout(()=>URL.revokeObjectURL(u),1500)};
  return <section className="sd-master">
   <div className="sd-master-head"><div><span><Sparkles/> MASTERING</span><b>Tối ưu âm thanh</b><small>Chọn chất âm rồi nghe thử ngay. Chỉ cần render khi muốn xuất file cuối.</small></div>{metrics&&<em className={'risk-'+metrics.risk.toLowerCase().replace(/ /g,'-')}><ShieldCheck/>{metrics.risk}</em>}</div>
-  <StudioSegmented value={profile} options={MASTER_PROFILES.map(x=>({value:x.id,label:x.label}))} onChange={v=>{setProfile(v);setMetrics(null)}}/>
-  <p className="sd-master-desc">{MASTER_PROFILES.find(p=>p.id===profile)?.description}</p>
+  <StudioSegmented value={profile} options={MASTER_PROFILES.map(x=>({value:x.id,label:x.label}))} onChange={v=>{setProfile(v);setMetrics(null);previewProfile(v)}}/>
+  <p className="sd-master-desc">{MASTER_PROFILES.find(p=>p.id===profile)?.description}</p><StudioStatus tone="success">Chất âm được áp dụng trực tiếp lên bài đang phát · đổi chế độ để A/B ngay</StudioStatus>
   <StudioPanel className="sd-5d">
     <StudioToggle checked={spatial} onChange={changeSpatial} label="Âm thanh 5D" description={spatial?'Đang bật · thay đổi sẽ nghe ngay':'Đang tắt · stereo gốc'}/>
     {spatial&&<div className="sd-5d-controls">

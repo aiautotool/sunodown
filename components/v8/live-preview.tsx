@@ -75,6 +75,10 @@ export function LivePreview(props: Props) {
   const spatialContext = useRef<AudioContext | null>(null);
   const spatialSource = useRef<MediaElementAudioSourceNode | null>(null);
   const spatialPan = useRef<StereoPannerNode | null>(null);
+  const masterEqLow = useRef<BiquadFilterNode | null>(null);
+  const masterEqPresence = useRef<BiquadFilterNode | null>(null);
+  const masterComp = useRef<DynamicsCompressorNode | null>(null);
+  const masterGain = useRef<GainNode | null>(null);
   const video = useRef<HTMLVideoElement>(null);
   const current = useRef(props);
   current.current = props;
@@ -199,7 +203,10 @@ export function LivePreview(props: Props) {
         if (!spatialSource.current) {
           spatialSource.current = ctx.createMediaElementSource(element);
           spatialPan.current = ctx.createStereoPanner();
-          spatialSource.current.connect(spatialPan.current).connect(ctx.destination);
+          masterEqLow.current = ctx.createBiquadFilter(); masterEqLow.current.type='lowshelf'; masterEqLow.current.frequency.value=180;
+          masterEqPresence.current = ctx.createBiquadFilter(); masterEqPresence.current.type='peaking'; masterEqPresence.current.frequency.value=3200; masterEqPresence.current.Q.value=.8;
+          masterComp.current = ctx.createDynamicsCompressor(); masterGain.current = ctx.createGain();
+          spatialSource.current.connect(masterEqLow.current).connect(masterEqPresence.current).connect(masterComp.current).connect(masterGain.current).connect(spatialPan.current).connect(ctx.destination);
         }
         if (ctx.state === 'suspended') await ctx.resume();
         const pan = spatialPan.current;
@@ -225,6 +232,34 @@ export function LivePreview(props: Props) {
       window.removeEventListener('suno-spatial-change', updateSpatial);
       spatialPan.current?.pan.cancelScheduledValues(spatialContext.current?.currentTime || 0);
     };
+  }, []);
+
+  useEffect(() => {
+    const updateMaster = async (event: Event) => {
+      const detail=(event as CustomEvent<{profile:'clean'|'tiktok-loud'|'punchy'|'max-loud'}>).detail;
+      const element=audio.current;if(!element||!detail)return;
+      try{
+        const Ctx=window.AudioContext||(window as typeof window & {webkitAudioContext?:typeof AudioContext}).webkitAudioContext;
+        if(!Ctx)return;
+        if(!spatialContext.current)spatialContext.current=new Ctx();
+        const ctx=spatialContext.current;
+        if(!spatialSource.current){
+          spatialSource.current=ctx.createMediaElementSource(element);spatialPan.current=ctx.createStereoPanner();
+          masterEqLow.current=ctx.createBiquadFilter();masterEqLow.current.type='lowshelf';masterEqLow.current.frequency.value=180;
+          masterEqPresence.current=ctx.createBiquadFilter();masterEqPresence.current.type='peaking';masterEqPresence.current.frequency.value=3200;masterEqPresence.current.Q.value=.8;
+          masterComp.current=ctx.createDynamicsCompressor();masterGain.current=ctx.createGain();
+          spatialSource.current.connect(masterEqLow.current).connect(masterEqPresence.current).connect(masterComp.current).connect(masterGain.current).connect(spatialPan.current).connect(ctx.destination);
+        }
+        if(ctx.state==='suspended')await ctx.resume();
+        const cfg={clean:{low:0,pres:.5,threshold:-14,ratio:1.6,gain:1},'tiktok-loud':{low:1.5,pres:2.2,threshold:-22,ratio:3.5,gain:1.22},punchy:{low:2.8,pres:1.2,threshold:-18,ratio:2.2,gain:1.12},'max-loud':{low:2,pres:2.8,threshold:-26,ratio:5,gain:1.38}}[detail.profile];
+        masterEqLow.current!.gain.setTargetAtTime(cfg.low,ctx.currentTime,.025);masterEqPresence.current!.gain.setTargetAtTime(cfg.pres,ctx.currentTime,.025);
+        masterComp.current!.threshold.setTargetAtTime(cfg.threshold,ctx.currentTime,.025);masterComp.current!.ratio.setTargetAtTime(cfg.ratio,ctx.currentTime,.025);
+        masterComp.current!.attack.setTargetAtTime(detail.profile==='punchy'?.025:.006,ctx.currentTime,.025);masterComp.current!.release.setTargetAtTime(.12,ctx.currentTime,.025);
+        masterGain.current!.gain.setTargetAtTime(cfg.gain,ctx.currentTime,.025);
+      }catch{}
+    };
+    window.addEventListener('suno-master-preview',updateMaster);
+    return()=>window.removeEventListener('suno-master-preview',updateMaster);
   }, []);
 
   useEffect(() => {
