@@ -946,12 +946,13 @@ export default function CreatorStudio() {
       );
     }
   }
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
+  useEffect(() => {
+    // Default demo is loaded once on entry so its cover/preview is visible immediately.
+    // Keep the URL editable, but do not re-analyse on every input change.
+    void resolve('https://suno.com/s/tszo0jGdVUua4rT4');
+    return () => { if (timer.current) clearTimeout(timer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(
     () => () => {
       if (resultUrl) URL.revokeObjectURL(resultUrl);
