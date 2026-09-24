@@ -233,7 +233,10 @@ export function LivePreview(props: Props) {
     setAudioAnalysisVersion((value) => value + 1);
     (async () => {
       try {
-        const response = await fetch(props.song.audio, { cache: 'no-store' });
+        const sourceUrl = /^https:\/\//i.test(props.song.audio)
+          ? `/api/audio?source=${encodeURIComponent(props.song.audio)}`
+          : props.song.audio;
+        const response = await fetch(sourceUrl, { cache: 'no-store' });
         if (!response.ok) return;
         const context = new AudioContext();
         try {

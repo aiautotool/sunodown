@@ -153,22 +153,22 @@ function amplitude(
   t: number,
   off = 0,
 ) {
-  if (!samples) return Math.max(0.08, 0.2 + 0.15 * Math.sin((t + off) * 5));
-  const c = Math.max(
-      0,
-      Math.min(samples.length - 1, Math.floor((t + off) * rate)),
-    ),
-    r = Math.max(64, Math.floor(rate * 0.012)),
+  // Never fake musical motion when analysis is unavailable: a flat idle wave is less misleading.
+  if (!samples || !rate) return 0.06;
+  const c = Math.max(0, Math.min(samples.length - 1, Math.floor((t + off) * rate))),
+    r = Math.max(128, Math.floor(rate * 0.022)),
     from = Math.max(0, c - r),
     to = Math.min(samples.length, c + r),
-    stride = Math.max(1, Math.floor((to - from) / 24));
-  let sum = 0,
-    n = 0;
+    stride = Math.max(1, Math.floor((to - from) / 96));
+  let energy = 0, peak = 0, n = 0;
   for (let i = from; i < to; i += stride) {
-    sum += Math.abs(samples[i]);
-    n++;
+    const v = Math.abs(samples[i]);
+    energy += v * v; peak = Math.max(peak, v); n++;
   }
-  return n ? Math.min(1, (sum / n) * 5.2) : 0.08;
+  if (!n) return 0.04;
+  // RMS follows perceived musical energy; peak adds transient response for kick/snare.
+  const rms = Math.sqrt(energy / n);
+  return Math.min(1, Math.max(0.035, rms * 6.6 + peak * 0.22));
 }
 function extractPalette(bmp: ImageBitmap): Palette {
   const c = document.createElement('canvas');
@@ -518,7 +518,7 @@ function drawWaveBase(
   for (let i = 0; i < n; i++) {
     const a = vals[i],
       x = start + (i / (n - 1)) * usable - bw / 2,
-      pulse = 0.82 + 0.18 * Math.sin(t * 7 + i * 0.3),
+      pulse = 1,
       hh = Math.max(5, max * a * pulse) * (style === 'pulse' ? 1.45 : 1);
     ctx.beginPath();
     if (style === 'mirror') {
