@@ -69,6 +69,11 @@ import {
   type StudioPresetConfig,
 } from '@/components/presets/studio-presets';
 import {
+  auditPresetLibrary,
+  comparePreviewAndRender,
+  visualFingerprint,
+} from '@/components/presets/preset-regression';
+import {
   clearProjectData,
   loadProjectData,
   saveProjectData,
@@ -588,22 +593,42 @@ export default function CreatorStudio() {
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeLine[]>([]);
   const [mediaClips, setMediaClips] = useState<MediaClip[]>([]);
   const effectConfig = useMemo(() => makeEffectConfig(effects), [effects]);
+  const visualSnapshot = useMemo<StudioPresetConfig>(
+    () => ({
+      template,
+      wave,
+      motion,
+      aspect,
+      lyrics,
+      effects: [...effects],
+      layout: structuredClone(layout),
+      textStyles: structuredClone(textStyles),
+      subtitleStyle: structuredClone(subtitleStyle),
+      background: structuredClone(background),
+    }),
+    [
+      template,
+      wave,
+      motion,
+      aspect,
+      lyrics,
+      effects,
+      layout,
+      textStyles,
+      subtitleStyle,
+      background,
+    ],
+  );
+  const visualHash = useMemo(
+    () => visualFingerprint(visualSnapshot),
+    [visualSnapshot],
+  );
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
   const timer = useRef<number | undefined>(undefined);
 
-  const currentPresetConfig = (): StudioPresetConfig => ({
-    template,
-    wave,
-    motion,
-    aspect,
-    lyrics,
-    effects: [...effects],
-    layout: structuredClone(layout),
-    textStyles: structuredClone(textStyles),
-    subtitleStyle: structuredClone(subtitleStyle),
-    background: structuredClone(background),
-  });
+  const currentPresetConfig = (): StudioPresetConfig =>
+    structuredClone(visualSnapshot);
 
   const markPresetModified = () => {
     if (selectedPresetId) setPresetModified(true);
@@ -862,12 +887,40 @@ export default function CreatorStudio() {
     const value = await navigator.clipboard.readText();
     change(value);
   }
+  const assertVisualParity = () => {
+    const renderSnapshot: StudioPresetConfig = {
+      template,
+      wave,
+      motion,
+      aspect,
+      lyrics,
+      effects: [...effectConfig.effects],
+      layout: structuredClone(layout),
+      textStyles: structuredClone(textStyles),
+      subtitleStyle: structuredClone(subtitleStyle),
+      background: structuredClone(background),
+    };
+    const report = comparePreviewAndRender(visualSnapshot, renderSnapshot);
+    if (!report.ok) {
+      throw new Error(
+        `Visual sync failed [${report.fingerprint}]: ${report.issues.join(', ')}`,
+      );
+    }
+    return report;
+  };
+
   async function renderVideo(mode: 'cut' | '30' = 'cut') {
     if (!song || rendering) return;
     setRendering(true);
     setProgress(0);
     setError('');
     try {
+      const parity = assertVisualParity();
+      console.info('[SunoDown visual QA]', {
+        fingerprint: parity.fingerprint,
+        selectedPresetId,
+        modified: presetModified,
+      });
       const config = effectConfig;
       const startSeconds = trimStart,
         available = Math.max(1, (trimEnd || song.duration || 30) - trimStart),
@@ -1005,6 +1058,12 @@ export default function CreatorStudio() {
       setFavoritePresetIds(
         JSON.parse(localStorage.getItem('sunodown-v14-favorite-presets') || '[]'),
       );
+      const builtinIssues = auditPresetLibrary(BUILTIN_STUDIO_PRESETS);
+      if (builtinIssues.length) {
+        setError(
+          `Preset QA failed: ${builtinIssues.slice(0, 4).join(', ')}`,
+        );
+      }
     } catch {}
   }, []);
   async function saveProject() {
@@ -1395,6 +1454,10 @@ export default function CreatorStudio() {
               setTrimStart={setTrimStart}
               setTrimEnd={setTrimEnd}
             />
+            <div className="sd-visual-sync" title="Preview/render visual fingerprint">
+              <span>Visual sync</span>
+              <b>{visualHash}</b>
+            </div>
             <div className="sd-actions">
               <button
                 className="sd-export"
