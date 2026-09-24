@@ -1261,7 +1261,7 @@ export default function CreatorStudio() {
           <small>MUSIC LIVES FURTHER</small>
         </main>
       ) : (
-        <main className="sd-studio">
+        <main className={`sd-studio ${rendering ? 'sd-render-locked' : ''}`}>
           <section className="sd-canvas-column">
             <div className="sd-mobile-title">
               <button onClick={() => setSong(null)}>‹</button>
@@ -1281,7 +1281,7 @@ export default function CreatorStudio() {
                 motion={motion}
                 lyrics={lyrics}
                 layout={layout}
-                onLayoutChange={(value) => { markPresetModified(); setLayout(value); }}
+                onLayoutChange={rendering ? undefined : (value) => { markPresetModified(); setLayout(value); }}
                 start={playbackStart}
                 exporting={rendering}
                 autoPlay={autoPreview}
@@ -1467,6 +1467,7 @@ export default function CreatorStudio() {
             </button>
             <nav>
               <button
+                disabled={rendering}
                 onClick={() => {
                   setPanel('style');
                   setMobileTools(true);
@@ -1476,6 +1477,7 @@ export default function CreatorStudio() {
                 Style
               </button>
               <button
+                disabled={rendering}
                 onClick={() => {
                   setPanel('lyrics');
                   setMobileTools(true);
@@ -1485,6 +1487,7 @@ export default function CreatorStudio() {
                 Lyrics
               </button>
               <button
+                disabled={rendering}
                 onClick={() => {
                   setPanel('wave');
                   setMobileTools(true);
