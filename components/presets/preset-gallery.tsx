@@ -5,6 +5,18 @@ import { Copy, Download, Heart, Pencil, RefreshCw, RotateCcw, Save, Sparkles, Tr
 import type { StudioPreset, StudioPresetCategory } from './studio-presets';
 import type { PresetApplyMode } from './preset-apply-engine';
 
+const aspectRatio = (aspect: StudioPreset['config']['aspect']) =>
+  aspect === '9:16' ? '9 / 16' : aspect === '1:1' ? '1 / 1' : aspect === '4:5' ? '4 / 5' : aspect === '4:3' ? '4 / 3' : '16 / 9';
+
+const backgroundLabel = (preset: StudioPreset) =>
+  preset.config.background.mode === 'preset'
+    ? preset.config.background.presetId || 'Preset'
+    : preset.config.background.mode === 'suno'
+      ? 'Suno cover'
+      : preset.config.background.mode;
+
+const waveLabel = (wave: string) => wave.replace(/-/g, ' ');
+
 const CATEGORIES: Array<'All' | 'Favorites' | StudioPresetCategory | 'My Presets'> = [
   'All',
   'Favorites',
@@ -224,18 +236,36 @@ export function PresetGallery({
             >
               <button className="sd-preset-preview" onClick={() => requestApply(preset)}>
                 <span
-                  className={`sd-preset-art${preset.thumbnail ? ' saved-thumb' : ''}`}
-                  style={
-                    preset.thumbnail || picture
-                      ? {
-                          backgroundImage: `url("${preset.thumbnail || picture}")`,
-                        }
-                      : undefined
-                  }
+                  className={`sd-preset-art preset-${preset.config.background.mode}${preset.thumbnail ? ' saved-thumb' : ''}`}
+                  style={{
+                    ['--preset-aspect' as string]: aspectRatio(preset.config.aspect),
+                    ['--preset-dim' as string]: String(preset.config.background.dim ?? 0),
+                    ['--preset-overlay' as string]: String(preset.config.background.overlayOpacity ?? 0),
+                    ...(preset.thumbnail || (preset.config.background.mode === 'suno' && picture)
+                      ? { backgroundImage: `url("${preset.thumbnail || picture}")` }
+                      : {}),
+                  }}
                 >
-                  <i />
+                  <span className="sd-preset-scene">
+                    <i className={`wave wave-${preset.config.wave}`} />
+                    <span className={`template template-${preset.config.template}`}>
+                      <b />
+                      {preset.config.lyrics !== 'off' && <small />}
+                    </span>
+                  </span>
                   <em>{preset.category}</em>
                   {preset.badge && <strong>{preset.badge}</strong>}
+                  <span className="sd-preset-specs">
+                    <span>{preset.config.aspect}</span>
+                    <span>{waveLabel(preset.config.wave)}</span>
+                    <span>{backgroundLabel(preset)}</span>
+                  </span>
+                  {selected && (
+                    <span className={`sd-preset-state ${modified ? 'modified' : 'applied'}`}>
+                      {modified ? 'Modified' : 'Applied'}
+                    </span>
+                  )}
+                  {!preset.builtin && <span className="sd-preset-owned">My preset</span>}
                 </span>
                 <span className="sd-preset-copy">
                   <b>{preset.name}</b>

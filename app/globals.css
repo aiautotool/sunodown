@@ -312,3 +312,25 @@ body { font-family: var(--font-app), Arial, Helvetica, sans-serif; }
 .sd-bg-selected-copy{display:flex;min-width:0;flex-direction:column;justify-content:center;gap:3px}.sd-bg-selected-copy>b{overflow:hidden;color:#e9edf5;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.sd-bg-selected-copy>small{color:#7f8b9d;font-size:8px}
 .sd-bg-selected-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr auto;gap:6px}.sd-bg-selected-actions button{min-height:34px!important;border:1px solid #3b4657!important;border-radius:8px!important;background:#151d29!important;color:#cfd6e2!important;font-size:9px!important}.sd-bg-selected-actions button:last-child{color:#ff9ea8!important}
 @media(max-width:800px){.sd-bg-upload-actions{grid-template-columns:1fr 1fr}.sd-bg-upload-btn{min-height:64px!important}.sd-bg-selected-actions button{min-height:40px!important}}
+
+
+/* Preset Gallery v2: cards visualize the actual preset state instead of borrowing the song cover. */
+.sd-preset-art{aspect-ratio:1.72;background-image:none!important}
+.sd-preset-art.saved-thumb,.sd-preset-art.preset-suno{background-position:center;background-size:cover!important}
+.sd-preset-art.saved-thumb{background-image:var(--preset-thumb)!important}
+.sd-preset-scene{position:absolute;z-index:2;inset:18% 12% 20%;margin:auto;max-width:84%;aspect-ratio:var(--preset-aspect);border:1px solid rgba(255,255,255,.2);border-radius:8px;background:linear-gradient(145deg,color-mix(in srgb,var(--preset-accent) 22%,#111827),color-mix(in srgb,var(--preset-secondary) 16%,#070b12));box-shadow:0 9px 22px rgba(0,0,0,.34);overflow:hidden}
+.sd-preset-scene:after{content:"";position:absolute;inset:0;background:rgba(0,0,0,calc(var(--preset-dim) * .004))}
+.sd-preset-scene .template{position:absolute;z-index:2;inset:15% 14%;display:flex;flex-direction:column;justify-content:center;gap:9%;align-items:center}
+.sd-preset-scene .template b{display:block;width:38%;aspect-ratio:1;border-radius:9px;background:linear-gradient(135deg,var(--preset-accent),var(--preset-secondary));box-shadow:0 0 15px color-mix(in srgb,var(--preset-accent) 35%,transparent)}
+.sd-preset-scene .template-vinyl b,.sd-preset-scene .template-gold-record b{border-radius:50%;box-shadow:inset 0 0 0 5px rgba(0,0,0,.28),0 0 16px color-mix(in srgb,var(--preset-accent) 35%,transparent)}
+.sd-preset-scene .template-lyrics-focus b{width:56%;height:8%;aspect-ratio:auto;border-radius:999px}
+.sd-preset-scene .template small{display:block;width:70%;height:5px;border-radius:999px;background:rgba(255,255,255,.8);box-shadow:0 8px 0 rgba(255,255,255,.35)}
+.sd-preset-scene .wave{position:absolute;z-index:3;left:16%;right:16%;bottom:12%;height:13%;border-bottom:2px solid var(--preset-accent);filter:drop-shadow(0 0 4px var(--preset-accent))}
+.sd-preset-scene .wave:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 4px,var(--preset-secondary) 4px 6px);clip-path:polygon(0 60%,8% 22%,16% 74%,24% 35%,32% 65%,40% 12%,48% 80%,56% 32%,64% 70%,72% 18%,80% 58%,88% 30%,100% 68%,100% 100%,0 100%)}
+.sd-preset-scene .wave-circle-bars,.sd-preset-scene .wave-neon-ring,.sd-preset-scene .wave-spectrum-rings,.sd-preset-scene .wave-orbit-dots{left:50%;right:auto;bottom:9%;width:28%;height:auto;aspect-ratio:1;transform:translateX(-50%);border:2px solid var(--preset-accent);border-radius:50%}
+.sd-preset-specs{position:absolute;z-index:4;left:7px;right:7px;bottom:6px;display:flex;gap:4px;overflow:hidden}
+.sd-preset-specs span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid rgba(255,255,255,.13);border-radius:999px;background:rgba(7,10,15,.62);color:#cbd5e1;padding:2px 5px;font-size:6px;text-transform:capitalize;backdrop-filter:blur(7px)}
+.sd-preset-state{position:absolute;z-index:5;left:50%;top:7px;transform:translateX(-50%);border-radius:999px;padding:3px 6px;background:#16a34a;color:#fff;font-size:7px;font-weight:800;text-transform:uppercase}.sd-preset-state.modified{background:#d97706}
+.sd-preset-owned{position:absolute;z-index:5;right:7px;bottom:25px;border-radius:999px;background:rgba(139,92,246,.8);color:#fff;padding:2px 5px;font-size:6px;font-weight:800;text-transform:uppercase}
+.sd-preset-grid>article.active .sd-preset-copy b{color:color-mix(in srgb,var(--preset-accent) 60%,white)}
+@media(max-width:800px){.sd-preset-scene{inset:16% 10% 22%;max-width:88%}.sd-preset-specs span{font-size:5.5px}.sd-preset-owned{bottom:24px}}
