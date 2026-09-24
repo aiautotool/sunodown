@@ -72,6 +72,9 @@ function clampPreviewTime(value: number, start: number, end: number) {
 export function LivePreview(props: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
+  const spatialContext = useRef<AudioContext | null>(null);
+  const spatialSource = useRef<MediaElementAudioSourceNode | null>(null);
+  const spatialPan = useRef<StereoPannerNode | null>(null);
   const video = useRef<HTMLVideoElement>(null);
   const current = useRef(props);
   current.current = props;
@@ -181,6 +184,47 @@ export function LivePreview(props: Props) {
     };
     window.addEventListener('suno-effects-change', update);
     return () => window.removeEventListener('suno-effects-change', update);
+  }, []);
+
+  useEffect(() => {
+    const updateSpatial = async (event: Event) => {
+      const detail = (event as CustomEvent<{enabled:boolean;mode:'wide'|'immersive'|'orbit';amount:number}>).detail;
+      const element = audio.current;
+      if (!element || !detail) return;
+      try {
+        const Ctx = window.AudioContext || (window as typeof window & {webkitAudioContext?: typeof AudioContext}).webkitAudioContext;
+        if (!Ctx) return;
+        if (!spatialContext.current) spatialContext.current = new Ctx();
+        const ctx = spatialContext.current;
+        if (!spatialSource.current) {
+          spatialSource.current = ctx.createMediaElementSource(element);
+          spatialPan.current = ctx.createStereoPanner();
+          spatialSource.current.connect(spatialPan.current).connect(ctx.destination);
+        }
+        if (ctx.state === 'suspended') await ctx.resume();
+        const pan = spatialPan.current;
+        if (!pan) return;
+        pan.pan.cancelScheduledValues(ctx.currentTime);
+        if (!detail.enabled) { pan.pan.setValueAtTime(0, ctx.currentTime); return; }
+        const depth = Math.max(.08, Math.min(.96, detail.amount / 100));
+        if (detail.mode === 'orbit') {
+          // Audible left → right → left movement. 2.8 s cycle at 100%, slower when subtle.
+          const half = 1.4 + (1-depth) * 1.6, now = ctx.currentTime;
+          pan.pan.setValueAtTime(-depth, now);
+          for (let t=now+half, side=1; t<now+120; t+=half, side*=-1) pan.pan.linearRampToValueAtTime(side*depth,t);
+        } else {
+          // These modes stay centered; their rendered version adds width/depth without forced travel.
+          pan.pan.setValueAtTime(0, ctx.currentTime);
+        }
+      } catch {
+        // Playback still works normally if Web Audio is unavailable.
+      }
+    };
+    window.addEventListener('suno-spatial-change', updateSpatial);
+    return () => {
+      window.removeEventListener('suno-spatial-change', updateSpatial);
+      spatialPan.current?.pan.cancelScheduledValues(spatialContext.current?.currentTime || 0);
+    };
   }, []);
 
   useEffect(() => {

@@ -61,7 +61,7 @@ import type { KaraokeLine } from '@/app/lib/karaoke';
 import { EditorTimeline, type MediaClip } from '@/components/editor-timeline';
 import { PresetGallery } from '@/components/presets/preset-gallery';
 import { MasteringPanel } from '@/components/mastering-panel';
-import { StudioTabs } from '@/components/studio-ui';
+import { StudioSheet, StudioTabs } from '@/components/studio-ui';
 import {
   BUILTIN_STUDIO_PRESETS,
   PRESET_SCHEMA_VERSION,
@@ -1553,11 +1553,7 @@ export default function CreatorStudio() {
         </main>
       )}
       {song && mobileTools && (
-        <div className="sd-tool-sheet">
-          <div className="sd-sheet-head">
-            <b>Điều khiển video</b>
-            <button onClick={() => setMobileTools(false)}>×</button>
-          </div>
+        <StudioSheet title="Điều khiển video" onClose={() => setMobileTools(false)} className="sd-tool-sheet">
           {panel === 'style' && (
             <PresetGallery
               presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
@@ -1580,7 +1576,7 @@ export default function CreatorStudio() {
             />
           )}
           <ToolControls {...toolControlsProps} />
-        </div>
+        </StudioSheet>
       )}
     </div>
   );
