@@ -279,13 +279,10 @@ export function LivePreview(props: Props) {
             await response.arrayBuffer(),
           );
           if (cancelled) return;
-          const channel = decoded.getChannelData(0);
-          const samples = new Float32Array(channel.length);
-          samples.set(channel);
-          audioAnalysis.current = {
-            samples,
-            rate: decoded.sampleRate,
-          };
+          const left = decoded.getChannelData(0), right = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : left;
+          const samples = new Float32Array(left.length);
+          for (let i=0;i<samples.length;i++) samples[i]=(left[i]+right[i])*.5;
+          audioAnalysis.current = { samples, rate: decoded.sampleRate };
           setAudioAnalysisVersion((value) => value + 1);
         } finally {
           await context.close();
