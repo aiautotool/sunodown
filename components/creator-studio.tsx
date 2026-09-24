@@ -1145,64 +1145,55 @@ export default function CreatorStudio() {
       })),
     );
   }
+  const invalidateRenderedResult = () => {
+    setResultBlob(null);
+    if (resultUrl) {
+      URL.revokeObjectURL(resultUrl);
+      setResultUrl('');
+    }
+    setResultName('');
+  };
+
+  const changeVisual = (change: () => void) => {
+    markPresetModified();
+    invalidateRenderedResult();
+    change();
+  };
+
   const toolControlsProps: Parameters<typeof ToolControls>[0] = {
     panel,
     setPanel,
     wave,
-    setWave: (value) => {
-      markPresetModified();
-      setWave(value);
-    },
+    setWave: (value) => changeVisual(() => setWave(value)),
     template,
-    setTemplate: (value) => {
-      markPresetModified();
-      setTemplate(value);
-    },
+    setTemplate: (value) => changeVisual(() => setTemplate(value)),
     aspect,
-    setAspect: (value) => {
-      markPresetModified();
-      setAspect(value);
-    },
+    setAspect: (value) => changeVisual(() => setAspect(value)),
     lyrics,
-    setLyrics: (value) => {
-      markPresetModified();
-      setLyrics(value);
-    },
+    setLyrics: (value) => changeVisual(() => setLyrics(value)),
     motion,
-    setMotion: (value) => {
-      markPresetModified();
-      setMotion(value);
-    },
+    setMotion: (value) => changeVisual(() => setMotion(value)),
     effects,
-    setEffects: (value) => {
-      markPresetModified();
-      setEffects(value);
-    },
+    setEffects: (value) => changeVisual(() => setEffects(value)),
     layout,
-    setLayout: (value) => {
-      markPresetModified();
-      setLayout(value);
-    },
+    setLayout: (value) => changeVisual(() => setLayout(value)),
     textStyles,
-    setTextStyles: (value) => {
-      markPresetModified();
-      setTextStyles(value);
-    },
+    setTextStyles: (value) => changeVisual(() => setTextStyles(value)),
     subtitleStyle,
-    setSubtitleStyle: (value) => {
-      markPresetModified();
-      setSubtitleStyle(value);
-    },
+    setSubtitleStyle: (value) => changeVisual(() => setSubtitleStyle(value)),
     background,
-    setBackground: (value) => {
-      markPresetModified();
-      setBackground(value);
-    },
+    setBackground: (value) => changeVisual(() => setBackground(value)),
     trimStart,
     trimEnd,
     duration: song?.duration || 0,
-    setTrimStart,
-    setTrimEnd,
+    setTrimStart: (value) => {
+      invalidateRenderedResult();
+      setTrimStart(value);
+    },
+    setTrimEnd: (value) => {
+      invalidateRenderedResult();
+      setTrimEnd(value);
+    },
   };
 
   return (
@@ -1404,7 +1395,7 @@ export default function CreatorStudio() {
                 motion={motion}
                 lyrics={lyrics}
                 layout={layout}
-                onLayoutChange={rendering ? undefined : (value) => { markPresetModified(); setLayout(value); }}
+                onLayoutChange={rendering ? undefined : (value) => changeVisual(() => setLayout(value))}
                 start={trimStart}
                 end={trimEnd || song.duration || undefined}
                 seekTo={playbackStart}
