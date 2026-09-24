@@ -518,6 +518,8 @@ export default function CreatorStudio() {
     activeColor: '#f0abfc',
   });
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeLine[]>([]);
+  const [audioBinary, setAudioBinary] = useState<Blob | null>(null);
+  const mediaCache = useRef<Map<string, Blob>>(new Map());
   const [mediaClips, setMediaClips] = useState<MediaClip[]>([]);
   const effectConfig = useMemo(() => makeEffectConfig(effects), [effects]);
   const visualSnapshot = useMemo<StudioPresetConfig>(
@@ -1395,6 +1397,7 @@ export default function CreatorStudio() {
                 subtitleStyle={subtitleStyle}
                 effects={effectConfig}
                 background={background}
+                audioBinary={audioBinary}
                 resultUrl={resultUrl || undefined}
               />
             </div>
