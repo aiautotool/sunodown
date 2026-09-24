@@ -139,7 +139,7 @@ export function PresetGallery({
             >
               <button className="sd-preset-preview" onClick={() => onApply(preset)}>
                 <span
-                  className="sd-preset-art"
+                  className={`sd-preset-art${preset.thumbnail ? ' saved-thumb' : ''}`}
                   style={
                     preset.thumbnail || picture
                       ? {
