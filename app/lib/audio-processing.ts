@@ -29,7 +29,8 @@ export async function convertProcessedAudio(source: Blob, format: ProcessedForma
 export type MasterProfileId = 'clean' | 'tiktok-loud' | 'punchy' | 'max-loud';
 export type MasterProfile = {id:MasterProfileId;label:string;targetLufs:number;ceilingDb:number;ratio:number;drive:number;description:string};
 export type MasterMetrics = {beforeLufs:number;beforePeak:number;crestDb:number;requestedLufs:number;safeTargetLufs:number;afterLufs:number;afterPeak:number;gainDb:number;risk:'Safe'|'Aggressive'|'Distortion risk'};
-export type AdvancedMasterSettings={targetLufs:number;ceilingDb:number;thresholdDb:number;ratio:number;attackMs:number;releaseMs:number;drive:number;eq:{sub:number;low:number;lowMid:number;mid:number;presence:number;air:number}};
+export type EqBand={enabled:boolean;frequency:number;gain:number;q:number;type:BiquadFilterType};
+export type AdvancedMasterSettings={targetLufs:number;ceilingDb:number;thresholdDb:number;ratio:number;attackMs:number;releaseMs:number;drive:number;eqBands:EqBand[]};
 export const MASTER_PROFILES:MasterProfile[]=[
  {id:'clean',label:'Clean',targetLufs:-11,ceilingDb:-1,ratio:1.8,drive:.08,description:'Giữ transient và độ mở, chỉ làm bản mix chắc hơn.'},
  {id:'tiktok-loud',label:'TikTok Loud',targetLufs:-8,ceilingDb:-1,ratio:2.6,drive:.18,description:'Dày và tiến về phía trước cho loa điện thoại.'},
@@ -47,7 +48,7 @@ export async function masterAudio(source:Blob,profileId:MasterProfileId,advanced
  const hp=offline.createBiquadFilter();hp.type='highpass';hp.frequency.value=28;hp.Q.value=.707;
  const mud=offline.createBiquadFilter();mud.type='peaking';mud.frequency.value=260;mud.Q.value=.9;mud.gain.value=profileId==='clean'?-0.4:-.9;
  const presence=offline.createBiquadFilter();presence.type='peaking';presence.frequency.value=3200;presence.Q.value=.8;presence.gain.value=profileId==='punchy'?.7:1;
- const eqNodes:BiquadFilterNode[]=[];if(advanced){const defs:[BiquadFilterType,number,number,number][]=[['lowshelf',70,.7,advanced.eq.sub],['peaking',140,1,advanced.eq.low],['peaking',350,1,advanced.eq.lowMid],['peaking',1000,1,advanced.eq.mid],['peaking',3500,1,advanced.eq.presence],['highshelf',10000,.7,advanced.eq.air]];for(const [type,freq,q,g] of defs){const n=offline.createBiquadFilter();n.type=type;n.frequency.value=freq;n.Q.value=q;n.gain.value=g;eqNodes.push(n)}}
+ const eqNodes:BiquadFilterNode[]=[];if(advanced){for(const band of advanced.eqBands){if(!band.enabled)continue;const n=offline.createBiquadFilter();n.type=band.type;n.frequency.value=band.frequency;n.Q.value=band.q;n.gain.value=band.gain;eqNodes.push(n)}}
  const comp=offline.createDynamicsCompressor();comp.threshold.value=advanced?advanced.thresholdDb:(profileId==='clean'?-15:-19);comp.knee.value=9;comp.ratio.value=profile.ratio;comp.attack.value=advanced?advanced.attackMs/1000:(profileId==='punchy'?.018:.009);comp.release.value=advanced?advanced.releaseMs/1000:.12;
  const drive=offline.createWaveShaper(),curve=new Float32Array(65536),k=1+profile.drive*8;for(let i=0;i<curve.length;i++){const x=i*2/(curve.length-1)-1;curve[i]=Math.tanh(k*x)/Math.tanh(k)}drive.curve=curve;drive.oversample='4x';
  let chain:AudioNode=presence;src.connect(hp).connect(mud).connect(presence);for(const eq of eqNodes){chain.connect(eq);chain=eq}chain.connect(comp).connect(drive).connect(offline.destination);src.start();

@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Download, Headphones, ShieldCheck, SlidersHorizontal, Sparkles, Waves } from 'lucide-react';
 import { StudioBadge, StudioButton, StudioControlRow, StudioPanel, StudioSegmented, StudioSlider, StudioStatus, StudioToggle } from '@/components/studio-ui';
-import { MASTER_PROFILES, masterAudio, render5DAudio, type AdvancedMasterSettings, type MasterMetrics, type MasterProfileId, type Spatial5DMode } from '@/app/lib/audio-processing';
+import { MASTER_PROFILES, masterAudio, render5DAudio, type AdvancedMasterSettings, type EqBand, type MasterMetrics, type MasterProfileId, type Spatial5DMode } from '@/app/lib/audio-processing';
 
 const MODE_INFO:Record<Spatial5DMode,{label:string;desc:string}> = {
  wide:{label:'Rộng',desc:'Mở rộng sân khấu stereo nhưng giữ vị trí nhạc cụ ổn định.'},
@@ -28,8 +28,14 @@ export function MasteringPanel({audio,binary,title}:{audio:string;binary?:Blob|n
  const changeSpatial=(v:boolean)=>{setSpatial(v);livePreview(v,spatialMode,spatialAmount)};
  const changeMode=(v:Spatial5DMode)=>{setSpatialMode(v);livePreview(spatial,v,spatialAmount)};
  const changeDepth=(v:number)=>{setSpatialAmount(v);livePreview(spatial,spatialMode,v)};
- const defaults=():AdvancedMasterSettings=>{const p=MASTER_PROFILES.find(x=>x.id===profile)||MASTER_PROFILES[0];return{targetLufs:p.targetLufs,ceilingDb:p.ceilingDb,thresholdDb:profile==='clean'?-15:-19,ratio:p.ratio,attackMs:profile==='punchy'?18:9,releaseMs:120,drive:p.drive,eq:{sub:0,low:0,lowMid:0,mid:0,presence:0,air:0}}};
- const settings=custom||defaults(),change=(patch:Partial<AdvancedMasterSettings>)=>setCustom({...settings,...patch}),changeEq=(key:keyof AdvancedMasterSettings['eq'],value:number)=>setCustom({...settings,eq:{...settings.eq,[key]:value}}),resetAdvanced=()=>setCustom(null);
+ const defaultBands=():EqBand[]=>[
+  {enabled:true,frequency:60,gain:0,q:.7,type:'lowshelf'},{enabled:true,frequency:120,gain:0,q:1,type:'peaking'},
+  {enabled:true,frequency:250,gain:0,q:1,type:'peaking'},{enabled:true,frequency:500,gain:0,q:1,type:'peaking'},
+  {enabled:true,frequency:1000,gain:0,q:1,type:'peaking'},{enabled:true,frequency:2500,gain:0,q:1,type:'peaking'},
+  {enabled:true,frequency:6000,gain:0,q:1,type:'peaking'},{enabled:true,frequency:12000,gain:0,q:.7,type:'highshelf'}];
+ const defaults=():AdvancedMasterSettings=>{const p=MASTER_PROFILES.find(x=>x.id===profile)||MASTER_PROFILES[0];return{targetLufs:p.targetLufs,ceilingDb:p.ceilingDb,thresholdDb:profile==='clean'?-15:-19,ratio:p.ratio,attackMs:profile==='punchy'?18:9,releaseMs:120,drive:p.drive,eqBands:defaultBands()}};
+ const settings=custom||defaults(),change=(patch:Partial<AdvancedMasterSettings>)=>setCustom({...settings,...patch}),changeBand=(index:number,patch:Partial<EqBand>)=>setCustom({...settings,eqBands:settings.eqBands.map((b,i)=>i===index?{...b,...patch}:b)}),resetAdvanced=()=>setCustom(null);
+ const eqPath=useMemo(()=>settings.eqBands.map((b,i)=>{const x=8+(Math.log10(b.frequency/20)/Math.log10(20000/20))*84,y=50-(b.enabled?b.gain:0)*(3.2);return (i?'L':'M')+x.toFixed(1)+' '+Math.max(8,Math.min(92,y)).toFixed(1)}).join(' '),[settings.eqBands]);
  const run=async()=>{setBusy(true);setError('');setProgress(binary?'Đang đọc binary audio…':'Đang tải audio nguồn…');try{const source=binary&&binary.size?binary:await loadAudioBlob(audio);setProgress('Đang giải mã & phân tích…');let result=await masterAudio(source,profile,custom||undefined);let output=result.blob;if(spatial){setProgress('Đang tạo không gian 5D…');output=await render5DAudio(output,spatialAmount/100,spatialMode);}if(mastered)URL.revokeObjectURL(mastered);setBlob(output);setMastered(URL.createObjectURL(output));setMetrics(result.metrics);setProgress('')}catch(e){setError(e instanceof Error?e.message:'Mastering thất bại.')}finally{setBusy(false)}};
  const download=()=>{if(!blob)return;const a=document.createElement('a'),u=URL.createObjectURL(blob);a.href=u;a.download=(title||'suno').replace(/[\\/:*?"<>|]+/g,'-')+'-'+profile+(spatial?'-5d':'')+'.wav';a.click();setTimeout(()=>URL.revokeObjectURL(u),1500)};
  return <section className="sd-master">
@@ -49,7 +55,10 @@ export function MasteringPanel({audio,binary,title}:{audio:string;binary?:Blob|n
        <StudioControlRow label="Release" value={settings.releaseMs+' ms'}><StudioSlider label="Release" min={40} max={500} step={5} value={settings.releaseMs} onChange={v=>change({releaseMs:v})}/></StudioControlRow>
        <StudioControlRow label="Drive" value={Math.round(settings.drive*100)+'%'}><StudioSlider label="Drive" min={0} max={0.4} step={0.01} value={settings.drive} onChange={v=>change({drive:v})}/></StudioControlRow>
       </div>
-      <div className="sd-channel-eq"><b>Channel EQ · 6 bands</b><small>Sub 70 · Low 140 · Low-mid 350 · Mid 1k · Presence 3.5k · Air 10k</small><div className="sd-eq-grid">{([['sub','Sub'],['low','Low'],['lowMid','Low-mid'],['mid','Mid'],['presence','Presence'],['air','Air']] as const).map(([key,label])=><StudioControlRow key={key} label={label} value={(settings.eq[key]>0?'+':'')+settings.eq[key].toFixed(1)+' dB'}><StudioSlider label={label} min={-12} max={12} step={0.5} value={settings.eq[key]} onChange={v=>changeEq(key,v)}/></StudioControlRow>)}</div></div>
+      <div className="sd-channel-eq"><div className="sd-eq-title"><div><b>8-Band Parametric EQ</b><small>Precision EQ · ±12 dB · Frequency / Gain / Q</small></div><StudioBadge>STEREO EQ</StudioBadge></div>
+       <div className="sd-eq-curve" aria-label="Đường cong EQ"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="eqFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="currentColor" stopOpacity=".22"/><stop offset="1" stopColor="currentColor" stopOpacity="0"/></linearGradient></defs>{[20,35,50,65,80].map(y=><line key={'y'+y} x1="0" y1={y} x2="100" y2={y}/>) }{[12,28,44,60,76,92].map(x=><line key={'x'+x} x1={x} y1="0" x2={x} y2="100"/>)}<path d={eqPath+' L92 50 L8 50 Z'} className="sd-eq-fill"/><path d={eqPath} className="sd-eq-line"/></svg>{settings.eqBands.map((b,i)=>{const left=8+(Math.log10(b.frequency/20)/Math.log10(1000))*84,top=50-(b.enabled?b.gain:0)*3.2;return <button key={i} type="button" className={'sd-eq-node '+(!b.enabled?'off':'')} style={{left:Math.max(4,Math.min(96,left))+'%',top:Math.max(8,Math.min(92,top))+'%'}} onClick={()=>changeBand(i,{enabled:!b.enabled})}>{i+1}</button>})}<span className="sd-eq-zero">0 dB</span></div>
+       <div className="sd-eq-bands">{settings.eqBands.map((b,i)=><div className={'sd-eq-band '+(!b.enabled?'is-off':'')} key={i}><div className="sd-eq-band-head"><button type="button" onClick={()=>changeBand(i,{enabled:!b.enabled})}>{b.enabled?'ON':'OFF'}</button><b>Band {i+1}</b><em>{b.frequency>=1000?(b.frequency/1000).toFixed(b.frequency%1000?1:0)+'k':Math.round(b.frequency)} Hz</em></div><StudioControlRow label="Gain" value={(b.gain>0?'+':'')+b.gain.toFixed(1)+' dB'}><StudioSlider label={'Band '+(i+1)+' gain'} min={-12} max={12} step={.5} value={b.gain} onChange={v=>changeBand(i,{gain:v})}/></StudioControlRow><StudioControlRow label="Frequency" value={Math.round(b.frequency)+' Hz'}><StudioSlider label={'Band '+(i+1)+' frequency'} min={20} max={20000} step={10} value={b.frequency} onChange={v=>changeBand(i,{frequency:v})}/></StudioControlRow><StudioControlRow label="Q" value={b.q.toFixed(2)}><StudioSlider label={'Band '+(i+1)+' Q'} min={.3} max={8} step={.1} value={b.q} onChange={v=>changeBand(i,{q:v})}/></StudioControlRow></div>)}</div>
+      </div>
       <StudioButton onClick={resetAdvanced} disabled={!custom}>Reset về preset {MASTER_PROFILES.find(x=>x.id===profile)?.label}</StudioButton>
     </div>}
   </StudioPanel>
