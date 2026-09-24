@@ -32,6 +32,11 @@ import {
 } from '@/components/v8/video-effects';
 import { LivePreview } from '@/components/v8/live-preview';
 import {
+  BACKGROUND_PRESETS,
+  DEFAULT_BACKGROUND_CONFIG,
+  type BackgroundConfig,
+} from '@/components/v8/background';
+import {
   WAVE_STYLES,
   VISUAL_TEMPLATES,
   type WaveStyle,
@@ -137,6 +142,8 @@ function ToolControls(p: {
   setTextStyles: (v: OverlayTextStyles) => void;
   subtitleStyle: KaraokeDrawStyle;
   setSubtitleStyle: (v: KaraokeDrawStyle) => void;
+  background: BackgroundConfig;
+  setBackground: (v: BackgroundConfig) => void;
   trimStart: number;
   trimEnd: number;
   duration: number;
@@ -149,6 +156,7 @@ function ToolControls(p: {
     ['wave', 'Waveform', SlidersHorizontal],
     ['lyrics', 'Lyrics', FileText],
     ['format', 'Format', SlidersHorizontal],
+    ['background', 'Background', ImageIcon],
     ['effects', 'Effects', Sparkles],
     ['trim', 'Cut & duration', SlidersHorizontal],
   ] as const;
@@ -371,6 +379,95 @@ function ToolControls(p: {
                     {x}
                   </button>
                 ))}
+              {id === 'background' && (
+                <p className="sd-control-hint">
+                  Preset có thể thay toàn bộ nền. Bạn vẫn có thể chỉnh nền thủ công sau khi apply.
+                </p>
+              )}
+              {id === 'background' && (
+                <>
+                  <button
+                    className={p.background.mode === 'suno' ? 'active' : ''}
+                    onClick={() =>
+                      p.setBackground({
+                        ...p.background,
+                        mode: 'suno',
+                        presetId: undefined,
+                      })
+                    }
+                  >
+                    Suno cover
+                  </button>
+                  {BACKGROUND_PRESETS.map((item) => (
+                    <button
+                      key={item.id}
+                      className={
+                        p.background.mode === 'preset' &&
+                        p.background.presetId === item.id
+                          ? 'active'
+                          : ''
+                      }
+                      onClick={() =>
+                        p.setBackground({
+                          ...p.background,
+                          mode: 'preset',
+                          presetId: item.id,
+                        })
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                  <label className="sd-scale">
+                    Dim
+                    <input
+                      type="range"
+                      min="0"
+                      max="80"
+                      value={p.background.dim}
+                      onChange={(e) =>
+                        p.setBackground({
+                          ...p.background,
+                          dim: Number(e.target.value),
+                        })
+                      }
+                    />
+                    <span>{p.background.dim}%</span>
+                  </label>
+                  <label className="sd-scale">
+                    Overlay
+                    <input
+                      type="range"
+                      min="0"
+                      max="80"
+                      value={p.background.overlayOpacity}
+                      onChange={(e) =>
+                        p.setBackground({
+                          ...p.background,
+                          overlayOpacity: Number(e.target.value),
+                        })
+                      }
+                    />
+                    <span>{p.background.overlayOpacity}%</span>
+                  </label>
+                  <label className="sd-scale">
+                    Blur
+                    <input
+                      type="range"
+                      min="0"
+                      max="20"
+                      value={p.background.blur}
+                      onChange={(e) =>
+                        p.setBackground({
+                          ...p.background,
+                          blur: Number(e.target.value),
+                        })
+                      }
+                    />
+                    <span>{p.background.blur}</span>
+                  </label>
+                </>
+              )}
               {id === 'effects' &&
                 VIDEO_EFFECTS.map((x) => (
                   <button
@@ -464,6 +561,9 @@ export default function CreatorStudio() {
     title: { font: 'Georgia, serif', color: '#ffffff' },
     creator: { font: 'system-ui, sans-serif', color: '#d1d5db' },
   });
+  const [background, setBackground] = useState<BackgroundConfig>(
+    structuredClone(DEFAULT_BACKGROUND_CONFIG),
+  );
   const [subtitleStyle, setSubtitleStyle] = useState<KaraokeDrawStyle>({
     font: 'system',
     color: '#ffffff',
@@ -485,6 +585,7 @@ export default function CreatorStudio() {
     layout: structuredClone(layout),
     textStyles: structuredClone(textStyles),
     subtitleStyle: structuredClone(subtitleStyle),
+    background: structuredClone(background),
   });
 
   const applyPreset = (preset: StudioPreset) => {
@@ -499,6 +600,7 @@ export default function CreatorStudio() {
     setLayout(next.layout);
     setTextStyles(next.textStyles);
     setSubtitleStyle(next.subtitleStyle);
+    setBackground(next.background);
     setSelectedPresetId(preset.id);
     setResultBlob(null);
     if (resultUrl) {
@@ -519,6 +621,7 @@ export default function CreatorStudio() {
     setLayout(next.layout);
     setTextStyles(next.textStyles);
     setSubtitleStyle(next.subtitleStyle);
+    setBackground(next.background);
     setSelectedPresetId(null);
     setPresetUndo(null);
   };
@@ -665,6 +768,7 @@ export default function CreatorStudio() {
           mediaClips,
           overlayTextStyles: textStyles,
           subtitleStyle,
+          background,
         },
       );
       if (resultUrl) URL.revokeObjectURL(resultUrl);
@@ -802,6 +906,7 @@ export default function CreatorStudio() {
         layout,
         textStyles,
         subtitleStyle,
+        background,
         trimStart,
         trimEnd,
         karaokeTimeline,
@@ -837,6 +942,8 @@ export default function CreatorStudio() {
     setLayout(project.layout);
     if (project.textStyles) setTextStyles(project.textStyles);
     if (project.subtitleStyle) setSubtitleStyle(project.subtitleStyle);
+    if (project.background) setBackground(project.background);
+    else setBackground(structuredClone(DEFAULT_BACKGROUND_CONFIG));
     setTrimStart(project.trimStart);
     setTrimEnd(project.trimEnd);
     setKaraokeTimeline(project.karaokeTimeline);
@@ -1056,6 +1163,7 @@ export default function CreatorStudio() {
                 mediaClips={mediaClips}
                 overlayTextStyles={textStyles}
                 subtitleStyle={subtitleStyle}
+                background={background}
                 resultUrl={resultUrl || undefined}
               />
             </div>
@@ -1143,6 +1251,8 @@ export default function CreatorStudio() {
               setTextStyles={(value) => { setSelectedPresetId(null); setTextStyles(value); }}
               subtitleStyle={subtitleStyle}
               setSubtitleStyle={(value) => { setSelectedPresetId(null); setSubtitleStyle(value); }}
+              background={background}
+              setBackground={(value) => { setSelectedPresetId(null); setBackground(value); }}
               trimStart={trimStart}
               trimEnd={trimEnd}
               duration={song.duration || 0}
