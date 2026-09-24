@@ -28,6 +28,7 @@ import {
 import {
   DEFAULT_BACKGROUND_CONFIG,
   applyBackgroundFinish,
+  backgroundVideoTime,
   drawMediaBackground,
   drawPresetBackground,
   type BackgroundConfig,
@@ -495,10 +496,7 @@ export function LivePreview(props: Props) {
       ) {
         const v = backgroundVideo.current,
           d = v.duration,
-          target =
-            background.loopVideo && d > 0
-              ? absoluteTime % d
-              : Math.min(absoluteTime, Math.max(0, d - 0.02));
+          target = backgroundVideoTime(absoluteTime, d, background);
         if (Math.abs(v.currentTime - target) > 0.12)
           try {
             v.currentTime = target;
