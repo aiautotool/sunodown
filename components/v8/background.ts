@@ -14,10 +14,10 @@ export type BackgroundConfig={
   dim:number;
   overlayOpacity:number;
   loopVideo:boolean;
-  positionX:number;
-  positionY:number;
-  zoom:number;
-  videoStart:number;
+  positionX?:number;
+  positionY?:number;
+  zoom?:number;
+  videoStart?:number;
   videoEnd?:number;
 };
 
