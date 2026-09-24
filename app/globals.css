@@ -334,3 +334,17 @@ body { font-family: var(--font-app), Arial, Helvetica, sans-serif; }
 .sd-preset-owned{position:absolute;z-index:5;right:7px;bottom:25px;border-radius:999px;background:rgba(139,92,246,.8);color:#fff;padding:2px 5px;font-size:6px;font-weight:800;text-transform:uppercase}
 .sd-preset-grid>article.active .sd-preset-copy b{color:color-mix(in srgb,var(--preset-accent) 60%,white)}
 @media(max-width:800px){.sd-preset-scene{inset:16% 10% 22%;max-width:88%}.sd-preset-specs span{font-size:5.5px}.sd-preset-owned{bottom:24px}}
+
+
+/* Preset apply confirmation is a real modal so Gallery never jumps/reflows. */
+.sd-preset-apply-backdrop{position:fixed;z-index:1200;inset:0;display:grid;place-items:center;background:rgba(3,6,12,.68);padding:20px;backdrop-filter:blur(7px);animation:sdPresetFade .14s ease-out}
+.sd-preset-apply-backdrop .sd-preset-apply-choice{position:relative;width:min(440px,calc(100vw - 32px));margin:0;border:1px solid #5b438f;border-radius:16px;background:linear-gradient(145deg,#171528,#101721 62%,#0d131c);padding:20px;box-shadow:0 28px 80px rgba(0,0,0,.55),0 0 0 1px rgba(139,92,246,.08);animation:sdPresetPop .16s ease-out}
+.sd-preset-apply-backdrop .sd-preset-apply-choice>div:first-of-type{padding-right:30px;gap:6px}
+.sd-preset-apply-backdrop .sd-preset-apply-choice b{font-size:15px;line-height:1.25}
+.sd-preset-apply-backdrop .sd-preset-apply-choice span{font-size:11px;line-height:1.55}
+.sd-preset-apply-backdrop .sd-preset-apply-choice>div:last-child{grid-template-columns:1fr;margin-top:16px;gap:8px}
+.sd-preset-apply-backdrop .sd-preset-apply-choice button{min-height:42px;font-size:11px}
+.sd-preset-dialog-close{position:absolute;right:12px;top:10px!important;width:32px!important;min-height:32px!important;border:0!important;background:transparent!important;color:#a9b1bf!important;font-size:22px!important;line-height:1!important;padding:0!important}
+.sd-preset-dialog-close:hover{color:#fff!important}
+@keyframes sdPresetFade{from{opacity:0}to{opacity:1}}@keyframes sdPresetPop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+@media(max-width:800px){.sd-preset-apply-backdrop{align-items:end;padding:14px}.sd-preset-apply-backdrop .sd-preset-apply-choice{width:100%;max-width:520px;border-radius:18px;padding:18px 16px calc(16px + env(safe-area-inset-bottom));margin:0 auto 6px}.sd-preset-apply-backdrop .sd-preset-apply-choice button{min-height:48px;font-size:12px}}

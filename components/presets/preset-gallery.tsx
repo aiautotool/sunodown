@@ -179,32 +179,56 @@ export function PresetGallery({
       )}
 
       {pendingPreset && (
-        <div className="sd-preset-apply-choice">
-          <div>
-            <b>Apply {pendingPreset.name}?</b>
-            <span>Choose whether this preset may replace your positioned text and custom background media.</span>
-          </div>
-          <div>
+        <div
+          className="sd-preset-apply-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setPendingPreset(null);
+          }}
+        >
+          <div
+            className="sd-preset-apply-choice"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sd-preset-apply-title"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') setPendingPreset(null);
+            }}
+          >
             <button
-              onClick={() => {
-                onApply(pendingPreset, 'preserve-custom');
-                setPendingPreset(null);
-              }}
+              className="sd-preset-dialog-close"
+              aria-label="Close"
+              onClick={() => setPendingPreset(null)}
             >
-              Keep layout, text & background
+              ×
             </button>
-            <button
-              className="replace"
-              onClick={() => {
-                onApply(pendingPreset, 'replace-all');
-                setPendingPreset(null);
-              }}
-            >
-              Replace everything
-            </button>
-            <button className="cancel" onClick={() => setPendingPreset(null)}>
-              Cancel
-            </button>
+            <div>
+              <b id="sd-preset-apply-title">Apply {pendingPreset.name}?</b>
+              <span>Choose whether this preset may replace your positioned text and custom background media.</span>
+            </div>
+            <div>
+              <button
+                onClick={() => {
+                  onApply(pendingPreset, 'preserve-custom');
+                  setPendingPreset(null);
+                }}
+              >
+                Keep layout, text & background
+              </button>
+              <button
+                className="replace"
+                autoFocus
+                onClick={() => {
+                  onApply(pendingPreset, 'replace-all');
+                  setPendingPreset(null);
+                }}
+              >
+                Replace everything
+              </button>
+              <button className="cancel" onClick={() => setPendingPreset(null)}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
