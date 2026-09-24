@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Copy, Heart, Pencil, RotateCcw, Save, Sparkles, Trash2 } from 'lucide-react';
+import { Copy, Heart, Pencil, RefreshCw, RotateCcw, Save, Sparkles, Trash2 } from 'lucide-react';
 import type { StudioPreset, StudioPresetCategory } from './studio-presets';
 
 const CATEGORIES: Array<'All' | 'Favorites' | StudioPresetCategory | 'My Presets'> = [
@@ -28,6 +28,8 @@ export function PresetGallery({
   onRename,
   onDelete,
   onSaveCurrent,
+  onUpdateCurrent,
+  onResetSelected,
   onUndo,
 }: {
   presets: StudioPreset[];
@@ -42,12 +44,15 @@ export function PresetGallery({
   onRename: (preset: StudioPreset, name: string) => void;
   onDelete: (preset: StudioPreset) => void;
   onSaveCurrent: (name: string) => void;
+  onUpdateCurrent: (preset: StudioPreset) => void;
+  onResetSelected: (preset: StudioPreset) => void;
   onUndo: () => void;
 }) {
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('All');
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
   const [pendingPreset, setPendingPreset] = useState<StudioPreset | null>(null);
+  const selectedPreset = presets.find((preset) => preset.id === selectedId) || null;
 
   const requestApply = (preset: StudioPreset) => {
     if (modified && selectedId) {
@@ -83,13 +88,30 @@ export function PresetGallery({
           <b>One tap changes the whole video {modified && selectedId ? '· Modified' : ''}</b>
         </div>
         <div className="sd-preset-head-actions">
+          {modified && selectedPreset && (
+            <button
+              onClick={() => onResetSelected(selectedPreset)}
+              title="Reset to saved preset"
+            >
+              <RefreshCw /> Reset
+            </button>
+          )}
+          {modified && selectedPreset && !selectedPreset.builtin && (
+            <button
+              className="primary"
+              onClick={() => onUpdateCurrent(selectedPreset)}
+              title="Update this custom preset"
+            >
+              <Save /> Update
+            </button>
+          )}
           {canUndo && (
             <button onClick={onUndo} title="Undo preset">
               <RotateCcw /> Undo
             </button>
           )}
           <button onClick={() => setSaving((value) => !value)}>
-            <Save /> Save current
+            <Save /> Save new
           </button>
         </div>
       </div>
