@@ -4,8 +4,9 @@ import { useMemo, useState } from 'react';
 import { Copy, Heart, Pencil, RotateCcw, Save, Sparkles, Trash2 } from 'lucide-react';
 import type { StudioPreset, StudioPresetCategory } from './studio-presets';
 
-const CATEGORIES: Array<'All' | StudioPresetCategory | 'My Presets'> = [
+const CATEGORIES: Array<'All' | 'Favorites' | StudioPresetCategory | 'My Presets'> = [
   'All',
+  'Favorites',
   'Social',
   'Lyrics',
   'Cinematic',
@@ -46,14 +47,21 @@ export function PresetGallery({
   const [name, setName] = useState('');
   const visible = useMemo(
     () =>
-      presets.filter((preset) =>
-        category === 'All'
-          ? true
-          : category === 'My Presets'
-            ? !preset.builtin
-            : preset.category === category,
-      ),
-    [category, presets],
+      presets
+        .filter((preset) =>
+          category === 'All'
+            ? true
+            : category === 'Favorites'
+              ? favoriteIds.includes(preset.id)
+              : category === 'My Presets'
+                ? !preset.builtin
+                : preset.category === category,
+        )
+        .sort((a, b) => {
+          if (category !== 'All') return 0;
+          return Number(favoriteIds.includes(b.id)) - Number(favoriteIds.includes(a.id));
+        }),
+    [category, presets, favoriteIds],
   );
 
   return (
