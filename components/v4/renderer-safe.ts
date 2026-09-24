@@ -558,7 +558,7 @@ function drawWave(
   drawWaveBase(ctx, samples, rate, t, w, h, style, p);
   ctx.restore();
 }
-function withSubtitleLayout(
+export function withSubtitleLayout(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
