@@ -51,6 +51,7 @@ type Props = {
   onLayoutChange?: (layout: OverlayLayout) => void;
   start: number;
   end?: number;
+  seekTo?: number;
   exporting: boolean;
   resultUrl?: string;
   autoPlay?: boolean;
@@ -61,6 +62,10 @@ type Props = {
 function fmt(value: number) {
   const seconds = Math.max(0, Math.floor(value));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function clampPreviewTime(value: number, start: number, end: number) {
+  return Math.max(start, Math.min(end, value));
 }
 
 export function LivePreview(props: Props) {
@@ -333,18 +338,33 @@ export function LivePreview(props: Props) {
   useEffect(() => {
     const player = audio.current;
     if (!player) return;
+    const target = clampPreviewTime(
+      props.seekTo ?? props.start,
+      props.start,
+      previewEnd,
+    );
     player.pause();
-    player.currentTime = props.start;
-    setTime(props.start);
+    player.currentTime = target;
+    setTime(target);
     setPlaying(false);
-  }, [props.song.audio, props.start, props.resultUrl]);
+  }, [
+    props.song.audio,
+    props.start,
+    props.seekTo,
+    props.resultUrl,
+    previewEnd,
+  ]);
 
   useEffect(() => {
     if (!props.autoPlay || !bitmap || props.exporting || props.resultUrl)
       return;
     const player = audio.current;
     if (!player) return;
-    player.currentTime = props.start;
+    player.currentTime = clampPreviewTime(
+      props.seekTo ?? props.start,
+      props.start,
+      previewEnd,
+    );
     void player
       .play()
       .then(() => setPlaying(true))
@@ -354,6 +374,8 @@ export function LivePreview(props: Props) {
     bitmap,
     props.song.audio,
     props.start,
+    props.seekTo,
+    previewEnd,
     props.exporting,
     props.resultUrl,
     props.end,
