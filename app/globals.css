@@ -229,3 +229,23 @@ body { font-family: var(--font-app), Arial, Helvetica, sans-serif; }
 
 .sd-preset-import{display:flex;height:31px;align-items:center;justify-content:center;gap:5px;border:1px solid #303a48;border-radius:8px;background:#151c26;color:#aeb8c7;padding:0 9px;font-size:10px;cursor:pointer}.sd-preset-import:hover{border-color:#765ce4;color:#fff}.sd-preset-import svg{width:13px;height:13px}.sd-preset-import input{display:none}
 @media(max-width:800px){.sd-preset-import{min-height:31px}}
+
+/* Keep preview and export on the same immutable visual snapshot while rendering. */
+.sd-render-locked .sd-preset-system,
+.sd-render-locked .sd-inspector .sd-fold,
+.sd-render-locked .sd-inspector .sd-save-project{
+  pointer-events:none;
+  opacity:.58;
+  filter:saturate(.72);
+}
+.sd-render-locked .sd-live-preview .sd-overlay-resize{
+  pointer-events:none!important;
+  opacity:0!important;
+}
+.sd-render-locked .sd-live-preview [aria-label^="Kéo trực tiếp"]{
+  pointer-events:none!important;
+}
+.sd-mobile-export nav button:disabled{
+  opacity:.35;
+  pointer-events:none;
+}
