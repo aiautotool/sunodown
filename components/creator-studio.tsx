@@ -170,13 +170,10 @@ function ToolControls(p: {
   setTrimStart: (v: number) => void;
   setTrimEnd: (v: number) => void;
   audioUrl: string;
-  audioBinary: Blob | null;
   songTitle: string;
 }) {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
   const rows = [
-    ['audio', 'Âm thanh', Music2],
-    ['presets', 'Preset', Sparkles],
     ['style', 'Kiểu', Sparkles],
     ['text', 'Văn bản', FileText],
     ['wave', 'Sóng nhạc', SlidersHorizontal],
@@ -184,6 +181,7 @@ function ToolControls(p: {
     ['format', 'Định dạng', SlidersHorizontal],
     ['background', 'Nền', ImageIcon],
     ['effects', 'Hiệu ứng', Sparkles],
+    ['audio', 'Âm thanh', Music2],
     ['trim', 'Cắt', SlidersHorizontal],
   ] as const;
   const toggle = (id: VideoEffect) =>
@@ -418,7 +416,7 @@ function ToolControls(p: {
                   </button>
                 ))}
               {id === 'audio' && (
-                <MasteringPanel audio={p.audioUrl} binary={p.audioBinary} title={p.songTitle} />
+                <MasteringPanel audio={p.audioUrl} title={p.songTitle} />
               )}
               {id === 'trim' && (
                 <div className="sd-trim">
@@ -474,7 +472,7 @@ export default function CreatorStudio() {
     [error, setError] = useState(''),
     [playbackStart, setPlaybackStart] = useState(0),
     [previewTime, setPreviewTime] = useState(0),
-    [panel, setPanel] = useState('audio'),
+    [panel, setPanel] = useState('style'),
     [mobileTools, setMobileTools] = useState(false),
     [savingProject, setSavingProject] = useState(false),
     [savedProject, setSavedProject] = useState(false);
@@ -785,9 +783,6 @@ export default function CreatorStudio() {
         data = await r.json();
       if (!r.ok) throw Error(data.error || 'Không thể tải bài hát này.');
       setSong(data);
-      // Load the media once as binary. Analysis/mastering/FFT reuse this Blob instead of re-fetching a fragile URL.
-      setAudioBinary(null);
-      try { const audioResponse = await fetch(data.audio, { cache: 'no-store' }); if (audioResponse.ok) setAudioBinary(await audioResponse.blob()); } catch {}
       setPlaybackStart(0);
       setPreviewTime(0);
       setTrimStart(0);
@@ -947,13 +942,12 @@ export default function CreatorStudio() {
       );
     }
   }
-  useEffect(() => {
-    // Default demo is loaded once on entry so its cover/preview is visible immediately.
-    // Keep the URL editable, but do not re-analyse on every input change.
-    void resolve('https://suno.com/s/tszo0jGdVUua4rT4');
-    return () => { if (timer.current) clearTimeout(timer.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
   useEffect(
     () => () => {
       if (resultUrl) URL.revokeObjectURL(resultUrl);
@@ -1423,7 +1417,7 @@ export default function CreatorStudio() {
                   : 'Lưu dự án'}
             </button>
             <hr />
-            {panel === 'presets' && <PresetGallery
+            <PresetGallery
               presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
               selectedId={selectedPresetId}
               picture={song.picture}
@@ -1441,7 +1435,7 @@ export default function CreatorStudio() {
               onExportPreset={exportPreset}
               onImportPreset={importPreset}
               onUndo={restorePresetSnapshot}
-            />}
+            />
             <ToolControls {...toolControlsProps} />
             <div className="sd-visual-sync" title="Preview/render visual fingerprint">
               <span>Visual sync</span>
@@ -1560,7 +1554,7 @@ export default function CreatorStudio() {
       )}
       {song && mobileTools && (
         <StudioSheet title="Điều khiển video" onClose={() => setMobileTools(false)} className="sd-tool-sheet">
-          {panel === 'presets' && (
+          {panel === 'style' && (
             <PresetGallery
               presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
               selectedId={selectedPresetId}
