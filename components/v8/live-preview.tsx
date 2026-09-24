@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pause, Play } from 'lucide-react';
 import {
   createLiveFramePainter,
+  withSubtitleLayout,
   type OverlayLayout,
   type OverlayTextStyles,
   type PreviewAudioAnalysis,
@@ -49,6 +50,7 @@ type Props = {
   effects?: EffectConfig;
   onLayoutChange?: (layout: OverlayLayout) => void;
   start: number;
+  end?: number;
   exporting: boolean;
   resultUrl?: string;
   autoPlay?: boolean;
@@ -158,9 +160,13 @@ export function LivePreview(props: Props) {
     };
   }, [mediaSourceKey]);
 
+  const requestedEnd = props.end ?? props.song.duration ?? props.start + 10;
   const previewEnd = props.fullPlayback
-    ? props.song.duration || props.start + 10
-    : Math.min(props.song.duration || props.start + 10, props.start + 10);
+    ? Math.max(props.start + 0.1, requestedEnd)
+    : Math.min(
+        Math.max(props.start + 0.1, requestedEnd),
+        props.start + 10,
+      );
   const previewDuration = Math.max(0.1, previewEnd - props.start);
 
   useEffect(() => {
@@ -350,6 +356,7 @@ export function LivePreview(props: Props) {
     props.start,
     props.exporting,
     props.resultUrl,
+    props.end,
   ]);
 
   useEffect(() => {
@@ -504,21 +511,16 @@ export function LivePreview(props: Props) {
         audioAnalysis.current,
       );
       if (hasExactLyrics) {
-        const q = p.layout?.subtitle || { x: 50, y: 58, scale: 100 },
-          s = q.scale / 100;
-        context.save();
-        context.translate((size.width * q.x) / 100, (size.height * q.y) / 100);
-        context.scale(s, s);
-        context.translate(-size.width * 0.5, -(size.height - 119));
-        drawKaraokeOverlay(
-          context,
-          p.karaokeTimeline!,
-          absoluteTime,
-          size.width,
-          size.height,
-          p.subtitleStyle,
+        withSubtitleLayout(context, size.width, size.height, p.layout, () =>
+          drawKaraokeOverlay(
+            context,
+            p.karaokeTimeline!,
+            absoluteTime,
+            size.width,
+            size.height,
+            p.subtitleStyle,
+          ),
         );
-        context.restore();
       }
       drawVideoEffects(
         context,
