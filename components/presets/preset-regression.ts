@@ -18,7 +18,7 @@ function stable(value: unknown): string {
       .map(([key, item]) => `${JSON.stringify(key)}:${stable(item)}`)
       .join(',')}}`;
   }
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? 'undefined';
 }
 
 function fingerprint(value: unknown) {
