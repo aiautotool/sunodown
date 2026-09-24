@@ -11,6 +11,19 @@ export type PresetApplyTransaction = {
   modified: boolean;
 };
 
+export type PresetVisualStateSetters = {
+  setTemplate: (value: StudioPresetConfig['template']) => void;
+  setWave: (value: StudioPresetConfig['wave']) => void;
+  setMotion: (value: StudioPresetConfig['motion']) => void;
+  setAspect: (value: StudioPresetConfig['aspect']) => void;
+  setLyrics: (value: StudioPresetConfig['lyrics']) => void;
+  setEffects: (value: StudioPresetConfig['effects']) => void;
+  setLayout: (value: StudioPresetConfig['layout']) => void;
+  setTextStyles: (value: StudioPresetConfig['textStyles']) => void;
+  setSubtitleStyle: (value: StudioPresetConfig['subtitleStyle']) => void;
+  setBackground: (value: StudioPresetConfig['background']) => void;
+};
+
 const isCustomMediaBackground = (config: StudioPresetConfig) =>
   (config.background.mode === 'image' && Boolean(config.background.imageUrl)) ||
   (config.background.mode === 'video' && Boolean(config.background.videoUrl));
@@ -45,6 +58,29 @@ export function createPresetApplyTransaction(
     next,
     modified: mode === 'preserve-custom',
   };
+}
+
+/**
+ * Commits a complete immutable visual snapshot through one shared path. React
+ * batches these setters in an event, so LivePreview never has a second apply
+ * implementation that can drift from Undo/reset/import.
+ */
+export function commitPresetVisualState(
+  config: StudioPresetConfig,
+  setters: PresetVisualStateSetters,
+) {
+  const next = clonePresetConfig(config);
+  setters.setTemplate(next.template);
+  setters.setWave(next.wave);
+  setters.setMotion(next.motion);
+  setters.setAspect(next.aspect);
+  setters.setLyrics(next.lyrics);
+  setters.setEffects([...next.effects]);
+  setters.setLayout(structuredClone(next.layout));
+  setters.setTextStyles(structuredClone(next.textStyles));
+  setters.setSubtitleStyle(structuredClone(next.subtitleStyle));
+  setters.setBackground(structuredClone(next.background));
+  return next;
 }
 
 /** Guard used by the apply UI to avoid silently destroying uploaded media. */
