@@ -6,6 +6,7 @@ import {
   createLiveFramePainter,
   type OverlayLayout,
   type OverlayTextStyles,
+  type PreviewAudioAnalysis,
 } from '../v4/renderer-safe';
 import {
   VIDEO_SIZES,
@@ -79,6 +80,8 @@ export function LivePreview(props: Props) {
   );
   const backgroundVideo = useRef<HTMLVideoElement | null>(null);
   const lastTimeNotify = useRef(0);
+  const audioAnalysis = useRef<PreviewAudioAnalysis | null>(null);
+  const [audioAnalysisVersion, setAudioAnalysisVersion] = useState(0);
   const sceneMedia = useRef(
     new Map<string, { bitmap?: ImageBitmap; video?: HTMLVideoElement }>(),
   );
@@ -167,6 +170,44 @@ export function LivePreview(props: Props) {
     window.addEventListener('suno-effects-change', update);
     return () => window.removeEventListener('suno-effects-change', update);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    audioAnalysis.current = null;
+    setAudioAnalysisVersion((value) => value + 1);
+    (async () => {
+      try {
+        const response = await fetch(props.song.audio, { cache: 'no-store' });
+        if (!response.ok) return;
+        const context = new AudioContext();
+        try {
+          const decoded = await context.decodeAudioData(
+            await response.arrayBuffer(),
+          );
+          if (cancelled) return;
+          const channel = decoded.getChannelData(0);
+          const samples = new Float32Array(channel.length);
+          samples.set(channel);
+          audioAnalysis.current = {
+            samples,
+            rate: decoded.sampleRate,
+          };
+          setAudioAnalysisVersion((value) => value + 1);
+        } finally {
+          await context.close();
+        }
+      } catch {
+        if (!cancelled) {
+          audioAnalysis.current = null;
+          setAudioAnalysisVersion((value) => value + 1);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      audioAnalysis.current = null;
+    };
+  }, [props.song.audio]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -460,6 +501,7 @@ export function LivePreview(props: Props) {
         customBackground,
         p.layout,
         p.overlayTextStyles,
+        audioAnalysis.current,
       );
       if (hasExactLyrics) {
         const q = p.layout?.subtitle || { x: 50, y: 58, scale: 100 },
@@ -505,6 +547,7 @@ export function LivePreview(props: Props) {
     props.subtitleStyle,
     props.overlayTextStyles,
     props.effects,
+    audioAnalysisVersion,
     props.exporting,
     props.resultUrl,
   ]);
