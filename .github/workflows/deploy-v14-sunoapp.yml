@@ -54,6 +54,7 @@ jobs:
           const cfg = JSON.parse(readFileSync(path, 'utf8'));
           cfg.name = 'sunoapp-aiautotool';
           cfg.routes = [{ pattern: 'sunoapp.aiautotool.com', custom_domain: true }];
+          if (cfg.queues?.consumers) delete cfg.queues.consumers;
           writeFileSync(path, JSON.stringify(cfg, null, 2));
           NODE
           cat wrangler.v6.generated.json
