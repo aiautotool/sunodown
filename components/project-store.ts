@@ -29,6 +29,11 @@ export type SavedProject = {
   textStyles?: OverlayTextStyles;
   subtitleStyle?: KaraokeDrawStyle;
   background?: BackgroundConfig;
+  backgroundAsset?: {
+    kind: 'image' | 'video';
+    blob: Blob;
+    fingerprint?: string;
+  };
   trimStart: number;
   trimEnd: number;
   karaokeTimeline: KaraokeLine[];
