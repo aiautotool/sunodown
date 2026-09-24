@@ -61,6 +61,7 @@ import type { KaraokeLine } from '@/app/lib/karaoke';
 import { EditorTimeline, type MediaClip } from '@/components/editor-timeline';
 import { PresetGallery } from '@/components/presets/preset-gallery';
 import { MasteringPanel } from '@/components/mastering-panel';
+import { StudioTabs } from '@/components/studio-ui';
 import {
   BUILTIN_STUDIO_PRESETS,
   PRESET_SCHEMA_VERSION,
@@ -191,13 +192,7 @@ function ToolControls(p: {
     );
   return (
     <>
-      <nav className="sd-tool-tabs" aria-label="Công cụ chỉnh sửa">
-        {rows.map(([id, label, Icon]) => (
-          <button key={id} className={p.panel === id ? 'active' : ''} onClick={() => p.setPanel(id)}>
-            <Icon /><span>{label}</span>
-          </button>
-        ))}
-      </nav>
+      <StudioTabs value={(p.panel || 'style') as string} tabs={rows.map(([id,label,Icon])=>({value:id,label,icon:<Icon/>}))} onChange={id=>p.setPanel(id)} />
       {rows.map(([id]) => p.panel === id && (
         <div className="sd-tab-panel" key={id}>
           <div className="sd-options">

@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Download, Headphones, ShieldCheck, Sparkles, Waves } from 'lucide-react';
+import { StudioBadge, StudioButton, StudioControlRow, StudioPanel, StudioSegmented, StudioSlider, StudioStatus, StudioToggle } from '@/components/studio-ui';
 import { MASTER_PROFILES, masterAudio, render5DAudio, type MasterMetrics, type MasterProfileId, type Spatial5DMode } from '@/app/lib/audio-processing';
 
 const MODE_INFO:Record<Spatial5DMode,{label:string;desc:string}> = {
  wide:{label:'Rộng',desc:'Mở rộng sân khấu stereo nhưng giữ vị trí nhạc cụ ổn định.'},
  immersive:{label:'Bao quanh',desc:'Không gian sâu và rộng hơn. Phù hợp nghe tai nghe, ballad và ambient.'},
- orbit:{label:'Chuyển động',desc:'Âm trường chuyển động trái/phải nhẹ theo thời gian. Hiệu ứng rõ nhất.'},
+ orbit:{label:'Qua tai',desc:'Âm thanh tự chạy rõ từ tai trái sang tai phải rồi quay lại. Bass dưới 140 Hz vẫn giữ ở giữa.'},
 };
 
 export function MasteringPanel({audio,title}:{audio:string;title:string}){
@@ -31,24 +32,23 @@ export function MasteringPanel({audio,title}:{audio:string;title:string}){
  const download=()=>{if(!blob)return;const a=document.createElement('a'),u=URL.createObjectURL(blob);a.href=u;a.download=(title||'suno').replace(/[\\/:*?"<>|]+/g,'-')+'-'+profile+(spatial?'-5d':'')+'.wav';a.click();setTimeout(()=>URL.revokeObjectURL(u),1500)};
  return <section className="sd-master">
   <div className="sd-master-head"><div><span><Sparkles/> MASTERING</span><b>Tối ưu âm thanh</b><small>Chọn chất âm rồi nghe thử ngay. Chỉ cần render khi muốn xuất file cuối.</small></div>{metrics&&<em className={'risk-'+metrics.risk.toLowerCase().replace(/ /g,'-')}><ShieldCheck/>{metrics.risk}</em>}</div>
-  <div className="sd-master-presets">{MASTER_PROFILES.map(p=><button key={p.id} className={profile===p.id?'active':''} onClick={()=>{setProfile(p.id);setMetrics(null);}}><b>{p.label}</b><span>{p.targetLufs} LUFS</span></button>)}</div>
+  <StudioSegmented value={profile} options={MASTER_PROFILES.map(x=>({value:x.id,label:x.label}))} onChange={v=>{setProfile(v);setMetrics(null)}}/>
   <p className="sd-master-desc">{MASTER_PROFILES.find(p=>p.id===profile)?.description}</p>
-  <div className="sd-5d">
-    <button className={spatial?'active':''} onClick={()=>changeSpatial(!spatial)}><Waves/><span><b>Âm thanh 5D</b><small>{spatial?'Đang bật · thay đổi sẽ nghe ngay':'Đang tắt · âm thanh stereo gốc'}</small></span><i/></button>
+  <StudioPanel className="sd-5d">
+    <StudioToggle checked={spatial} onChange={changeSpatial} label="Âm thanh 5D" description={spatial?'Đang bật · thay đổi sẽ nghe ngay':'Đang tắt · stereo gốc'}/>
     {spatial&&<div className="sd-5d-controls">
-      <p className="sd-5d-help"><b>5D là gì?</b> Tạo cảm giác âm thanh rộng và bao quanh hơn bằng xử lý stereo. Không tạo thêm loa/kênh âm thanh thật.</p>
-      <div>{(['wide','immersive','orbit'] as Spatial5DMode[]).map(x=><button key={x} className={spatialMode===x?'active':''} onClick={()=>changeMode(x)}>{MODE_INFO[x].label}</button>)}</div>
+      <p className="sd-5d-help"><b>Muốn nghe tiếng chạy qua 2 tai?</b> Chọn <strong>Qua tai</strong>. Rộng/Bao quanh chủ yếu mở không gian, không cố tình chạy trái → phải.</p>
+      <StudioSegmented value={spatialMode} options={(Object.keys(MODE_INFO) as Spatial5DMode[]).map(x=>({value:x,label:MODE_INFO[x].label}))} onChange={changeMode}/>
       <p className="sd-5d-mode-desc">{MODE_INFO[spatialMode].desc}</p>
-      <label><span>Độ rộng</span><input type="range" min="20" max="100" value={spatialAmount} onChange={e=>changeDepth(+e.target.value)}/><strong>{spatialAmount}%</strong></label>
-      <small>Gợi ý: 40–60% tự nhiên · 60–80% rộng rõ · trên 80% hiệu ứng mạnh. Nên nghe bằng tai nghe.</small>
-      <div className={'sd-live-audio '+(previewBusy?'working':'')}><i/><span>{previewBusy?'Đang cập nhật nghe thử…':'Nghe thử trực tiếp · thay đổi có tác dụng ngay'}</span></div>
+      <StudioControlRow label={spatialMode==='orbit'?'Mức chuyển động':'Độ rộng'} value={spatialAmount+'%'} hint={spatialMode==='orbit'?'70–90%: tiếng chạy qua hai tai rõ hơn. Nên dùng tai nghe.':'40–60% tự nhiên · 60–80% rộng rõ.'}><StudioSlider label="Mức hiệu ứng 5D" min={20} max={100} value={spatialAmount} onChange={changeDepth}/></StudioControlRow>
+      <StudioStatus tone={previewBusy?'warning':'success'}>{previewBusy?'Đang cập nhật nghe thử…':'Preview trực tiếp đang hoạt động'}</StudioStatus>
     </div>}
-  </div>
-  <button className="sd-master-run" disabled={busy} onClick={()=>void run()}>{busy?<><i/> {progress}</>:<><Headphones/> Phân tích & Master để xuất file</>}</button>
+  </StudioPanel>
+  <StudioButton tone="accent" className="sd-master-run" disabled={busy} onClick={()=>void run()}>{busy?<><i/> {progress}</>:<><Headphones/> Phân tích & Master để xuất file</>}</StudioButton>
   {error&&<p className="sd-master-error">{error}</p>}
   {metrics&&<><div className="sd-master-meter"><div><small>ĐẦU VÀO</small><b>{metrics.beforeLufs.toFixed(1)}</b><span>est. LUFS</span></div><strong>→</strong><div><small>MỤC TIÊU</small><b>{metrics.safeTargetLufs.toFixed(1)}</b><span>LUFS</span></div><strong>→</strong><div><small>ĐẦU RA</small><b>{metrics.afterLufs.toFixed(1)}</b><span>est. LUFS</span></div></div>
    <div className="sd-master-stats"><span>Peak {metrics.afterPeak.toFixed(1)} dBFS</span><span>Crest {metrics.crestDb.toFixed(1)} dB</span><span>Gain {metrics.gainDb>0?'+':''}{metrics.gainDb.toFixed(1)} dB</span>{metrics.safeTargetLufs<metrics.requestedLufs&&<b>Auto Guard: {metrics.requestedLufs} → {metrics.safeTargetLufs} LUFS</b>}</div>
    <div className="sd-master-ab"><div><small>A · Bản gốc</small><audio controls preload="none" src={audio}/></div><div><small>B · Đã xử lý</small><audio controls preload="metadata" src={mastered||undefined}/></div></div>
-   <button className="sd-master-download" onClick={download}><Download/> Tải WAV đã xử lý</button></>}
+   <StudioButton className="sd-master-download" onClick={download}><Download/> Tải WAV đã xử lý</StudioButton></>}
  </section>
 }
