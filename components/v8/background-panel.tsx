@@ -14,7 +14,7 @@ export function BackgroundPanel({value,onChange,onError}:Props){
  const ownedImage=useRef<string|null>(null),ownedVideo=useRef<string|null>(null);
  const [imageName,setImageName]=useState(''),[videoName,setVideoName]=useState(''),[videoDuration,setVideoDuration]=useState<number|null>(null),[videoSize,setVideoSize]=useState(0),[warning,setWarning]=useState('');
 
- useEffect(()=>()=>{if(ownedImage.current)URL.revokeObjectURL(ownedImage.current);if(ownedVideo.current)URL.revokeObjectURL(ownedVideo.current)},[]);
+ // Keep object URLs alive when this accordion panel closes; Creator Studio owns the active background lifecycle.
 
  useEffect(()=>{
   const stored={...value,imageUrl:undefined,videoUrl:undefined,imageFingerprint:undefined,videoFingerprint:undefined,mode:value.mode==='image'||value.mode==='video'?'suno':value.mode};
