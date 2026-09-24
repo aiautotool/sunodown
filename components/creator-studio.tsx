@@ -1058,10 +1058,13 @@ export default function CreatorStudio() {
       setFavoritePresetIds(
         JSON.parse(localStorage.getItem('sunodown-v14-favorite-presets') || '[]'),
       );
-      const builtinIssues = auditPresetLibrary(BUILTIN_STUDIO_PRESETS);
-      if (builtinIssues.length) {
+      const presetIssues = auditPresetLibrary([
+        ...BUILTIN_STUDIO_PRESETS,
+        ...storedPresets,
+      ]);
+      if (presetIssues.length) {
         setError(
-          `Preset QA failed: ${builtinIssues.slice(0, 4).join(', ')}`,
+          `Preset QA failed: ${presetIssues.slice(0, 4).join(', ')}`,
         );
       }
     } catch {}
