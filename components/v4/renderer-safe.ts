@@ -54,6 +54,7 @@ export type PreviewAudioAnalysis = {
   samples: Float32Array;
   rate: number;
 };
+export type RealtimeSpectrumBands = { bass:number; lowMid:number; vocal:number; high:number };
 export type SafeRenderOptions = {
   motion: MotionIntensity;
   lyrics: LyricsMode;
@@ -161,6 +162,7 @@ function spectrumBands(samples:Float32Array|null,rate:number,t:number):SpectrumB
  const norm=(v:number,n:number,g:number)=>Math.min(1,Math.max(.025,(n?v/n:0)*g));
  return{bass:norm(bass,bc,28),lowMid:norm(lowMid,lc,42),vocal:norm(vocal,vc,62),high:norm(high,hc,95)};
 }
+function realtimeSpectrumValue(b:RealtimeSpectrumBands,column:number,total:number){const x=column/Math.max(1,total-1),c=[0,.31,.61,1],v=[b.bass,b.lowMid,b.vocal,b.high];let j=0;while(j<2&&x>c[j+1])j++;const q=(x-c[j])/(c[j+1]-c[j]);return Math.min(1,Math.max(.035,(v[j]*(1-q)+v[j+1]*q)*1.9));}
 function spectrumValue(samples:Float32Array|null,rate:number,t:number,column:number,total:number){
  const b=spectrumBands(samples,rate,t),x=column/Math.max(1,total-1);
  // Left→right maps low→high frequency while softly blending neighboring musical bands.
@@ -388,6 +390,7 @@ function drawWaveBase(
   h: number,
   style: WaveStyle,
   p: Palette,
+  realtimeBands?: RealtimeSpectrumBands,
 ) {
   const ph = Math.max(110, Math.round(h * 0.14)),
     top = h - ph,
@@ -396,9 +399,7 @@ function drawWaveBase(
     start = w * 0.08,
     cy = h - ph * 0.42,
     max = ph * 0.52,
-    vals = Array.from({ length: n }, (_, i) =>
-      spectrumValue(samples, rate, t, i, n),
-    ),
+    vals = Array.from({ length: n }, (_, i) => realtimeBands ? realtimeSpectrumValue(realtimeBands,i,n) : spectrumValue(samples, rate, t, i, n)),
     grad = waveGradient(ctx, w, p);
   const radial = [
     'circle',
@@ -547,6 +548,7 @@ function drawWave(
   p: Palette,
   layout?: OverlayLayout,
   textStyles?: OverlayTextStyles,
+  realtimeBands?: RealtimeSpectrumBands,
 ) {
   const pos = layout?.wave || { x: 50, y: 86, scale: 100 },
     sx = pos.scale / 100;
@@ -554,7 +556,7 @@ function drawWave(
   ctx.translate((w * pos.x) / 100, (h * pos.y) / 100);
   ctx.scale(sx, sx);
   ctx.translate(-w * 0.5, -h * 0.86);
-  drawWaveBase(ctx, samples, rate, t, w, h, style, p);
+  drawWaveBase(ctx, samples, rate, t, w, h, style, p, realtimeBands);
   ctx.restore();
 }
 export function withSubtitleLayout(
@@ -653,6 +655,7 @@ export function createLiveFramePainter(bitmap: ImageBitmap) {
     layout?: OverlayLayout,
     textStyles?: OverlayTextStyles,
     audioAnalysis?: PreviewAudioAnalysis | null,
+    realtimeBands?: RealtimeSpectrumBands,
   ) => {
     drawTemplate(
       ctx,
@@ -682,6 +685,8 @@ export function createLiveFramePainter(bitmap: ImageBitmap) {
       wave,
       palette,
       layout,
+      undefined,
+      realtimeBands,
     );
   };
 }

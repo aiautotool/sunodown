@@ -175,6 +175,8 @@ function ToolControls(p: {
 }) {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
   const rows = [
+    ['audio', 'Âm thanh', Music2],
+    ['presets', 'Preset', Sparkles],
     ['style', 'Kiểu', Sparkles],
     ['text', 'Văn bản', FileText],
     ['wave', 'Sóng nhạc', SlidersHorizontal],
@@ -182,7 +184,6 @@ function ToolControls(p: {
     ['format', 'Định dạng', SlidersHorizontal],
     ['background', 'Nền', ImageIcon],
     ['effects', 'Hiệu ứng', Sparkles],
-    ['audio', 'Âm thanh', Music2],
     ['trim', 'Cắt', SlidersHorizontal],
   ] as const;
   const toggle = (id: VideoEffect) =>
@@ -473,7 +474,7 @@ export default function CreatorStudio() {
     [error, setError] = useState(''),
     [playbackStart, setPlaybackStart] = useState(0),
     [previewTime, setPreviewTime] = useState(0),
-    [panel, setPanel] = useState('style'),
+    [panel, setPanel] = useState('audio'),
     [mobileTools, setMobileTools] = useState(false),
     [savingProject, setSavingProject] = useState(false),
     [savedProject, setSavedProject] = useState(false);
@@ -1422,7 +1423,7 @@ export default function CreatorStudio() {
                   : 'Lưu dự án'}
             </button>
             <hr />
-            <PresetGallery
+            {panel === 'presets' && <PresetGallery
               presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
               selectedId={selectedPresetId}
               picture={song.picture}
@@ -1440,7 +1441,7 @@ export default function CreatorStudio() {
               onExportPreset={exportPreset}
               onImportPreset={importPreset}
               onUndo={restorePresetSnapshot}
-            />
+            />}
             <ToolControls {...toolControlsProps} />
             <div className="sd-visual-sync" title="Preview/render visual fingerprint">
               <span>Visual sync</span>
@@ -1559,7 +1560,7 @@ export default function CreatorStudio() {
       )}
       {song && mobileTools && (
         <StudioSheet title="Điều khiển video" onClose={() => setMobileTools(false)} className="sd-tool-sheet">
-          {panel === 'style' && (
+          {panel === 'presets' && (
             <PresetGallery
               presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
               selectedId={selectedPresetId}
