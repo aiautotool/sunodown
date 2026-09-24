@@ -301,3 +301,14 @@ body { font-family: var(--font-app), Arial, Helvetica, sans-serif; }
     grid-template-columns:42px minmax(0,1fr) 46px;
   }
 }
+
+/* v14 explicit custom background actions */
+.sd-bg-upload-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;margin:10px 0 4px}
+.sd-bg-upload-btn{display:grid!important;grid-template-columns:26px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;column-gap:8px;min-height:58px!important;border:1px dashed #49576c!important;border-radius:10px!important;background:#111823!important;color:#e5eaf2!important;padding:9px 10px!important;text-align:left!important}
+.sd-bg-upload-btn>span{grid-row:1/3;display:grid;width:26px;height:26px;place-items:center;border-radius:7px;background:#261d4a;color:#b9a7ff;font-size:16px}
+.sd-bg-upload-btn>b{font-size:10px}.sd-bg-upload-btn>small{color:#788496;font-size:8px}.sd-bg-upload-btn:hover{border-color:#8b6cf0!important;background:#161d2a!important}
+.sd-bg-selected{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;width:100%;margin-top:10px;border:1px solid #303a48;border-radius:10px;background:#0d131c;padding:8px}
+.sd-bg-selected>img,.sd-bg-selected>video{width:64px;height:56px;border-radius:8px;background:#05080d;object-fit:cover}
+.sd-bg-selected-copy{display:flex;min-width:0;flex-direction:column;justify-content:center;gap:3px}.sd-bg-selected-copy>b{overflow:hidden;color:#e9edf5;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.sd-bg-selected-copy>small{color:#7f8b9d;font-size:8px}
+.sd-bg-selected-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr auto;gap:6px}.sd-bg-selected-actions button{min-height:34px!important;border:1px solid #3b4657!important;border-radius:8px!important;background:#151d29!important;color:#cfd6e2!important;font-size:9px!important}.sd-bg-selected-actions button:last-child{color:#ff9ea8!important}
+@media(max-width:800px){.sd-bg-upload-actions{grid-template-columns:1fr 1fr}.sd-bg-upload-btn{min-height:64px!important}.sd-bg-selected-actions button{min-height:40px!important}}
