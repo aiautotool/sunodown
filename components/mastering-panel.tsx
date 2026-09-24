@@ -20,7 +20,7 @@ async function loadAudioBlob(audio:string){
  throw new Error(`Không tải được audio nguồn${lastStatus?` (HTTP ${lastStatus})`:''}.`);
 }
 
-export function MasteringPanel({audio,title}:{audio:string;title:string}){
+export function MasteringPanel({audio,audioBinary,title}:{audio:string;audioBinary?:Blob|null;title:string}){
  const [profile,setProfile]=useState<MasterProfileId>('tiktok-loud'),[spatial,setSpatial]=useState(false),[spatialMode,setSpatialMode]=useState<Spatial5DMode>('immersive'),[spatialAmount,setSpatialAmount]=useState(65),[busy,setBusy]=useState(false),[progress,setProgress]=useState(''),[metrics,setMetrics]=useState<MasterMetrics|null>(null),[mastered,setMastered]=useState<string|null>(null),[blob,setBlob]=useState<Blob|null>(null),[error,setError]=useState('');
  useEffect(()=>()=>{if(mastered)URL.revokeObjectURL(mastered)},[mastered]);
  const livePreview=(enabled=spatial,mode=spatialMode,amount=spatialAmount)=>window.dispatchEvent(new CustomEvent('suno-spatial-change',{detail:{enabled,mode,amount}}));
@@ -28,7 +28,7 @@ export function MasteringPanel({audio,title}:{audio:string;title:string}){
  const changeSpatial=(v:boolean)=>{setSpatial(v);livePreview(v,spatialMode,spatialAmount)};
  const changeMode=(v:Spatial5DMode)=>{setSpatialMode(v);livePreview(spatial,v,spatialAmount)};
  const changeDepth=(v:number)=>{setSpatialAmount(v);livePreview(spatial,spatialMode,v)};
- const run=async()=>{setBusy(true);setError('');setProgress('Đang tải audio nguồn…');try{const source=await loadAudioBlob(audio);setProgress('Đang giải mã & phân tích…');let result=await masterAudio(source,profile);let output=result.blob;if(spatial){setProgress('Đang tạo không gian 5D…');output=await render5DAudio(output,spatialAmount/100,spatialMode);}if(mastered)URL.revokeObjectURL(mastered);setBlob(output);setMastered(URL.createObjectURL(output));setMetrics(result.metrics);setProgress('')}catch(e){setError(e instanceof Error?e.message:'Mastering thất bại.')}finally{setBusy(false)}};
+ const run=async()=>{setBusy(true);setError('');setProgress('Đang tải audio nguồn…');try{const source=audioBinary || await loadAudioBlob(audio);setProgress('Đang giải mã & phân tích…');let result=await masterAudio(source,profile);let output=result.blob;if(spatial){setProgress('Đang tạo không gian 5D…');output=await render5DAudio(output,spatialAmount/100,spatialMode);}if(mastered)URL.revokeObjectURL(mastered);setBlob(output);setMastered(URL.createObjectURL(output));setMetrics(result.metrics);setProgress('')}catch(e){setError(e instanceof Error?e.message:'Mastering thất bại.')}finally{setBusy(false)}};
  const download=()=>{if(!blob)return;const a=document.createElement('a'),u=URL.createObjectURL(blob);a.href=u;a.download=(title||'suno').replace(/[\\/:*?"<>|]+/g,'-')+'-'+profile+(spatial?'-5d':'')+'.wav';a.click();setTimeout(()=>URL.revokeObjectURL(u),1500)};
  return <section className="sd-master">
   <div className="sd-master-head"><div><span><Sparkles/> MASTERING</span><b>Tối ưu âm thanh</b><small>Chọn chất âm rồi nghe thử ngay. Chỉ cần render khi muốn xuất file cuối.</small></div>{metrics&&<em className={'risk-'+metrics.risk.toLowerCase().replace(/ /g,'-')}><ShieldCheck/>{metrics.risk}</em>}</div>

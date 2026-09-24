@@ -170,6 +170,7 @@ function ToolControls(p: {
   setTrimStart: (v: number) => void;
   setTrimEnd: (v: number) => void;
   audioUrl: string;
+  audioBinary: Blob | null;
   songTitle: string;
 }) {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
@@ -416,7 +417,7 @@ function ToolControls(p: {
                   </button>
                 ))}
               {id === 'audio' && (
-                <MasteringPanel audio={p.audioUrl} title={p.songTitle} />
+                <MasteringPanel audio={p.audioUrl} audioBinary={p.audioBinary} title={p.songTitle} />
               )}
               {id === 'trim' && (
                 <div className="sd-trim">
@@ -514,6 +515,8 @@ export default function CreatorStudio() {
     activeColor: '#f0abfc',
   });
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeLine[]>([]);
+  const [audioBinary, setAudioBinary] = useState<Blob | null>(null);
+  const mediaCache = useRef(new Map<string, Blob>());
   const [mediaClips, setMediaClips] = useState<MediaClip[]>([]);
   const effectConfig = useMemo(() => makeEffectConfig(effects), [effects]);
   const visualSnapshot = useMemo<StudioPresetConfig>(
@@ -549,6 +552,29 @@ export default function CreatorStudio() {
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
   const timer = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!song?.audio) { setAudioBinary(null); return; }
+    const cached = mediaCache.current.get(song.audio);
+    if (cached) { setAudioBinary(cached); return; }
+    void (async () => {
+      const candidates = [/^https:\/\//i.test(song.audio) ? `/api/audio?source=${encodeURIComponent(song.audio)}` : song.audio, song.audio];
+      for (const source of [...new Set(candidates)]) {
+        try {
+          const response = await fetch(source, { cache: 'no-store' });
+          if (!response.ok) continue;
+          const blob = await response.blob();
+          if (!blob.size) continue;
+          mediaCache.current.set(song.audio, blob);
+          if (!cancelled) setAudioBinary(blob);
+          return;
+        } catch {}
+      }
+      if (!cancelled) setAudioBinary(null);
+    })();
+    return () => { cancelled = true; };
+  }, [song?.audio]);
 
   const currentPresetConfig = (): StudioPresetConfig =>
     structuredClone(visualSnapshot);
@@ -1142,6 +1168,9 @@ export default function CreatorStudio() {
     trimStart,
     trimEnd,
     duration: song?.duration || 0,
+    audioUrl: song?.audio || '',
+    audioBinary,
+    songTitle: song?.title || 'suno',
     setTrimStart: (value) => {
       invalidateRenderedResult();
       setTrimStart(value);
