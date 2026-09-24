@@ -64,6 +64,7 @@ import {
   PRESET_SCHEMA_VERSION,
   clonePresetConfig,
   normalizeStoredPresets,
+  normalizeStudioPreset,
   type StudioPreset,
   type StudioPresetConfig,
 } from '@/components/presets/studio-presets';
@@ -745,6 +746,46 @@ export default function CreatorStudio() {
     applyPreset(preset, 'replace-all');
   };
 
+  const exportPreset = (preset: StudioPreset) => {
+    const payload: StudioPreset = {
+      ...preset,
+      schemaVersion: PRESET_SCHEMA_VERSION,
+      config: clonePresetConfig(preset.config),
+    };
+    const filename = `${safeName(preset.name)}.sunodown-preset.json`;
+    saveBlob(
+      new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json;charset=utf-8',
+      }),
+      filename,
+    );
+  };
+
+  const importPreset = async (file: File) => {
+    try {
+      const parsed = JSON.parse(await file.text());
+      const normalized = normalizeStudioPreset(parsed);
+      if (!normalized) throw new Error('Preset file is invalid.');
+      const imported: StudioPreset = {
+        ...normalized,
+        schemaVersion: PRESET_SCHEMA_VERSION,
+        id: `user-${Date.now()}`,
+        name: normalized.name.endsWith(' Imported')
+          ? normalized.name
+          : `${normalized.name} Imported`,
+        badge: 'Imported',
+        builtin: false,
+      };
+      persistCustomPresets([imported, ...customPresets]);
+      applyPreset(imported, 'replace-all');
+      setError('');
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'Không thể import preset này.',
+      );
+    }
+  };
+
   const deleteCustomPreset = (preset: StudioPreset) => {
     persistCustomPresets(customPresets.filter((item) => item.id !== preset.id));
     if (selectedPresetId === preset.id) {
@@ -1315,6 +1356,8 @@ export default function CreatorStudio() {
               onSaveCurrent={saveCurrentAsPreset}
               onUpdateCurrent={updateCurrentPreset}
               onResetSelected={resetSelectedPreset}
+              onExportPreset={exportPreset}
+              onImportPreset={importPreset}
               onUndo={restorePresetSnapshot}
             />
             <ToolControls
@@ -1476,6 +1519,8 @@ export default function CreatorStudio() {
               onSaveCurrent={saveCurrentAsPreset}
               onUpdateCurrent={updateCurrentPreset}
               onResetSelected={resetSelectedPreset}
+              onExportPreset={exportPreset}
+              onImportPreset={importPreset}
               onUndo={restorePresetSnapshot}
             />
           )}
