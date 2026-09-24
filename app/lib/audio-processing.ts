@@ -55,3 +55,22 @@ export async function masterAudio(source:Blob,profileId:MasterProfileId){
  const after=measure(out),risk=masterRisk(safeTarget,crest);
  return {blob:wavBlob(out),metrics:{beforeLufs:before.lufs,beforePeak:before.peak,crestDb:crest,requestedLufs:profile.targetLufs,safeTargetLufs:safeTarget,afterLufs:after.lufs,afterPeak:after.peak,gainDb:db(gain),risk} satisfies MasterMetrics};
 }
+
+
+export type Spatial5DMode = 'wide' | 'immersive' | 'orbit';
+export async function render5DAudio(source:Blob,amount=.65,mode:Spatial5DMode='immersive'){
+ const decoded=await decode(source),rate=48000,frames=Math.ceil(decoded.duration*rate),ctx=new OfflineAudioContext(2,frames,rate);
+ const src=ctx.createBufferSource();src.buffer=decoded;
+ const split=ctx.createChannelSplitter(Math.max(2,decoded.numberOfChannels)),merge=ctx.createChannelMerger(2);
+ const left=ctx.createGain(),right=ctx.createGain(),crossL=ctx.createGain(),crossR=ctx.createGain(),delayL=ctx.createDelay(.05),delayR=ctx.createDelay(.05);
+ const width=Math.max(0,Math.min(1,amount));left.gain.value=1;right.gain.value=1;crossL.gain.value=-.16*width;crossR.gain.value=-.16*width;
+ delayL.delayTime.value=(mode==='wide'?5:mode==='orbit'?14:9)/1000;delayR.delayTime.value=(mode==='wide'?8:mode==='orbit'?5:13)/1000;
+ const airL=ctx.createBiquadFilter(),airR=ctx.createBiquadFilter();airL.type=airR.type='highshelf';airL.frequency.value=airR.frequency.value=6500;airL.gain.value=airR.gain.value=1.1*width;
+ src.connect(split);split.connect(left,0);split.connect(right,Math.min(1,decoded.numberOfChannels-1));split.connect(crossR,0);split.connect(crossL,Math.min(1,decoded.numberOfChannels-1));
+ left.connect(airL).connect(merge,0,0);right.connect(airR).connect(merge,0,1);crossL.connect(delayL).connect(merge,0,0);crossR.connect(delayR).connect(merge,0,1);
+ if(mode==='orbit'){const pan=ctx.createStereoPanner();merge.connect(pan).connect(ctx.destination);pan.pan.setValueAtTime(-.18,0);for(let t=2;t<decoded.duration;t+=4)pan.pan.linearRampToValueAtTime(((Math.floor(t/4)%2)*2-1)*.18,t)}
+ else merge.connect(ctx.destination);
+ src.start();const rendered=await ctx.startRendering(),ceiling=Math.pow(10,-1/20);
+ for(let ch=0;ch<rendered.numberOfChannels;ch++){const d=rendered.getChannelData(ch);for(let i=0;i<d.length;i++)d[i]=Math.max(-ceiling,Math.min(ceiling,d[i]));}
+ return wavBlob(rendered);
+}
