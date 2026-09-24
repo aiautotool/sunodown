@@ -37,6 +37,7 @@ import type { MediaClip } from '@/components/editor-timeline';
 
 type Props = {
   song: Song;
+  audioBinary?: Blob | null;
   aspect: VideoAspect;
   template: VisualTemplate;
   wave: WaveStyle;
@@ -268,16 +269,11 @@ export function LivePreview(props: Props) {
     setAudioAnalysisVersion((value) => value + 1);
     (async () => {
       try {
-        const sourceUrl = /^https:\/\//i.test(props.song.audio)
-          ? `/api/audio?source=${encodeURIComponent(props.song.audio)}`
-          : props.song.audio;
-        const response = await fetch(sourceUrl, { cache: 'no-store' });
-        if (!response.ok) return;
+        let binary = props.audioBinary;
+        if (!binary) { const response = await fetch(props.song.audio, { cache: 'no-store' }); if (!response.ok) return; binary = await response.blob(); }
         const context = new AudioContext();
         try {
-          const decoded = await context.decodeAudioData(
-            await response.arrayBuffer(),
-          );
+          const decoded = await context.decodeAudioData(await binary.arrayBuffer());
           if (cancelled) return;
           const left = decoded.getChannelData(0), right = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : left;
           const samples = new Float32Array(left.length);
@@ -298,7 +294,7 @@ export function LivePreview(props: Props) {
       cancelled = true;
       audioAnalysis.current = null;
     };
-  }, [props.song.audio]);
+  }, [props.song.audio, props.audioBinary]);
 
   useEffect(() => {
     const controller = new AbortController();

@@ -170,6 +170,7 @@ function ToolControls(p: {
   setTrimStart: (v: number) => void;
   setTrimEnd: (v: number) => void;
   audioUrl: string;
+  audioBinary: Blob | null;
   songTitle: string;
 }) {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
@@ -416,7 +417,7 @@ function ToolControls(p: {
                   </button>
                 ))}
               {id === 'audio' && (
-                <MasteringPanel audio={p.audioUrl} title={p.songTitle} />
+                <MasteringPanel audio={p.audioUrl} binary={p.audioBinary} title={p.songTitle} />
               )}
               {id === 'trim' && (
                 <div className="sd-trim">
@@ -783,6 +784,9 @@ export default function CreatorStudio() {
         data = await r.json();
       if (!r.ok) throw Error(data.error || 'Không thể tải bài hát này.');
       setSong(data);
+      // Load the media once as binary. Analysis/mastering/FFT reuse this Blob instead of re-fetching a fragile URL.
+      setAudioBinary(null);
+      try { const audioResponse = await fetch(data.audio, { cache: 'no-store' }); if (audioResponse.ok) setAudioBinary(await audioResponse.blob()); } catch {}
       setPlaybackStart(0);
       setPreviewTime(0);
       setTrimStart(0);
