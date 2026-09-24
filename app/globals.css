@@ -249,3 +249,6 @@ body { font-family: var(--font-app), Arial, Helvetica, sans-serif; }
   opacity:.35;
   pointer-events:none;
 }
+
+.sd-visual-sync{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 10px;border:1px solid rgba(74,222,128,.18);border-radius:9px;background:rgba(34,197,94,.07);padding:7px 9px;color:#9ca3af;font-size:9px}
+.sd-visual-sync span{font-weight:700;letter-spacing:.04em;text-transform:uppercase}.sd-visual-sync b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#86efac;font-size:9px;letter-spacing:.04em}
