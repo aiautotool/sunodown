@@ -61,7 +61,9 @@ import { EditorTimeline, type MediaClip } from '@/components/editor-timeline';
 import { PresetGallery } from '@/components/presets/preset-gallery';
 import {
   BUILTIN_STUDIO_PRESETS,
+  PRESET_SCHEMA_VERSION,
   clonePresetConfig,
+  normalizeStoredPresets,
   type StudioPreset,
   type StudioPresetConfig,
 } from '@/components/presets/studio-presets';
@@ -633,6 +635,7 @@ export default function CreatorStudio() {
 
   const saveCurrentAsPreset = (name: string) => {
     const preset: StudioPreset = {
+      schemaVersion: PRESET_SCHEMA_VERSION,
       id: `user-${Date.now()}`,
       name,
       description: 'Preset cá nhân lưu từ cấu hình hiện tại của Creator Studio.',
@@ -653,6 +656,7 @@ export default function CreatorStudio() {
   const duplicatePreset = (source: StudioPreset) => {
     const copy: StudioPreset = {
       ...source,
+      schemaVersion: PRESET_SCHEMA_VERSION,
       id: `user-${Date.now()}`,
       name: `${source.name} Copy`,
       description: `Bản sao tùy chỉnh từ ${source.name}.`,
@@ -873,8 +877,13 @@ export default function CreatorStudio() {
   useEffect(() => {
     try {
       setProjects(JSON.parse(localStorage.getItem('sundown-projects') || '[]'));
-      setCustomPresets(
+      const storedPresets = normalizeStoredPresets(
         JSON.parse(localStorage.getItem('sunodown-v14-custom-presets') || '[]'),
+      );
+      setCustomPresets(storedPresets);
+      localStorage.setItem(
+        'sunodown-v14-custom-presets',
+        JSON.stringify(storedPresets),
       );
       setFavoritePresetIds(
         JSON.parse(localStorage.getItem('sunodown-v14-favorite-presets') || '[]'),
