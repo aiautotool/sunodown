@@ -1596,6 +1596,9 @@ export default function CreatorStudio() {
               picture={song.picture}
               playhead={previewTime}
               onSeek={(time) => {
+                // Timeline seeking is an editing action: freeze preview at the
+                // chosen frame instead of immediately continuing playback.
+                setAutoPreview(false);
                 setPlaybackStart(time);
                 setPreviewTime(time);
               }}
