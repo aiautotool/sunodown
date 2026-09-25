@@ -1284,23 +1284,24 @@ export async function generateVisualizerVideoSafe(
     mobile = isMobileRenderDevice();
   let processedWav: Blob | null = null,
     audioBlob: Blob = originalAudio;
-  if (!mobile) {
-    options.onProgress?.(6);
-    const mastering = options.productionMastering;
-    if (mastering?.profile && mastering.profile !== 'original') {
-      processedWav = (await masterAudio(originalAudio, mastering.profile, mastering.advanced)).blob;
-      if (mastering.spatial?.enabled) processedWav = await render5DAudio(processedWav, mastering.spatial.amount/100, mastering.spatial.mode);
-    } else if (!mastering) {
-      processedWav = await renderTikTokLikeAudio(originalAudio);
+  options.onProgress?.(6);
+  const mastering = options.productionMastering;
+  if (mobile) await yieldToBrowser();
+  if (mastering?.profile && mastering.profile !== 'original') {
+    processedWav = (await masterAudio(originalAudio, mastering.profile, mastering.advanced)).blob;
+    if (mobile) await yieldToBrowser();
+    if (mastering.spatial?.enabled) {
+      processedWav = await render5DAudio(processedWav, mastering.spatial.amount/100, mastering.spatial.mode);
+      if (mobile) await yieldToBrowser();
     }
-    options.onProgress?.(8);
-    if (processedWav) {
-      try { audioBlob = await convertProcessedAudio(processedWav, 'm4a'); }
-      catch { audioBlob = await convertProcessedAudio(processedWav, 'mp3'); }
-    }
-  } else {
-    options.onProgress?.(8);
-    await yieldToBrowser();
+  } else if (!mastering) {
+    processedWav = await renderTikTokLikeAudio(originalAudio);
+  }
+  options.onProgress?.(8);
+  if (processedWav) {
+    try { audioBlob = await convertProcessedAudio(processedWav, 'm4a'); }
+    catch { audioBlob = await convertProcessedAudio(processedWav, 'mp3'); }
+    if (mobile) await yieldToBrowser();
   }
   const input = new Input({
       source: new BlobSource(audioBlob),
@@ -1338,7 +1339,7 @@ export async function generateVisualizerVideoSafe(
     end = start + duration;
   let samples: Float32Array | null = null,
     rate = 48000;
-  if (!mobile && processedWav) {
+  if (processedWav) {
     try {
       const ac = new AudioContext(),
         d = await ac.decodeAudioData(await processedWav.arrayBuffer());
