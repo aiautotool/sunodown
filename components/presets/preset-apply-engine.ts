@@ -14,6 +14,7 @@ export type PresetApplyTransaction = {
 export type PresetVisualStateSetters = {
   setTemplate: (value: StudioPresetConfig['template']) => void;
   setWave: (value: StudioPresetConfig['wave']) => void;
+  setWaveAppearance?: (value: NonNullable<StudioPresetConfig['waveAppearance']>) => void;
   setMotion: (value: StudioPresetConfig['motion']) => void;
   setAspect: (value: StudioPresetConfig['aspect']) => void;
   setLyrics: (value: StudioPresetConfig['lyrics']) => void;
@@ -37,6 +38,7 @@ const isCustomMediaBackground = (config: StudioPresetConfig) =>
 const stableVisualValue = (config: StudioPresetConfig) => ({
   template: config.template,
   wave: config.wave,
+  waveAppearance: config.waveAppearance,
   motion: config.motion,
   aspect: config.aspect,
   lyrics: config.lyrics,
@@ -103,6 +105,7 @@ export function commitPresetVisualState(
   const next = clonePresetConfig(config);
   setters.setTemplate(next.template);
   setters.setWave(next.wave);
+  if(next.waveAppearance&&setters.setWaveAppearance)setters.setWaveAppearance(structuredClone(next.waveAppearance));
   setters.setMotion(next.motion);
   setters.setAspect(next.aspect);
   setters.setLyrics(next.lyrics);
