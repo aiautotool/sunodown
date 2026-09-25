@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { env } from 'cloudflare:workers';
 
 const ALLOWED = new Set([
   'session_started',
@@ -27,7 +28,17 @@ type IncomingEvent = {
   payload?: unknown;
 };
 
-function normalize(event: IncomingEvent) {
+type StoredEvent = {
+  version: 1;
+  event: string;
+  eventId: string;
+  sessionId: string;
+  occurredAt: string;
+  path: string;
+  payload: Record<string, string | number | boolean | null>;
+};
+
+function normalize(event: IncomingEvent): StoredEvent | null {
   if (
     event.version !== 1 ||
     typeof event.event !== 'string' ||
@@ -48,7 +59,7 @@ function normalize(event: IncomingEvent) {
               key.slice(0, 60),
               typeof value === 'string' ? value.slice(0, 160) : value,
             ]),
-        )
+        ) as Record<string, string | number | boolean | null>
       : {};
 
   return {
@@ -65,26 +76,66 @@ function normalize(event: IncomingEvent) {
   };
 }
 
+async function ensureAnalyticsSchema(db: D1Database) {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS analytics_events (
+      event_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      event_name TEXT NOT NULL,
+      occurred_at INTEGER NOT NULL,
+      path TEXT NOT NULL,
+      payload_json TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_analytics_occurred
+      ON analytics_events(occurred_at);
+    CREATE INDEX IF NOT EXISTS idx_analytics_event_time
+      ON analytics_events(event_name, occurred_at);
+    CREATE INDEX IF NOT EXISTS idx_analytics_session_time
+      ON analytics_events(session_id, occurred_at);
+  `);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const raw = await request.json() as { events?: IncomingEvent[] };
     const events = Array.isArray(raw.events)
-      ? raw.events.slice(0, 30).map(normalize).filter(Boolean)
+      ? raw.events.slice(0, 30).map(normalize).filter((event): event is StoredEvent => Boolean(event))
       : [];
 
     if (events.length) {
-      // Cloudflare observability is enabled in this deployment. Structured
-      // logs give us production funnel/performance data without collecting
-      // raw song URLs, titles, lyrics or media.
       console.log(JSON.stringify({
         type: 'sunodown_analytics_batch',
         receivedAt: new Date().toISOString(),
         events,
       }));
+
+      const db = (env as unknown as { RENDER_DB?: D1Database }).RENDER_DB;
+      if (db) {
+        await ensureAnalyticsSchema(db);
+        const statements = events.map((event) => {
+          const timestamp = Number.isFinite(Date.parse(event.occurredAt))
+            ? Date.parse(event.occurredAt)
+            : Date.now();
+          return db.prepare(`
+            INSERT OR IGNORE INTO analytics_events
+              (event_id, session_id, event_name, occurred_at, path, payload_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).bind(
+            event.eventId,
+            event.sessionId,
+            event.event,
+            timestamp,
+            event.path,
+            JSON.stringify(event.payload),
+          );
+        });
+        if (statements.length) await db.batch(statements);
+      }
     }
 
     return NextResponse.json({ accepted: events.length }, { status: 202 });
-  } catch {
+  } catch (error) {
+    console.error('analytics ingest failed', error);
     return NextResponse.json({ accepted: 0 }, { status: 202 });
   }
 }
