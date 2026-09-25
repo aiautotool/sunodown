@@ -82,7 +82,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Deploy standard branches
-        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/v6' && github.ref != 'refs/heads/v7' && github.ref != 'refs/heads/v8' && github.ref != 'refs/heads/v9' && github.ref != 'refs/heads/v10' && github.ref != 'refs/heads/v11' && github.ref != 'refs/heads/v12' && github.ref != 'refs/heads/v17'
+        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/v6' && github.ref != 'refs/heads/v7' && github.ref != 'refs/heads/v8' && github.ref != 'refs/heads/v9' && github.ref != 'refs/heads/v10' && github.ref != 'refs/heads/v11' && github.ref != 'refs/heads/v12' && github.ref != 'refs/heads/v17' && github.ref != 'refs/heads/v18'
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
