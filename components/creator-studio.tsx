@@ -1044,6 +1044,14 @@ export default function CreatorStudio() {
     return { retryable: !nonRetryable };
   };
 
+  const triggerQuickRender = (mode: 'cut' | '30') => {
+    setError('');
+    window.requestAnimationFrame(() => {
+      document.querySelector('.sd-quick-create')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+    void renderVideo(mode);
+  };
+
   async function renderVideo(mode: 'cut' | '30' = 'cut', attempt = 1) {
     if (!song || rendering) return;
     const renderStartedAt = performance.now();
@@ -1794,9 +1802,10 @@ export default function CreatorStudio() {
                 </div>
                 <div className="sd-quick-actions">
                   <button
+                    type="button"
                     className="primary"
                     disabled={rendering}
-                    onClick={() => renderVideo('cut')}
+                    onClick={() => triggerQuickRender('cut')}
                   >
                     <Upload />
                     {rendering
@@ -1804,12 +1813,33 @@ export default function CreatorStudio() {
                       : 'Create video'}
                   </button>
                   <button
+                    type="button"
                     disabled={rendering}
-                    onClick={() => renderVideo('30')}
+                    onClick={() => triggerQuickRender('30')}
                   >
                     <Play /> Tạo bản 30s
                   </button>
                 </div>
+                {(rendering || error || lastRenderFailure) && (
+                  <div className={`sd-quick-render-status ${error ? 'error' : ''}`} role="status" aria-live="polite">
+                    {rendering ? (
+                      <>
+                        <b>{renderStage === 'validation' ? 'Đang kiểm tra video…' : renderStage === 'prepare' ? 'Đang chuẩn bị media…' : renderStage === 'finalize' ? 'Đang hoàn tất video…' : 'Đang tạo video…'}</b>
+                        <span>{Math.round(progress)}% · Không đóng trang trong khi đang xử lý.</span>
+                      </>
+                    ) : (
+                      <>
+                        <b>Không thể tạo video</b>
+                        <span>{error || lastRenderFailure?.message || 'Render thất bại. Hãy thử lại.'}</span>
+                        {lastRenderFailure?.retryable && (
+                          <button type="button" onClick={() => triggerQuickRender(lastRenderFailure.mode)}>
+                            Thử lại
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </section>
             )}
             {lastPresetId && (
@@ -2028,7 +2058,7 @@ export default function CreatorStudio() {
             </div>
           </aside>
           <div className="sd-mobile-export">
-            <button disabled={rendering} onClick={() => renderVideo('cut')}>
+            <button type="button" disabled={rendering} onClick={() => triggerQuickRender('cut')}>
               <Upload />
               {rendering
                 ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
@@ -2065,7 +2095,7 @@ export default function CreatorStudio() {
                 <FileText />
                 Lời
               </button>
-              <button disabled={rendering} onClick={() => renderVideo('cut')}>
+              <button type="button" disabled={rendering} onClick={() => triggerQuickRender('cut')}>
                 <Upload />
                 Xuất
               </button>
