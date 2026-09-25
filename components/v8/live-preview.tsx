@@ -15,6 +15,7 @@ import {
   type VideoAspect,
   type VisualTemplate,
   type WaveStyle,
+  type WaveAppearance,
   type MotionIntensity,
   type LyricsMode,
 } from '../v4/types';
@@ -41,6 +42,7 @@ type Props = {
   aspect: VideoAspect;
   template: VisualTemplate;
   wave: WaveStyle;
+  waveAppearance?: WaveAppearance;
   motion: MotionIntensity;
   lyrics: LyricsMode;
   karaokeTimeline?: KaraokeLine[];
@@ -617,6 +619,7 @@ export function LivePreview(props: Props) {
         p.overlayTextStyles,
         audioAnalysis.current,
         realtimeBands.current,
+        p.waveAppearance,
       );
       if (hasExactLyrics) {
         withSubtitleLayout(context, size.width, size.height, p.layout, () =>
@@ -648,6 +651,7 @@ export function LivePreview(props: Props) {
     props.aspect,
     props.template,
     props.wave,
+    props.waveAppearance,
     props.motion,
     props.lyrics,
     props.mediaClips,
