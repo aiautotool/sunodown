@@ -53,7 +53,8 @@ export async function verifyAdminPassword(password: string) {
 export async function createAdminSession() {
   const exp = Math.floor(Date.now() / 1000) + MAX_AGE_SECONDS;
   const nonce = crypto.randomUUID();
-  const value = `v1.${exp}.${nonce}`;
+  const version = ADMIN_PASSWORD_SHA256.slice(0, 12);
+  const value = `v2.${version}.${exp}.${nonce}`;
   return {
     value: `${value}.${await sign(value)}`,
     maxAge: MAX_AGE_SECONDS,
@@ -73,12 +74,13 @@ export async function isAdminRequest(request: NextRequest) {
   const token = cookieValue(request, COOKIE);
   if (!token || token.length > 500) return false;
   const parts = token.split('.');
-  if (parts.length !== 4 || parts[0] !== 'v1') return false;
-  const exp = Number(parts[1]);
+  if (parts.length !== 5 || parts[0] !== 'v2') return false;
+  if (parts[1] !== ADMIN_PASSWORD_SHA256.slice(0, 12)) return false;
+  const exp = Number(parts[2]);
   if (!Number.isFinite(exp) || exp <= Math.floor(Date.now() / 1000)) return false;
-  const value = parts.slice(0, 3).join('.');
+  const value = parts.slice(0, 4).join('.');
   try {
-    return secureEqual(await sign(value), parts[3]);
+    return secureEqual(await sign(value), parts[4]);
   } catch {
     return false;
   }
