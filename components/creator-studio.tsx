@@ -57,6 +57,7 @@ import {
 } from '@/app/lib/audio-processing';
 import { buildEstimatedKaraokeTimeline, exportSrt } from '@/app/lib/karaoke';
 import { buildLocalKaraokeTimeline } from '@/app/lib/karaoke-local-sync';
+import { buildCapCutKaraokeTimeline } from '@/app/lib/karaoke-capcut-sync';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 import { initAnalytics, track } from '@/app/lib/analytics';
 import { DEFAULT_PLAN, canUse } from '@/app/lib/entitlements';
@@ -988,38 +989,71 @@ export default function CreatorStudio() {
       setKaraokeSyncMessage(hydrated.lyrics ? 'Đang chuẩn bị căn subtitle theo giọng hát…' : '');
       const syncRun = ++karaokeSyncRun.current;
       if (source && hydrated.lyrics) {
-        void buildLocalKaraokeTimeline({
-          audio: source,
-          lyrics: hydrated.lyrics,
-          duration: hydrated.duration || 30,
-          language: 'vi',
-          onStage: (_stage, message) => {
+        void (async () => {
+          const duration = hydrated.duration || 30;
+          try {
+            const timeline = await buildCapCutKaraokeTimeline({
+              audio: source,
+              lyrics: hydrated.lyrics || '',
+              duration,
+              language: 'vi-VN',
+              onStage: (message) => {
+                if (karaokeSyncRun.current !== syncRun) return;
+                setKaraokeSyncStatus('syncing');
+                setKaraokeSyncMessage(message);
+              },
+            });
             if (karaokeSyncRun.current !== syncRun) return;
-            setKaraokeSyncStatus('syncing');
-            setKaraokeSyncMessage(message);
-          },
-        })
-          .then((timeline) => {
+            setKaraokeTimeline(timeline);
+            setKaraokeSyncStatus('synced');
+            setKaraokeSyncMessage('Đã căn subtitle bằng timestamp CapCut.');
+            track('karaoke_auto_sync_succeeded', {
+              engine: 'capcut',
+              lines: timeline.length,
+            });
+            return;
+          } catch (capcutError) {
+            console.warn('[karaoke-capcut-sync]', capcutError);
+            track('karaoke_capcut_fallback', {
+              reason:
+                capcutError instanceof Error
+                  ? capcutError.message.slice(0, 120)
+                  : 'unknown',
+            });
+          }
+
+          try {
+            const timeline = await buildLocalKaraokeTimeline({
+              audio: source,
+              lyrics: hydrated.lyrics || '',
+              duration,
+              language: 'vi',
+              onStage: (_stage, message) => {
+                if (karaokeSyncRun.current !== syncRun) return;
+                setKaraokeSyncStatus('syncing');
+                setKaraokeSyncMessage(message);
+              },
+            });
             if (karaokeSyncRun.current !== syncRun) return;
             setKaraokeTimeline(timeline);
             setKaraokeSyncStatus('synced');
             setKaraokeSyncMessage('Đã căn subtitle theo timestamp giọng hát.');
-            track('karaoke_auto_sync_succeeded', { lines: timeline.length });
-          })
-          .catch((syncError) => {
+            track('karaoke_auto_sync_succeeded', {
+              engine: 'local-whisper',
+              lines: timeline.length,
+            });
+          } catch (syncError) {
             if (karaokeSyncRun.current !== syncRun) return;
-            const reason = syncError instanceof Error
-              ? syncError.message
-              : 'Lỗi không xác định';
+            const reason =
+              syncError instanceof Error ? syncError.message : 'Lỗi không xác định';
             console.error('[karaoke-auto-sync]', syncError);
             setKaraokeSyncStatus('fallback');
-            setKaraokeSyncMessage(
-              `Không chạy được căn lời AI (${reason}); đang dùng timing ước lượng.`,
-            );
+            setKaraokeSyncMessage('');
             track('karaoke_auto_sync_fallback', {
               reason: reason.slice(0, 120),
             });
-          });
+          }
+        })();
       } else if (hydrated.lyrics) {
         setKaraokeSyncStatus('fallback');
         setKaraokeSyncMessage('Không có audio binary; đang dùng timing ước lượng.');
