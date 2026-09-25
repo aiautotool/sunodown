@@ -1,4 +1,5 @@
 import type { StudioPreset, StudioPresetConfig } from './studio-presets';
+import { normalizePresetConfig } from './studio-presets';
 
 export type VisualParityReport = {
   ok: boolean;
@@ -37,19 +38,7 @@ function fingerprint(value: unknown) {
  * deliberately preserved because compositing order changes the final frame.
  */
 export function normalizeVisualSnapshot(config: StudioPresetConfig): StudioPresetConfig {
-  return {
-    template: config.template,
-    wave: config.wave,
-    waveAppearance: config.waveAppearance ? structuredClone(config.waveAppearance) : undefined,
-    motion: config.motion,
-    aspect: config.aspect,
-    lyrics: config.lyrics,
-    effects: [...config.effects],
-    layout: structuredClone(config.layout),
-    textStyles: structuredClone(config.textStyles),
-    subtitleStyle: structuredClone(config.subtitleStyle),
-    background: structuredClone(config.background),
-  };
+  return normalizePresetConfig(config);
 }
 
 export function visualFingerprint(config: StudioPresetConfig) {
