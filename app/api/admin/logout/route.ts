@@ -7,7 +7,7 @@ export async function POST() {
     httpOnly: true,
     secure: true,
     sameSite: 'strict',
-    path: '/admin',
+    path: '/',
     maxAge: 0,
   });
   return response;
