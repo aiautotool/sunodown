@@ -474,6 +474,7 @@ export default function CreatorStudio() {
     [error, setError] = useState(''),
     [playbackStart, setPlaybackStart] = useState(0),
     [previewTime, setPreviewTime] = useState(0),
+    [timelinePauseSignal, setTimelinePauseSignal] = useState(0),
     [panel, setPanel] = useState('audio'),
     [mobileTools, setMobileTools] = useState(false),
     [savingProject, setSavingProject] = useState(false),
@@ -1485,6 +1486,7 @@ export default function CreatorStudio() {
                 start={trimStart}
                 end={trimEnd || song.duration || undefined}
                 seekTo={playbackStart}
+                pauseSignal={timelinePauseSignal}
                 exporting={rendering}
                 autoPlay={autoPreview}
                 fullPlayback
@@ -1578,13 +1580,15 @@ export default function CreatorStudio() {
               duration={song.duration || 1}
               picture={song.picture}
               playhead={previewTime}
-              onSeek={(time) => {
-                // Timeline seeking is an editing action: freeze preview at the
-                // chosen frame instead of immediately continuing playback.
+              onEditStart={() => {
                 setAutoPreview(false);
+                setTimelinePauseSignal((value) => value + 1);
+              }}
+              onSeek={(time) => {
                 setPlaybackStart(time);
                 setPreviewTime(time);
               }}
+              onEditEnd={() => setTimelinePauseSignal((value) => value + 1)}
               subtitles={karaokeTimeline}
               onSubtitlesChange={(lines) => {
                 markPresetField('lyrics');

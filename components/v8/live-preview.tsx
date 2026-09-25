@@ -56,6 +56,7 @@ type Props = {
   start: number;
   end?: number;
   seekTo?: number;
+  pauseSignal?: number;
   exporting: boolean;
   resultUrl?: string;
   autoPlay?: boolean;
@@ -439,10 +440,12 @@ export function LivePreview(props: Props) {
     player.currentTime = target;
     setTime(target);
     setPlaying(false);
+    props.onTimeChange?.(target);
   }, [
     props.song.audio,
     props.start,
     props.seekTo,
+    props.pauseSignal,
     props.resultUrl,
     previewEnd,
   ]);
@@ -722,8 +725,11 @@ export function LivePreview(props: Props) {
     const player = audio.current;
     if (!player) return;
     const next = Math.max(props.start, Math.min(previewEnd, value));
+    player.pause();
     player.currentTime = next;
     setTime(next);
+    setPlaying(false);
+    props.onTimeChange?.(next);
   }
 
   const size = VIDEO_SIZES[props.aspect];

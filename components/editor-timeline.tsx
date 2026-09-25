@@ -33,6 +33,8 @@ type Props = {
   picture?: string;
   playhead: number;
   onSeek: (time: number) => void;
+  onEditStart?: () => void;
+  onEditEnd?: () => void;
   subtitles: KaraokeLine[];
   onSubtitlesChange: (lines: KaraokeLine[]) => void;
   clips: MediaClip[];
@@ -72,6 +74,15 @@ export function EditorTimeline(props: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const touchDistance = useRef<number | null>(null);
   const touchZoom = useRef(1);
+  const zoomRef = useRef(zoom);
+  const touchTap = useRef<{ x: number; y: number; time: number } | null>(null);
+  const pinchActive = useRef(false);
+  const MIN_ZOOM = 0.5;
+  const MAX_ZOOM = 5;
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
 
   const width = Math.max(900, props.duration * 22 * zoom);
   const px = width / Math.max(1, props.duration);
@@ -155,33 +166,56 @@ export function EditorTimeline(props: Props) {
     const node = scroller.current;
     if (!node) return;
     const start = (event: TouchEvent) => {
+      if (event.touches.length === 1) {
+        const touch = event.touches[0];
+        touchTap.current = { x: touch.clientX, y: touch.clientY, time: performance.now() };
+        pinchActive.current = false;
+        return;
+      }
       if (event.touches.length !== 2) return;
+      pinchActive.current = true;
+      touchTap.current = null;
+      props.onEditStart?.();
       const dx = event.touches[0].clientX - event.touches[1].clientX;
       const dy = event.touches[0].clientY - event.touches[1].clientY;
       touchDistance.current = Math.hypot(dx, dy);
-      touchZoom.current = zoom;
+      touchZoom.current = zoomRef.current;
     };
     const move = (event: TouchEvent) => {
+      if (event.touches.length === 1 && touchTap.current) {
+        const touch = event.touches[0];
+        if (Math.hypot(touch.clientX - touchTap.current.x, touch.clientY - touchTap.current.y) > 8) {
+          touchTap.current = null;
+        }
+        return;
+      }
       if (event.touches.length !== 2 || !touchDistance.current) return;
       event.preventDefault();
+      pinchActive.current = true;
       const dx = event.touches[0].clientX - event.touches[1].clientX;
       const dy = event.touches[0].clientY - event.touches[1].clientY;
       const distance = Math.hypot(dx, dy);
       const ratio = distance / touchDistance.current;
-      setZoom(clamp(touchZoom.current * ratio, 0.5, 5));
+      setZoom(clamp(touchZoom.current * ratio, MIN_ZOOM, MAX_ZOOM));
     };
-    const end = () => {
-      touchDistance.current = null;
+    const end = (event: TouchEvent) => {
+      if (event.touches.length === 0) {
+        touchDistance.current = null;
+        if (pinchActive.current) props.onEditEnd?.();
+        pinchActive.current = false;
+      }
     };
     node.addEventListener('touchstart', start, { passive: true });
     node.addEventListener('touchmove', move, { passive: false });
     node.addEventListener('touchend', end, { passive: true });
+    node.addEventListener('touchcancel', end, { passive: true });
     return () => {
       node.removeEventListener('touchstart', start);
       node.removeEventListener('touchmove', move);
       node.removeEventListener('touchend', end);
+      node.removeEventListener('touchcancel', end);
     };
-  }, [zoom]);
+  }, [props.onEditStart, props.onEditEnd]);
 
   const timeAt = (clientX: number) => {
     const node = scroller.current;
@@ -222,18 +256,50 @@ export function EditorTimeline(props: Props) {
     return clamp(best, 0, props.duration);
   };
 
+  const isTimelineControl = (target: EventTarget | null) =>
+    (target as HTMLElement | null)?.closest(
+      '.sd-timeline-clip,.sd-sub-clip,.sd-track-label,.sd-timeline-effect,.sd-timeline-zoom,.sd-timeline-history,.sd-add-media',
+    );
+
+  const seekAt = (clientX: number) => {
+    props.onEditStart?.();
+    props.onSeek(snap(timeAt(clientX)));
+  };
+
   const scrub = (event: React.PointerEvent) => {
-    if ((event.target as HTMLElement).closest('.sd-timeline-clip,.sd-sub-clip,.sd-track-label,.sd-timeline-effect')) return;
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    props.onSeek(snap(timeAt(event.clientX)));
-    const move = (e: PointerEvent) => props.onSeek(snap(timeAt(e.clientX)));
-    const up = () => {
+    if (isTimelineControl(event.target) || event.pointerType === 'touch') return;
+    seekAt(event.clientX);
+    const pointerId = event.pointerId;
+    event.currentTarget.setPointerCapture?.(pointerId);
+    const move = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId) return;
+      props.onSeek(snap(timeAt(e.clientX)));
+    };
+    const up = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId) return;
       setSnapHint(null);
+      props.onEditEnd?.();
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
     };
     window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up, { once: true });
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+
+  const touchSeek = (event: React.TouchEvent) => {
+    if (event.touches.length || pinchActive.current || !touchTap.current) return;
+    if (isTimelineControl(event.target)) {
+      touchTap.current = null;
+      return;
+    }
+    const tap = touchTap.current;
+    touchTap.current = null;
+    if (performance.now() - tap.time > 450) return;
+    seekAt(tap.x);
+    setSnapHint(null);
+    props.onEditEnd?.();
   };
 
   const drag = (
@@ -243,6 +309,7 @@ export function EditorTimeline(props: Props) {
     edge: 'move' | 'start' | 'end',
   ) => {
     event.stopPropagation();
+    props.onEditStart?.();
     pushHistory();
     event.currentTarget.setPointerCapture(event.pointerId);
     const originX = event.clientX;
@@ -310,11 +377,14 @@ export function EditorTimeline(props: Props) {
 
     const up = () => {
       setSnapHint(null);
+      props.onEditEnd?.();
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
     };
     window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up, { once: true });
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   };
 
   const addMedia = (files: FileList | null, replaceId?: string) => {
@@ -379,27 +449,27 @@ export function EditorTimeline(props: Props) {
         </label>
         <div className="sd-timeline-zoom" aria-label="Timeline zoom">
           <button
-            disabled={zoom <= 0.5}
-            onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
+            disabled={zoom <= MIN_ZOOM}
+            onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - 0.25))}
             title="Zoom out"
           >
             <Minus />
           </button>
-          <span className="sd-zoom-bound">MIN 0.5×</span>
+          <span className="sd-zoom-bound">MIN {MIN_ZOOM}×</span>
           <input
             type="range"
-            min="0.5"
-            max="5"
+            min={MIN_ZOOM}
+            max={MAX_ZOOM}
             step="0.25"
             value={zoom}
             onChange={(event) => setZoom(Number(event.target.value))}
             aria-label="Mức zoom timeline"
           />
           <b>{zoom.toFixed(zoom % 1 === 0 ? 0 : 2)}×</b>
-          <span className="sd-zoom-bound">MAX 5×</span>
+          <span className="sd-zoom-bound">MAX {MAX_ZOOM}×</span>
           <button
-            disabled={zoom >= 5}
-            onClick={() => setZoom((z) => Math.min(5, z + 0.25))}
+            disabled={zoom >= MAX_ZOOM}
+            onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + 0.25))}
             title="Zoom in"
           >
             <Plus />
@@ -407,7 +477,12 @@ export function EditorTimeline(props: Props) {
         </div>
       </header>
 
-      <div className="sd-timeline-scroll" ref={scroller} onPointerDown={scrub}>
+      <div
+        className="sd-timeline-scroll"
+        ref={scroller}
+        onPointerDown={scrub}
+        onTouchEnd={touchSeek}
+      >
         <div className="sd-timeline-canvas" style={{ width }}>
           <div className="sd-time-ruler">
             {ticks.map((t) => (
