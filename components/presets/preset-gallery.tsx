@@ -16,6 +16,34 @@ type ManageAction =
   | { type: 'rename' | 'delete' | 'update'; preset: StudioPreset }
   | null;
 
+const SCENE_LABEL: Record<string, string> = {
+  'cover-motion': 'Cover Motion',
+  vinyl: 'Vinyl',
+  'glass-card': 'Glass',
+  'lyrics-focus': 'Lyrics Focus',
+  editorial: 'Editorial',
+  spotlight: 'Spotlight',
+  'gold-record': 'Gold Record',
+};
+
+const WAVE_LABEL: Record<string, string> = {
+  off: 'No wave',
+  bars: 'Bars',
+  pulse: 'Pulse',
+  line: 'Line',
+  'thin-bars': 'Thin Bars',
+  'circle-bars': 'Circle',
+  'neon-ring': 'Neon Ring',
+  'center-line': 'Center Line',
+  mirror: 'Mirror',
+  'wave-bars': 'Wave Bars',
+  ribbon: 'Ribbon',
+  mountain: 'Mountain',
+  'spectrum-rings': 'Spectrum',
+  dots: 'Dots',
+  'orbit-dots': 'Orbit',
+};
+
 export function PresetGallery({
   presets,
   selectedId,
@@ -323,6 +351,30 @@ export function PresetGallery({
 
       {notice && <div className="sd-preset-toast" role="status"><span>✓</span>{notice}</div>}
 
+      {category === 'Tất cả' && (
+        <div className="sd-preset-quick">
+          <div>
+            <b>Gợi ý nhanh</b>
+            <span>Chọn theo kết quả muốn có, không cần chỉnh thông số.</span>
+          </div>
+          <div className="sd-preset-quick-row">
+            {presets.filter((preset) => preset.builtin).slice(0, 6).map((preset) => (
+              <button
+                key={preset.id}
+                className={selectedId === preset.id ? 'active' : ''}
+                onClick={() => requestApply(preset)}
+              >
+                <span className={`scene-${preset.config.template}`}>
+                  {picture && <i style={{ backgroundImage: `url("${picture}")` }} />}
+                </span>
+                <b>{preset.name}</b>
+                <small>{SCENE_LABEL[preset.config.template] || preset.config.template}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="sd-preset-tabs">
         {CATEGORIES.map((item) => (
           <button key={item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>
@@ -346,7 +398,7 @@ export function PresetGallery({
             >
               <button className="sd-preset-preview" onClick={() => requestApply(preset)}>
                 <span
-                  className={`sd-preset-art${preset.thumbnail || picture ? ' saved-thumb' : ''}`}
+                  className={`sd-preset-art scene-${preset.config.template}${preset.thumbnail || picture ? ' saved-thumb' : ''}`}
                   style={preset.thumbnail || picture ? { backgroundImage: `url("${preset.thumbnail || picture}")` } : undefined}
                 >
                   <em>{preset.category}</em>
@@ -361,6 +413,11 @@ export function PresetGallery({
                 <span className="sd-preset-copy">
                   <b>{preset.name}</b>
                   <small>{preset.description}</small>
+                  <span className="sd-preset-meta">
+                    <i>{SCENE_LABEL[preset.config.template] || preset.config.template}</i>
+                    <i>{WAVE_LABEL[preset.config.wave] || preset.config.wave}</i>
+                    <i>{preset.config.aspect}</i>
+                  </span>
                 </span>
               </button>
               <footer className={preset.builtin ? '' : 'custom'}>
