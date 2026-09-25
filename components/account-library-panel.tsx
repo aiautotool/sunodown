@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Download, ExternalLink, Library, RefreshCw, Search, UserRound } from 'lucide-react';
+import { Download, ExternalLink, Library, RefreshCw, Search, UserRound, X, Plus } from 'lucide-react';
 
 type LibrarySong = {
   id: string;
@@ -51,6 +51,7 @@ export function AccountLibraryPanel({ onOpenSong }: { onOpenSong: (url: string) 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [query, setQuery] = useState('');
+  const [scanOpen, setScanOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -114,6 +115,7 @@ export function AccountLibraryPanel({ onOpenSong }: { onOpenSong: (url: string) 
       setInput(`@${data.handle}`);
       const added = (data.songs as LibrarySong[]).filter(song => !oldIds.has(song.id)).length;
       setMessage(`${added ? `+${added} bài mới · ` : ''}${songs.length} bài trong thư viện${data.truncated ? ' · còn có thể Sync tiếp' : ''}.`);
+      setScanOpen(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Không thể đồng bộ profile.');
     } finally {
@@ -130,41 +132,50 @@ export function AccountLibraryPanel({ onOpenSong }: { onOpenSong: (url: string) 
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
-      <div style={{ border: '1px solid rgba(148,163,184,.18)', borderRadius: 20, padding: 18, background: 'rgba(15,23,42,.38)' }}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14 }}>
-          <div style={{ width: 42, height: 42, borderRadius: 14, display: 'grid', placeItems: 'center', background: 'rgba(139,92,246,.18)' }}><UserRound size={20}/></div>
-          <div style={{ flex: 1 }}>
-            <b style={{ display: 'block' }}>Kết nối thư viện Suno</b>
-            <small style={{ opacity: .66 }}>Chỉ quét bài public. Không cần đăng nhập SunoDown hay lưu MP3/video.</small>
-          </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <b style={{ display: 'block', fontSize: 18 }}>Thư viện bài hát</b>
+          <small style={{ opacity: .62 }}>
+            {library ? `@${library.handle} · ${library.songs.length} bài public` : 'Quản lý các bài Suno đã quét và mở lại vào Studio.'}
+          </small>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <input
-            value={input}
-            onChange={event => setInput(event.target.value)}
-            onKeyDown={event => event.key === 'Enter' && void sync()}
-            placeholder="@username hoặc https://suno.com/@username"
-            style={{ flex: '1 1 300px', minWidth: 0, borderRadius: 12, padding: '12px 14px', border: '1px solid rgba(148,163,184,.24)', background: 'rgba(2,6,23,.45)', color: 'inherit' }}
-          />
-          <button onClick={() => void sync()} disabled={busy} style={{ borderRadius: 12, padding: '11px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
-            <RefreshCw size={16} className={busy ? 'spin' : ''}/>{busy ? 'Đang quét…' : library ? 'Sync bài mới' : 'Import'}
-          </button>
-        </div>
-        {message && <p style={{ margin: '10px 0 0', fontSize: 13, opacity: .78 }}>{message}</p>}
+        <button
+          onClick={() => setScanOpen(true)}
+          style={{ borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}
+        >
+          <Plus size={16}/> Quét tài khoản Suno
+        </button>
       </div>
 
-      {library && (
+      {message && <p style={{ margin: 0, fontSize: 13, opacity: .76 }}>{message}</p>}
+
+      {library ? (
         <>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
               {library.avatarUrl ? <img src={library.avatarUrl} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }}/> : <Library size={22}/>}
-              <div><b>{library.displayName || library.handle}</b><small style={{ display: 'block', opacity: .6 }}>@{library.handle} · {library.songs.length} bài public</small></div>
+              <div>
+                <b>{library.displayName || library.handle}</b>
+                <small style={{ display: 'block', opacity: .6 }}>
+                  @{library.handle} · {library.songs.length} bài
+                  {library.syncedAt ? ` · Sync ${new Date(library.syncedAt).toLocaleString()}` : ''}
+                </small>
+              </div>
             </div>
-            <button onClick={clearLibrary} style={{ opacity: .7 }}>Xóa thư viện local</button>
+            <button onClick={() => void sync()} disabled={busy} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <RefreshCw size={15}/>{busy ? 'Đang sync…' : 'Sync bài mới'}
+            </button>
+            <button onClick={clearLibrary} style={{ opacity: .65 }}>Xóa thư viện</button>
           </div>
 
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid rgba(148,163,184,.16)', borderRadius: 12, padding: '10px 12px' }}>
-            <Search size={16}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Tìm bài hát…" style={{ flex: 1, background: 'transparent', border: 0, color: 'inherit', outline: 'none' }}/>
+            <Search size={16}/>
+            <input
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder="Tìm theo tên bài, tác giả, style..."
+              style={{ flex: 1, background: 'transparent', border: 0, color: 'inherit', outline: 'none' }}
+            />
           </label>
 
           <div className="sd-section-grid">
@@ -184,6 +195,60 @@ export function AccountLibraryPanel({ onOpenSong }: { onOpenSong: (url: string) 
             ))}
           </div>
         </>
+      ) : (
+        <div style={{ border: '1px dashed rgba(148,163,184,.24)', borderRadius: 18, padding: 28, textAlign: 'center', opacity: .82 }}>
+          <Library size={30} style={{ margin: '0 auto 10px' }}/>
+          <b style={{ display: 'block', marginBottom: 6 }}>Chưa có bài hát trong thư viện</b>
+          <small>Quét tài khoản Suno để đưa các bài public vào đây.</small>
+        </div>
+      )}
+
+      {scanOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !busy && setScanOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(2,6,23,.72)', backdropFilter: 'blur(8px)', display: 'grid', placeItems: 'center', padding: 16 }}
+        >
+          <div
+            onClick={event => event.stopPropagation()}
+            style={{ width: 'min(560px,100%)', borderRadius: 22, border: '1px solid rgba(148,163,184,.18)', background: '#0f172a', padding: 20, boxShadow: '0 24px 70px rgba(0,0,0,.45)' }}
+          >
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 14, display: 'grid', placeItems: 'center', background: 'rgba(139,92,246,.18)' }}>
+                <UserRound size={21}/>
+              </div>
+              <div style={{ flex: 1 }}>
+                <b style={{ display: 'block', fontSize: 17 }}>Quét tài khoản Suno</b>
+                <small style={{ opacity: .64 }}>Nhập @username hoặc URL profile. Chỉ quét bài public.</small>
+              </div>
+              <button onClick={() => !busy && setScanOpen(false)} aria-label="Đóng" style={{ width: 36, height: 36, display: 'grid', placeItems: 'center' }}>
+                <X size={18}/>
+              </button>
+            </div>
+
+            <input
+              autoFocus
+              value={input}
+              onChange={event => setInput(event.target.value)}
+              onKeyDown={event => event.key === 'Enter' && void sync()}
+              placeholder="@username hoặc https://suno.com/@username"
+              style={{ width: '100%', boxSizing: 'border-box', borderRadius: 12, padding: '12px 14px', border: '1px solid rgba(148,163,184,.24)', background: 'rgba(2,6,23,.55)', color: 'inherit', marginBottom: 12 }}
+            />
+
+            <button
+              onClick={() => void sync()}
+              disabled={busy}
+              style={{ width: '100%', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            >
+              <RefreshCw size={16}/>{busy ? 'Đang quét tài khoản…' : library ? 'Quét và cập nhật thư viện' : 'Quét bài hát'}
+            </button>
+
+            <p style={{ fontSize: 12, opacity: .58, margin: '12px 0 0' }}>
+              SunoDown chỉ lưu metadata thư viện trên thiết bị; không tự tải MP3/video khi quét.
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );
