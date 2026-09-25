@@ -578,7 +578,7 @@ export default function CreatorStudio() {
     const next = clonePresetConfig(transaction.next);
     if (mode === 'preserve-custom') {
       for (const field of presetOverrideFields) {
-        (next as Record<string, unknown>)[field] = structuredClone(
+        (next as unknown as Record<string, unknown>)[field] = structuredClone(
           (current as unknown as Record<string, unknown>)[field],
         );
       }
@@ -1402,7 +1402,7 @@ export default function CreatorStudio() {
                 motion={motion}
                 lyrics={lyrics}
                 layout={layout}
-                onLayoutChange={rendering ? undefined : (value) => changeVisual(() => setLayout(value))}
+                onLayoutChange={rendering ? undefined : (value) => { markPresetField('layout'); changeVisual(() => setLayout(value)); }}
                 start={trimStart}
                 end={trimEnd || song.duration || undefined}
                 seekTo={playbackStart}
