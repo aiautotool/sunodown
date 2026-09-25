@@ -102,12 +102,26 @@ jobs:
       - name: Build standalone release APK with bundled JS
         run: ./gradlew assembleRelease
         working-directory: apps/mobile/android
-      - name: Verify JS bundle and launcher icon are packaged
+      - name: Verify standalone APK contents
         run: |
+          set -euo pipefail
           APK=android/app/build/outputs/apk/release/app-release.apk
-          test -f "$APK"
-          unzip -l "$APK" | grep -E 'assets/(index\.android\.bundle|.*\.bundle)' >/dev/null
-          unzip -l "$APK" | grep -E 'res/.*/ic_launcher' >/dev/null
+          test -s "$APK"
+
+          echo "APK size: $(stat -c%s "$APK") bytes"
+          echo "Checking packaged React Native bundle..."
+          unzip -p "$APK" assets/index.android.bundle > /tmp/index.android.bundle
+          test -s /tmp/index.android.bundle
+          echo "JS bundle size: $(stat -c%s /tmp/index.android.bundle) bytes"
+
+          echo "Checking launcher icon declared in manifest/resources..."
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+          test -x "$AAPT"
+          "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
+          grep -q "application-icon-" /tmp/apk-badging.txt
+          grep -q "package: name='com.aiautotool.sunodown'" /tmp/apk-badging.txt
+
+          echo "Standalone APK audit passed."
         working-directory: apps/mobile
       - uses: actions/upload-artifact@v4
         with:
