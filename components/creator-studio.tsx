@@ -78,6 +78,11 @@ import {
   visualFingerprint,
 } from '@/components/presets/preset-regression';
 import {
+  commitPresetVisualState,
+  createPresetApplyTransaction,
+  type PresetApplyMode,
+} from '@/components/presets/preset-apply-engine';
+import {
   clearProjectData,
   loadProjectData,
   saveProjectData,
@@ -181,8 +186,8 @@ function ToolControls(p: {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
   const rows = [
     ['audio', 'Âm thanh', Music2],
-    ['presets', 'Preset', Sparkles],
-    ['style', 'Kiểu', Sparkles],
+    ['presets', 'Mẫu hoàn chỉnh', Sparkles],
+    ['style', 'Kiểu hình ảnh', Sparkles],
     ['text', 'Văn bản', FileText],
     ['wave', 'Sóng nhạc', SlidersHorizontal],
     ['lyrics', 'Lời bài hát', FileText],
@@ -482,12 +487,14 @@ export default function CreatorStudio() {
 
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [presetModified, setPresetModified] = useState(false);
+  const [presetOverrideFields, setPresetOverrideFields] = useState<Array<keyof StudioPresetConfig>>([]);
   const [customPresets, setCustomPresets] = useState<StudioPreset[]>([]);
   const [favoritePresetIds, setFavoritePresetIds] = useState<string[]>([]);
   const [presetUndo, setPresetUndo] = useState<{
     config: StudioPresetConfig;
     selectedId: string | null;
     modified: boolean;
+    overrideFields: Array<keyof StudioPresetConfig>;
   } | null>(null);
 
   const [resultBlob, setResultBlob] = useState<Blob | null>(null),
@@ -550,40 +557,48 @@ export default function CreatorStudio() {
   const currentPresetConfig = (): StudioPresetConfig =>
     structuredClone(visualSnapshot);
 
-  const markPresetModified = () => {
-    if (selectedPresetId) setPresetModified(true);
+  const markPresetField = (field: keyof StudioPresetConfig) => {
+    if (!selectedPresetId) return;
+    setPresetModified(true);
+    setPresetOverrideFields((fields) => fields.includes(field) ? fields : [...fields, field]);
   };
 
   const applyPreset = (
     preset: StudioPreset,
-    mode: 'replace-all' | 'preserve-custom' = 'replace-all',
+    mode: PresetApplyMode = 'replace-all',
   ) => {
     const current = currentPresetConfig();
     setPresetUndo({
       config: current,
       selectedId: selectedPresetId,
       modified: presetModified,
+      overrideFields: [...presetOverrideFields],
     });
-    const next = clonePresetConfig(preset.config);
+    const transaction = createPresetApplyTransaction(current, preset, 'replace-all');
+    const next = clonePresetConfig(transaction.next);
     if (mode === 'preserve-custom') {
-      next.layout = structuredClone(current.layout);
-      next.textStyles = structuredClone(current.textStyles);
-      next.subtitleStyle = structuredClone(current.subtitleStyle);
-      next.background = structuredClone(current.background);
+      for (const field of presetOverrideFields) {
+        (next as Record<string, unknown>)[field] = structuredClone(
+          (current as unknown as Record<string, unknown>)[field],
+        );
+      }
     }
-    setTemplate(next.template);
-    setWave(next.wave);
-    setWaveAppearance({...DEFAULT_WAVE_APPEARANCE,...(next.waveAppearance||{})});
-    setMotion(next.motion);
-    setAspect(next.aspect);
-    setLyrics(next.lyrics);
-    setEffects(next.effects);
-    setLayout(next.layout);
-    setTextStyles(next.textStyles);
-    setSubtitleStyle(next.subtitleStyle);
-    setBackground(next.background);
+    commitPresetVisualState(next, {
+      setTemplate,
+      setWave,
+      setWaveAppearance: (value) => setWaveAppearance({...DEFAULT_WAVE_APPEARANCE,...value}),
+      setMotion,
+      setAspect,
+      setLyrics,
+      setEffects,
+      setLayout,
+      setTextStyles,
+      setSubtitleStyle,
+      setBackground,
+    });
     setSelectedPresetId(preset.id);
-    setPresetModified(mode === 'preserve-custom');
+    setPresetModified(mode === 'preserve-custom' && presetOverrideFields.length > 0);
+    setPresetOverrideFields(mode === 'preserve-custom' ? [...presetOverrideFields] : []);
     setResultBlob(null);
     if (resultUrl) {
       URL.revokeObjectURL(resultUrl);
@@ -607,6 +622,7 @@ export default function CreatorStudio() {
     setBackground(next.background);
     setSelectedPresetId(presetUndo.selectedId);
     setPresetModified(presetUndo.modified);
+    setPresetOverrideFields([...presetUndo.overrideFields]);
     setPresetUndo(null);
   };
 
@@ -655,6 +671,7 @@ export default function CreatorStudio() {
     persistCustomPresets([preset, ...customPresets]);
     setSelectedPresetId(preset.id);
     setPresetModified(false);
+    setPresetOverrideFields([]);
   };
 
   const duplicatePreset = (source: StudioPreset) => {
@@ -696,6 +713,7 @@ export default function CreatorStudio() {
     persistCustomPresets(next);
     setSelectedPresetId(preset.id);
     setPresetModified(false);
+    setPresetOverrideFields([]);
   };
 
   const resetSelectedPreset = (preset: StudioPreset) => {
@@ -747,6 +765,7 @@ export default function CreatorStudio() {
     if (selectedPresetId === preset.id) {
       setSelectedPresetId(null);
       setPresetModified(false);
+      setPresetOverrideFields([]);
     }
     if (favoritePresetIds.includes(preset.id)) {
       const nextFavorites = favoritePresetIds.filter((id) => id !== preset.id);
@@ -1052,6 +1071,7 @@ export default function CreatorStudio() {
         motion,
         selectedPresetId,
         presetModified,
+        presetOverrideFields,
         effects,
         layout,
         textStyles,
@@ -1090,6 +1110,7 @@ export default function CreatorStudio() {
     setMotion(project.motion || 'medium');
     setSelectedPresetId(project.selectedPresetId || null);
     setPresetModified(Boolean(project.presetModified));
+    setPresetOverrideFields(project.presetOverrideFields || []);
     setEffects(project.effects);
     setLayout(project.layout);
     if (project.textStyles) setTextStyles(project.textStyles);
@@ -1134,7 +1155,6 @@ export default function CreatorStudio() {
   };
 
   const changeVisual = (change: () => void) => {
-    markPresetModified();
     invalidateRenderedResult();
     change();
   };
@@ -1143,27 +1163,27 @@ export default function CreatorStudio() {
     panel,
     setPanel,
     wave,
-    setWave: (value) => changeVisual(() => setWave(value)),
+    setWave: (value) => { markPresetField('wave'); changeVisual(() => setWave(value)); },
     waveAppearance,
-    setWaveAppearance: (value) => changeVisual(() => setWaveAppearance(value)),
+    setWaveAppearance: (value) => { markPresetField('waveAppearance'); changeVisual(() => setWaveAppearance(value)); },
     template,
-    setTemplate: (value) => changeVisual(() => setTemplate(value)),
+    setTemplate: (value) => { markPresetField('template'); changeVisual(() => setTemplate(value)); },
     aspect,
-    setAspect: (value) => changeVisual(() => setAspect(value)),
+    setAspect: (value) => { markPresetField('aspect'); changeVisual(() => setAspect(value)); },
     lyrics,
-    setLyrics: (value) => changeVisual(() => setLyrics(value)),
+    setLyrics: (value) => { markPresetField('lyrics'); changeVisual(() => setLyrics(value)); },
     motion,
-    setMotion: (value) => changeVisual(() => setMotion(value)),
+    setMotion: (value) => { markPresetField('motion'); changeVisual(() => setMotion(value)); },
     effects,
-    setEffects: (value) => changeVisual(() => setEffects(value)),
+    setEffects: (value) => { markPresetField('effects'); changeVisual(() => setEffects(value)); },
     layout,
-    setLayout: (value) => changeVisual(() => setLayout(value)),
+    setLayout: (value) => { markPresetField('layout'); changeVisual(() => setLayout(value)); },
     textStyles,
-    setTextStyles: (value) => changeVisual(() => setTextStyles(value)),
+    setTextStyles: (value) => { markPresetField('textStyles'); changeVisual(() => setTextStyles(value)); },
     subtitleStyle,
-    setSubtitleStyle: (value) => changeVisual(() => setSubtitleStyle(value)),
+    setSubtitleStyle: (value) => { markPresetField('subtitleStyle'); changeVisual(() => setSubtitleStyle(value)); },
     background,
-    setBackground: (value) => changeVisual(() => setBackground(value)),
+    setBackground: (value) => { markPresetField('background'); changeVisual(() => setBackground(value)); },
     onError: setError,
     trimStart,
     trimEnd,
