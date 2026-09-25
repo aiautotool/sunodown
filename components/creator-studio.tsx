@@ -63,6 +63,14 @@ import type { KaraokeLine } from '@/app/lib/karaoke';
 import { EditorTimeline, type MediaClip } from '@/components/editor-timeline';
 import { PresetGallery } from '@/components/presets/preset-gallery';
 import { MasteringPanel } from '@/components/mastering-panel';
+import {
+  DEFAULT_PRODUCTION_EXPORT,
+  DEFAULT_PRODUCTION_MASTERING,
+  masteringLabel,
+  normalizeProductionPreset,
+  type ProductionExportConfig,
+  type ProductionMasteringConfig,
+} from '@/components/presets/production-preset';
 import { StudioSheet, StudioTabs } from '@/components/studio-ui';
 import { StyleStudio } from '@/components/style-studio';
 import {
@@ -219,6 +227,10 @@ function ToolControls(p: {
   audioBinary: Blob | null;
   songTitle: string;
   songPicture?: string;
+  mastering: ProductionMasteringConfig;
+  setMastering: (value: ProductionMasteringConfig) => void;
+  exportConfig: ProductionExportConfig;
+  setExportConfig: (value: ProductionExportConfig) => void;
   presetContent?: React.ReactNode;
 }) {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
@@ -451,7 +463,7 @@ function ToolControls(p: {
                   </button>
                 ))}
               {id === 'audio' && (
-                <MasteringPanel audio={p.audioUrl} binary={p.audioBinary} title={p.songTitle} />
+                <MasteringPanel audio={p.audioUrl} binary={p.audioBinary} title={p.songTitle} value={p.mastering} onChange={p.setMastering} />
               )}
               {id === 'trim' && (
                 <div className="sd-trim">
@@ -533,6 +545,8 @@ export default function CreatorStudio() {
     [downloading, setDownloading] = useState('');
   useRenderWakeLock(rendering);
 
+  const [masteringConfig, setMasteringConfig] = useState<ProductionMasteringConfig>(structuredClone(DEFAULT_PRODUCTION_MASTERING));
+  const [exportConfig, setExportConfig] = useState<ProductionExportConfig>({...DEFAULT_PRODUCTION_EXPORT,aspect:'9:16'});
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [lastPresetId, setLastPresetId] = useState<string | null>(null);
   const [presetModified, setPresetModified] = useState(false);
@@ -650,6 +664,11 @@ export default function CreatorStudio() {
       return;
     }
 
+    setMasteringConfig(structuredClone(transaction.production.mastering));
+    setExportConfig(structuredClone(transaction.production.export));
+    window.dispatchEvent(new CustomEvent('suno-master-preview',{detail:{profile:transaction.production.mastering.profile}}));
+    window.dispatchEvent(new CustomEvent('suno-spatial-change',{detail:transaction.production.mastering.spatial || DEFAULT_PRODUCTION_MASTERING.spatial}));
+
     const commit = commitPresetVisualState(transaction.next, {
       setTemplate,
       setWave,
@@ -673,6 +692,13 @@ export default function CreatorStudio() {
     );
     localStorage.setItem('sunodown-v16-last-preset', preset.id);
     setLastPresetId(preset.id);
+    track('production_recipe_applied', {
+      preset_id:preset.id,
+      mastering_profile:transaction.production.mastering.profile,
+      export_quality:transaction.production.export.quality,
+      export_duration_mode:transaction.production.export.durationMode,
+      production_fingerprint:transaction.productionFingerprint,
+    });
     track('preset_applied', {
       preset_id: preset.id,
       mode,
@@ -681,6 +707,10 @@ export default function CreatorStudio() {
       aspect: commit.snapshot.aspect,
       lyrics: commit.snapshot.lyrics,
       visual_fingerprint: commit.fingerprint,
+      production_fingerprint: transaction.productionFingerprint,
+      mastering_profile: transaction.production.mastering.profile,
+      export_quality: transaction.production.export.quality,
+      export_duration_mode: transaction.production.export.durationMode,
       revision: commit.revision,
     });
     setResultBlob(null);
@@ -760,6 +790,8 @@ export default function CreatorStudio() {
       thumbnail: capturePresetThumbnail(),
       builtin: false,
       config: currentPresetConfig(),
+      mastering: structuredClone(masteringConfig),
+      export: { ...exportConfig, aspect },
     };
     persistCustomPresets([preset, ...customPresets]);
     setSelectedPresetId(preset.id);
@@ -779,6 +811,8 @@ export default function CreatorStudio() {
       thumbnail: source.thumbnail || capturePresetThumbnail(),
       builtin: false,
       config: clonePresetConfig(source.config),
+      mastering: source.mastering ? structuredClone(source.mastering) : structuredClone(DEFAULT_PRODUCTION_MASTERING),
+      export: source.export ? structuredClone(source.export) : { ...DEFAULT_PRODUCTION_EXPORT, aspect: source.config.aspect },
     };
     persistCustomPresets([copy, ...customPresets]);
     applyPreset(copy);
@@ -800,6 +834,8 @@ export default function CreatorStudio() {
       secondary: textStyles.title.color || preset.secondary,
       thumbnail: capturePresetThumbnail() || preset.thumbnail,
       config: currentPresetConfig(),
+      mastering: structuredClone(masteringConfig),
+      export: { ...exportConfig, aspect },
     };
     const next = customPresets.map((item) =>
       item.id === preset.id ? nextPreset : item,
@@ -820,6 +856,7 @@ export default function CreatorStudio() {
       ...preset,
       schemaVersion: PRESET_SCHEMA_VERSION,
       config: clonePresetConfig(preset.config),
+      ...normalizeProductionPreset({mastering:preset.mastering,export:preset.export},preset.config.aspect),
     };
     const filename = `${safeName(preset.name)}.sunodown-preset.json`;
     saveBlob(
@@ -1073,6 +1110,8 @@ export default function CreatorStudio() {
           overlayTextStyles: visual.textStyles,
           subtitleStyle: visual.subtitleStyle,
           background: visual.background,
+          quality: exportConfig.quality,
+          productionMastering: masteringConfig,
         },
       );
 
@@ -1098,6 +1137,10 @@ export default function CreatorStudio() {
         template,
         preset_id: selectedPresetId,
         visual_fingerprint: parity.fingerprint,
+        mastering_profile: masteringConfig.profile,
+        export_quality: exportConfig.quality,
+        export_resolution: exportConfig.resolution,
+        export_duration_mode: mode === '30' ? '30s' : exportConfig.durationMode,
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Không thể tạo video.';
@@ -1408,6 +1451,16 @@ export default function CreatorStudio() {
     audioBinary,
     songTitle: song?.title || 'suno',
     songPicture: song?.picture || undefined,
+    mastering: masteringConfig,
+    setMastering: (value) => {
+      setMasteringConfig(value);
+      invalidateRenderedResult();
+    },
+    exportConfig,
+    setExportConfig: (value) => {
+      setExportConfig(value);
+      invalidateRenderedResult();
+    },
     setTrimStart: (value) => {
       invalidateRenderedResult();
       setTrimStart(value);
@@ -1727,7 +1780,7 @@ export default function CreatorStudio() {
                       <span>
                         <small>{index === 0 ? 'ĐỀ XUẤT' : preset.badge || preset.category}</small>
                         <b>{preset.name}</b>
-                        <em>{preset.config.aspect} · {preset.config.lyrics === 'off' ? 'Visualizer' : 'Lyrics'}</em>
+                        <em>{preset.config.aspect} · {preset.config.lyrics === 'off' ? 'Visualizer' : 'Lyrics'} · {masteringLabel(normalizeProductionPreset({mastering:preset.mastering,export:preset.export},preset.config.aspect).mastering.profile)}</em>
                       </span>
                     </button>
                   ))}
