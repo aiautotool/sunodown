@@ -13,6 +13,7 @@ export type AnalyticsEventName =
   | 'render_started'
   | 'render_stage'
   | 'render_retry'
+  | 'render_audio_fallback'
   | 'render_succeeded'
   | 'render_failed'
   | 'video_saved'
