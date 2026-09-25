@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: true,
       sameSite: 'strict',
-      path: '/admin',
+      path: '/',
       maxAge: session.maxAge,
     });
     return response;
