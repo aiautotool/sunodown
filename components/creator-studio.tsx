@@ -83,9 +83,13 @@ import {
   createStudioRenderModel,
 } from '@/components/studio-render-model';
 import {
+  auditPresetApplyTransaction,
+  auditPresetVisualCommit,
   commitPresetVisualState,
   createPresetApplyTransaction,
+  createPresetVisualCommit,
   type PresetApplyMode,
+  type PresetVisualCommit,
 } from '@/components/presets/preset-apply-engine';
 import {
   clearProjectData,
@@ -503,6 +507,7 @@ export default function CreatorStudio() {
     modified: boolean;
     overrideFields: Array<keyof StudioPresetConfig>;
   } | null>(null);
+  const [presetCommit, setPresetCommit] = useState<PresetVisualCommit | null>(null);
 
   const [resultBlob, setResultBlob] = useState<Blob | null>(null),
     [resultUrl, setResultUrl] = useState(''),
@@ -576,6 +581,7 @@ export default function CreatorStudio() {
         aspect,
       });
     }
+    setPresetCommit(null);
     if (!selectedPresetId) return;
     setPresetModified(true);
     setPresetOverrideFields((fields) => fields.includes(field) ? fields : [...fields, field]);
@@ -592,19 +598,19 @@ export default function CreatorStudio() {
       modified: presetModified,
       overrideFields: [...presetOverrideFields],
     });
-    const transaction = createPresetApplyTransaction(current, preset, 'replace-all');
-    const next = clonePresetConfig(transaction.next);
-    if (mode === 'preserve-custom') {
-      for (const field of presetOverrideFields) {
-        (next as unknown as Record<string, unknown>)[field] = structuredClone(
-          (current as unknown as Record<string, unknown>)[field],
-        );
-      }
+
+    const transaction = createPresetApplyTransaction(current, preset, mode);
+    const audit = auditPresetApplyTransaction(transaction);
+    if (!audit.ok) {
+      setError(`Preset apply blocked: ${audit.issues.join(', ')}`);
+      return;
     }
-    commitPresetVisualState(next, {
+
+    const commit = commitPresetVisualState(transaction.next, {
       setTemplate,
       setWave,
-      setWaveAppearance: (value) => setWaveAppearance({...DEFAULT_WAVE_APPEARANCE,...value}),
+      setWaveAppearance: (value) =>
+        setWaveAppearance({ ...DEFAULT_WAVE_APPEARANCE, ...value }),
       setMotion,
       setAspect,
       setLyrics,
@@ -613,20 +619,55 @@ export default function CreatorStudio() {
       setTextStyles,
       setSubtitleStyle,
       setBackground,
-    });
+    }, presetCommit?.revision || 0);
+
+    setPresetCommit(commit);
     setSelectedPresetId(preset.id);
-    setPresetModified(mode === 'preserve-custom' && presetOverrideFields.length > 0);
-    setPresetOverrideFields(mode === 'preserve-custom' ? [...presetOverrideFields] : []);
-    localStorage.setItem('sunodown-v14-last-preset', preset.id);
+    setPresetModified(transaction.modified);
+    setPresetOverrideFields(
+      mode === 'preserve-custom' ? [...presetOverrideFields] : [],
+    );
+    localStorage.setItem('sunodown-v15-last-preset', preset.id);
     setLastPresetId(preset.id);
     track('preset_applied', {
       preset_id: preset.id,
       mode,
-      template: next.template,
-      wave: next.wave,
-      aspect: next.aspect,
-      lyrics: next.lyrics,
+      template: commit.snapshot.template,
+      wave: commit.snapshot.wave,
+      aspect: commit.snapshot.aspect,
+      lyrics: commit.snapshot.lyrics,
+      visual_fingerprint: commit.fingerprint,
+      revision: commit.revision,
     });
+    setResultBlob(null);
+    if (resultUrl) {
+      URL.revokeObjectURL(resultUrl);
+      setResultUrl('');
+    }
+    setError('');
+  };
+
+  const restorePresetSnapshot = () => {
+    if (!presetUndo) return;
+    const commit = commitPresetVisualState(presetUndo.config, {
+      setTemplate,
+      setWave,
+      setWaveAppearance: (value) =>
+        setWaveAppearance({ ...DEFAULT_WAVE_APPEARANCE, ...value }),
+      setMotion,
+      setAspect,
+      setLyrics,
+      setEffects,
+      setLayout,
+      setTextStyles,
+      setSubtitleStyle,
+      setBackground,
+    }, presetCommit?.revision || 0);
+    setPresetCommit(commit);
+    setSelectedPresetId(presetUndo.selectedId);
+    setPresetModified(presetUndo.modified);
+    setPresetOverrideFields([...presetUndo.overrideFields]);
+    setPresetUndo(null);
     setResultBlob(null);
     if (resultUrl) {
       URL.revokeObjectURL(resultUrl);
@@ -634,29 +675,9 @@ export default function CreatorStudio() {
     }
   };
 
-  const restorePresetSnapshot = () => {
-    if (!presetUndo) return;
-    const next = clonePresetConfig(presetUndo.config);
-    setTemplate(next.template);
-    setWave(next.wave);
-    setWaveAppearance({...DEFAULT_WAVE_APPEARANCE,...(next.waveAppearance||{})});
-    setMotion(next.motion);
-    setAspect(next.aspect);
-    setLyrics(next.lyrics);
-    setEffects(next.effects);
-    setLayout(next.layout);
-    setTextStyles(next.textStyles);
-    setSubtitleStyle(next.subtitleStyle);
-    setBackground(next.background);
-    setSelectedPresetId(presetUndo.selectedId);
-    setPresetModified(presetUndo.modified);
-    setPresetOverrideFields([...presetUndo.overrideFields]);
-    setPresetUndo(null);
-  };
-
   const persistCustomPresets = (items: StudioPreset[]) => {
     setCustomPresets(items);
-    localStorage.setItem('sunodown-v14-custom-presets', JSON.stringify(items));
+    localStorage.setItem('sunodown-v15-custom-presets', JSON.stringify(items));
   };
 
   const capturePresetThumbnail = () => {
@@ -700,6 +721,7 @@ export default function CreatorStudio() {
     setSelectedPresetId(preset.id);
     setPresetModified(false);
     setPresetOverrideFields([]);
+    setPresetCommit(createPresetVisualCommit(preset.config, presetCommit?.revision || 0));
   };
 
   const duplicatePreset = (source: StudioPreset) => {
@@ -742,6 +764,7 @@ export default function CreatorStudio() {
     setSelectedPresetId(preset.id);
     setPresetModified(false);
     setPresetOverrideFields([]);
+    setPresetCommit(createPresetVisualCommit(nextPreset.config, presetCommit?.revision || 0));
   };
 
   const resetSelectedPreset = (preset: StudioPreset) => {
@@ -794,12 +817,13 @@ export default function CreatorStudio() {
       setSelectedPresetId(null);
       setPresetModified(false);
       setPresetOverrideFields([]);
+      setPresetCommit(null);
     }
     if (favoritePresetIds.includes(preset.id)) {
       const nextFavorites = favoritePresetIds.filter((id) => id !== preset.id);
       setFavoritePresetIds(nextFavorites);
       localStorage.setItem(
-        'sunodown-v14-favorite-presets',
+        'sunodown-v15-favorite-presets',
         JSON.stringify(nextFavorites),
       );
     }
@@ -810,7 +834,7 @@ export default function CreatorStudio() {
       ? favoritePresetIds.filter((item) => item !== id)
       : [...favoritePresetIds, id];
     setFavoritePresetIds(next);
-    localStorage.setItem('sunodown-v14-favorite-presets', JSON.stringify(next));
+    localStorage.setItem('sunodown-v15-favorite-presets', JSON.stringify(next));
   };
 
   async function resolve(value = url): Promise<Song | null> {
@@ -895,8 +919,22 @@ export default function CreatorStudio() {
     const value = await navigator.clipboard.readText();
     change(value);
   }
-  const assertVisualParity = () =>
-    assertStudioRenderParity(visualSnapshot, studioModel.visual);
+  const assertVisualParity = () => {
+    const parity = assertStudioRenderParity(visualSnapshot, studioModel.visual);
+    if (presetCommit && !presetModified) {
+      const presetAudit = auditPresetVisualCommit(
+        presetCommit,
+        visualSnapshot,
+        studioModel.visual,
+      );
+      if (!presetAudit.ok) {
+        throw new Error(
+          `Preset regression failed [r${presetAudit.revision}]: ${presetAudit.issues.join(', ')}`,
+        );
+      }
+    }
+    return parity;
+  };
 
   async function renderVideo(mode: 'cut' | '30' = 'cut') {
     if (!song || rendering) return;
@@ -1068,21 +1106,22 @@ export default function CreatorStudio() {
     try {
       setProjects(JSON.parse(localStorage.getItem('sundown-projects') || '[]'));
       const storedPresets = normalizeStoredPresets(
-        JSON.parse(localStorage.getItem('sunodown-v14-custom-presets') || '[]'),
+        JSON.parse(localStorage.getItem('sunodown-v15-custom-presets') || '[]'),
       );
       setCustomPresets(storedPresets);
       localStorage.setItem(
-        'sunodown-v14-custom-presets',
+        'sunodown-v15-custom-presets',
         JSON.stringify(storedPresets),
       );
       setFavoritePresetIds(
-        JSON.parse(localStorage.getItem('sunodown-v14-favorite-presets') || '[]'),
+        JSON.parse(localStorage.getItem('sunodown-v15-favorite-presets') || '[]'),
       );
-      setLastPresetId(localStorage.getItem('sunodown-v14-last-preset'));
-      const presetIssues = auditPresetLibrary([
+      setLastPresetId(localStorage.getItem('sunodown-v15-last-preset'));
+      const allPresets = [
         ...BUILTIN_STUDIO_PRESETS,
         ...storedPresets,
-      ]);
+      ];
+      const presetIssues = auditPresetLibrary(allPresets);
       if (presetIssues.length) {
         setError(
           `Preset QA failed: ${presetIssues.slice(0, 4).join(', ')}`,

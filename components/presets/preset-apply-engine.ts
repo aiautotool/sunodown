@@ -156,6 +156,10 @@ export function auditPresetApplyTransaction(transaction: PresetApplyTransaction)
     if (JSON.stringify(before.textStyles) !== JSON.stringify(next.textStyles)) issues.push('textStyles');
     if (JSON.stringify(before.subtitleStyle) !== JSON.stringify(next.subtitleStyle)) issues.push('subtitleStyle');
     if (JSON.stringify(before.background) !== JSON.stringify(next.background)) issues.push('background');
+  } else if (mode === 'replace-all') {
+    if (JSON.stringify(next) !== JSON.stringify(clonePresetConfig(transaction.next))) {
+      issues.push('transaction');
+    }
   }
   return { ok: issues.length === 0, issues };
 }
