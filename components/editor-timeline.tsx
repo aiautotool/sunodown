@@ -551,7 +551,8 @@ export function EditorTimeline(props: Props) {
         </div>
       </header>
 
-      {props.subtitleSyncStatus && props.subtitleSyncStatus !== 'idle' && (
+      {(props.subtitleSyncStatus === 'syncing' ||
+        props.subtitleSyncStatus === 'synced') && (
         <div
           style={{
             display: 'flex',
@@ -565,17 +566,13 @@ export function EditorTimeline(props: Props) {
             background:
               props.subtitleSyncStatus === 'synced'
                 ? 'rgba(34,197,94,.07)'
-                : props.subtitleSyncStatus === 'fallback'
-                  ? 'rgba(245,158,11,.07)'
-                  : 'rgba(6,182,212,.07)',
+                : 'rgba(6,182,212,.07)',
           }}
         >
           <b style={{ fontSize: 11 }}>
             {props.subtitleSyncStatus === 'syncing'
               ? 'AI đang căn subtitle'
-              : props.subtitleSyncStatus === 'synced'
-                ? 'Subtitle đã sync'
-                : 'Đang dùng timing dự phòng'}
+              : 'Subtitle đã sync'}
           </b>
           <span style={{ fontSize: 11, opacity: 0.62 }}>
             {props.subtitleSyncMessage}
