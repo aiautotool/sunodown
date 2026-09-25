@@ -1420,6 +1420,27 @@ export default function CreatorStudio() {
                 resultUrl={resultUrl || undefined}
               />
             </div>
+            <div className="sd-first-run-flow" aria-label="Quy trình tạo video nhanh">
+              <button
+                className="primary"
+                disabled={rendering}
+                onClick={() => {
+                  setPanel('presets');
+                  setMobileTools(true);
+                }}
+              >
+                <b>1 · Chọn mẫu</b>
+                Mẫu hoàn chỉnh
+              </button>
+              <span>
+                <b>2 · Xem preview</b>
+                Chạm Play để kiểm tra
+              </span>
+              <button disabled={rendering} onClick={() => renderVideo('cut')}>
+                <b>3 · Xuất video</b>
+                {rendering ? `${Math.round(progress)}%` : 'Tạo video'}
+              </button>
+            </div>
             {resultUrl && (
               <div className="sd-result-actions">
                 <div>
@@ -1568,12 +1589,22 @@ export default function CreatorStudio() {
               <button
                 disabled={rendering}
                 onClick={() => {
-                  setPanel('style');
+                  setPanel('presets');
                   setMobileTools(true);
                 }}
               >
                 <Sparkles />
-                Style
+                Mẫu
+              </button>
+              <button
+                disabled={rendering}
+                onClick={() => {
+                  setPanel('style');
+                  setMobileTools(true);
+                }}
+              >
+                <SlidersHorizontal />
+                Tùy chỉnh
               </button>
               <button
                 disabled={rendering}
@@ -1583,21 +1614,11 @@ export default function CreatorStudio() {
                 }}
               >
                 <FileText />
-                Lyrics
+                Lời
               </button>
-              <button
-                disabled={rendering}
-                onClick={() => {
-                  setPanel('wave');
-                  setMobileTools(true);
-                }}
-              >
-                <Music2 />
-                Wave
-              </button>
-              <button onClick={() => renderVideo('30')}>
+              <button disabled={rendering} onClick={() => renderVideo('cut')}>
                 <Upload />
-                Export
+                Xuất
               </button>
             </nav>
           </div>
