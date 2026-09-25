@@ -95,9 +95,7 @@ const normalizeLayout=(value:Partial<OverlayLayout>|undefined,fallback:OverlayLa
 };
 
 export function clonePresetConfig(config:StudioPresetConfig):StudioPresetConfig{
-  const cloned=structuredClone(config) as StudioPresetConfig;
-  cloned.background=structuredClone(config.background||DEFAULT_BACKGROUND_CONFIG);
-  return cloned;
+  return normalizePresetConfig(config);
 }
 const fallbackConfig=():StudioPresetConfig=>clonePresetConfig(BUILTIN_STUDIO_PRESETS[0].config);
 export function normalizePresetConfig(value:Partial<StudioPresetConfig>|null|undefined):StudioPresetConfig{
