@@ -60,8 +60,17 @@ export async function createAdminSession() {
   };
 }
 
+function cookieValue(request: NextRequest, name: string) {
+  const raw = request.headers.get('cookie') || '';
+  for (const part of raw.split(';')) {
+    const [key, ...rest] = part.trim().split('=');
+    if (key === name) return decodeURIComponent(rest.join('='));
+  }
+  return undefined;
+}
+
 export async function isAdminRequest(request: NextRequest) {
-  const token = request.cookies.get(COOKIE)?.value;
+  const token = cookieValue(request, COOKIE);
   if (!token || token.length > 500) return false;
   const parts = token.split('.');
   if (parts.length !== 4 || parts[0] !== 'v1') return false;
