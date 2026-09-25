@@ -543,6 +543,7 @@ export default function CreatorStudio() {
     } | null>(null),
     [progress, setProgress] = useState(0),
     [downloading, setDownloading] = useState('');
+  const [renderNotice, setRenderNotice] = useState('');
   useRenderWakeLock(rendering);
 
   const [masteringConfig, setMasteringConfig] = useState<ProductionMasteringConfig>(structuredClone(DEFAULT_PRODUCTION_MASTERING));
@@ -1060,6 +1061,7 @@ export default function CreatorStudio() {
     setRenderStage(stage);
     setProgress(0);
     setError('');
+    setRenderNotice('');
     setLastRenderFailure(null);
     track(attempt > 1 ? 'render_retry' : 'render_started', {
       mode,
@@ -1128,6 +1130,14 @@ export default function CreatorStudio() {
           background: visual.background,
           quality: exportConfig.quality,
           productionMastering: masteringConfig,
+          onAudioFallback: (reason) => {
+            setRenderNotice('iPhone không giải mã được mastering của nguồn này nên video sẽ dùng audio gốc để đảm bảo xuất thành công.');
+            track('render_audio_fallback', {
+              reason,
+              preset_id: selectedPresetId,
+              mastering_profile: masteringConfig.profile,
+            });
+          },
         },
       );
 
@@ -1820,6 +1830,12 @@ export default function CreatorStudio() {
                     <Play /> Tạo bản 30s
                   </button>
                 </div>
+                {renderNotice && !error && (
+                  <div className="sd-quick-render-status" role="status" aria-live="polite">
+                    <b>Đang dùng audio gốc</b>
+                    <span>{renderNotice}</span>
+                  </div>
+                )}
                 {(rendering || error || lastRenderFailure) && (
                   <div className={`sd-quick-render-status ${error ? 'error' : ''}`} role="status" aria-live="polite">
                     {rendering ? (
