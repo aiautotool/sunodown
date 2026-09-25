@@ -64,6 +64,7 @@ import { EditorTimeline, type MediaClip } from '@/components/editor-timeline';
 import { PresetGallery } from '@/components/presets/preset-gallery';
 import { MasteringPanel } from '@/components/mastering-panel';
 import { StudioSheet, StudioTabs } from '@/components/studio-ui';
+import { StyleStudio } from '@/components/style-studio';
 import {
   BUILTIN_STUDIO_PRESETS,
   PRESET_SCHEMA_VERSION,
@@ -176,6 +177,7 @@ function ToolControls(p: {
   audioUrl: string;
   audioBinary: Blob | null;
   songTitle: string;
+  songPicture?: string;
   presetContent?: React.ReactNode;
 }) {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
@@ -205,33 +207,14 @@ function ToolControls(p: {
           <div className="sd-options">
               {id === 'presets' && p.presetContent}
               {id === 'style' && (
-                <p className="sd-control-hint">
-                  Preset thay đổi toàn bộ video. Các nút dưới đây dùng để tinh chỉnh thủ công sau khi chọn preset.
-                </p>
-              )}
-              {id === 'style' &&
-                VISUAL_TEMPLATES.map((x) => (
-                  <button
-                    className={p.template === x.id ? 'active' : ''}
-                    onClick={() => p.setTemplate(x.id)}
-                    key={x.id}
-                  >
-                    {x.label}
-                  </button>
-                ))}
-              {id === 'style' && (
-                <div className="sd-motion-row">
-                  <span>Motion</span>
-                  {MOTION_LEVELS.map((x) => (
-                    <button
-                      key={x.id}
-                      className={p.motion === x.id ? 'active' : ''}
-                      onClick={() => p.setMotion(x.id)}
-                    >
-                      {x.label}
-                    </button>
-                  ))}
-                </div>
+                <StyleStudio
+                  template={p.template}
+                  setTemplate={p.setTemplate}
+                  motion={p.motion}
+                  setMotion={p.setMotion}
+                  picture={p.songPicture}
+                  onOpenPanel={p.setPanel}
+                />
               )}
               {id === 'text' && (
                 <div className="sd-text-style">
@@ -1190,6 +1173,7 @@ export default function CreatorStudio() {
     audioUrl: song?.audio || '',
     audioBinary,
     songTitle: song?.title || 'suno',
+    songPicture: song?.picture || undefined,
     setTrimStart: (value) => {
       invalidateRenderedResult();
       setTrimStart(value);
