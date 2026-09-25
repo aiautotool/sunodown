@@ -79,12 +79,17 @@ export function AdminAnalyticsDashboard() {
       if (response.status === 401) {
         setReport(null);
         setAuthRequired(true);
+        setLoginError('');
         return;
       }
-      if (!response.ok) throw new Error('Không tải được báo cáo analytics.');
+      if (!response.ok) {
+        const detail = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(detail?.error || 'Không tải được báo cáo analytics.');
+      }
       setReport((await response.json()) as Report);
       setAuthRequired(false);
     } catch (error) {
+      setAuthRequired(true);
       setLoginError(error instanceof Error ? error.message : 'Không tải được dashboard.');
     } finally {
       setBusy(false);
