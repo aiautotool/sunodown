@@ -533,3 +533,14 @@ body { font-family: var(--font-app), Arial, Helvetica, sans-serif; }
 
 /* Adaptive preview quality hints */
 .sd-preview-performance{display:inline-flex;align-items:center;gap:5px;color:#6f7a8a;font-size:9px}
+
+
+/* v14 Growth & Measurement retention surfaces */
+.sd-resume-project{display:flex;width:100%;margin:16px 0 2px;align-items:center;gap:12px;border:1px solid #313a47;border-radius:14px;background:linear-gradient(135deg,#121923,#0c1118);padding:12px 14px;color:#e7ebf2;text-align:left}
+.sd-resume-project>svg{width:20px;color:#8d72ff}.sd-resume-project>span{display:flex;min-width:0;flex:1;flex-direction:column;gap:3px}.sd-resume-project b{font-size:12px}.sd-resume-project small{overflow:hidden;color:#8d97a7;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.sd-resume-project i{color:#9e87ff;font-size:10px;font-style:normal}
+.sd-last-preset{display:none}
+.sd-plan-foundation{display:flex;flex-direction:column;gap:4px;border:1px solid #2a3340;border-radius:12px;background:#0f151e;padding:12px;color:#cbd2dc}.sd-plan-foundation b{font-size:12px}.sd-plan-foundation span{color:#8994a5;font-size:10px;line-height:1.5}
+@media(max-width:800px){
+  .sd-last-preset{display:flex;width:100%;margin:10px 0 0;align-items:center;gap:10px;border:1px solid #2b3442;border-radius:12px;background:#0e141d;padding:10px 12px;color:#e8ebf0;text-align:left}
+  .sd-last-preset>svg{width:17px;color:#9b7cff}.sd-last-preset>span{display:flex;min-width:0;flex-direction:column;gap:3px}.sd-last-preset b{font-size:10px}.sd-last-preset small{overflow:hidden;color:#8791a1;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
+}
