@@ -416,7 +416,24 @@ function drawWaveBase(
     max = ph * 0.52,
     rawVals = Array.from({ length: n }, (_, i) => realtimeBands ? realtimeSpectrumValue(realtimeBands,i,n) : spectrumValue(samples, rate, t, i, n)),
     smooth = Math.max(0,Math.min(1,look.smoothing/100)),
-    vals = rawVals.map((v,i)=>{const a=rawVals[Math.max(0,i-1)],b=rawVals[Math.min(rawVals.length-1,i+1)];return v*(1-smooth)+((a+v+b)/3)*smooth}),
+    rawMin=Math.min(...rawVals),rawMax=Math.max(...rawVals),rawSpan=Math.max(.0001,rawMax-rawMin),
+    currentBands=samples&&rate?spectrumBands(samples,rate,t):null,
+    previousBands=samples&&rate?spectrumBands(samples,rate,Math.max(0,t-.09)):null,
+    spectralFlux=currentBands&&previousBands?Math.max(0,
+      (currentBands.bass-previousBands.bass)*1.7+
+      (currentBands.lowMid-previousBands.lowMid)*1.2+
+      (currentBands.vocal-previousBands.vocal)*.9+
+      (currentBands.high-previousBands.high)*.65):0,
+    avgEnergy=rawVals.reduce((sum,v)=>sum+v,0)/Math.max(1,rawVals.length),
+    flatness=Math.max(0,Math.min(1,(.22-rawSpan)/.22)),
+    adaptiveVals=rawVals.map((v,i)=>{
+      const normalized=(v-rawMin)/rawSpan;
+      const shaped=.055+Math.pow(Math.max(.001,v),.72)*.72+normalized*(.18+flatness*.16);
+      const transient=Math.min(.28,spectralFlux*3.8)*(0.45+0.55*Math.sin((i/n)*Math.PI));
+      const living=flatness*(.035+.085*Math.min(1,avgEnergy*1.6))*(.5+.5*Math.sin(t*(5.2+avgEnergy*4.4)+i*.52));
+      return Math.max(.04,Math.min(1,shaped+transient+living));
+    }),
+    vals = adaptiveVals.map((v,i)=>{const a=adaptiveVals[Math.max(0,i-1)],b=adaptiveVals[Math.min(adaptiveVals.length-1,i+1)];return v*(1-smooth*.72)+((a+v+b)/3)*(smooth*.72)}),
     grad = ctx.createLinearGradient(w * 0.08, 0, w * 0.92, 0);
   grad.addColorStop(0,look.color);
   grad.addColorStop(.5,look.color2);
