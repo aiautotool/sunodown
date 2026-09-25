@@ -83,8 +83,8 @@ export function AdminAnalyticsDashboard() {
         return;
       }
       if (!response.ok) {
-        const detail = await response.json().catch(() => null) as { error?: string } | null;
-        throw new Error(detail?.error || 'Không tải được báo cáo analytics.');
+        const detail = await response.json().catch(() => null) as { error?: string; detail?: string } | null;
+        throw new Error(detail?.detail || detail?.error || 'Không tải được báo cáo analytics.');
       }
       setReport((await response.json()) as Report);
       setAuthRequired(false);
@@ -118,6 +118,8 @@ export function AdminAnalyticsDashboard() {
       }
       setPassword('');
       await load(range);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Không kết nối được máy chủ quản trị.');
     } finally {
       setBusy(false);
     }
