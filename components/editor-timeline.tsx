@@ -43,6 +43,8 @@ type Props = {
   audioUrl?: string;
   visualLabel?: string;
   effectLabels?: string[];
+  subtitleSyncStatus?: 'idle' | 'syncing' | 'synced' | 'fallback';
+  subtitleSyncMessage?: string;
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -424,6 +426,37 @@ export function EditorTimeline(props: Props) {
   const toggleTrack = (track: typeof expandedTrack) =>
     setExpandedTrack((current) => (current === track ? 'audio' : track));
 
+  const selectedSubtitleIndex =
+    selected?.startsWith('sub-') ? Number(selected.slice(4)) : -1;
+
+  const shiftSubtitles = (index: number, requestedDelta: number, following: boolean) => {
+    if (!Number.isInteger(index) || index < 0 || index >= props.subtitles.length) return;
+    const affected = props.subtitles.slice(index, following ? undefined : index + 1);
+    if (!affected.length) return;
+    const minStart = Math.min(...affected.map((line) => line.start));
+    const maxEnd = Math.max(...affected.map((line) => line.end));
+    const delta = clamp(requestedDelta, -minStart, props.duration - maxEnd);
+    if (Math.abs(delta) < 0.0001) return;
+    pushHistory();
+    props.onEditStart?.();
+    props.onSubtitlesChange(
+      props.subtitles.map((line, lineIndex) => {
+        if (lineIndex < index || (!following && lineIndex !== index)) return line;
+        return {
+          ...line,
+          start: line.start + delta,
+          end: line.end + delta,
+          words: line.words.map((word) => ({
+            ...word,
+            start: word.start + delta,
+            end: word.end + delta,
+          })),
+        };
+      }),
+    );
+    props.onEditEnd?.();
+  };
+
   return (
     <section className="sd-edit-timeline">
       <header>
@@ -476,6 +509,90 @@ export function EditorTimeline(props: Props) {
           </button>
         </div>
       </header>
+
+      {(props.subtitleSyncStatus && props.subtitleSyncStatus !== 'idle') && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            padding: '8px 10px',
+            margin: '0 0 8px',
+            borderRadius: 10,
+            border: '1px solid rgba(148,163,184,.12)',
+            background:
+              props.subtitleSyncStatus === 'synced'
+                ? 'rgba(34,197,94,.07)'
+                : props.subtitleSyncStatus === 'fallback'
+                  ? 'rgba(245,158,11,.07)'
+                  : 'rgba(6,182,212,.07)',
+          }}
+        >
+          <b style={{ fontSize: 11 }}>
+            {props.subtitleSyncStatus === 'syncing'
+              ? 'AI đang căn subtitle'
+              : props.subtitleSyncStatus === 'synced'
+                ? 'Subtitle đã sync'
+                : 'Đang dùng timing dự phòng'}
+          </b>
+          <span style={{ fontSize: 11, opacity: .62 }}>
+            {props.subtitleSyncMessage}
+          </span>
+        </div>
+      )}
+
+      {selectedSubtitleIndex >= 0 && props.subtitles[selectedSubtitleIndex] && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 6,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            padding: '8px 10px',
+            margin: '0 0 8px',
+            borderRadius: 10,
+            border: '1px solid rgba(217,70,239,.16)',
+            background: 'rgba(217,70,239,.05)',
+          }}
+        >
+          <b style={{ fontSize: 11, marginRight: 4 }}>Chỉnh timing:</b>
+          {[-0.5, -0.1, 0.1, 0.5].map((delta) => (
+            <button
+              key={delta}
+              onClick={() => shiftSubtitles(selectedSubtitleIndex, delta, false)}
+              style={{ padding: '5px 8px', borderRadius: 8, fontSize: 11 }}
+            >
+              {delta > 0 ? '+' : ''}{delta.toFixed(1)}s
+            </button>
+          ))}
+          <span style={{ width: 1, height: 20, background: 'rgba(148,163,184,.18)', margin: '0 2px' }} />
+          <button
+            onClick={() => shiftSubtitles(selectedSubtitleIndex, -0.1, true)}
+            style={{ padding: '5px 8px', borderRadius: 8, fontSize: 11 }}
+          >
+            Từ đây −0.1s
+          </button>
+          <button
+            onClick={() => shiftSubtitles(selectedSubtitleIndex, 0.1, true)}
+            style={{ padding: '5px 8px', borderRadius: 8, fontSize: 11 }}
+          >
+            Từ đây +0.1s
+          </button>
+          <button
+            onClick={() => shiftSubtitles(selectedSubtitleIndex, -0.5, true)}
+            style={{ padding: '5px 8px', borderRadius: 8, fontSize: 11 }}
+          >
+            Từ đây −0.5s
+          </button>
+          <button
+            onClick={() => shiftSubtitles(selectedSubtitleIndex, 0.5, true)}
+            style={{ padding: '5px 8px', borderRadius: 8, fontSize: 11 }}
+          >
+            Từ đây +0.5s
+          </button>
+        </div>
+      )}
 
       <div
         className="sd-timeline-scroll"
