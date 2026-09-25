@@ -1,10 +1,10 @@
 name: Publish v17 APK
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Mobile v17"]
     branches: [v17]
-    paths:
-      - '.github/workflows/publish-apk-v17.yml'
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -13,23 +13,36 @@ permissions:
 
 jobs:
   publish:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download validated APK artifact
+      - name: Resolve validated mobile run
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            RUN_ID="${{ github.event.workflow_run.id }}"
+          else
+            RUN_ID=$(gh run list --workflow "Mobile v17" --branch v17 --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          fi
+          test -n "$RUN_ID"
+          echo "id=$RUN_ID" >> "$GITHUB_OUTPUT"
+      - name: Download standalone release APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p release
-          gh run download 36117159863 -n sunodown-mobile-v17-debug-apk -D release
-          test -f release/app-debug.apk
-          mv release/app-debug.apk release/SunoDown-v17-debug.apk
-      - name: Publish GitHub Release
+          gh run download "${{ steps.run.outputs.id }}" -n sunodown-mobile-v17-release-apk -D release
+          test -f release/app-release.apk
+          mv release/app-release.apk release/SunoDown-v17.apk
+      - name: Publish direct-download APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view v17-mobile >/dev/null 2>&1; then
-            gh release upload v17-mobile release/SunoDown-v17-debug.apk --clobber
+            gh release upload v17-mobile release/SunoDown-v17.apk --clobber
           else
-            gh release create v17-mobile release/SunoDown-v17-debug.apk               --target v17               --title "SunoDown v17 Mobile MVP"               --notes "Validated Android debug APK from Mobile v17 CI run 36117159863."
+            gh release create v17-mobile release/SunoDown-v17.apk               --target v17               --title "SunoDown v17 Mobile MVP"               --notes "Standalone Android APK with bundled React Native JavaScript."
           fi
