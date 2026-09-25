@@ -24,6 +24,7 @@ export type SavedProject = {
   motion?: MotionIntensity;
   selectedPresetId?: string | null;
   presetModified?: boolean;
+  presetOverrideFields?: Array<'template'|'wave'|'waveAppearance'|'motion'|'aspect'|'lyrics'|'effects'|'layout'|'textStyles'|'subtitleStyle'|'background'>;
   effects: VideoEffect[];
   layout: OverlayLayout;
   textStyles?: OverlayTextStyles;
