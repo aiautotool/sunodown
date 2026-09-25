@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { createProjectDocument } from '@core/project';
 import { createRenderJob } from '@core/render-job';
@@ -69,7 +70,7 @@ export async function startRender(song: Song, preset: MobilePreset) {
     id: `project-${song.id}`,
     sourceUrl: song.sourceAudio,
     title: song.title,
-    platform: 'ios',
+    platform: Platform.OS === 'android' ? 'android' : 'ios',
     assets: [
       {
         id: 'audio-main',
