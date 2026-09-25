@@ -7,8 +7,9 @@ import type {
   VideoAspect,
   VisualTemplate,
   WaveStyle,
+  WaveAppearance,
 } from './types';
-import { VIDEO_SIZES } from './types';
+import { VIDEO_SIZES, DEFAULT_WAVE_APPEARANCE } from './types';
 import { cleanLyricsForVideo } from './lyrics-clean';
 import {
   convertProcessedAudio,
@@ -65,6 +66,7 @@ export type SafeRenderOptions = {
   background?: BackgroundConfig;
   mediaClips?: MediaClip[];
   effects?: EffectConfig;
+  waveAppearance?: WaveAppearance;
   loopDuration?: number;
   startSeconds?: number;
   previewSeconds?: number;
@@ -402,16 +404,23 @@ function drawWaveBase(
   style: WaveStyle,
   p: Palette,
   realtimeBands?: RealtimeSpectrumBands,
+  appearance?: WaveAppearance,
 ) {
+  const look={...DEFAULT_WAVE_APPEARANCE,...appearance};
   const ph = Math.max(110, Math.round(h * 0.14)),
     top = h - ph,
-    n = Math.max(42, Math.min(92, Math.round(w / 14))),
+    n = Math.max(34, Math.min(120, Math.round(34 + look.density * 0.86))),
     usable = w * 0.84,
     start = w * 0.08,
     cy = h - ph * 0.42,
     max = ph * 0.52,
-    vals = Array.from({ length: n }, (_, i) => realtimeBands ? realtimeSpectrumValue(realtimeBands,i,n) : spectrumValue(samples, rate, t, i, n)),
-    grad = waveGradient(ctx, w, p);
+    rawVals = Array.from({ length: n }, (_, i) => realtimeBands ? realtimeSpectrumValue(realtimeBands,i,n) : spectrumValue(samples, rate, t, i, n)),
+    smooth = Math.max(0,Math.min(1,look.smoothing/100)),
+    vals = rawVals.map((v,i)=>{const a=rawVals[Math.max(0,i-1)],b=rawVals[Math.min(rawVals.length-1,i+1)];return v*(1-smooth)+((a+v+b)/3)*smooth}),
+    grad = ctx.createLinearGradient(w * 0.08, 0, w * 0.92, 0);
+  grad.addColorStop(0,look.color);
+  grad.addColorStop(.5,look.color2);
+  grad.addColorStop(1,look.color);
   const radial = [
     'circle',
     'circle-bars',
@@ -428,8 +437,9 @@ function drawWaveBase(
   ctx.save();
   ctx.fillStyle = grad;
   ctx.strokeStyle = grad;
-  ctx.shadowColor = rgb(p[1], 0.55);
-  ctx.shadowBlur = 12;
+  ctx.globalAlpha=Math.max(.1,Math.min(1,look.opacity/100));
+  ctx.shadowColor = look.color2;
+  ctx.shadowBlur = Math.max(0,look.glow*.28);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   if (radial) {
@@ -560,6 +570,7 @@ function drawWave(
   layout?: OverlayLayout,
   textStyles?: OverlayTextStyles,
   realtimeBands?: RealtimeSpectrumBands,
+  appearance?: WaveAppearance,
 ) {
   const pos = layout?.wave || { x: 50, y: 86, scale: 100 },
     sx = pos.scale / 100;
@@ -567,7 +578,7 @@ function drawWave(
   ctx.translate((w * pos.x) / 100, (h * pos.y) / 100);
   ctx.scale(sx, sx);
   ctx.translate(-w * 0.5, -h * 0.86);
-  drawWaveBase(ctx, samples, rate, t, w, h, style, p, realtimeBands);
+  drawWaveBase(ctx, samples, rate, t, w, h, style, p, realtimeBands, appearance);
   ctx.restore();
 }
 export function withSubtitleLayout(
@@ -667,6 +678,7 @@ export function createLiveFramePainter(bitmap: ImageBitmap) {
     textStyles?: OverlayTextStyles,
     audioAnalysis?: PreviewAudioAnalysis | null,
     realtimeBands?: RealtimeSpectrumBands,
+    waveAppearance?: WaveAppearance,
   ) => {
     drawTemplate(
       ctx,
@@ -698,6 +710,7 @@ export function createLiveFramePainter(bitmap: ImageBitmap) {
       layout,
       undefined,
       realtimeBands,
+      waveAppearance,
     );
   };
 }
@@ -987,6 +1000,9 @@ export async function generateVisualizerVideoSafe(
         waveStyle,
         palette,
         options.layout,
+        undefined,
+        undefined,
+        options.waveAppearance,
       );
       if (options.effects?.effects?.length) {
         drawVideoEffects(
