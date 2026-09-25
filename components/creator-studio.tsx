@@ -490,7 +490,7 @@ export default function CreatorStudio() {
   const [wave, setWave] = useState<WaveStyle>('bars'),
     [waveAppearance, setWaveAppearance] = useState<WaveAppearance>({...DEFAULT_WAVE_APPEARANCE}),
     [template, setTemplate] = useState<VisualTemplate>('cover-motion'),
-    [aspect, setAspect] = useState<VideoAspect>('16:9'),
+    [aspect, setAspect] = useState<VideoAspect>('9:16'),
     [lyrics, setLyrics] = useState<LyricsMode>('focus'),
     [motion, setMotion] = useState<MotionIntensity>('medium'),
     [effects, setEffects] = useState<VideoEffect[]>([]),
