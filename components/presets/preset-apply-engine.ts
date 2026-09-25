@@ -1,5 +1,6 @@
 import type { StudioPreset, StudioPresetConfig } from './studio-presets';
 import { clonePresetConfig } from './studio-presets';
+import { normalizeProductionPreset, productionFingerprint, type ProductionPresetConfig } from './production-preset';
 
 export type PresetApplyMode = 'replace-all' | 'preserve-custom';
 
@@ -9,6 +10,8 @@ export type PresetApplyTransaction = {
   before: StudioPresetConfig;
   next: StudioPresetConfig;
   modified: boolean;
+  production: ProductionPresetConfig;
+  productionFingerprint: string;
 };
 
 export type PresetVisualStateSetters = {
@@ -75,6 +78,7 @@ export function createPresetApplyTransaction(
 ): PresetApplyTransaction {
   const before = clonePresetConfig(current);
   const next = clonePresetConfig(preset.config);
+  const production = normalizeProductionPreset({ mastering:preset.mastering, export:preset.export }, next.aspect);
 
   if (mode === 'preserve-custom') {
     next.layout = structuredClone(before.layout);
@@ -89,6 +93,8 @@ export function createPresetApplyTransaction(
     before,
     next,
     modified: mode === 'preserve-custom',
+    production,
+    productionFingerprint: productionFingerprint(production),
   };
 }
 
@@ -161,6 +167,8 @@ export function auditPresetApplyTransaction(transaction: PresetApplyTransaction)
       issues.push('transaction');
     }
   }
+  if (!transaction.production.mastering.profile) issues.push('mastering');
+  if (!transaction.production.export.aspect) issues.push('export');
   return { ok: issues.length === 0, issues };
 }
 
