@@ -377,13 +377,34 @@ export function EditorTimeline(props: Props) {
             onChange={(e) => addMedia(e.target.files)}
           />
         </label>
-        <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))} title="Thu nhỏ">
-          <Minus />
-        </button>
-        <small>{Math.round(zoom * 100)}%</small>
-        <button onClick={() => setZoom((z) => Math.min(5, z + 0.25))} title="Phóng to">
-          <Plus />
-        </button>
+        <div className="sd-timeline-zoom" aria-label="Timeline zoom">
+          <button
+            disabled={zoom <= 0.5}
+            onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
+            title="Zoom out"
+          >
+            <Minus />
+          </button>
+          <span className="sd-zoom-bound">MIN 0.5×</span>
+          <input
+            type="range"
+            min="0.5"
+            max="5"
+            step="0.25"
+            value={zoom}
+            onChange={(event) => setZoom(Number(event.target.value))}
+            aria-label="Mức zoom timeline"
+          />
+          <b>{zoom.toFixed(zoom % 1 === 0 ? 0 : 2)}×</b>
+          <span className="sd-zoom-bound">MAX 5×</span>
+          <button
+            disabled={zoom >= 5}
+            onClick={() => setZoom((z) => Math.min(5, z + 0.25))}
+            title="Zoom in"
+          >
+            <Plus />
+          </button>
+        </div>
       </header>
 
       <div className="sd-timeline-scroll" ref={scroller} onPointerDown={scrub}>
