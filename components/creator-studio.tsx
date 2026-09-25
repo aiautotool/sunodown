@@ -1634,57 +1634,41 @@ export default function CreatorStudio() {
             <Menu />
           </div>
           <div className="sd-empty-content">
-            <p>SUNO CREATOR STUDIO</p>
+            <p>CREATOR STUDIO</p>
             <h1>
-              Bắt đầu từ Suno
+              Turn your Suno song
               <br />
-              <em>theo cách của bạn</em>
+              <em>into content</em>
             </h1>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:16,width:'100%'}}>
-              <section style={{border:'1px solid rgba(148,163,184,.18)',borderRadius:20,padding:18,background:'rgba(15,23,42,.28)'}}>
-                <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
-                  <BookOpen size={20}/>
-                  <div>
-                    <b>Nhập tài khoản Suno</b>
-                    <small style={{display:'block',opacity:.62}}>Quét và quản lý toàn bộ bài public</small>
-                  </div>
-                </div>
-                <AccountLibraryPanel
-                  onOpenSong={(songUrl) => {
-                    setUrl(songUrl);
-                    void resolve(songUrl);
-                  }}
-                />
-              </section>
-
-              <section style={{border:'1px solid rgba(148,163,184,.18)',borderRadius:20,padding:18,background:'rgba(15,23,42,.28)'}}>
-                <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
-                  <Link2 size={20}/>
-                  <div>
-                    <b>Dán link bài Suno</b>
-                    <small style={{display:'block',opacity:.62}}>Mở ngay một bài để tải, chỉnh sửa hoặc render</small>
-                  </div>
-                </div>
-                <div className="sd-input">
-                  <Link2 />
-                  <input
-                    value={url}
-                    onChange={(e) => change(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && void resolve()}
-                    placeholder="https://suno.com/song/..."
-                  />
-                  <button onClick={paste}>Paste</button>
-                </div>
-                <button
-                  className="sd-analyze"
-                  disabled={busy}
-                  onClick={() => resolve()}
-                >
-                  {busy ? 'Đang phân tích…' : 'Mở bài hát'}
-                </button>
-              </section>
+            <div className="sd-input">
+              <Link2 />
+              <input
+                value={url}
+                onChange={(e) => change(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void resolve()}
+                placeholder="Dán liên kết Suno"
+              />
+              <button onClick={paste}>Paste</button>
             </div>
+            <button
+              className="sd-analyze"
+              disabled={busy}
+              onClick={() => resolve()}
+            >
+              {busy ? 'Đang phân tích…' : 'Phân tích'}
+            </button>
             {error && <div className="sd-error">{error}</div>}
+            <button
+              className="sd-resume-project"
+              onClick={() => setView('library')}
+            >
+              <BookOpen />
+              <span>
+                <b>Thư viện bài hát</b>
+                <small>Quản lý bài đã lưu và quét bài theo tài khoản Suno</small>
+              </span>
+              <i>Mở thư viện</i>
+            </button>
             {projects[0] && (
               <button
                 className="sd-resume-project"
