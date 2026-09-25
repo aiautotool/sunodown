@@ -40,6 +40,7 @@ export function normalizeVisualSnapshot(config: StudioPresetConfig): StudioPrese
   return {
     template: config.template,
     wave: config.wave,
+    waveAppearance: config.waveAppearance ? structuredClone(config.waveAppearance) : undefined,
     motion: config.motion,
     aspect: config.aspect,
     lyrics: config.lyrics,
@@ -78,6 +79,7 @@ export function comparePreviewAndRender(
 
   comparePath(issues, 'template', a.template, b.template);
   comparePath(issues, 'wave', a.wave, b.wave);
+  comparePath(issues, 'waveAppearance', a.waveAppearance, b.waveAppearance);
   comparePath(issues, 'motion', a.motion, b.motion);
   comparePath(issues, 'aspect', a.aspect, b.aspect);
   comparePath(issues, 'lyrics', a.lyrics, b.lyrics);

@@ -76,9 +76,12 @@ import {
 } from '@/components/presets/studio-presets';
 import {
   auditPresetLibrary,
-  comparePreviewAndRender,
   visualFingerprint,
 } from '@/components/presets/preset-regression';
+import {
+  assertStudioRenderParity,
+  createStudioRenderModel,
+} from '@/components/studio-render-model';
 import {
   commitPresetVisualState,
   createPresetApplyTransaction,
@@ -520,21 +523,21 @@ export default function CreatorStudio() {
   const [audioBinary, setAudioBinary] = useState<Blob | null>(null);
   const mediaCache = useRef<Map<string, Blob>>(new Map());
   const [mediaClips, setMediaClips] = useState<MediaClip[]>([]);
-  const effectConfig = useMemo(() => makeEffectConfig(effects), [effects]);
-  const visualSnapshot = useMemo<StudioPresetConfig>(
-    () => ({
-      template,
-      wave,
-      waveAppearance: structuredClone(waveAppearance),
-      motion,
-      aspect,
-      lyrics,
-      effects: [...effects],
-      layout: structuredClone(layout),
-      textStyles: structuredClone(textStyles),
-      subtitleStyle: structuredClone(subtitleStyle),
-      background: structuredClone(background),
-    }),
+  const studioModel = useMemo(
+    () =>
+      createStudioRenderModel({
+        template,
+        wave,
+        waveAppearance,
+        motion,
+        aspect,
+        lyrics,
+        effects,
+        layout,
+        textStyles,
+        subtitleStyle,
+        background,
+      }),
     [
       template,
       wave,
@@ -549,10 +552,9 @@ export default function CreatorStudio() {
       background,
     ],
   );
-  const visualHash = useMemo(
-    () => visualFingerprint(visualSnapshot),
-    [visualSnapshot],
-  );
+  const visualSnapshot = studioModel.visual;
+  const effectConfig = studioModel.effects;
+  const visualHash = studioModel.fingerprint;
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
   const timer = useRef<number | undefined>(undefined);
@@ -892,28 +894,8 @@ export default function CreatorStudio() {
     const value = await navigator.clipboard.readText();
     change(value);
   }
-  const assertVisualParity = () => {
-    const renderSnapshot: StudioPresetConfig = {
-      template,
-      wave,
-      waveAppearance: structuredClone(waveAppearance),
-      motion,
-      aspect,
-      lyrics,
-      effects: [...effectConfig.effects],
-      layout: structuredClone(layout),
-      textStyles: structuredClone(textStyles),
-      subtitleStyle: structuredClone(subtitleStyle),
-      background: structuredClone(background),
-    };
-    const report = comparePreviewAndRender(visualSnapshot, renderSnapshot);
-    if (!report.ok) {
-      throw new Error(
-        `Visual sync failed [${report.fingerprint}]: ${report.issues.join(', ')}`,
-      );
-    }
-    return report;
-  };
+  const assertVisualParity = () =>
+    assertStudioRenderParity(visualSnapshot, studioModel.visual);
 
   async function renderVideo(mode: 'cut' | '30' = 'cut') {
     if (!song || rendering) return;
@@ -935,29 +917,30 @@ export default function CreatorStudio() {
         selectedPresetId,
         modified: presetModified,
       });
-      const config = effectConfig;
+      const config = studioModel.effects;
       const startSeconds = trimStart,
         available = Math.max(1, (trimEnd || song.duration || 30) - trimStart),
         previewSeconds = mode === '30' ? Math.min(30, available) : available;
+      const visual = studioModel.visual;
       const blob = await generateVisualizerVideoArt(
         renderSong(song),
-        aspect,
-        wave,
-        template,
+        visual.aspect,
+        visual.wave,
+        visual.template,
         {
-          motion,
-          lyrics,
-          waveAppearance,
-          layout,
+          motion: visual.motion,
+          lyrics: visual.lyrics,
+          waveAppearance: visual.waveAppearance,
+          layout: visual.layout,
           startSeconds,
           previewSeconds,
           onProgress: setProgress,
           effects: config,
           karaokeTimeline,
           mediaClips,
-          overlayTextStyles: textStyles,
-          subtitleStyle,
-          background,
+          overlayTextStyles: visual.textStyles,
+          subtitleStyle: visual.subtitleStyle,
+          background: visual.background,
         },
       );
       if (resultUrl) URL.revokeObjectURL(resultUrl);
@@ -1491,13 +1474,13 @@ export default function CreatorStudio() {
             <div className="sd-stage sd-live-preview">
               <LivePreview
                 song={renderSong(song)}
-                aspect={aspect}
-                template={template}
-                wave={wave}
-                waveAppearance={waveAppearance}
-                motion={motion}
-                lyrics={lyrics}
-                layout={layout}
+                aspect={studioModel.visual.aspect}
+                template={studioModel.visual.template}
+                wave={studioModel.visual.wave}
+                waveAppearance={studioModel.visual.waveAppearance}
+                motion={studioModel.visual.motion}
+                lyrics={studioModel.visual.lyrics}
+                layout={studioModel.visual.layout}
                 onLayoutChange={rendering ? undefined : (value) => { markPresetField('layout'); changeVisual(() => setLayout(value)); }}
                 start={trimStart}
                 end={trimEnd || song.duration || undefined}
@@ -1527,10 +1510,10 @@ export default function CreatorStudio() {
                 }}
                 karaokeTimeline={karaokeTimeline}
                 mediaClips={mediaClips}
-                overlayTextStyles={textStyles}
-                subtitleStyle={subtitleStyle}
+                overlayTextStyles={studioModel.visual.textStyles}
+                subtitleStyle={studioModel.visual.subtitleStyle}
                 effects={effectConfig}
-                background={background}
+                background={studioModel.visual.background}
                 audioBinary={audioBinary}
                 resultUrl={resultUrl || undefined}
               />
