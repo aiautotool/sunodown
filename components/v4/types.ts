@@ -1,5 +1,7 @@
 export type Song = { id:string|null; title:string; picture:string|null; audio:string; sourceAudio:string; video:string|null; description:string|null; lyrics:string|null; style:string|null; tags:string|null; duration:number|null; creator:string|null };
 export type VideoAspect = '16:9'|'9:16'|'1:1'|'4:5'|'4:3';
+export type WaveAppearance = { color:string; color2:string; glow:number; opacity:number; density:number; smoothing:number };
+export const DEFAULT_WAVE_APPEARANCE:WaveAppearance={color:'#8b5cf6',color2:'#22d3ee',glow:55,opacity:92,density:72,smoothing:55};
 export type WaveStyle = 'bars'|'mirror'|'line'|'dots'|'pulse'|'thin-bars'|'blocks'|'needles'|'mountain'|'ribbon'|'spark'|'center-line'|'equalizer'|'circle'|'circle-bars'|'orbit-dots'|'radial-spectrum'|'neon-ring'|'arc-burst'|'spiral'|'radial-wave'|'pinwheel'|'mandala'|'spectrum-rings'|'wave-bars'|'stacked-spectrum';
 export type VisualTemplate = 'cover-motion'|'vinyl'|'glass-card'|'lyrics-focus'|'editorial'|'spotlight'|'gold-record';
 export type MotionIntensity = 'low'|'medium'|'high';
