@@ -75,6 +75,7 @@ export type SafeRenderOptions = {
   previewSeconds?: number;
   onProgress?: (value: number) => void;
   productionMastering?: ProductionMasteringConfig;
+  onAudioFallback?: (reason: string) => void;
 };
 
 type AudioTrim = { start: number; end: number; duration: number };
@@ -1286,32 +1287,73 @@ export async function generateVisualizerVideoSafe(
     audioBlob: Blob = originalAudio;
   options.onProgress?.(6);
   const mastering = options.productionMastering;
+  let masteringFallback = false;
   if (mobile) await yieldToBrowser();
-  if (mastering?.profile && mastering.profile !== 'original') {
-    processedWav = (await masterAudio(originalAudio, mastering.profile, mastering.advanced)).blob;
-    if (mobile) await yieldToBrowser();
-    if (mastering.spatial?.enabled) {
-      processedWav = await render5DAudio(processedWav, mastering.spatial.amount/100, mastering.spatial.mode);
+  try {
+    if (mastering?.profile && mastering.profile !== 'original') {
+      processedWav = (await masterAudio(originalAudio, mastering.profile, mastering.advanced)).blob;
+      if (mobile) await yieldToBrowser();
+      if (mastering.spatial?.enabled) {
+        processedWav = await render5DAudio(processedWav, mastering.spatial.amount/100, mastering.spatial.mode);
+        if (mobile) await yieldToBrowser();
+      }
+    } else if (!mastering) {
+      processedWav = await renderTikTokLikeAudio(originalAudio);
+    }
+    options.onProgress?.(8);
+    if (processedWav) {
+      try {
+        audioBlob = await convertProcessedAudio(processedWav, 'm4a');
+      } catch (m4aError) {
+        try {
+          audioBlob = await convertProcessedAudio(processedWav, 'mp3');
+        } catch (mp3Error) {
+          if (!mobile) throw mp3Error;
+          masteringFallback = true;
+          processedWav = null;
+          audioBlob = originalAudio;
+          console.warn('[SunoDown render] mobile mastered audio encode failed, using original audio', m4aError, mp3Error);
+        }
+      }
       if (mobile) await yieldToBrowser();
     }
-  } else if (!mastering) {
-    processedWav = await renderTikTokLikeAudio(originalAudio);
+  } catch (processingError) {
+    if (!mobile) throw processingError;
+    masteringFallback = true;
+    processedWav = null;
+    audioBlob = originalAudio;
+    options.onProgress?.(8);
+    console.warn('[SunoDown render] mobile audio mastering/decode failed, using original audio', processingError);
+    await yieldToBrowser();
   }
-  options.onProgress?.(8);
-  if (processedWav) {
-    try { audioBlob = await convertProcessedAudio(processedWav, 'm4a'); }
-    catch { audioBlob = await convertProcessedAudio(processedWav, 'mp3'); }
-    if (mobile) await yieldToBrowser();
-  }
-  const input = new Input({
+  let input = new Input({
       source: new BlobSource(audioBlob),
       formats: ALL_FORMATS,
-    }),
+    });
+  let track = await input.getPrimaryAudioTrack();
+  if (!track && mobile && audioBlob !== originalAudio) {
+    masteringFallback = true;
+    processedWav = null;
+    audioBlob = originalAudio;
+    input = new Input({ source: new BlobSource(originalAudio), formats: ALL_FORMATS });
     track = await input.getPrimaryAudioTrack();
+  }
   if (!track) throw new Error('Không có luồng âm thanh hợp lệ.');
-  const codec = await track.getCodec(),
+  let codec = await track.getCodec(),
     decoderConfig = await track.getDecoderConfig(),
     sourceDuration = await input.computeDuration();
+  if ((!codec || !decoderConfig || !Number.isFinite(sourceDuration) || sourceDuration <= 0) && mobile && audioBlob !== originalAudio) {
+    masteringFallback = true;
+    processedWav = null;
+    audioBlob = originalAudio;
+    input = new Input({ source: new BlobSource(originalAudio), formats: ALL_FORMATS });
+    track = await input.getPrimaryAudioTrack();
+    if (track) {
+      codec = await track.getCodec();
+      decoderConfig = await track.getDecoderConfig();
+      sourceDuration = await input.computeDuration();
+    }
+  }
   if (
     !codec ||
     !decoderConfig ||
@@ -1319,6 +1361,7 @@ export async function generateVisualizerVideoSafe(
     sourceDuration <= 0
   )
     throw new Error('Không đọc được âm thanh.');
+  if (masteringFallback) options.onAudioFallback?.('mobile_decode_or_encode');
   const trim = storedAudioTrim(sourceDuration),
     trimStart = trim?.start || 0,
     trimEnd = trim?.end || sourceDuration,
