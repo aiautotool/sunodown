@@ -66,13 +66,13 @@ export function StyleStudio({
   return (
     <section className="sd-style-studio">
       <p className="sd-style-intro">
-        Preset thay đổi toàn bộ video. Chọn một phong cách trước, sau đó tinh chỉnh sâu nếu cần.
+        Kiểu hình ảnh chỉ thay cấu trúc scene chính. Sóng nhạc, lời bài hát, nền và các chỉnh khác của bạn vẫn được giữ nguyên.
       </p>
 
       <div className="sd-style-heading">
         <div>
-          <b>Chọn phong cách</b>
-          <span>Preview đổi ngay khi chọn</span>
+          <b>Chọn kiểu hình ảnh</b>
+          <span>Scene đổi ngay trên preview</span>
         </div>
       </div>
 
