@@ -83,6 +83,7 @@ export function LivePreview(props: Props) {
   const masterComp = useRef<DynamicsCompressorNode | null>(null);
   const masterGain = useRef<GainNode | null>(null);
   const spectrumAnalyser = useRef<AnalyserNode | null>(null);
+  const spectrumBins = useRef<Uint8Array | null>(null);
   const realtimeBands = useRef({ bass: .04, lowMid: .04, vocal: .04, high: .04 });
   const video = useRef<HTMLVideoElement>(null);
   const current = useRef(props);
@@ -477,19 +478,28 @@ export function LivePreview(props: Props) {
     const context = canvas.current?.getContext('2d');
     if (!context) return;
     const paint = createLiveFramePainter(bitmap);
+    const mobilePreview =
+      typeof navigator !== 'undefined' &&
+      (/iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent) ||
+        (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent)));
+    const targetFps = mobilePreview ? 24 : 30;
+    const maxSurface = mobilePreview ? 520 : 640;
     let frame = 0;
     let previous = 0;
 
     const draw = (now: number) => {
       frame = requestAnimationFrame(draw);
-      if (now - previous < 1000 / 30) return;
+      if (now - previous < 1000 / targetFps) return;
       previous = now;
       if (document.hidden) return;
 
       const p = current.current;
       const player = audio.current;
       const analyser=spectrumAnalyser.current;
-      if(analyser&&player&&!player.paused){const bins=new Uint8Array(analyser.frequencyBinCount);analyser.getByteFrequencyData(bins);const hz=(spatialContext.current?.sampleRate||48000)/analyser.fftSize;
+      if(analyser&&player&&!player.paused){
+        let bins=spectrumBins.current;
+        if(!bins||bins.length!==analyser.frequencyBinCount){bins=new Uint8Array(analyser.frequencyBinCount);spectrumBins.current=bins;}
+        analyser.getByteFrequencyData(bins);const hz=(spatialContext.current?.sampleRate||48000)/analyser.fftSize;
         const avg=(lo:number,hi:number)=>{let s=0,n=0;for(let k=Math.max(1,Math.floor(lo/hz));k<Math.min(bins.length,Math.ceil(hi/hz));k++){s+=bins[k];n++}return n?s/n/255:0};
         const q={bass:avg(35,180),lowMid:avg(180,800),vocal:avg(800,4000),high:avg(4000,12000)},o=realtimeBands.current;
         const env=(a:number,b:number,attack:number,release:number)=>a+(b-a)*(b>a?attack:release);
@@ -512,7 +522,7 @@ export function LivePreview(props: Props) {
       }
       const size = VIDEO_SIZES[p.aspect];
       const surface = context.canvas;
-      const scale = Math.min(1, 640 / Math.max(size.width, size.height));
+      const scale = Math.min(1, maxSurface / Math.max(size.width, size.height));
       const width = Math.round(size.width * scale),
         height = Math.round(size.height * scale);
       if (surface.width !== width || surface.height !== height) {
@@ -707,6 +717,11 @@ export function LivePreview(props: Props) {
               ? 'Kết quả thay trực tiếp khung preview.'
               : 'Hình ảnh, lyrics và nhạc chạy cùng một timeline.'}
           </p>
+          {!props.resultUrl && (
+            <span className="sd-preview-performance">
+              Preview tự cân bằng chất lượng để giữ chuyển động mượt trên mobile
+            </span>
+          )}
         </div>
         {!props.resultUrl && (
           <button
