@@ -11,10 +11,8 @@ export type ProductionMasteringConfig = {
 export type ProductionExportConfig = {
   aspect: VideoAspect;
   quality: SmartRenderQualityMode;
-  resolution: 'auto' | '720p' | '1080p';
-  durationMode: 'full' | '30s' | 'custom';
-  audioProfile: ProductionMasterProfile;
-};
+   durationMode: 'full' | '30s' | 'custom';
+ };
 export type ProductionPresetConfig = {
   mastering: ProductionMasteringConfig;
   export: ProductionExportConfig;
@@ -27,15 +25,12 @@ export const DEFAULT_PRODUCTION_MASTERING: ProductionMasteringConfig = {
 export const DEFAULT_PRODUCTION_EXPORT: ProductionExportConfig = {
   aspect: '9:16',
   quality: 'auto',
-  resolution: 'auto',
-  durationMode: 'full',
-  audioProfile: 'original',
-};
+   durationMode: 'full',
+ };
 
 const MASTERING = new Set<ProductionMasterProfile>(['original','clean','tiktok-loud','punchy','max-loud']);
 const QUALITY = new Set<SmartRenderQualityMode>(['auto','data-saver','balanced','high']);
-const RESOLUTION = new Set<ProductionExportConfig['resolution']>(['auto','720p','1080p']);
-const DURATION = new Set<ProductionExportConfig['durationMode']>(['full','30s','custom']);
+ const DURATION = new Set<ProductionExportConfig['durationMode']>(['full','30s','custom']);
 const ASPECT = new Set<VideoAspect>(['16:9','9:16','1:1','4:5','4:3']);
 
 export function normalizeProductionPreset(
@@ -61,9 +56,7 @@ export function normalizeProductionPreset(
     export: {
       aspect: ASPECT.has(exp.aspect as VideoAspect) ? exp.aspect as VideoAspect : fallbackAspect,
       quality: QUALITY.has(exp.quality as SmartRenderQualityMode) ? exp.quality as SmartRenderQualityMode : 'auto',
-      resolution: RESOLUTION.has(exp.resolution as ProductionExportConfig['resolution']) ? exp.resolution as ProductionExportConfig['resolution'] : 'auto',
       durationMode: DURATION.has(exp.durationMode as ProductionExportConfig['durationMode']) ? exp.durationMode as ProductionExportConfig['durationMode'] : 'full',
-      audioProfile: MASTERING.has(exp.audioProfile as ProductionMasterProfile) ? exp.audioProfile as ProductionMasterProfile : profile,
     },
   };
 }
