@@ -61,6 +61,13 @@ type Props = {
   autoPlay?: boolean;
   fullPlayback?: boolean;
   onTimeChange?: (time: number) => void;
+  onPreviewPlay?: () => void;
+  onPerformance?: (sample: {
+    fps: number;
+    droppedFrames: number;
+    targetFps: number;
+    deviceClass: 'mobile' | 'desktop';
+  }) => void;
 };
 
 function fmt(value: number) {
@@ -486,12 +493,28 @@ export function LivePreview(props: Props) {
     const maxSurface = mobilePreview ? 520 : 640;
     let frame = 0;
     let previous = 0;
+    let perfStarted = performance.now();
+    let perfFrames = 0;
 
     const draw = (now: number) => {
       frame = requestAnimationFrame(draw);
       if (now - previous < 1000 / targetFps) return;
       previous = now;
       if (document.hidden) return;
+      perfFrames += 1;
+      if (now - perfStarted >= 5000) {
+        const elapsed = Math.max(1, now - perfStarted);
+        const fps = (perfFrames * 1000) / elapsed;
+        const expected = (elapsed / 1000) * targetFps;
+        current.current.onPerformance?.({
+          fps: Math.round(fps * 10) / 10,
+          droppedFrames: Math.max(0, Math.round(expected - perfFrames)),
+          targetFps,
+          deviceClass: mobilePreview ? 'mobile' : 'desktop',
+        });
+        perfStarted = now;
+        perfFrames = 0;
+      }
 
       const p = current.current;
       const player = audio.current;
@@ -685,6 +708,7 @@ export function LivePreview(props: Props) {
       try {
         await player.play();
         setPlaying(true);
+        props.onPreviewPlay?.();
       } catch {
         setStatus('Trình duyệt chặn phát tự động. Hãy bấm Play lại.');
       }
