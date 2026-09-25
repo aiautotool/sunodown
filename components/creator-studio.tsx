@@ -555,6 +555,8 @@ export default function CreatorStudio() {
   const [favoritePresetIds, setFavoritePresetIds] = useState<string[]>([]);
   const [presetUndo, setPresetUndo] = useState<{
     config: StudioPresetConfig;
+    mastering: ProductionMasteringConfig;
+    exportConfig: ProductionExportConfig;
     selectedId: string | null;
     modified: boolean;
     overrideFields: Array<keyof StudioPresetConfig>;
@@ -652,6 +654,8 @@ export default function CreatorStudio() {
     const current = currentPresetConfig();
     setPresetUndo({
       config: current,
+      mastering: structuredClone(masteringConfig),
+      exportConfig: structuredClone(exportConfig),
       selectedId: selectedPresetId,
       modified: presetModified,
       overrideFields: [...presetOverrideFields],
@@ -738,6 +742,10 @@ export default function CreatorStudio() {
       setBackground,
     }, presetCommit?.revision || 0);
     setPresetCommit(commit);
+    setMasteringConfig(structuredClone(presetUndo.mastering));
+    setExportConfig(structuredClone(presetUndo.exportConfig));
+    window.dispatchEvent(new CustomEvent('suno-master-preview',{detail:{profile:presetUndo.mastering.profile}}));
+    window.dispatchEvent(new CustomEvent('suno-spatial-change',{detail:presetUndo.mastering.spatial || DEFAULT_PRODUCTION_MASTERING.spatial}));
     setSelectedPresetId(presetUndo.selectedId);
     setPresetModified(presetUndo.modified);
     setPresetOverrideFields([...presetUndo.overrideFields]);
@@ -1139,8 +1147,7 @@ export default function CreatorStudio() {
         visual_fingerprint: parity.fingerprint,
         mastering_profile: masteringConfig.profile,
         export_quality: exportConfig.quality,
-        export_resolution: exportConfig.resolution,
-        export_duration_mode: mode === '30' ? '30s' : exportConfig.durationMode,
+         export_duration_mode: mode === '30' ? '30s' : exportConfig.durationMode,
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Không thể tạo video.';
