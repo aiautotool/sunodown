@@ -8,6 +8,8 @@ import {
   type VideoAspect,
   type VisualTemplate,
   type WaveStyle,
+  type WaveAppearance,
+  DEFAULT_WAVE_APPEARANCE,
 } from '@/components/v4/types';
 import { VIDEO_EFFECTS, type VideoEffect } from '@/components/v8/video-effects';
 import {
@@ -20,6 +22,7 @@ export type StudioPresetCategory = 'Social' | 'Lyrics' | 'Cinematic' | 'Album' |
 export type StudioPresetConfig = {
   template: VisualTemplate;
   wave: WaveStyle;
+  waveAppearance?: WaveAppearance;
   motion: MotionIntensity;
   aspect: VideoAspect;
   lyrics: LyricsMode;
@@ -100,6 +103,7 @@ export function normalizePresetConfig(value:Partial<StudioPresetConfig>|null|und
   return {
     template:VALID_TEMPLATES.has(value.template as VisualTemplate)?value.template as VisualTemplate:fallback.template,
     wave:VALID_WAVES.has(value.wave as WaveStyle)?value.wave as WaveStyle:fallback.wave,
+    waveAppearance:{...DEFAULT_WAVE_APPEARANCE,...(value.waveAppearance||fallback.waveAppearance||{})},
     motion:VALID_MOTION.has(value.motion as MotionIntensity)?value.motion as MotionIntensity:fallback.motion,
     aspect:VALID_ASPECTS.has(value.aspect as VideoAspect)?value.aspect as VideoAspect:fallback.aspect,
     lyrics:VALID_LYRICS.has(value.lyrics as LyricsMode)?value.lyrics as LyricsMode:fallback.lyrics,
