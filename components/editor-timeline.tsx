@@ -130,22 +130,32 @@ export function EditorTimeline(props: Props) {
         if (!blob) return;
         const Ctx =
           window.AudioContext ||
-          (window as typeof window & { webkitAudioContext?: typeof AudioContext })
-            .webkitAudioContext;
+          (
+            window as typeof window & {
+              webkitAudioContext?: typeof AudioContext;
+            }
+          ).webkitAudioContext;
         if (!Ctx) return;
         const context = new Ctx();
         try {
-          const decoded = await context.decodeAudioData(await blob.arrayBuffer());
+          const decoded = await context.decodeAudioData(
+            await blob.arrayBuffer(),
+          );
           if (cancelled) return;
           const left = decoded.getChannelData(0);
-          const right = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : left;
+          const right =
+            decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : left;
           const bins = 320;
           const block = Math.max(1, Math.floor(left.length / bins));
           const peaks = Array.from({ length: bins }, (_, index) => {
             const start = index * block;
             const end = Math.min(left.length, start + block);
             let peak = 0;
-            for (let i = start; i < end; i += Math.max(1, Math.floor(block / 90))) {
+            for (
+              let i = start;
+              i < end;
+              i += Math.max(1, Math.floor(block / 90))
+            ) {
               peak = Math.max(peak, Math.abs((left[i] + right[i]) * 0.5));
             }
             return peak;
@@ -170,7 +180,11 @@ export function EditorTimeline(props: Props) {
     const start = (event: TouchEvent) => {
       if (event.touches.length === 1) {
         const touch = event.touches[0];
-        touchTap.current = { x: touch.clientX, y: touch.clientY, time: performance.now() };
+        touchTap.current = {
+          x: touch.clientX,
+          y: touch.clientY,
+          time: performance.now(),
+        };
         pinchActive.current = false;
         return;
       }
@@ -186,7 +200,12 @@ export function EditorTimeline(props: Props) {
     const move = (event: TouchEvent) => {
       if (event.touches.length === 1 && touchTap.current) {
         const touch = event.touches[0];
-        if (Math.hypot(touch.clientX - touchTap.current.x, touch.clientY - touchTap.current.y) > 8) {
+        if (
+          Math.hypot(
+            touch.clientX - touchTap.current.x,
+            touch.clientY - touchTap.current.y,
+          ) > 8
+        ) {
           touchTap.current = null;
         }
         return;
@@ -269,7 +288,8 @@ export function EditorTimeline(props: Props) {
   };
 
   const scrub = (event: React.PointerEvent) => {
-    if (isTimelineControl(event.target) || event.pointerType === 'touch') return;
+    if (isTimelineControl(event.target) || event.pointerType === 'touch')
+      return;
     seekAt(event.clientX);
     const pointerId = event.pointerId;
     event.currentTarget.setPointerCapture?.(pointerId);
@@ -291,7 +311,8 @@ export function EditorTimeline(props: Props) {
   };
 
   const touchSeek = (event: React.TouchEvent) => {
-    if (event.touches.length || pinchActive.current || !touchTap.current) return;
+    if (event.touches.length || pinchActive.current || !touchTap.current)
+      return;
     if (isTimelineControl(event.target)) {
       touchTap.current = null;
       return;
@@ -426,12 +447,25 @@ export function EditorTimeline(props: Props) {
   const toggleTrack = (track: typeof expandedTrack) =>
     setExpandedTrack((current) => (current === track ? 'audio' : track));
 
-  const selectedSubtitleIndex =
-    selected?.startsWith('sub-') ? Number(selected.slice(4)) : -1;
+  const selectedSubtitleIndex = selected?.startsWith('sub-')
+    ? Number(selected.slice(4))
+    : -1;
 
-  const shiftSubtitles = (index: number, requestedDelta: number, following: boolean) => {
-    if (!Number.isInteger(index) || index < 0 || index >= props.subtitles.length) return;
-    const affected = props.subtitles.slice(index, following ? undefined : index + 1);
+  const shiftSubtitles = (
+    index: number,
+    requestedDelta: number,
+    following: boolean,
+  ) => {
+    if (
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= props.subtitles.length
+    )
+      return;
+    const affected = props.subtitles.slice(
+      index,
+      following ? undefined : index + 1,
+    );
     if (!affected.length) return;
     const minStart = Math.min(...affected.map((line) => line.start));
     const maxEnd = Math.max(...affected.map((line) => line.end));
@@ -441,7 +475,8 @@ export function EditorTimeline(props: Props) {
     props.onEditStart?.();
     props.onSubtitlesChange(
       props.subtitles.map((line, lineIndex) => {
-        if (lineIndex < index || (!following && lineIndex !== index)) return line;
+        if (lineIndex < index || (!following && lineIndex !== index))
+          return line;
         return {
           ...line,
           start: line.start + delta,
@@ -462,14 +497,20 @@ export function EditorTimeline(props: Props) {
       <header>
         <div className="sd-timeline-title">
           <b>Creator Timeline</b>
-          <span>{stamp(props.playhead)} / {stamp(props.duration)}</span>
+          <span>
+            {stamp(props.playhead)} / {stamp(props.duration)}
+          </span>
         </div>
         <span className="sd-timeline-help">
           Kéo playhead/clip/subtitle · snap tự động · pinch để zoom
         </span>
         <div className="sd-timeline-history">
-          <button disabled={!undoStack.length} onClick={undo} title="Hoàn tác"><Undo2 /></button>
-          <button disabled={!redoStack.length} onClick={redo} title="Làm lại"><Redo2 /></button>
+          <button disabled={!undoStack.length} onClick={undo} title="Hoàn tác">
+            <Undo2 />
+          </button>
+          <button disabled={!redoStack.length} onClick={redo} title="Làm lại">
+            <Redo2 />
+          </button>
         </div>
         <label className="sd-add-media">
           <ImagePlus /> Thêm ảnh/video
@@ -510,7 +551,7 @@ export function EditorTimeline(props: Props) {
         </div>
       </header>
 
-      {(props.subtitleSyncStatus && props.subtitleSyncStatus !== 'idle') && (
+      {props.subtitleSyncStatus && props.subtitleSyncStatus !== 'idle' && (
         <div
           style={{
             display: 'flex',
@@ -536,7 +577,7 @@ export function EditorTimeline(props: Props) {
                 ? 'Subtitle đã sync'
                 : 'Đang dùng timing dự phòng'}
           </b>
-          <span style={{ fontSize: 11, opacity: .62 }}>
+          <span style={{ fontSize: 11, opacity: 0.62 }}>
             {props.subtitleSyncMessage}
           </span>
         </div>
@@ -557,16 +598,38 @@ export function EditorTimeline(props: Props) {
           }}
         >
           <b style={{ fontSize: 11, marginRight: 4 }}>Chỉnh timing:</b>
+          <button
+            onClick={() =>
+              shiftSubtitles(
+                selectedSubtitleIndex,
+                props.playhead - props.subtitles[selectedSubtitleIndex].start,
+                false,
+              )
+            }
+            style={{ padding: '5px 8px', borderRadius: 8, fontSize: 11 }}
+          >
+            Đặt đầu câu tại playhead
+          </button>
           {[-0.5, -0.1, 0.1, 0.5].map((delta) => (
             <button
               key={delta}
-              onClick={() => shiftSubtitles(selectedSubtitleIndex, delta, false)}
+              onClick={() =>
+                shiftSubtitles(selectedSubtitleIndex, delta, false)
+              }
               style={{ padding: '5px 8px', borderRadius: 8, fontSize: 11 }}
             >
-              {delta > 0 ? '+' : ''}{delta.toFixed(1)}s
+              {delta > 0 ? '+' : ''}
+              {delta.toFixed(1)}s
             </button>
           ))}
-          <span style={{ width: 1, height: 20, background: 'rgba(148,163,184,.18)', margin: '0 2px' }} />
+          <span
+            style={{
+              width: 1,
+              height: 20,
+              background: 'rgba(148,163,184,.18)',
+              margin: '0 2px',
+            }}
+          />
           <button
             onClick={() => shiftSubtitles(selectedSubtitleIndex, -0.1, true)}
             style={{ padding: '5px 8px', borderRadius: 8, fontSize: 11 }}
@@ -609,25 +672,51 @@ export function EditorTimeline(props: Props) {
             ))}
           </div>
 
-          <div className={`sd-track sd-audio-track ${expandedTrack === 'audio' ? 'expanded' : ''}`}>
-            <button className="sd-track-label" onClick={(e) => { e.stopPropagation(); toggleTrack('audio'); }}>
+          <div
+            className={`sd-track sd-audio-track ${expandedTrack === 'audio' ? 'expanded' : ''}`}
+          >
+            <button
+              className="sd-track-label"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleTrack('audio');
+              }}
+            >
               <Waves /> Audio <ChevronDown />
             </button>
             <div className="sd-waveform-clip" style={{ left: 0, width }}>
-              <div className="sd-waveform-bars" aria-label="Waveform âm thanh thật">
+              <div
+                className="sd-waveform-bars"
+                aria-label="Waveform âm thanh thật"
+              >
                 {waveform.length
                   ? waveform.map((peak, index) => (
-                      <i key={index} style={{ height: `${Math.max(8, peak * 92)}%` }} />
+                      <i
+                        key={index}
+                        style={{ height: `${Math.max(8, peak * 92)}%` }}
+                      />
                     ))
                   : Array.from({ length: 80 }, (_, index) => (
-                      <i key={index} className="loading" style={{ height: `${22 + ((index * 17) % 52)}%` }} />
+                      <i
+                        key={index}
+                        className="loading"
+                        style={{ height: `${22 + ((index * 17) % 52)}%` }}
+                      />
                     ))}
               </div>
             </div>
           </div>
 
-          <div className={`sd-track sd-video-track ${expandedTrack === 'visual' ? 'expanded' : ''}`}>
-            <button className="sd-track-label" onClick={(e) => { e.stopPropagation(); toggleTrack('visual'); }}>
+          <div
+            className={`sd-track sd-video-track ${expandedTrack === 'visual' ? 'expanded' : ''}`}
+          >
+            <button
+              className="sd-track-label"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleTrack('visual');
+              }}
+            >
               <Video /> Visual <ChevronDown />
             </button>
             {!props.clips.length && (
@@ -649,24 +738,48 @@ export function EditorTimeline(props: Props) {
                   drag(e, 'clip', index, 'move');
                 }}
               >
-                <button className="sd-edge left" onPointerDown={(e) => drag(e, 'clip', index, 'start')} />
-                <span style={clip.type === 'image' ? { backgroundImage: `url(${clip.url})` } : undefined}>
+                <button
+                  className="sd-edge left"
+                  onPointerDown={(e) => drag(e, 'clip', index, 'start')}
+                />
+                <span
+                  style={
+                    clip.type === 'image'
+                      ? { backgroundImage: `url(${clip.url})` }
+                      : undefined
+                  }
+                >
                   {clip.type === 'video' && <Video />}
                 </span>
                 <b>{clip.name}</b>
-                <button className="sd-edge right" onPointerDown={(e) => drag(e, 'clip', index, 'end')} />
+                <button
+                  className="sd-edge right"
+                  onPointerDown={(e) => drag(e, 'clip', index, 'end')}
+                />
                 {selected === clip.id && (
                   <label className="sd-replace">
                     Thay thế
-                    <input type="file" accept="image/*,video/*" onChange={(e) => addMedia(e.target.files, clip.id)} />
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={(e) => addMedia(e.target.files, clip.id)}
+                    />
                   </label>
                 )}
               </div>
             ))}
           </div>
 
-          <div className={`sd-track sd-subtitle-track ${expandedTrack === 'subtitle' ? 'expanded' : ''}`}>
-            <button className="sd-track-label" onClick={(e) => { e.stopPropagation(); toggleTrack('subtitle'); }}>
+          <div
+            className={`sd-track sd-subtitle-track ${expandedTrack === 'subtitle' ? 'expanded' : ''}`}
+          >
+            <button
+              className="sd-track-label"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleTrack('subtitle');
+              }}
+            >
               CC Subtitle <ChevronDown />
             </button>
             {props.subtitles.map((line, index) => (
@@ -683,18 +796,35 @@ export function EditorTimeline(props: Props) {
                   drag(e, 'subtitle', index, 'move');
                 }}
               >
-                <button className="sd-edge left" onPointerDown={(e) => drag(e, 'subtitle', index, 'start')} />
+                <button
+                  className="sd-edge left"
+                  onPointerDown={(e) => drag(e, 'subtitle', index, 'start')}
+                />
                 <span>{line.text}</span>
-                <button className="sd-edge right" onPointerDown={(e) => drag(e, 'subtitle', index, 'end')} />
+                <button
+                  className="sd-edge right"
+                  onPointerDown={(e) => drag(e, 'subtitle', index, 'end')}
+                />
               </div>
             ))}
           </div>
 
-          <div className={`sd-track sd-effects-track ${expandedTrack === 'effects' ? 'expanded' : ''}`}>
-            <button className="sd-track-label" onClick={(e) => { e.stopPropagation(); toggleTrack('effects'); }}>
+          <div
+            className={`sd-track sd-effects-track ${expandedTrack === 'effects' ? 'expanded' : ''}`}
+          >
+            <button
+              className="sd-track-label"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleTrack('effects');
+              }}
+            >
               <Sparkles /> Effects <ChevronDown />
             </button>
-            {(props.effectLabels?.length ? props.effectLabels : ['Không có effect']).map((effect, index) => (
+            {(props.effectLabels?.length
+              ? props.effectLabels
+              : ['Không có effect']
+            ).map((effect, index) => (
               <div
                 key={`${effect}-${index}`}
                 className="sd-timeline-effect"

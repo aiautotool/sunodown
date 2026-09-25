@@ -1008,10 +1008,16 @@ export default function CreatorStudio() {
           })
           .catch((syncError) => {
             if (karaokeSyncRun.current !== syncRun) return;
+            const reason = syncError instanceof Error
+              ? syncError.message
+              : 'Lỗi không xác định';
+            console.error('[karaoke-auto-sync]', syncError);
             setKaraokeSyncStatus('fallback');
-            setKaraokeSyncMessage('Không chạy được căn lời AI; đang dùng timing ước lượng.');
+            setKaraokeSyncMessage(
+              `Không chạy được căn lời AI (${reason}); đang dùng timing ước lượng.`,
+            );
             track('karaoke_auto_sync_fallback', {
-              reason: syncError instanceof Error ? syncError.message.slice(0, 120) : 'unknown',
+              reason: reason.slice(0, 120),
             });
           });
       } else if (hydrated.lyrics) {

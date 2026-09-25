@@ -64,8 +64,11 @@ function transcribe(
   onStage?: SyncOptions['onStage'],
 ) {
   return new Promise<RoughWord[]>((resolve, reject) => {
+    // vinext currently emits browser worker assets as file:///_next/... URLs.
+    // Passing only the generated pathname preserves Vite's worker compilation
+    // while letting the browser resolve the asset against the active HTTP origin.
     const worker = new Worker(
-      new URL('../workers/karaoke-whisper.worker.ts', import.meta.url),
+      new URL('../workers/karaoke-whisper.worker.ts', import.meta.url).pathname,
       { type: 'module' },
     );
 
