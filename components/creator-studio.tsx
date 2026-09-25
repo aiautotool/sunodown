@@ -39,7 +39,6 @@ import {
 } from '@/components/v8/background';
 import {
   WAVE_STYLES,
-  VISUAL_TEMPLATES,
   type WaveStyle,
   type WaveAppearance,
   DEFAULT_WAVE_APPEARANCE,
@@ -47,7 +46,6 @@ import {
   type VideoAspect,
   type LyricsMode,
   type MotionIntensity,
-  MOTION_LEVELS,
 } from '@/components/v4/types';
 import {
   DEFAULT_OVERLAY_LAYOUT,
