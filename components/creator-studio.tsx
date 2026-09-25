@@ -41,6 +41,8 @@ import {
   WAVE_STYLES,
   VISUAL_TEMPLATES,
   type WaveStyle,
+  type WaveAppearance,
+  DEFAULT_WAVE_APPEARANCE,
   type VisualTemplate,
   type VideoAspect,
   type LyricsMode,
@@ -145,6 +147,8 @@ function ToolControls(p: {
   setPanel: (v: string) => void;
   wave: WaveStyle;
   setWave: (v: WaveStyle) => void;
+  waveAppearance: WaveAppearance;
+  setWaveAppearance: (v: WaveAppearance) => void;
   template: VisualTemplate;
   setTemplate: (v: VisualTemplate) => void;
   aspect: VideoAspect;
@@ -292,33 +296,36 @@ function ToolControls(p: {
                   Chọn kiểu sóng rồi kéo trực tiếp vùng sóng trên preview.
                 </p>
               )}
-              {id === 'wave' &&
-                WAVE_STYLES.map((x) => (
-                  <button
-                    className={p.wave === x.id ? 'active' : ''}
-                    onClick={() => p.setWave(x.id)}
-                    key={x.id}
-                  >
-                    {x.label}
-                  </button>
-                ))}
               {id === 'wave' && (
-                <label className="sd-scale">
-                  Kích thước sóng
-                  <input
-                    type="range"
-                    min="50"
-                    max="180"
-                    value={p.layout.wave.scale}
-                    onChange={(e) =>
-                      p.setLayout({
-                        ...p.layout,
-                        wave: { ...p.layout.wave, scale: +e.target.value },
-                      })
-                    }
-                  />
-                  <span>{p.layout.wave.scale}%</span>
-                </label>
+                <div className="sd-wave-studio">
+                  <div className="sd-wave-style-grid">
+                    {WAVE_STYLES.map((x) => (
+                      <button
+                        className={p.wave === x.id ? 'active' : ''}
+                        onClick={() => p.setWave(x.id)}
+                        key={x.id}
+                        title={x.label}
+                      >
+                        <i className={'sd-wave-icon wave-'+x.id} />
+                        <span>{x.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="sd-wave-look">
+                    <div className="sd-wave-colors">
+                      <label>Màu chính<input type="color" value={p.waveAppearance.color} onChange={e=>p.setWaveAppearance({...p.waveAppearance,color:e.target.value})}/></label>
+                      <label>Màu phụ<input type="color" value={p.waveAppearance.color2} onChange={e=>p.setWaveAppearance({...p.waveAppearance,color2:e.target.value})}/></label>
+                    </div>
+                    {[
+                      ['Kích thước',50,180,p.layout.wave.scale,(v:number)=>p.setLayout({...p.layout,wave:{...p.layout.wave,scale:v}}),'%'],
+                      ['Glow',0,100,p.waveAppearance.glow,(v:number)=>p.setWaveAppearance({...p.waveAppearance,glow:v}),'%'],
+                      ['Độ đậm',20,100,p.waveAppearance.opacity,(v:number)=>p.setWaveAppearance({...p.waveAppearance,opacity:v}),'%'],
+                      ['Mật độ',20,100,p.waveAppearance.density,(v:number)=>p.setWaveAppearance({...p.waveAppearance,density:v}),'%'],
+                      ['Mượt',0,100,p.waveAppearance.smoothing,(v:number)=>p.setWaveAppearance({...p.waveAppearance,smoothing:v}),'%'],
+                    ].map(([label,min,max,value,setter,suffix])=><label className="sd-wave-slider" key={String(label)}><span>{String(label)} <b>{Number(value)}{String(suffix)}</b></span><input type="range" min={Number(min)} max={Number(max)} value={Number(value)} onChange={e=>(setter as (v:number)=>void)(+e.target.value)}/></label>)}
+                    <p className="sd-control-hint">Kéo trực tiếp waveform trên preview để đặt vị trí. Preview và video xuất dùng cùng một renderer.</p>
+                  </div>
+                </div>
               )}
               {id === 'lyrics' && (
                 <p className="sd-control-hint">
@@ -481,6 +488,7 @@ export default function CreatorStudio() {
     [savingProject, setSavingProject] = useState(false),
     [savedProject, setSavedProject] = useState(false);
   const [wave, setWave] = useState<WaveStyle>('bars'),
+    [waveAppearance, setWaveAppearance] = useState<WaveAppearance>({...DEFAULT_WAVE_APPEARANCE}),
     [template, setTemplate] = useState<VisualTemplate>('cover-motion'),
     [aspect, setAspect] = useState<VideoAspect>('16:9'),
     [lyrics, setLyrics] = useState<LyricsMode>('focus'),
@@ -526,6 +534,7 @@ export default function CreatorStudio() {
     () => ({
       template,
       wave,
+      waveAppearance: structuredClone(waveAppearance),
       motion,
       aspect,
       lyrics,
@@ -538,6 +547,7 @@ export default function CreatorStudio() {
     [
       template,
       wave,
+      waveAppearance,
       motion,
       aspect,
       lyrics,
@@ -582,6 +592,7 @@ export default function CreatorStudio() {
     }
     setTemplate(next.template);
     setWave(next.wave);
+    setWaveAppearance({...DEFAULT_WAVE_APPEARANCE,...(next.waveAppearance||{})});
     setMotion(next.motion);
     setAspect(next.aspect);
     setLyrics(next.lyrics);
@@ -604,6 +615,7 @@ export default function CreatorStudio() {
     const next = clonePresetConfig(presetUndo.config);
     setTemplate(next.template);
     setWave(next.wave);
+    setWaveAppearance({...DEFAULT_WAVE_APPEARANCE,...(next.waveAppearance||{})});
     setMotion(next.motion);
     setAspect(next.aspect);
     setLyrics(next.lyrics);
@@ -844,6 +856,7 @@ export default function CreatorStudio() {
     const renderSnapshot: StudioPresetConfig = {
       template,
       wave,
+      waveAppearance: structuredClone(waveAppearance),
       motion,
       aspect,
       lyrics,
@@ -886,6 +899,7 @@ export default function CreatorStudio() {
         {
           motion,
           lyrics,
+          waveAppearance,
           layout,
           startSeconds,
           previewSeconds,
@@ -1149,6 +1163,8 @@ export default function CreatorStudio() {
     setPanel,
     wave,
     setWave: (value) => changeVisual(() => setWave(value)),
+    waveAppearance,
+    setWaveAppearance: (value) => changeVisual(() => setWaveAppearance(value)),
     template,
     setTemplate: (value) => changeVisual(() => setTemplate(value)),
     aspect,
@@ -1380,6 +1396,7 @@ export default function CreatorStudio() {
                 aspect={aspect}
                 template={template}
                 wave={wave}
+                waveAppearance={waveAppearance}
                 motion={motion}
                 lyrics={lyrics}
                 layout={layout}
