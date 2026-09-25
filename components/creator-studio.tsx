@@ -56,6 +56,7 @@ import {
   renderTikTokLikeAudio,
 } from '@/app/lib/audio-processing';
 import { buildEstimatedKaraokeTimeline, exportSrt } from '@/app/lib/karaoke';
+import { buildLocalKaraokeTimeline } from '@/app/lib/karaoke-local-sync';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 import { initAnalytics, track } from '@/app/lib/analytics';
 import { DEFAULT_PLAN, canUse } from '@/app/lib/entitlements';
@@ -582,6 +583,8 @@ export default function CreatorStudio() {
     activeColor: '#f0abfc',
   });
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeLine[]>([]);
+  const [karaokeSyncStatus, setKaraokeSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'fallback'>('idle');
+  const [karaokeSyncMessage, setKaraokeSyncMessage] = useState('');
   const [audioBinary, setAudioBinary] = useState<Blob | null>(null);
   const mediaCache = useRef<Map<string, Blob>>(new Map());
   const [mediaClips, setMediaClips] = useState<MediaClip[]>([]);
@@ -629,6 +632,7 @@ export default function CreatorStudio() {
   const firstExportTracked = useRef(false);
   const resolvedAt = useRef<number | null>(null);
   const lastPerfTrack = useRef(0);
+  const karaokeSyncRun = useRef(0);
 
   const currentPresetConfig = (): StudioPresetConfig =>
     structuredClone(visualSnapshot);
@@ -959,8 +963,9 @@ export default function CreatorStudio() {
       setSong(hydrated);
       // One remote load per media URL per session. Everything downstream reuses the binary.
       setAudioBinary(null);
+      let source: Blob | null = null;
       try {
-        let source = mediaCache.current.get(hydrated.audio);
+        source = mediaCache.current.get(hydrated.audio) || null;
         if (!source) {
           const audioResponse = await fetch(hydrated.audio, { cache: 'no-store' });
           if (!audioResponse.ok) throw new Error('Không tải được binary audio.');
@@ -975,11 +980,44 @@ export default function CreatorStudio() {
       setPreviewTime(0);
       setTrimStart(0);
       setTrimEnd(hydrated.duration || 30);
-      setKaraokeTimeline(
-        hydrated.lyrics
-          ? buildEstimatedKaraokeTimeline(hydrated.lyrics, hydrated.duration || 30)
-          : [],
-      );
+      const estimatedTimeline = hydrated.lyrics
+        ? buildEstimatedKaraokeTimeline(hydrated.lyrics, hydrated.duration || 30)
+        : [];
+      setKaraokeTimeline(estimatedTimeline);
+      setKaraokeSyncStatus(hydrated.lyrics ? 'syncing' : 'idle');
+      setKaraokeSyncMessage(hydrated.lyrics ? 'Đang chuẩn bị căn subtitle theo giọng hát…' : '');
+      const syncRun = ++karaokeSyncRun.current;
+      if (source && hydrated.lyrics) {
+        void buildLocalKaraokeTimeline({
+          audio: source,
+          lyrics: hydrated.lyrics,
+          duration: hydrated.duration || 30,
+          language: 'vi',
+          onStage: (_stage, message) => {
+            if (karaokeSyncRun.current !== syncRun) return;
+            setKaraokeSyncStatus('syncing');
+            setKaraokeSyncMessage(message);
+          },
+        })
+          .then((timeline) => {
+            if (karaokeSyncRun.current !== syncRun) return;
+            setKaraokeTimeline(timeline);
+            setKaraokeSyncStatus('synced');
+            setKaraokeSyncMessage('Đã căn subtitle theo timestamp giọng hát.');
+            track('karaoke_auto_sync_succeeded', { lines: timeline.length });
+          })
+          .catch((syncError) => {
+            if (karaokeSyncRun.current !== syncRun) return;
+            setKaraokeSyncStatus('fallback');
+            setKaraokeSyncMessage('Không chạy được căn lời AI; đang dùng timing ước lượng.');
+            track('karaoke_auto_sync_fallback', {
+              reason: syncError instanceof Error ? syncError.message.slice(0, 120) : 'unknown',
+            });
+          });
+      } else if (hydrated.lyrics) {
+        setKaraokeSyncStatus('fallback');
+        setKaraokeSyncMessage('Không có audio binary; đang dùng timing ước lượng.');
+      }
       setMediaClips([]);
       setQuickMode(true);
       editedFieldsTracked.current.clear();
@@ -1946,6 +1984,8 @@ export default function CreatorStudio() {
               audioUrl={song.audio}
               visualLabel={`${template} · ${background.mode}`}
               effectLabels={effects.length ? effects : ['Không có effect']}
+              subtitleSyncStatus={karaokeSyncStatus}
+              subtitleSyncMessage={karaokeSyncMessage}
             />
           </section>
           <aside className="sd-inspector">
