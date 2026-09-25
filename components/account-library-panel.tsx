@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Download, ExternalLink, Library, RefreshCw, Search, UserRound, X, Plus } from 'lucide-react';
+import { Library, RefreshCw, Search, UserRound, X, Plus } from 'lucide-react';
 
 type LibrarySong = {
   id: string;
@@ -178,20 +178,38 @@ export function AccountLibraryPanel({ onOpenSong }: { onOpenSong: (url: string) 
             />
           </label>
 
-          <div className="sd-section-grid">
+          <div style={{ display: 'grid', gap: 6 }}>
             {visibleSongs.map(song => (
-              <div key={song.id} style={{ border: '1px solid rgba(148,163,184,.14)', borderRadius: 16, overflow: 'hidden', background: 'rgba(15,23,42,.24)' }}>
-                {song.picture && <img src={song.picture} alt="" style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', display: 'block' }}/>}
-                <div style={{ padding: 12, display: 'grid', gap: 7 }}>
-                  <b style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.title}</b>
-                  <small style={{ opacity: .62 }}>{fmt(song.duration)}{song.tags ? ` · ${song.tags}` : ''}</small>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => onOpenSong(song.sunoUrl)} style={{ flex: 1 }}>Mở Studio</button>
-                    {song.audioUrl && <a href={song.audioUrl} download title="Tải audio" style={{ display: 'grid', placeItems: 'center', width: 38 }}><Download size={16}/></a>}
-                    <a href={song.sunoUrl} target="_blank" rel="noreferrer" title="Mở Suno" style={{ display: 'grid', placeItems: 'center', width: 38 }}><ExternalLink size={16}/></a>
+              <button
+                key={song.id}
+                onClick={() => onOpenSong(song.sunoUrl)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '8px 10px',
+                  borderRadius: 12,
+                  border: '1px solid rgba(148,163,184,.10)',
+                  background: 'rgba(15,23,42,.18)',
+                  textAlign: 'left'
+                }}
+              >
+                {song.picture ? (
+                  <img
+                    src={song.picture}
+                    alt=""
+                    style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'cover', flex: '0 0 auto' }}
+                  />
+                ) : (
+                  <div style={{ width: 42, height: 42, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'rgba(148,163,184,.10)', flex: '0 0 auto' }}>
+                    <Library size={17}/>
                   </div>
-                </div>
-              </div>
+                )}
+                <b style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {song.title}
+                </b>
+              </button>
             ))}
           </div>
         </>
