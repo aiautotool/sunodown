@@ -73,6 +73,7 @@ import {
 } from '@/components/presets/production-preset';
 import { StudioSheet, StudioTabs } from '@/components/studio-ui';
 import { StyleStudio } from '@/components/style-studio';
+import { AccountLibraryPanel } from '@/components/account-library-panel';
 import {
   BUILTIN_STUDIO_PRESETS,
   PRESET_SCHEMA_VERSION,
@@ -1567,17 +1568,13 @@ export default function CreatorStudio() {
             </div>
           )}
           {view === 'library' && (
-            <div className="sd-section-grid">
-              {song ? (
-                <button onClick={() => setView('create')}>
-                  <img src={song.picture} />
-                  <b>{song.title}</b>
-                  <span>{song.creator || 'Suno'}</span>
-                </button>
-              ) : (
-                <p>Paste a Suno link to add a song to your library.</p>
-              )}
-            </div>
+            <AccountLibraryPanel
+              onOpenSong={(songUrl) => {
+                setView('create');
+                setUrl(songUrl);
+                void resolve(songUrl);
+              }}
+            />
           )}
           {view === 'jobs' && (
             <div className="sd-job-card">
