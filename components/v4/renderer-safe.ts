@@ -614,6 +614,251 @@ export function withSubtitleLayout(
   draw();
   ctx.restore();
 }
+function drawRoundImage(
+  ctx: CanvasRenderingContext2D,
+  bmp: ImageBitmap,
+  cx: number,
+  cy: number,
+  radius: number,
+  rotation = 0,
+) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation);
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.clip();
+  const side = radius * 2;
+  const s = Math.max(side / bmp.width, side / bmp.height);
+  const iw = bmp.width * s, ih = bmp.height * s;
+  ctx.drawImage(bmp, -iw / 2, -ih / 2, iw, ih);
+  ctx.restore();
+}
+
+function drawVinylDisc(
+  ctx: CanvasRenderingContext2D,
+  bmp: ImageBitmap,
+  w: number,
+  h: number,
+  t: number,
+  level: number,
+  gain: number,
+  gold = false,
+) {
+  const portrait = h > w * 1.2;
+  const r = Math.min(w * (portrait ? .34 : .22), h * .24);
+  const cx = w * .5;
+  const cy = portrait ? h * .39 : h * .43;
+  const beat = 1 + level * .035 * gain;
+  const rotation = t * (.52 + gain * .12);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(beat, beat);
+  ctx.rotate(rotation);
+
+  const grad = ctx.createRadialGradient(0, 0, r * .08, 0, 0, r);
+  if (gold) {
+    grad.addColorStop(0, '#f7d768');
+    grad.addColorStop(.22, '#9b6814');
+    grad.addColorStop(.48, '#f0c34e');
+    grad.addColorStop(.72, '#68430c');
+    grad.addColorStop(1, '#d69b25');
+  } else {
+    grad.addColorStop(0, '#20202a');
+    grad.addColorStop(.25, '#080910');
+    grad.addColorStop(.55, '#1b1b24');
+    grad.addColorStop(.78, '#05060a');
+    grad.addColorStop(1, '#171721');
+  }
+  ctx.fillStyle = grad;
+  ctx.shadowColor = gold ? 'rgba(247,190,62,.45)' : 'rgba(125,92,255,.38)';
+  ctx.shadowBlur = r * .18;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = gold ? 'rgba(255,239,172,.19)' : 'rgba(255,255,255,.10)';
+  ctx.lineWidth = Math.max(1, r * .006);
+  for (let i = .28; i < .96; i += .055) {
+    ctx.beginPath();
+    ctx.arc(0, 0, r * i, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  drawRoundImage(ctx, bmp, cx, cy, r * .32, rotation * .92);
+  ctx.save();
+  ctx.fillStyle = gold ? 'rgba(255,231,148,.9)' : 'rgba(220,210,255,.85)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, Math.max(3, r * .035), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Tonearm makes the vinyl metaphor instantly readable.
+  if (!gold) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(214,219,232,.78)';
+    ctx.lineWidth = Math.max(5, w * .006);
+    ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(0,0,0,.55)';
+    ctx.shadowBlur = 10;
+    const ax = cx + r * .92, ay = cy - r * .96;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(cx + r * .62, cy - r * .18);
+    ctx.stroke();
+    ctx.fillStyle = '#252a35';
+    ctx.beginPath();
+    ctx.arc(ax, ay, Math.max(8, r * .09), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawGlassCard(
+  ctx: CanvasRenderingContext2D,
+  bmp: ImageBitmap,
+  w: number,
+  h: number,
+  t: number,
+  level: number,
+  gain: number,
+) {
+  const cw = w * .64, ch = Math.min(h * .38, cw * .82);
+  const x = (w - cw) / 2 + Math.sin(t * .45) * w * .015 * gain;
+  const y = h * .25 + Math.cos(t * .36) * h * .012 * gain;
+  ctx.save();
+  ctx.translate(x + cw / 2, y + ch / 2);
+  ctx.rotate(Math.sin(t * .3) * .025 * gain);
+  ctx.translate(-cw / 2, -ch / 2);
+  ctx.fillStyle = 'rgba(15,20,36,.42)';
+  ctx.strokeStyle = 'rgba(255,255,255,.28)';
+  ctx.lineWidth = Math.max(2, w * .002);
+  ctx.shadowColor = 'rgba(129,92,246,.38)';
+  ctx.shadowBlur = 36 + level * 24;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, cw, ch, Math.min(28, cw * .05));
+  ctx.fill();
+  ctx.stroke();
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(10, 10, cw - 20, ch - 20, Math.min(22, cw * .045));
+  ctx.clip();
+  const s = Math.max((cw - 20) / bmp.width, (ch - 20) / bmp.height);
+  const iw = bmp.width * s, ih = bmp.height * s;
+  ctx.globalAlpha = .82;
+  ctx.drawImage(bmp, 10 + (cw - 20 - iw) / 2, 10 + (ch - 20 - ih) / 2, iw, ih);
+  ctx.restore();
+  ctx.restore();
+}
+
+function drawEditorial(
+  ctx: CanvasRenderingContext2D,
+  bmp: ImageBitmap,
+  song: Song,
+  w: number,
+  h: number,
+) {
+  const portrait = h > w * 1.2;
+  ctx.save();
+  ctx.fillStyle = 'rgba(5,8,14,.28)';
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(242,228,196,.8)';
+  ctx.lineWidth = Math.max(2, w * .002);
+  ctx.strokeRect(w * .06, h * .08, w * .88, h * .82);
+  ctx.fillStyle = 'rgba(244,232,202,.94)';
+  ctx.font = `900 ${Math.round(w * (portrait ? .115 : .072))}px Georgia,serif`;
+  ctx.textAlign = 'left';
+  ctx.fillText('MUSIC', w * .075, h * .19);
+  ctx.font = `700 ${Math.round(w * .025)}px system-ui,sans-serif`;
+  ctx.fillText('EDITORIAL / 01', w * .078, h * .235);
+  ctx.restore();
+
+  const size = Math.min(w * .46, h * .34);
+  const x = portrait ? w * .47 : w * .58;
+  const y = portrait ? h * .42 : h * .43;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-.045);
+  ctx.fillStyle = '#efe6d3';
+  ctx.fillRect(-size * .52, -size * .52, size * 1.04, size * 1.04);
+  ctx.beginPath();
+  ctx.rect(-size * .47, -size * .47, size * .94, size * .94);
+  ctx.clip();
+  const s = Math.max((size * .94) / bmp.width, (size * .94) / bmp.height);
+  ctx.drawImage(bmp, -bmp.width * s / 2, -bmp.height * s / 2, bmp.width * s, bmp.height * s);
+  ctx.restore();
+}
+
+function drawSpotlight(
+  ctx: CanvasRenderingContext2D,
+  bmp: ImageBitmap,
+  w: number,
+  h: number,
+  t: number,
+  level: number,
+  gain: number,
+) {
+  const cx = w / 2, top = h * .08, baseY = h * .69;
+  const sweep = Math.sin(t * .42) * w * .08 * gain;
+  const g = ctx.createLinearGradient(cx + sweep, top, cx, baseY);
+  g.addColorStop(0, 'rgba(183,145,255,.55)');
+  g.addColorStop(1, 'rgba(126,66,255,0)');
+  ctx.save();
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(cx - w * .035 + sweep, top);
+  ctx.lineTo(cx + w * .035 + sweep, top);
+  ctx.lineTo(cx + w * (.30 + level * .04), baseY);
+  ctx.lineTo(cx - w * (.30 + level * .04), baseY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  const size = Math.min(w * .52, h * .36);
+  ctx.save();
+  ctx.translate(cx, h * .39);
+  ctx.rotate(Math.sin(t * .33) * .035 * gain);
+  ctx.shadowColor = 'rgba(147,105,255,.62)';
+  ctx.shadowBlur = 38 + level * 35;
+  ctx.fillStyle = '#101521';
+  ctx.fillRect(-size / 2, -size / 2, size, size);
+  ctx.beginPath();
+  ctx.rect(-size * .47, -size * .47, size * .94, size * .94);
+  ctx.clip();
+  const s = Math.max((size * .94) / bmp.width, (size * .94) / bmp.height);
+  ctx.drawImage(bmp, -bmp.width * s / 2, -bmp.height * s / 2, bmp.width * s, bmp.height * s);
+  ctx.restore();
+}
+
+function drawLyricsFocusScene(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  t: number,
+  level: number,
+) {
+  ctx.save();
+  const g = ctx.createLinearGradient(0, h * .2, 0, h * .78);
+  g.addColorStop(0, 'rgba(4,7,15,.20)');
+  g.addColorStop(.5, 'rgba(3,6,14,.58)');
+  g.addColorStop(1, 'rgba(3,6,14,.20)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, h * .18, w, h * .62);
+  ctx.strokeStyle = `rgba(175,139,255,${.22 + level * .3})`;
+  ctx.lineWidth = Math.max(2, w * .0025);
+  ctx.beginPath();
+  const cy = h * .5;
+  for (let i = 0; i <= 48; i++) {
+    const x = (i / 48) * w;
+    const y = cy + Math.sin(i * .72 + t * 4.2) * h * (.006 + level * .016);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawTemplate(
   ctx: CanvasRenderingContext2D,
   bmp: ImageBitmap,
@@ -629,48 +874,45 @@ function drawTemplate(
   layout?: OverlayLayout,
   textStyles?: OverlayTextStyles,
 ) {
-  if (preserveBackground) {
-    drawMeta(
-      ctx,
-      song,
-      w,
-      h * 0.67,
-      'center',
-      0.72,
-      template,
-      p,
-      h,
-      layout,
-      textStyles,
-    );
-    return;
-  }
   const gain = MOTION_GAIN[motion];
-  ctx.fillStyle = '#080812';
-  ctx.fillRect(0, 0, w, h);
-  const zoom = 1.06 + 0.025 * Math.sin(t * 0.45) * gain + level * 0.025 * gain,
-    dx = Math.sin(t * 0.22) * w * 0.018 * gain,
-    dy = Math.cos(t * 0.18) * h * 0.014 * gain;
-  /* Suno mode uses one image only: the thumbnail fills the canvas. Never draw a second centered copy. */ coverFill(
-    ctx,
-    bmp,
-    w,
-    h,
-    1,
-    0,
-    zoom,
-    dx,
-    dy,
-  );
-  ctx.fillStyle = 'rgba(3,4,12,.18)';
-  ctx.fillRect(0, 0, w, h);
+
+  // Draw the base only when the user has not supplied a custom background.
+  if (!preserveBackground) {
+    ctx.fillStyle = '#080812';
+    ctx.fillRect(0, 0, w, h);
+    const zoom = 1.045 + 0.018 * Math.sin(t * .45) * gain + level * .018 * gain;
+    const dx = Math.sin(t * .22) * w * .012 * gain;
+    const dy = Math.cos(t * .18) * h * .010 * gain;
+    coverFill(ctx, bmp, w, h, template === 'cover-motion' ? .94 : .58, template === 'cover-motion' ? 0 : 24, zoom, dx, dy);
+    ctx.fillStyle = template === 'cover-motion' ? 'rgba(3,4,12,.16)' : 'rgba(3,4,12,.42)';
+    ctx.fillRect(0, 0, w, h);
+  } else {
+    // Keep custom background intact, but give the style overlays enough contrast.
+    ctx.fillStyle = 'rgba(3,4,12,.10)';
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  if (template === 'vinyl') {
+    drawVinylDisc(ctx, bmp, w, h, t, level, gain, false);
+  } else if (template === 'gold-record') {
+    drawVinylDisc(ctx, bmp, w, h, t, level, gain, true);
+  } else if (template === 'glass-card') {
+    drawGlassCard(ctx, bmp, w, h, t, level, gain);
+  } else if (template === 'editorial') {
+    drawEditorial(ctx, bmp, song, w, h);
+  } else if (template === 'spotlight') {
+    drawSpotlight(ctx, bmp, w, h, t, level, gain);
+  } else if (template === 'lyrics-focus') {
+    drawLyricsFocusScene(ctx, w, h, t, level);
+  }
+
   drawMeta(
     ctx,
     song,
     w,
-    h * 0.67,
+    h * .67,
     'center',
-    0.72,
+    template === 'editorial' ? .62 : .72,
     template,
     p,
     h,
