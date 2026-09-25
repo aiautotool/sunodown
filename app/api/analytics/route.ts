@@ -8,6 +8,7 @@ const ALLOWED = new Set([
   'song_resolve_failed',
   'quick_create_started',
   'suggested_preset_selected',
+  'production_recipe_applied',
   'customize_opened',
   'preset_applied',
   'preview_played',
