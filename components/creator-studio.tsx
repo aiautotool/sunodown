@@ -1634,19 +1634,29 @@ export default function CreatorStudio() {
             <Menu />
           </div>
           <div className="sd-empty-content">
-            <p>CREATOR STUDIO</p>
+            <p>SUNO CREATOR LIBRARY</p>
             <h1>
-              Turn your Suno song
+              Nhập tài khoản Suno
               <br />
-              <em>into content</em>
+              <em>quản lý toàn bộ bài hát</em>
             </h1>
+            <p className="sd-control-hint">
+              Nhập @username hoặc URL profile Suno. SunoDown sẽ quét các bài public và lưu thư viện ngay trên thiết bị.
+            </p>
+            <AccountLibraryPanel
+              onOpenSong={(songUrl) => {
+                setUrl(songUrl);
+                void resolve(songUrl);
+              }}
+            />
+            <div className="sd-choose">Hoặc mở nhanh một bài riêng lẻ</div>
             <div className="sd-input">
               <Link2 />
               <input
                 value={url}
                 onChange={(e) => change(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && void resolve()}
-                placeholder="Dán liên kết Suno"
+                placeholder="Dán liên kết bài hát Suno"
               />
               <button onClick={paste}>Paste</button>
             </div>
@@ -1655,7 +1665,7 @@ export default function CreatorStudio() {
               disabled={busy}
               onClick={() => resolve()}
             >
-              {busy ? 'Đang phân tích…' : 'Phân tích'}
+              {busy ? 'Đang phân tích…' : 'Mở bài hát'}
             </button>
             {error && <div className="sd-error">{error}</div>}
             {projects[0] && (
