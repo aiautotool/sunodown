@@ -488,6 +488,7 @@ export default function CreatorStudio() {
   useRenderWakeLock(rendering);
 
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [lastPresetId, setLastPresetId] = useState<string | null>(null);
   const [presetModified, setPresetModified] = useState(false);
   const [presetOverrideFields, setPresetOverrideFields] = useState<Array<keyof StudioPresetConfig>>([]);
   const [customPresets, setCustomPresets] = useState<StudioPreset[]>([]);
@@ -614,6 +615,7 @@ export default function CreatorStudio() {
     setPresetModified(mode === 'preserve-custom' && presetOverrideFields.length > 0);
     setPresetOverrideFields(mode === 'preserve-custom' ? [...presetOverrideFields] : []);
     localStorage.setItem('sunodown-v14-last-preset', preset.id);
+    setLastPresetId(preset.id);
     track('preset_applied', {
       preset_id: preset.id,
       mode,
@@ -997,12 +999,12 @@ export default function CreatorStudio() {
     ) {
       try {
         await navigator.share({ files: [file], title: resultName });
-        track('video_saved', { method: 'share', result_name: resultName });
+        track('video_saved', { method: 'share' });
         return;
       } catch {}
     }
     saveBlob(resultBlob, resultName || 'suno-video.mp4');
-    track('video_saved', { method: 'download', result_name: resultName || 'suno-video.mp4' });
+    track('video_saved', { method: 'download' });
   }
   async function downloadAudio(format: 'm4a' | 'mp3' | 'wav') {
     if (!song || downloading) return;
@@ -1092,6 +1094,7 @@ export default function CreatorStudio() {
       setFavoritePresetIds(
         JSON.parse(localStorage.getItem('sunodown-v14-favorite-presets') || '[]'),
       );
+      setLastPresetId(localStorage.getItem('sunodown-v14-last-preset'));
       const presetIssues = auditPresetLibrary([
         ...BUILTIN_STUDIO_PRESETS,
         ...storedPresets,
@@ -1532,6 +1535,28 @@ export default function CreatorStudio() {
                 resultUrl={resultUrl || undefined}
               />
             </div>
+            {lastPresetId && (
+              <button
+                className="sd-last-preset"
+                disabled={rendering}
+                onClick={() => {
+                  const preset = [...BUILTIN_STUDIO_PRESETS, ...customPresets].find(
+                    (item) => item.id === lastPresetId,
+                  );
+                  if (preset) applyPreset(preset, 'replace-all');
+                }}
+              >
+                <Sparkles />
+                <span>
+                  <b>Dùng lại mẫu gần nhất</b>
+                  <small>
+                    {[...BUILTIN_STUDIO_PRESETS, ...customPresets].find(
+                      (item) => item.id === lastPresetId,
+                    )?.name || 'Mẫu đã dùng trước đó'}
+                  </small>
+                </span>
+              </button>
+            )}
             <div className="sd-first-run-flow" aria-label="Quy trình tạo video nhanh">
               <button
                 className="primary"
