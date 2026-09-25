@@ -14,7 +14,10 @@ import { cleanLyricsForVideo } from './lyrics-clean';
 import {
   convertProcessedAudio,
   renderTikTokLikeAudio,
+  masterAudio,
+  render5DAudio,
 } from '@/app/lib/audio-processing';
+import type { ProductionMasteringConfig } from '@/components/presets/production-preset';
 import {
   drawKaraokeOverlay,
   type KaraokeLine,
@@ -71,6 +74,7 @@ export type SafeRenderOptions = {
   startSeconds?: number;
   previewSeconds?: number;
   onProgress?: (value: number) => void;
+  productionMastering?: ProductionMasteringConfig;
 };
 
 type AudioTrim = { start: number; end: number; duration: number };
@@ -1282,12 +1286,17 @@ export async function generateVisualizerVideoSafe(
     audioBlob: Blob = originalAudio;
   if (!mobile) {
     options.onProgress?.(6);
-    processedWav = await renderTikTokLikeAudio(originalAudio);
+    const mastering = options.productionMastering;
+    if (mastering?.profile && mastering.profile !== 'original') {
+      processedWav = (await masterAudio(originalAudio, mastering.profile, mastering.advanced)).blob;
+      if (mastering.spatial?.enabled) processedWav = await render5DAudio(processedWav, mastering.spatial.amount/100, mastering.spatial.mode);
+    } else if (!mastering) {
+      processedWav = await renderTikTokLikeAudio(originalAudio);
+    }
     options.onProgress?.(8);
-    try {
-      audioBlob = await convertProcessedAudio(processedWav, 'm4a');
-    } catch {
-      audioBlob = await convertProcessedAudio(processedWav, 'mp3');
+    if (processedWav) {
+      try { audioBlob = await convertProcessedAudio(processedWav, 'm4a'); }
+      catch { audioBlob = await convertProcessedAudio(processedWav, 'mp3'); }
     }
   } else {
     options.onProgress?.(8);
