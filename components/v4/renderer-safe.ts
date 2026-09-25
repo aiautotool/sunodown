@@ -614,6 +614,10 @@ export function withSubtitleLayout(
   draw();
   ctx.restore();
 }
+function sceneEnergy(level: number, gain: number) {
+  return Math.max(0, Math.min(1, level * (0.82 + gain * 0.22)));
+}
+
 function drawRoundImage(
   ctx: CanvasRenderingContext2D,
   bmp: ImageBitmap,
@@ -646,72 +650,139 @@ function drawVinylDisc(
   gold = false,
 ) {
   const portrait = h > w * 1.2;
-  const r = Math.min(w * (portrait ? .34 : .22), h * .24);
+  const energy = sceneEnergy(level, gain);
+  const r = Math.min(w * (portrait ? .34 : .235), h * .245);
   const cx = w * .5;
-  const cy = portrait ? h * .39 : h * .43;
-  const beat = 1 + level * .035 * gain;
-  const rotation = t * (.52 + gain * .12);
+  const cy = portrait ? h * .365 : h * .405;
+  const pulse = 1 + energy * .022;
+  const rotation = t * (gold ? .34 : .58) * (.9 + gain * .16);
+
+  // Platter/depth shadow: gives the record a physical object feel.
+  ctx.save();
+  ctx.translate(cx, cy + r * .06);
+  ctx.scale(pulse * 1.035, pulse * .34);
+  const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.15);
+  shadow.addColorStop(0, gold ? 'rgba(244,191,64,.25)' : 'rgba(112,74,255,.26)');
+  shadow.addColorStop(.58, 'rgba(0,0,0,.36)');
+  shadow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shadow;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 1.18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.scale(beat, beat);
+  ctx.scale(pulse, pulse);
   ctx.rotate(rotation);
 
-  const grad = ctx.createRadialGradient(0, 0, r * .08, 0, 0, r);
+  const grad = ctx.createRadialGradient(-r * .18, -r * .22, r * .05, 0, 0, r);
   if (gold) {
-    grad.addColorStop(0, '#f7d768');
-    grad.addColorStop(.22, '#9b6814');
-    grad.addColorStop(.48, '#f0c34e');
-    grad.addColorStop(.72, '#68430c');
-    grad.addColorStop(1, '#d69b25');
+    grad.addColorStop(0, '#fff2a8');
+    grad.addColorStop(.16, '#c48a21');
+    grad.addColorStop(.34, '#f2c759');
+    grad.addColorStop(.52, '#8b5e13');
+    grad.addColorStop(.72, '#e1aa31');
+    grad.addColorStop(1, '#5f3c0b');
   } else {
-    grad.addColorStop(0, '#20202a');
-    grad.addColorStop(.25, '#080910');
-    grad.addColorStop(.55, '#1b1b24');
-    grad.addColorStop(.78, '#05060a');
-    grad.addColorStop(1, '#171721');
+    grad.addColorStop(0, '#2a2b37');
+    grad.addColorStop(.2, '#11121a');
+    grad.addColorStop(.42, '#05060a');
+    grad.addColorStop(.68, '#171822');
+    grad.addColorStop(1, '#020307');
   }
   ctx.fillStyle = grad;
-  ctx.shadowColor = gold ? 'rgba(247,190,62,.45)' : 'rgba(125,92,255,.38)';
-  ctx.shadowBlur = r * .18;
+  ctx.shadowColor = gold ? 'rgba(255,204,91,.48)' : 'rgba(126,90,255,.42)';
+  ctx.shadowBlur = r * (.16 + energy * .08);
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.fill();
 
+  // Dense grooves make the vinyl unmistakable even on small mobile previews.
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = gold ? 'rgba(255,239,172,.19)' : 'rgba(255,255,255,.10)';
-  ctx.lineWidth = Math.max(1, r * .006);
-  for (let i = .28; i < .96; i += .055) {
+  ctx.lineWidth = Math.max(1, r * .005);
+  for (let i = .26; i < .96; i += .035) {
+    const alpha = i % .07 < .02 ? .15 : .08;
+    ctx.strokeStyle = gold
+      ? `rgba(255,243,184,${alpha + .03})`
+      : `rgba(255,255,255,${alpha})`;
     ctx.beginPath();
     ctx.arc(0, 0, r * i, 0, Math.PI * 2);
     ctx.stroke();
   }
+
+  // Rotating specular sweep.
+  ctx.strokeStyle = gold ? 'rgba(255,249,210,.55)' : 'rgba(207,196,255,.28)';
+  ctx.lineWidth = Math.max(3, r * .025);
+  ctx.beginPath();
+  ctx.arc(0, 0, r * .82, -.5, .28);
+  ctx.stroke();
   ctx.restore();
 
-  drawRoundImage(ctx, bmp, cx, cy, r * .32, rotation * .92);
+  drawRoundImage(ctx, bmp, cx, cy, r * .31, rotation * .96);
+
   ctx.save();
-  ctx.fillStyle = gold ? 'rgba(255,231,148,.9)' : 'rgba(220,210,255,.85)';
+  const labelRing = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * .36);
+  labelRing.addColorStop(0, gold ? '#f5d56b' : '#e7ddff');
+  labelRing.addColorStop(.18, gold ? '#b47b1e' : '#8b69dc');
+  labelRing.addColorStop(.22, 'rgba(10,10,16,.88)');
+  labelRing.addColorStop(1, 'rgba(10,10,16,0)');
+  ctx.fillStyle = labelRing;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * .37, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = gold ? '#fff0ae' : '#ded5ff';
   ctx.beginPath();
   ctx.arc(cx, cy, Math.max(3, r * .035), 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // Tonearm makes the vinyl metaphor instantly readable.
-  if (!gold) {
+  if (gold) {
+    // Gold scene uses a presentation plaque instead of a tonearm.
+    const plaqueW = Math.min(w * .46, r * 1.5);
+    const plaqueH = Math.max(46, h * .055);
+    const px = cx - plaqueW / 2;
+    const py = Math.min(h - plaqueH - h * .12, cy + r * .96);
     ctx.save();
-    ctx.strokeStyle = 'rgba(214,219,232,.78)';
+    const pg = ctx.createLinearGradient(px, py, px + plaqueW, py + plaqueH);
+    pg.addColorStop(0, '#33200d');
+    pg.addColorStop(.48, '#8d6427');
+    pg.addColorStop(1, '#241708');
+    ctx.fillStyle = pg;
+    ctx.strokeStyle = 'rgba(255,224,151,.68)';
+    ctx.lineWidth = Math.max(1, w * .0018);
+    ctx.beginPath();
+    ctx.roundRect(px, py, plaqueW, plaqueH, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,237,191,.95)';
+    ctx.font = `700 ${Math.max(12, Math.round(w * .018))}px Georgia,serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('GOLD RECORD', cx, py + plaqueH * .58);
+    ctx.restore();
+  } else {
+    // Tonearm + head, with a tiny music-reactive tracking motion.
+    ctx.save();
+    ctx.strokeStyle = 'rgba(225,229,239,.82)';
     ctx.lineWidth = Math.max(5, w * .006);
     ctx.lineCap = 'round';
-    ctx.shadowColor = 'rgba(0,0,0,.55)';
-    ctx.shadowBlur = 10;
+    ctx.shadowColor = 'rgba(0,0,0,.58)';
+    ctx.shadowBlur = 12;
     const ax = cx + r * .92, ay = cy - r * .96;
+    const needleX = cx + r * (.58 - energy * .025);
+    const needleY = cy - r * (.16 + energy * .02);
     ctx.beginPath();
     ctx.moveTo(ax, ay);
-    ctx.lineTo(cx + r * .62, cy - r * .18);
+    ctx.lineTo(needleX, needleY);
     ctx.stroke();
-    ctx.fillStyle = '#252a35';
+    ctx.fillStyle = '#2c313d';
     ctx.beginPath();
     ctx.arc(ax, ay, Math.max(8, r * .09), 0, Math.PI * 2);
     ctx.fill();
+    ctx.translate(needleX, needleY);
+    ctx.rotate(-.24);
+    ctx.fillStyle = '#c7cbd4';
+    ctx.fillRect(-r * .055, -r * .022, r * .11, r * .044);
     ctx.restore();
   }
 }
@@ -724,32 +795,81 @@ function drawGlassCard(
   t: number,
   level: number,
   gain: number,
+  p: Palette,
 ) {
-  const cw = w * .64, ch = Math.min(h * .38, cw * .82);
-  const x = (w - cw) / 2 + Math.sin(t * .45) * w * .015 * gain;
-  const y = h * .25 + Math.cos(t * .36) * h * .012 * gain;
+  const energy = sceneEnergy(level, gain);
+  const cw = w * (h > w * 1.2 ? .72 : .58);
+  const ch = Math.min(h * .40, cw * .84);
+  const cx = w / 2 + Math.sin(t * .42) * w * .018 * gain;
+  const cy = h * .37 + Math.cos(t * .34) * h * .012 * gain;
+  const tilt = Math.sin(t * .28) * .035 * gain;
+
+  // Ambient colored orbs behind the glass.
   ctx.save();
-  ctx.translate(x + cw / 2, y + ch / 2);
-  ctx.rotate(Math.sin(t * .3) * .025 * gain);
-  ctx.translate(-cw / 2, -ch / 2);
-  ctx.fillStyle = 'rgba(15,20,36,.42)';
-  ctx.strokeStyle = 'rgba(255,255,255,.28)';
+  const orb = (x:number,y:number,r:number,color:string,alpha:number) => {
+    const g = ctx.createRadialGradient(x,y,0,x,y,r);
+    g.addColorStop(0,color.replace('1)',`${alpha})`));
+    g.addColorStop(1,color.replace('1)','0)'));
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+  };
+  orb(w * (.28 + Math.sin(t*.27)*.04), h*.27, w*.22, rgb(p[1],1), .20 + energy*.16);
+  orb(w * (.72 + Math.cos(t*.23)*.04), h*.47, w*.25, rgb(p[2],1), .14 + energy*.12);
+  ctx.restore();
+
+  // Back glass card for depth.
+  ctx.save();
+  ctx.translate(cx - cw*.06, cy - ch*.04);
+  ctx.rotate(-tilt * .75);
+  ctx.fillStyle='rgba(255,255,255,.045)';
+  ctx.strokeStyle='rgba(255,255,255,.12)';
+  ctx.lineWidth=Math.max(1,w*.0018);
+  ctx.beginPath();ctx.roundRect(-cw*.5,-ch*.5,cw,ch,Math.min(32,cw*.055));ctx.fill();ctx.stroke();
+  ctx.restore();
+
+  // Main card.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(tilt);
+  ctx.shadowColor = rgb(p[1], .52);
+  ctx.shadowBlur = 28 + energy * 42;
+  ctx.fillStyle = 'rgba(12,18,34,.48)';
+  ctx.strokeStyle = 'rgba(255,255,255,.30)';
   ctx.lineWidth = Math.max(2, w * .002);
-  ctx.shadowColor = 'rgba(129,92,246,.38)';
-  ctx.shadowBlur = 36 + level * 24;
   ctx.beginPath();
-  ctx.roundRect(0, 0, cw, ch, Math.min(28, cw * .05));
+  ctx.roundRect(-cw / 2, -ch / 2, cw, ch, Math.min(32, cw * .055));
   ctx.fill();
   ctx.stroke();
+
+  // Glass shine.
+  const shine = ctx.createLinearGradient(-cw*.45,-ch*.45,cw*.35,ch*.35);
+  shine.addColorStop(0,'rgba(255,255,255,.18)');
+  shine.addColorStop(.35,'rgba(255,255,255,.025)');
+  shine.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=shine;
+  ctx.beginPath();ctx.roundRect(-cw/2+4,-ch/2+4,cw-8,ch-8,Math.min(28,cw*.05));ctx.fill();
+
   ctx.save();
+  const inset = Math.max(12, cw * .03);
   ctx.beginPath();
-  ctx.roundRect(10, 10, cw - 20, ch - 20, Math.min(22, cw * .045));
+  ctx.roundRect(-cw/2+inset,-ch/2+inset,cw-inset*2,ch-inset*2,Math.min(24,cw*.045));
   ctx.clip();
-  const s = Math.max((cw - 20) / bmp.width, (ch - 20) / bmp.height);
+  const iwBox=cw-inset*2, ihBox=ch-inset*2;
+  const s = Math.max(iwBox / bmp.width, ihBox / bmp.height);
   const iw = bmp.width * s, ih = bmp.height * s;
-  ctx.globalAlpha = .82;
-  ctx.drawImage(bmp, 10 + (cw - 20 - iw) / 2, 10 + (ch - 20 - ih) / 2, iw, ih);
+  ctx.globalAlpha = .86;
+  ctx.drawImage(bmp, -iw/2, -ih/2, iw, ih);
   ctx.restore();
+
+  // Music-reactive edge meter.
+  ctx.strokeStyle = rgb(p[1], .78);
+  ctx.lineWidth = Math.max(3, w * .004);
+  ctx.beginPath();
+  ctx.roundRect(-cw/2+7,-ch/2+7,cw-14,ch-14,Math.min(28,cw*.05));
+  ctx.stroke();
+  ctx.fillStyle=rgb(p[1], .76);
+  const meterH=Math.max(6,ch*.018);
+  ctx.fillRect(-cw*.38,ch*.5-meterH*2,cw*(.22+.58*energy),meterH);
   ctx.restore();
 }
 
@@ -759,35 +879,81 @@ function drawEditorial(
   song: Song,
   w: number,
   h: number,
+  t: number,
+  level: number,
+  gain: number,
 ) {
   const portrait = h > w * 1.2;
+  const energy = sceneEnergy(level, gain);
+  const margin = w * .055;
+
   ctx.save();
-  ctx.fillStyle = 'rgba(5,8,14,.28)';
+  ctx.fillStyle = 'rgba(5,8,14,.34)';
   ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = 'rgba(242,228,196,.8)';
+
+  // Magazine border + editorial grid.
+  ctx.strokeStyle = 'rgba(242,228,196,.78)';
   ctx.lineWidth = Math.max(2, w * .002);
-  ctx.strokeRect(w * .06, h * .08, w * .88, h * .82);
-  ctx.fillStyle = 'rgba(244,232,202,.94)';
-  ctx.font = `900 ${Math.round(w * (portrait ? .115 : .072))}px Georgia,serif`;
+  ctx.strokeRect(margin, h * .07, w - margin * 2, h * .84);
+  ctx.globalAlpha=.28;
+  ctx.beginPath();
+  ctx.moveTo(w*.51,h*.08);ctx.lineTo(w*.51,h*.90);
+  ctx.moveTo(margin,h*.28);ctx.lineTo(w-margin,h*.28);
+  ctx.stroke();
+  ctx.globalAlpha=1;
+
+  ctx.fillStyle = 'rgba(244,232,202,.96)';
+  ctx.font = `900 ${Math.round(w * (portrait ? .112 : .072))}px Georgia,serif`;
   ctx.textAlign = 'left';
-  ctx.fillText('MUSIC', w * .075, h * .19);
-  ctx.font = `700 ${Math.round(w * .025)}px system-ui,sans-serif`;
-  ctx.fillText('EDITORIAL / 01', w * .078, h * .235);
+  ctx.fillText('MUSIC', margin*1.35, h * .18);
+  ctx.font = `700 ${Math.round(w * .022)}px system-ui,sans-serif`;
+  ctx.letterSpacing = '0.16em';
+  ctx.fillText('EDITORIAL / VISUAL ISSUE', margin*1.42, h * .225);
+  ctx.letterSpacing = '0px';
+
+  // Side copy behaves like real editorial furniture.
+  ctx.save();
+  ctx.translate(w*.90,h*.34);
+  ctx.rotate(Math.PI/2);
+  ctx.font=`700 ${Math.max(10,Math.round(w*.016))}px system-ui,sans-serif`;
+  ctx.fillStyle='rgba(244,232,202,.72)';
+  ctx.fillText('SUNODOWN — MUSIC LIVES FURTHER',0,0);
   ctx.restore();
 
-  const size = Math.min(w * .46, h * .34);
-  const x = portrait ? w * .47 : w * .58;
-  const y = portrait ? h * .42 : h * .43;
+  // Audio-reactive rule.
+  ctx.fillStyle='rgba(244,232,202,.72)';
+  ctx.fillRect(margin*1.35,h*.245,w*(.12+.24*energy),Math.max(2,h*.0025));
+  ctx.restore();
+
+  const size = Math.min(w * (portrait ? .56 : .42), h * .34);
+  const x = portrait ? w * .50 : w * .64;
+  const y = portrait ? h * .43 : h * .45;
+  const drift=Math.sin(t*.28)*w*.009*gain;
   ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(-.045);
+  ctx.translate(x+drift, y);
+  ctx.rotate(-.055 + Math.sin(t*.20)*.012*gain);
+  ctx.shadowColor='rgba(0,0,0,.45)';
+  ctx.shadowBlur=22;
   ctx.fillStyle = '#efe6d3';
-  ctx.fillRect(-size * .52, -size * .52, size * 1.04, size * 1.04);
+  ctx.fillRect(-size * .535, -size * .535, size * 1.07, size * 1.07);
+  ctx.shadowBlur=0;
   ctx.beginPath();
   ctx.rect(-size * .47, -size * .47, size * .94, size * .94);
   ctx.clip();
   const s = Math.max((size * .94) / bmp.width, (size * .94) / bmp.height);
-  ctx.drawImage(bmp, -bmp.width * s / 2, -bmp.height * s / 2, bmp.width * s, bmp.height * s);
+  const iw=bmp.width*s, ih=bmp.height*s;
+  ctx.drawImage(bmp,-iw/2,-ih/2,iw,ih);
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle='rgba(244,232,202,.88)';
+  ctx.font=`italic 700 ${Math.max(16,Math.round(w*.026))}px Georgia,serif`;
+  ctx.textAlign='left';
+  const kicker=(song.creator || 'MUSIC').toUpperCase();
+  ctx.fillText(kicker,margin*1.4,h*.62);
+  ctx.font=`600 ${Math.max(9,Math.round(w*.014))}px system-ui,sans-serif`;
+  ctx.fillStyle='rgba(244,232,202,.56)';
+  ctx.fillText('01  /  FEATURE STORY',margin*1.4,h*.655);
   ctx.restore();
 }
 
@@ -799,36 +965,67 @@ function drawSpotlight(
   t: number,
   level: number,
   gain: number,
+  p: Palette,
 ) {
-  const cx = w / 2, top = h * .08, baseY = h * .69;
-  const sweep = Math.sin(t * .42) * w * .08 * gain;
-  const g = ctx.createLinearGradient(cx + sweep, top, cx, baseY);
-  g.addColorStop(0, 'rgba(183,145,255,.55)');
-  g.addColorStop(1, 'rgba(126,66,255,0)');
+  const energy=sceneEnergy(level,gain);
+  const cx=w/2, top=h*.045, floorY=h*.69;
+  const sweep=Math.sin(t*.46)*w*.09*gain;
+
   ctx.save();
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(cx - w * .035 + sweep, top);
-  ctx.lineTo(cx + w * .035 + sweep, top);
-  ctx.lineTo(cx + w * (.30 + level * .04), baseY);
-  ctx.lineTo(cx - w * (.30 + level * .04), baseY);
-  ctx.closePath();
-  ctx.fill();
+  ctx.globalCompositeOperation='screen';
+  const cone=(originX:number,targetX:number,color:[number,number,number],alpha:number)=>{
+    const g=ctx.createLinearGradient(originX,top,targetX,floorY);
+    g.addColorStop(0,rgb(color,alpha));
+    g.addColorStop(.68,rgb(color,alpha*.18));
+    g.addColorStop(1,rgb(color,0));
+    ctx.fillStyle=g;
+    ctx.beginPath();
+    ctx.moveTo(originX-w*.025,top);
+    ctx.lineTo(originX+w*.025,top);
+    ctx.lineTo(targetX+w*(.22+energy*.05),floorY);
+    ctx.lineTo(targetX-w*(.22+energy*.05),floorY);
+    ctx.closePath();ctx.fill();
+  };
+  cone(w*.30+sweep,cx-w*.10,p[0],.42+energy*.20);
+  cone(w*.70-sweep,cx+w*.10,p[1],.38+energy*.18);
   ctx.restore();
 
-  const size = Math.min(w * .52, h * .36);
+  // Stage floor + reflected halo.
   ctx.save();
-  ctx.translate(cx, h * .39);
-  ctx.rotate(Math.sin(t * .33) * .035 * gain);
-  ctx.shadowColor = 'rgba(147,105,255,.62)';
-  ctx.shadowBlur = 38 + level * 35;
-  ctx.fillStyle = '#101521';
-  ctx.fillRect(-size / 2, -size / 2, size, size);
-  ctx.beginPath();
-  ctx.rect(-size * .47, -size * .47, size * .94, size * .94);
-  ctx.clip();
-  const s = Math.max((size * .94) / bmp.width, (size * .94) / bmp.height);
-  ctx.drawImage(bmp, -bmp.width * s / 2, -bmp.height * s / 2, bmp.width * s, bmp.height * s);
+  const floor=ctx.createRadialGradient(cx,floorY,0,cx,floorY,w*.36);
+  floor.addColorStop(0,rgb(p[1],.18+energy*.16));
+  floor.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=floor;
+  ctx.beginPath();ctx.ellipse(cx,floorY,w*.36,h*.055,0,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+
+  // Floating album tile.
+  const size=Math.min(w*.54,h*.34);
+  const floatY=Math.sin(t*.52)*h*.009*gain;
+  ctx.save();
+  ctx.translate(cx,h*.39+floatY);
+  ctx.rotate(Math.sin(t*.30)*.032*gain);
+  ctx.shadowColor=rgb(p[1],.58);
+  ctx.shadowBlur=34+energy*40;
+  ctx.fillStyle='#101521';
+  ctx.fillRect(-size/2,-size/2,size,size);
+  ctx.beginPath();ctx.rect(-size*.47,-size*.47,size*.94,size*.94);ctx.clip();
+  const s=Math.max((size*.94)/bmp.width,(size*.94)/bmp.height);
+  ctx.drawImage(bmp,-bmp.width*s/2,-bmp.height*s/2,bmp.width*s,bmp.height*s);
+  ctx.restore();
+
+  // Stage particles react to energy.
+  ctx.save();
+  ctx.fillStyle=rgb(p[1],.64);
+  const count=10+Math.round(energy*12);
+  for(let i=0;i<count;i++){
+    const phase=i*1.97;
+    const x=cx+Math.sin(phase+t*(.35+i%3*.08))*w*(.18+(i%4)*.025);
+    const y=h*.18+((i*79+t*18)%(h*.42));
+    const r=1.4+(i%3)*.8+energy*1.5;
+    ctx.globalAlpha=.18+(i%5)*.08;
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -838,24 +1035,57 @@ function drawLyricsFocusScene(
   h: number,
   t: number,
   level: number,
+  gain: number,
+  p: Palette,
 ) {
+  const energy=sceneEnergy(level,gain);
   ctx.save();
-  const g = ctx.createLinearGradient(0, h * .2, 0, h * .78);
-  g.addColorStop(0, 'rgba(4,7,15,.20)');
-  g.addColorStop(.5, 'rgba(3,6,14,.58)');
-  g.addColorStop(1, 'rgba(3,6,14,.20)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, h * .18, w, h * .62);
-  ctx.strokeStyle = `rgba(175,139,255,${.22 + level * .3})`;
-  ctx.lineWidth = Math.max(2, w * .0025);
+  const g=ctx.createLinearGradient(0,h*.16,0,h*.80);
+  g.addColorStop(0,'rgba(4,7,15,.10)');
+  g.addColorStop(.38,'rgba(3,6,14,.66)');
+  g.addColorStop(.62,'rgba(3,6,14,.70)');
+  g.addColorStop(1,'rgba(3,6,14,.12)');
+  ctx.fillStyle=g;
+  ctx.fillRect(0,h*.14,w,h*.68);
+
+  // Focus window.
+  ctx.fillStyle='rgba(10,13,26,.34)';
+  ctx.strokeStyle=rgb(p[1],.18+energy*.24);
+  ctx.lineWidth=Math.max(1,w*.0015);
   ctx.beginPath();
-  const cy = h * .5;
-  for (let i = 0; i <= 48; i++) {
-    const x = (i / 48) * w;
-    const y = cy + Math.sin(i * .72 + t * 4.2) * h * (.006 + level * .016);
-    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  ctx.roundRect(w*.07,h*.36,w*.86,h*.28,Math.min(28,w*.035));
+  ctx.fill();ctx.stroke();
+
+  // Audio-reactive guide waveform behind lyric text.
+  ctx.strokeStyle=rgb(p[1],.30+energy*.38);
+  ctx.lineWidth=Math.max(2,w*.0024);
+  ctx.shadowColor=rgb(p[1],.36);
+  ctx.shadowBlur=12+energy*18;
+  ctx.beginPath();
+  const cy=h*.50;
+  for(let i=0;i<=64;i++){
+    const x=w*.08+(i/64)*w*.84;
+    const envelope=Math.sin((i/64)*Math.PI);
+    const y=cy+Math.sin(i*.62+t*(4.0+gain*.5))*h*(.004+energy*.022)*envelope;
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);
   }
   ctx.stroke();
+  ctx.shadowBlur=0;
+
+  // Quote marks / focus furniture.
+  ctx.font=`900 ${Math.round(w*.18)}px Georgia,serif`;
+  ctx.fillStyle=rgb(p[1],.10+energy*.08);
+  ctx.textAlign='left';
+  ctx.fillText('“',w*.055,h*.43);
+
+  // Beat indicator segments.
+  const segments=7;
+  for(let i=0;i<segments;i++){
+    const segEnergy=Math.max(.08,energy*(.45+.55*Math.sin(t*2.6+i*.9)*.5+.5));
+    ctx.fillStyle=rgb(p[i%p.length],.18+segEnergy*.26);
+    const sw=w*.012, sh=h*(.012+.022*segEnergy);
+    ctx.fillRect(w*.12+i*w*.03,h*.67-sh,sw,sh);
+  }
   ctx.restore();
 }
 
@@ -875,20 +1105,27 @@ function drawTemplate(
   textStyles?: OverlayTextStyles,
 ) {
   const gain = MOTION_GAIN[motion];
+  const energy = sceneEnergy(level, gain);
 
-  // Draw the base only when the user has not supplied a custom background.
   if (!preserveBackground) {
-    ctx.fillStyle = '#080812';
+    ctx.fillStyle = '#070812';
     ctx.fillRect(0, 0, w, h);
-    const zoom = 1.045 + 0.018 * Math.sin(t * .45) * gain + level * .018 * gain;
-    const dx = Math.sin(t * .22) * w * .012 * gain;
-    const dy = Math.cos(t * .18) * h * .010 * gain;
-    coverFill(ctx, bmp, w, h, template === 'cover-motion' ? .94 : .58, template === 'cover-motion' ? 0 : 24, zoom, dx, dy);
-    ctx.fillStyle = template === 'cover-motion' ? 'rgba(3,4,12,.16)' : 'rgba(3,4,12,.42)';
+    const zoom = 1.04 + .015 * Math.sin(t * .42) * gain + energy * .018;
+    const dx = Math.sin(t * .22) * w * .011 * gain;
+    const dy = Math.cos(t * .18) * h * .009 * gain;
+    const coverAlpha = template === 'cover-motion' ? .96 : template === 'lyrics-focus' ? .42 : .56;
+    const blur = template === 'cover-motion' ? 0 : template === 'editorial' ? 18 : 26;
+    coverFill(ctx, bmp, w, h, coverAlpha, blur, zoom, dx, dy);
+    ctx.fillStyle = template === 'cover-motion'
+      ? 'rgba(3,4,12,.15)'
+      : template === 'editorial'
+        ? 'rgba(7,8,14,.50)'
+        : 'rgba(3,4,12,.43)';
     ctx.fillRect(0, 0, w, h);
   } else {
-    // Keep custom background intact, but give the style overlays enough contrast.
-    ctx.fillStyle = 'rgba(3,4,12,.10)';
+    ctx.fillStyle = template === 'editorial'
+      ? 'rgba(3,4,12,.26)'
+      : 'rgba(3,4,12,.12)';
     ctx.fillRect(0, 0, w, h);
   }
 
@@ -897,13 +1134,13 @@ function drawTemplate(
   } else if (template === 'gold-record') {
     drawVinylDisc(ctx, bmp, w, h, t, level, gain, true);
   } else if (template === 'glass-card') {
-    drawGlassCard(ctx, bmp, w, h, t, level, gain);
+    drawGlassCard(ctx, bmp, w, h, t, level, gain, p);
   } else if (template === 'editorial') {
-    drawEditorial(ctx, bmp, song, w, h);
+    drawEditorial(ctx, bmp, song, w, h, t, level, gain);
   } else if (template === 'spotlight') {
-    drawSpotlight(ctx, bmp, w, h, t, level, gain);
+    drawSpotlight(ctx, bmp, w, h, t, level, gain, p);
   } else if (template === 'lyrics-focus') {
-    drawLyricsFocusScene(ctx, w, h, t, level);
+    drawLyricsFocusScene(ctx, w, h, t, level, gain, p);
   }
 
   drawMeta(
@@ -912,7 +1149,7 @@ function drawTemplate(
     w,
     h * .67,
     'center',
-    template === 'editorial' ? .62 : .72,
+    template === 'editorial' ? .60 : template === 'lyrics-focus' ? .68 : .72,
     template,
     p,
     h,
