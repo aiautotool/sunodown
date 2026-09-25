@@ -1,3 +1,4 @@
+import { normalizeProductionPreset, type ProductionExportConfig, type ProductionMasteringConfig } from './production-preset';
 import type { KaraokeDrawStyle } from '@/app/lib/karaoke';
 import type { OverlayTextStyles } from '@/components/v4/renderer-safe';
 import type { OverlayLayout } from '@/components/v9/overlay-layout-panel';
@@ -32,7 +33,7 @@ export type StudioPresetConfig = {
   subtitleStyle: KaraokeDrawStyle;
   background: BackgroundConfig;
 };
-export const PRESET_SCHEMA_VERSION = 2;
+export const PRESET_SCHEMA_VERSION = 3;
 export type StudioPreset = {
   schemaVersion?: number;
   id: string;
@@ -45,6 +46,8 @@ export type StudioPreset = {
   thumbnail?: string;
   builtin?: boolean;
   config: StudioPresetConfig;
+  mastering?: ProductionMasteringConfig;
+  export?: ProductionExportConfig;
 };
 
 const layout = (waveY:number,subtitleY:number,titleY:number,creatorY:number,waveScale=100,subtitleScale=100,titleScale=100):OverlayLayout => ({
@@ -126,6 +129,7 @@ export function normalizeStudioPreset(value:Partial<StudioPreset>|null|undefined
     secondary:typeof value.secondary==='string'&&/^#[0-9a-f]{6}$/i.test(value.secondary)?value.secondary:'#ffffff',
     thumbnail:typeof value.thumbnail==='string'&&(value.thumbnail.startsWith('data:image/')||value.thumbnail.startsWith('https://'))?value.thumbnail:undefined,
     builtin:value.builtin===true,config:normalizePresetConfig(value.config),
+    ...normalizeProductionPreset({ mastering:value.mastering, export:value.export }, normalizePresetConfig(value.config).aspect),
   };
 }
 export function normalizeStoredPresets(input:unknown):StudioPreset[]{
