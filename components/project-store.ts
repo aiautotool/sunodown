@@ -12,6 +12,7 @@ import type { VideoEffect } from '@/components/v8/video-effects';
 import type { OverlayTextStyles } from '@/components/v4/renderer-safe';
 import type { KaraokeDrawStyle } from '@/app/lib/karaoke';
 import type { BackgroundConfig } from '@/components/v8/background';
+import type { ProjectRepository } from '@/packages/core/src/persistence';
 
 export type SavedProject = {
   url: string;
@@ -54,38 +55,55 @@ function database() {
   });
 }
 
+class IndexedDbProjectRepository implements ProjectRepository<SavedProject> {
+  async save(project: SavedProject) {
+    const db = await database();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE, 'readwrite');
+      transaction.objectStore(STORE).put(project);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    db.close();
+  }
+
+  async load(id: string) {
+    const db = await database();
+    const value = await new Promise<SavedProject | undefined>(
+      (resolve, reject) => {
+        const request = db.transaction(STORE).objectStore(STORE).get(id);
+        request.onsuccess = () =>
+          resolve(request.result as SavedProject | undefined);
+        request.onerror = () => reject(request.error);
+      },
+    );
+    db.close();
+    return value;
+  }
+
+  async clear() {
+    const db = await database();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE, 'readwrite');
+      transaction.objectStore(STORE).clear();
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    db.close();
+  }
+}
+
+export const projectRepository: ProjectRepository<SavedProject> =
+  new IndexedDbProjectRepository();
+
 export async function saveProjectData(project: SavedProject) {
-  const db = await database();
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(STORE, 'readwrite');
-    transaction.objectStore(STORE).put(project);
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
-  });
-  db.close();
+  return projectRepository.save(project);
 }
 
 export async function loadProjectData(url: string) {
-  const db = await database();
-  const value = await new Promise<SavedProject | undefined>(
-    (resolve, reject) => {
-      const request = db.transaction(STORE).objectStore(STORE).get(url);
-      request.onsuccess = () =>
-        resolve(request.result as SavedProject | undefined);
-      request.onerror = () => reject(request.error);
-    },
-  );
-  db.close();
-  return value;
+  return projectRepository.load(url);
 }
 
 export async function clearProjectData() {
-  const db = await database();
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(STORE, 'readwrite');
-    transaction.objectStore(STORE).clear();
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
-  });
-  db.close();
+  return projectRepository.clear();
 }
