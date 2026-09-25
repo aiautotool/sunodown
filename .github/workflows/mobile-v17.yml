@@ -49,14 +49,65 @@ jobs:
           java-version: '17'
       - run: npm install --no-audit --no-fund
       - run: npx expo prebuild --platform android --clean --no-install
+      - name: Install SunoDown Android launcher icon
+        run: |
+          mkdir -p android/app/src/main/res/drawable
+          mkdir -p android/app/src/main/res/mipmap-anydpi
+          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
+          cat > android/app/src/main/res/values/sunodown_icon_colors.xml <<'EOF'
+          <resources>
+            <color name="sunodown_icon_bg">#070B14</color>
+          </resources>
+          EOF
+          cat > android/app/src/main/res/drawable/sunodown_foreground.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+            <path android:fillColor="#00D9FF"
+              android:pathData="M31,22 L82,54 L31,86 Z"/>
+            <path android:fillColor="#7C3AED"
+              android:pathData="M37,29 L74,54 L37,79 Z"/>
+            <path android:fillColor="#FFFFFF"
+              android:pathData="M47,42 L51,42 L51,66 L47,66 Z"/>
+            <path android:fillColor="#D8B4FE"
+              android:pathData="M55,36 L59,36 L59,72 L55,72 Z"/>
+            <path android:fillColor="#F472B6"
+              android:pathData="M63,44 L67,44 L67,64 L63,64 Z"/>
+          </vector>
+          EOF
+          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@color/sunodown_icon_bg"/>
+            <foreground android:drawable="@drawable/sunodown_foreground"/>
+          </adaptive-icon>
+          EOF
+          cp android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          cat > android/app/src/main/res/mipmap-anydpi/ic_launcher.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+            <path android:fillColor="#070B14" android:pathData="M0,0 H108 V108 H0 Z"/>
+            <path android:fillColor="#00D9FF" android:pathData="M31,22 L82,54 L31,86 Z"/>
+            <path android:fillColor="#7C3AED" android:pathData="M37,29 L74,54 L37,79 Z"/>
+            <path android:fillColor="#FFFFFF" android:pathData="M47,42 L51,42 L51,66 L47,66 Z"/>
+            <path android:fillColor="#D8B4FE" android:pathData="M55,36 L59,36 L59,72 L55,72 Z"/>
+            <path android:fillColor="#F472B6" android:pathData="M63,44 L67,44 L67,64 L63,64 Z"/>
+          </vector>
+          EOF
+          cp android/app/src/main/res/mipmap-anydpi/ic_launcher.xml android/app/src/main/res/mipmap-anydpi/ic_launcher_round.xml
       - name: Build standalone release APK with bundled JS
         run: ./gradlew assembleRelease
         working-directory: apps/mobile/android
-      - name: Verify JS bundle is packaged in APK
+      - name: Verify JS bundle and launcher icon are packaged
         run: |
           APK=android/app/build/outputs/apk/release/app-release.apk
           test -f "$APK"
           unzip -l "$APK" | grep -E 'assets/(index\.android\.bundle|.*\.bundle)' >/dev/null
+          unzip -l "$APK" | grep -E 'res/.*/ic_launcher' >/dev/null
         working-directory: apps/mobile
       - uses: actions/upload-artifact@v4
         with:
