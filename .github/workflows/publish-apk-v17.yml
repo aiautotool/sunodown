@@ -1,0 +1,35 @@
+name: Publish v17 APK
+
+on:
+  push:
+    branches: [v17]
+    paths:
+      - '.github/workflows/publish-apk-v17.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download validated APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release
+          gh run download 36117159863 -n sunodown-mobile-v17-debug-apk -D release
+          test -f release/app-debug.apk
+          mv release/app-debug.apk release/SunoDown-v17-debug.apk
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v17-mobile >/dev/null 2>&1; then
+            gh release upload v17-mobile release/SunoDown-v17-debug.apk --clobber
+          else
+            gh release create v17-mobile release/SunoDown-v17-debug.apk               --target v17               --title "SunoDown v17 Mobile MVP"               --notes "Validated Android debug APK from Mobile v17 CI run 36117159863."
+          fi
