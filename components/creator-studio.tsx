@@ -1600,9 +1600,16 @@ export default function CreatorStudio() {
                 setPreviewTime(time);
               }}
               subtitles={karaokeTimeline}
-              onSubtitlesChange={setKaraokeTimeline}
+              onSubtitlesChange={(lines) => {
+                markPresetField('lyrics');
+                setKaraokeTimeline(lines);
+              }}
               clips={mediaClips}
               onClipsChange={setMediaClips}
+              audioBinary={audioBinary}
+              audioUrl={song.audio}
+              visualLabel={`${template} · ${background.mode}`}
+              effectLabels={effects.length ? effects : ['Không có effect']}
             />
           </section>
           <aside className="sd-inspector">
