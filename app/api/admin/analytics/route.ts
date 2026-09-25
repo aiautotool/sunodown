@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const rangeParam = request.nextUrl.searchParams.get('range') as RangeKey | null;
+  const rangeParam = new URL(request.url).searchParams.get('range') as RangeKey | null;
   const range: RangeKey = rangeParam && rangeParam in RANGE_MS ? rangeParam : '24h';
   const from = Date.now() - RANGE_MS[range];
 
