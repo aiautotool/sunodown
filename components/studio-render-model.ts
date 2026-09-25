@@ -1,6 +1,6 @@
 import { DEFAULT_WAVE_APPEARANCE } from '@/components/v4/types';
 import type { EffectConfig } from '@/components/v8/video-effects';
-import type { StudioPresetConfig } from '@/components/presets/studio-presets';
+import { normalizePresetConfig, type StudioPresetConfig } from '@/components/presets/studio-presets';
 import {
   comparePreviewAndRender,
   visualFingerprint,
@@ -18,21 +18,10 @@ export type StudioRenderModel = {
  * Do not build a second render config in either surface: normalize here first.
  */
 export function createStudioRenderModel(config: StudioPresetConfig): StudioRenderModel {
+  const normalized = normalizePresetConfig(config);
   const visual = {
-    template: config.template,
-    wave: config.wave,
-    waveAppearance: {
-      ...DEFAULT_WAVE_APPEARANCE,
-      ...(config.waveAppearance || {}),
-    },
-    motion: config.motion,
-    aspect: config.aspect,
-    lyrics: config.lyrics,
-    effects: [...config.effects],
-    layout: structuredClone(config.layout),
-    textStyles: structuredClone(config.textStyles),
-    subtitleStyle: structuredClone(config.subtitleStyle),
-    background: structuredClone(config.background),
+    ...normalized,
+    waveAppearance: normalized.waveAppearance!,
   } satisfies StudioPresetConfig & { waveAppearance: typeof DEFAULT_WAVE_APPEARANCE };
 
   return {
