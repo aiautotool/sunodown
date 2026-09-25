@@ -57,6 +57,8 @@ import {
 } from '@/app/lib/audio-processing';
 import { buildEstimatedKaraokeTimeline, exportSrt } from '@/app/lib/karaoke';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
+import { initAnalytics, track } from '@/app/lib/analytics';
+import { DEFAULT_PLAN, canUse } from '@/app/lib/entitlements';
 import type { KaraokeLine } from '@/app/lib/karaoke';
 import { EditorTimeline, type MediaClip } from '@/components/editor-timeline';
 import { PresetGallery } from '@/components/presets/preset-gallery';
@@ -553,11 +555,23 @@ export default function CreatorStudio() {
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
   const timer = useRef<number | undefined>(undefined);
+  const editedFieldsTracked = useRef(new Set<keyof StudioPresetConfig>());
+  const previewPlayTracked = useRef(false);
+  const lastPerfTrack = useRef(0);
 
   const currentPresetConfig = (): StudioPresetConfig =>
     structuredClone(visualSnapshot);
 
   const markPresetField = (field: keyof StudioPresetConfig) => {
+    if (!editedFieldsTracked.current.has(field)) {
+      editedFieldsTracked.current.add(field);
+      track('manual_edit', {
+        field,
+        preset_id: selectedPresetId,
+        template,
+        aspect,
+      });
+    }
     if (!selectedPresetId) return;
     setPresetModified(true);
     setPresetOverrideFields((fields) => fields.includes(field) ? fields : [...fields, field]);
@@ -599,6 +613,15 @@ export default function CreatorStudio() {
     setSelectedPresetId(preset.id);
     setPresetModified(mode === 'preserve-custom' && presetOverrideFields.length > 0);
     setPresetOverrideFields(mode === 'preserve-custom' ? [...presetOverrideFields] : []);
+    localStorage.setItem('sunodown-v14-last-preset', preset.id);
+    track('preset_applied', {
+      preset_id: preset.id,
+      mode,
+      template: next.template,
+      wave: next.wave,
+      aspect: next.aspect,
+      lyrics: next.lyrics,
+    });
     setResultBlob(null);
     if (resultUrl) {
       URL.revokeObjectURL(resultUrl);
@@ -786,12 +809,15 @@ export default function CreatorStudio() {
   };
 
   async function resolve(value = url): Promise<Song | null> {
+    const startedAt = performance.now();
     if (!valid(value)) {
       setError('Hãy dán liên kết Suno hợp lệ.');
+      track('song_resolve_failed', { reason: 'invalid_url' });
       return null;
     }
     setBusy(true);
     setError('');
+    track('song_resolve_started');
     try {
       const r = await fetch('/api/resolve', {
           method: 'POST',
@@ -835,9 +861,21 @@ export default function CreatorStudio() {
           : [],
       );
       setMediaClips([]);
+      editedFieldsTracked.current.clear();
+      previewPlayTracked.current = false;
+      track('song_resolve_succeeded', {
+        duration_ms: Math.round(performance.now() - startedAt),
+        has_lyrics: Boolean(hydrated.lyrics),
+        song_duration_s: Math.round(hydrated.duration || 0),
+      });
       return hydrated;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Không thể tải bài hát này.');
+      const message = e instanceof Error ? e.message : 'Không thể tải bài hát này.';
+      setError(message);
+      track('song_resolve_failed', {
+        duration_ms: Math.round(performance.now() - startedAt),
+        reason: message.slice(0, 120),
+      });
       return null;
     } finally {
       setBusy(false);
@@ -877,9 +915,17 @@ export default function CreatorStudio() {
 
   async function renderVideo(mode: 'cut' | '30' = 'cut') {
     if (!song || rendering) return;
+    const renderStartedAt = performance.now();
     setRendering(true);
     setProgress(0);
     setError('');
+    track('render_started', {
+      mode,
+      template,
+      preset_id: selectedPresetId,
+      aspect,
+      plan: DEFAULT_PLAN,
+    });
     try {
       const parity = assertVisualParity();
       console.info('[SunoDown visual QA]', {
@@ -917,8 +963,24 @@ export default function CreatorStudio() {
       setResultBlob(blob);
       setResultUrl(URL.createObjectURL(blob));
       setResultName(name);
+      track('render_succeeded', {
+        mode,
+        duration_ms: Math.round(performance.now() - renderStartedAt),
+        output_seconds: Math.round(previewSeconds),
+        template,
+        preset_id: selectedPresetId,
+        visual_fingerprint: parity.fingerprint,
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Không thể tạo video.');
+      const message = e instanceof Error ? e.message : 'Không thể tạo video.';
+      setError(message);
+      track('render_failed', {
+        mode,
+        duration_ms: Math.round(performance.now() - renderStartedAt),
+        template,
+        preset_id: selectedPresetId,
+        reason: message.slice(0, 120),
+      });
     } finally {
       setRendering(false);
     }
@@ -935,10 +997,12 @@ export default function CreatorStudio() {
     ) {
       try {
         await navigator.share({ files: [file], title: resultName });
+        track('video_saved', { method: 'share', result_name: resultName });
         return;
       } catch {}
     }
     saveBlob(resultBlob, resultName || 'suno-video.mp4');
+    track('video_saved', { method: 'download', result_name: resultName || 'suno-video.mp4' });
   }
   async function downloadAudio(format: 'm4a' | 'mp3' | 'wav') {
     if (!song || downloading) return;
@@ -1010,6 +1074,10 @@ export default function CreatorStudio() {
       new CustomEvent('suno-effects-change', { detail: config }),
     );
   }, [effects]);
+  useEffect(() => {
+    const cleanupAnalytics = initAnalytics();
+    return cleanupAnalytics;
+  }, []);
   useEffect(() => {
     try {
       setProjects(JSON.parse(localStorage.getItem('sundown-projects') || '[]'));
@@ -1090,6 +1158,11 @@ export default function CreatorStudio() {
       setProjects(next);
       localStorage.setItem('sundown-projects', JSON.stringify(next));
       setSavedProject(true);
+      track('project_saved', {
+        preset_id: selectedPresetId,
+        template,
+        aspect,
+      });
       window.setTimeout(() => setSavedProject(false), 1800);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Không lưu được dự án.');
@@ -1099,6 +1172,7 @@ export default function CreatorStudio() {
   }
   async function openProject(item: { url: string; title: string }) {
     setView('create');
+    track('project_resumed');
     setUrl(item.url);
     if (!(await resolve(item.url))) return;
     const project = await loadProjectData(item.url);
@@ -1312,6 +1386,12 @@ export default function CreatorStudio() {
                   onChange={(e) => setAutoPreview(e.target.checked)}
                 />
               </label>
+              <div className="sd-plan-foundation">
+                <b>Plan foundation</b>
+                <span>
+                  {DEFAULT_PLAN.toUpperCase()} · Advanced mastering {canUse(DEFAULT_PLAN, 'advanced_mastering') ? 'enabled' : 'locked'} · Pro entitlements ready
+                </span>
+              </div>
               <button
                 onClick={() => {
                   localStorage.removeItem('sundown-projects');
@@ -1361,6 +1441,19 @@ export default function CreatorStudio() {
               {busy ? 'Đang phân tích…' : 'Phân tích'}
             </button>
             {error && <div className="sd-error">{error}</div>}
+            {projects[0] && (
+              <button
+                className="sd-resume-project"
+                onClick={() => void openProject(projects[0])}
+              >
+                <Folder />
+                <span>
+                  <b>Tiếp tục dự án gần nhất</b>
+                  <small>{projects[0].title}</small>
+                </span>
+                <i>Tiếp tục</i>
+              </button>
+            )}
             <span className="sd-choose">Chọn nội dung muốn tạo</span>
             <div className="sd-intents">
               <button className="active">
@@ -1410,6 +1503,25 @@ export default function CreatorStudio() {
                 autoPlay={autoPreview}
                 fullPlayback
                 onTimeChange={setPreviewTime}
+                onPreviewPlay={() => {
+                  if (previewPlayTracked.current) return;
+                  previewPlayTracked.current = true;
+                  track('preview_played', {
+                    template,
+                    preset_id: selectedPresetId,
+                    aspect,
+                  });
+                }}
+                onPerformance={(sample) => {
+                  const now = Date.now();
+                  if (now - lastPerfTrack.current < 15000) return;
+                  lastPerfTrack.current = now;
+                  track('preview_performance', {
+                    ...sample,
+                    template,
+                    aspect,
+                  });
+                }}
                 karaokeTimeline={karaokeTimeline}
                 mediaClips={mediaClips}
                 overlayTextStyles={textStyles}
