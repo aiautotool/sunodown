@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 
 const COOKIE = 'sd_admin';
 const ADMIN_PASSWORD_SHA256 =
-  'f5b76f6a63b0a083a9ea9428f547d57d1b61c0b3d6bd385abeeb3da008e0638c';
+  '58e901a25d346776cad704b492af711a3dc3d44e847d291c3b31dbffacce0d3d';
 const MAX_AGE_SECONDS = 60 * 60 * 8;
 
 function hex(bytes: ArrayBuffer) {
