@@ -24,10 +24,9 @@ export function cleanLyricsForVideo(input:string|null|undefined){
     return line
       .replace(/\(([^()\n]{1,16})\)/g,(m,x)=>isChordToken(x)?'':m)
       .replace(/\{([^{}\n]{1,16})\}/g,(m,x)=>isChordToken(x)?'':m)
-      // Remove naked inline chords only when they are isolated tokens, e.g. "Khi [Am] em..." or "Khi Am em...".
-      .split(/(\s+)/)
-      .filter(part=>/^\s+$/.test(part)||!isChordToken(part))
-      .join('')
+      // Do not remove unwrapped single tokens such as "Em": in Vietnamese lyrics
+      // those can be real words. Bare chords are removed only when the whole
+      // line is chord notation (handled above); inline chords must be bracketed.
       .replace(/[ \t]{2,}/g,' ')
       .trim();
   })
