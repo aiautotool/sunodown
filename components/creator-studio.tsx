@@ -147,6 +147,35 @@ function saveBlob(blob: Blob, filename: string) {
 const safeName = (value: string) =>
   (value || 'suno').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120);
 
+const QUICK_PRESET_LIMIT = 3;
+function recommendQuickPresets(song: Song) {
+  const haystack = `${song.style || ''} ${song.tags || ''} ${song.lyrics || ''}`.toLowerCase();
+  const score = (preset: StudioPreset) => {
+    let value = preset.config.aspect === '9:16' ? 2 : 0;
+    if (song.lyrics && preset.config.lyrics !== 'off') value += 3;
+    if (/ballad|sad|emotional|piano|acoustic|love|romantic/.test(haystack)) {
+      if (['sad-lyrics','romantic-letter','acoustic-room','story-confession'].includes(preset.id)) value += 7;
+    }
+    if (/edm|electronic|dance|house|synth|techno|festival/.test(haystack)) {
+      if (['neon-pulse','festival-energy','reels-velocity'].includes(preset.id)) value += 8;
+    }
+    if (/rap|hip hop|trap|fast|energetic|pop/.test(haystack)) {
+      if (['social-hook','reels-velocity','neon-pulse'].includes(preset.id)) value += 5;
+    }
+    if (/chill|lofi|lo-fi|jazz|soul|retro/.test(haystack)) {
+      if (['minimal-clean','midnight-drive','retro-vinyl'].includes(preset.id)) value += 6;
+    }
+    if (/podcast|spoken|speech|story/.test(haystack)) {
+      if (['podcast-wave','story-confession'].includes(preset.id)) value += 8;
+    }
+    if (preset.id === 'social-hook') value += 1;
+    return value;
+  };
+  return [...BUILTIN_STUDIO_PRESETS]
+    .sort((a,b) => score(b) - score(a))
+    .slice(0, QUICK_PRESET_LIMIT);
+}
+
 const makeEffectConfig = (effects: VideoEffect[]): EffectConfig => ({
   effects,
   intensity: 1,
@@ -469,6 +498,7 @@ export default function CreatorStudio() {
     'create' | 'projects' | 'library' | 'jobs' | 'settings'
   >('create');
   const [autoPreview, setAutoPreview] = useState(true);
+  const [quickMode, setQuickMode] = useState(true);
   const [projects, setProjects] = useState<{ url: string; title: string }[]>(
     [],
   );
@@ -569,6 +599,10 @@ export default function CreatorStudio() {
   const visualSnapshot = studioModel.visual;
   const effectConfig = studioModel.effects;
   const visualHash = studioModel.fingerprint;
+  const quickPresets = useMemo(
+    () => (song ? recommendQuickPresets(song) : []),
+    [song],
+  );
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
   const timer = useRef<number | undefined>(undefined);
@@ -637,7 +671,7 @@ export default function CreatorStudio() {
     setPresetOverrideFields(
       mode === 'preserve-custom' ? [...presetOverrideFields] : [],
     );
-    localStorage.setItem('sunodown-v15-last-preset', preset.id);
+    localStorage.setItem('sunodown-v16-last-preset', preset.id);
     setLastPresetId(preset.id);
     track('preset_applied', {
       preset_id: preset.id,
@@ -687,7 +721,7 @@ export default function CreatorStudio() {
 
   const persistCustomPresets = (items: StudioPreset[]) => {
     setCustomPresets(items);
-    localStorage.setItem('sunodown-v15-custom-presets', JSON.stringify(items));
+    localStorage.setItem('sunodown-v16-custom-presets', JSON.stringify(items));
   };
 
   const capturePresetThumbnail = () => {
@@ -833,7 +867,7 @@ export default function CreatorStudio() {
       const nextFavorites = favoritePresetIds.filter((id) => id !== preset.id);
       setFavoritePresetIds(nextFavorites);
       localStorage.setItem(
-        'sunodown-v15-favorite-presets',
+        'sunodown-v16-favorite-presets',
         JSON.stringify(nextFavorites),
       );
     }
@@ -844,7 +878,7 @@ export default function CreatorStudio() {
       ? favoritePresetIds.filter((item) => item !== id)
       : [...favoritePresetIds, id];
     setFavoritePresetIds(next);
-    localStorage.setItem('sunodown-v15-favorite-presets', JSON.stringify(next));
+    localStorage.setItem('sunodown-v16-favorite-presets', JSON.stringify(next));
   };
 
   async function resolve(value = url): Promise<Song | null> {
@@ -900,11 +934,16 @@ export default function CreatorStudio() {
           : [],
       );
       setMediaClips([]);
+      setQuickMode(true);
       editedFieldsTracked.current.clear();
       previewPlayTracked.current = false;
       firstExportTracked.current = false;
       resolvedAt.current = performance.now();
       setLastRenderFailure(null);
+      track('quick_create_started', {
+        has_lyrics: Boolean(hydrated.lyrics),
+        style_hint: (hydrated.style || hydrated.tags || 'unknown').slice(0, 80),
+      });
       track('song_resolve_succeeded', {
         duration_ms: Math.round(performance.now() - startedAt),
         has_lyrics: Boolean(hydrated.lyrics),
@@ -1183,17 +1222,17 @@ export default function CreatorStudio() {
     try {
       setProjects(JSON.parse(localStorage.getItem('sundown-projects') || '[]'));
       const storedPresets = normalizeStoredPresets(
-        JSON.parse(localStorage.getItem('sunodown-v15-custom-presets') || '[]'),
+        JSON.parse(localStorage.getItem('sunodown-v16-custom-presets') || '[]'),
       );
       setCustomPresets(storedPresets);
       localStorage.setItem(
-        'sunodown-v15-custom-presets',
+        'sunodown-v16-custom-presets',
         JSON.stringify(storedPresets),
       );
       setFavoritePresetIds(
-        JSON.parse(localStorage.getItem('sunodown-v15-favorite-presets') || '[]'),
+        JSON.parse(localStorage.getItem('sunodown-v16-favorite-presets') || '[]'),
       );
-      setLastPresetId(localStorage.getItem('sunodown-v15-last-preset'));
+      setLastPresetId(localStorage.getItem('sunodown-v16-last-preset'));
       const allPresets = [
         ...BUILTIN_STUDIO_PRESETS,
         ...storedPresets,
@@ -1577,7 +1616,7 @@ export default function CreatorStudio() {
           <small>MUSIC LIVES FURTHER</small>
         </main>
       ) : (
-        <main className={`sd-studio ${rendering ? 'sd-render-locked' : ''}`}>
+        <main className={`sd-studio ${rendering ? 'sd-render-locked' : ''} ${quickMode ? 'sd-quick-mode' : ''}`}>
           <section className="sd-canvas-column">
             <div className="sd-mobile-title">
               <button onClick={() => setSong(null)}>‹</button>
@@ -1639,6 +1678,80 @@ export default function CreatorStudio() {
                 resultUrl={resultUrl || undefined}
               />
             </div>
+            {quickMode && (
+              <section className="sd-quick-create" aria-label="Quick Create">
+                <div className="sd-quick-create-head">
+                  <div>
+                    <small>QUICK CREATE · V16</small>
+                    <b>Chọn một mẫu, xem preview rồi xuất</b>
+                    <span>Đã gợi ý theo style, lyrics và định dạng phù hợp với bài này.</span>
+                  </div>
+                  <button
+                    className="sd-quick-customize"
+                    disabled={rendering}
+                    onClick={() => {
+                      setQuickMode(false);
+                      track('customize_opened', {
+                        preset_id: selectedPresetId,
+                        template,
+                        aspect,
+                      });
+                    }}
+                  >
+                    <SlidersHorizontal /> Customize
+                  </button>
+                </div>
+                <div className="sd-quick-presets">
+                  {quickPresets.map((preset, index) => (
+                    <button
+                      key={preset.id}
+                      className={selectedPresetId === preset.id ? 'active' : ''}
+                      disabled={rendering}
+                      onClick={() => {
+                        applyPreset(preset, 'replace-all');
+                        track('suggested_preset_selected', {
+                          preset_id: preset.id,
+                          rank: index + 1,
+                          category: preset.category,
+                        });
+                      }}
+                    >
+                      <span
+                        className={`scene-thumb scene-${preset.config.template}`}
+                        style={{
+                          backgroundImage: song.picture
+                            ? `linear-gradient(#080b1299,#080b1299),url("${song.picture}")`
+                            : undefined,
+                        }}
+                      />
+                      <span>
+                        <small>{index === 0 ? 'ĐỀ XUẤT' : preset.badge || preset.category}</small>
+                        <b>{preset.name}</b>
+                        <em>{preset.config.aspect} · {preset.config.lyrics === 'off' ? 'Visualizer' : 'Lyrics'}</em>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div className="sd-quick-actions">
+                  <button
+                    className="primary"
+                    disabled={rendering}
+                    onClick={() => renderVideo('cut')}
+                  >
+                    <Upload />
+                    {rendering
+                      ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
+                      : 'Create video'}
+                  </button>
+                  <button
+                    disabled={rendering}
+                    onClick={() => renderVideo('30')}
+                  >
+                    <Play /> Tạo bản 30s
+                  </button>
+                </div>
+              </section>
+            )}
             {lastPresetId && (
               <button
                 className="sd-last-preset"
@@ -1661,7 +1774,7 @@ export default function CreatorStudio() {
                 </span>
               </button>
             )}
-            <div className="sd-first-run-flow" aria-label="Quy trình tạo video nhanh">
+            {!quickMode && <div className="sd-first-run-flow" aria-label="Quy trình tạo video nhanh">
               <button
                 className="primary"
                 disabled={rendering}
@@ -1681,7 +1794,7 @@ export default function CreatorStudio() {
                 <b>3 · Xuất video</b>
                 {rendering ? `${Math.round(progress)}%` : 'Tạo video'}
               </button>
-            </div>
+            </div>}
             {resultUrl && (
               <div className="sd-result-actions">
                 <div>

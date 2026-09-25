@@ -3,6 +3,9 @@ export type AnalyticsEventName =
   | 'song_resolve_started'
   | 'song_resolve_succeeded'
   | 'song_resolve_failed'
+  | 'quick_create_started'
+  | 'suggested_preset_selected'
+  | 'customize_opened'
   | 'preset_applied'
   | 'preview_played'
   | 'manual_edit'
@@ -31,8 +34,8 @@ type AnalyticsEvent = {
   payload: AnalyticsPayload;
 };
 
-const SESSION_KEY = 'sunodown-v15-analytics-session';
-const QUEUE_KEY = 'sunodown-v15-analytics-queue';
+const SESSION_KEY = 'sunodown-v16-analytics-session';
+const QUEUE_KEY = 'sunodown-v16-analytics-queue';
 const QUEUE_LIMIT = 120;
 const FLUSH_SIZE = 12;
 

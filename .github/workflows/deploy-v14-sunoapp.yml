@@ -1,8 +1,8 @@
-name: Deploy V15 to sunoapp.aiautotool.com
+name: Deploy V16 to sunoapp.aiautotool.com
 
 on:
   push:
-    branches: [v15]
+    branches: [v16]
   workflow_dispatch:
 
 permissions:
@@ -10,7 +10,7 @@ permissions:
   statuses: write
 
 concurrency:
-  group: sunodown-v15-sunoapp
+  group: sunodown-v16-sunoapp
   cancel-in-progress: true
 
 jobs:
@@ -18,13 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Checkout v15
+      - name: Checkout v16
         uses: actions/checkout@v4
 
       - name: Mark deploy pending
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context=sunodown/v15-sunoapp -f description="Build and deploy to sunoapp.aiautotool.com"
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context=sunodown/v16-sunoapp -f description="Build and deploy to sunoapp.aiautotool.com"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -46,7 +46,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Configure isolated v15 Worker and custom domain
+      - name: Configure isolated v16 Worker and custom domain
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
@@ -76,7 +76,7 @@ jobs:
           if [ -n "$MEDIA_TOKEN_SECRET" ]; then
             printf '%s' "$MEDIA_TOKEN_SECRET" | npx wrangler secret put MEDIA_TOKEN_SECRET --config wrangler.v6.generated.json
           elif [ -n "$AI_RENDER_TOKEN" ]; then
-            DERIVED_SECRET="$(printf 'sunodown-media-token-v15:%s' "$AI_RENDER_TOKEN" | sha256sum | awk '{print $1}')"
+            DERIVED_SECRET="$(printf 'sunodown-media-token-v16:%s' "$AI_RENDER_TOKEN" | sha256sum | awk '{print $1}')"
             printf '%s' "$DERIVED_SECRET" | npx wrangler secret put MEDIA_TOKEN_SECRET --config wrangler.v6.generated.json
             echo "::warning::MEDIA_TOKEN_SECRET repo secret is not configured; using a stable derived secret."
           else
@@ -101,7 +101,7 @@ jobs:
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
 
-      - name: Deploy v15 to sunoapp.aiautotool.com
+      - name: Deploy v16 to sunoapp.aiautotool.com
         run: npx wrangler deploy --config wrangler.v6.generated.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -110,10 +110,10 @@ jobs:
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context=sunodown/v15-sunoapp -f description="v15 deployed to sunoapp.aiautotool.com"
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context=sunodown/v16-sunoapp -f description="v16 deployed to sunoapp.aiautotool.com"
 
       - name: Mark deploy failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context=sunodown/v15-sunoapp -f description="v15 sunoapp deploy failed"
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context=sunodown/v16-sunoapp -f description="v16 sunoapp deploy failed"
