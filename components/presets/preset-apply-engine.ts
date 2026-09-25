@@ -1,5 +1,5 @@
 import type { StudioPreset, StudioPresetConfig } from './studio-presets';
-import { clonePresetConfig } from './studio-presets';
+import { clonePresetConfig, normalizePresetConfig } from './studio-presets';
 import { normalizeProductionPreset, productionFingerprint, type ProductionPresetConfig } from './production-preset';
 
 export type PresetApplyMode = 'replace-all' | 'preserve-custom';
@@ -76,8 +76,8 @@ export function createPresetApplyTransaction(
   preset: StudioPreset,
   mode: PresetApplyMode = 'replace-all',
 ): PresetApplyTransaction {
-  const before = clonePresetConfig(current);
-  const next = clonePresetConfig(preset.config);
+  const before = normalizePresetConfig(current);
+  const next = normalizePresetConfig(preset.config);
   const production = normalizeProductionPreset({ mastering:preset.mastering, export:preset.export }, next.aspect);
 
   if (mode === 'preserve-custom') {
@@ -108,10 +108,10 @@ export function commitPresetVisualState(
   setters: PresetVisualStateSetters,
   revision = 0,
 ): PresetVisualCommit {
-  const next = clonePresetConfig(config);
+  const next = normalizePresetConfig(config);
   setters.setTemplate(next.template);
   setters.setWave(next.wave);
-  if(next.waveAppearance&&setters.setWaveAppearance)setters.setWaveAppearance(structuredClone(next.waveAppearance));
+  if(setters.setWaveAppearance)setters.setWaveAppearance(structuredClone(next.waveAppearance!));
   setters.setMotion(next.motion);
   setters.setAspect(next.aspect);
   setters.setLyrics(next.lyrics);
@@ -136,7 +136,7 @@ export function createPresetVisualCommit(
   config: StudioPresetConfig,
   revision = 0,
 ): PresetVisualCommit {
-  const snapshot = clonePresetConfig(config);
+  const snapshot = normalizePresetConfig(config);
   return {
     revision: revision + 1,
     snapshot,
