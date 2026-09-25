@@ -491,6 +491,14 @@ export default function CreatorStudio() {
     [motion, setMotion] = useState<MotionIntensity>('medium'),
     [effects, setEffects] = useState<VideoEffect[]>([]),
     [rendering, setRendering] = useState(false),
+    [renderStage, setRenderStage] = useState<'idle' | 'validation' | 'prepare' | 'render' | 'finalize'>('idle'),
+    [lastRenderFailure, setLastRenderFailure] = useState<{
+      mode: 'cut' | '30';
+      stage: string;
+      retryable: boolean;
+      attempt: number;
+      message: string;
+    } | null>(null),
     [progress, setProgress] = useState(0),
     [downloading, setDownloading] = useState('');
   useRenderWakeLock(rendering);
@@ -566,6 +574,8 @@ export default function CreatorStudio() {
   const timer = useRef<number | undefined>(undefined);
   const editedFieldsTracked = useRef(new Set<keyof StudioPresetConfig>());
   const previewPlayTracked = useRef(false);
+  const firstExportTracked = useRef(false);
+  const resolvedAt = useRef<number | null>(null);
   const lastPerfTrack = useRef(0);
 
   const currentPresetConfig = (): StudioPresetConfig =>
@@ -892,6 +902,9 @@ export default function CreatorStudio() {
       setMediaClips([]);
       editedFieldsTracked.current.clear();
       previewPlayTracked.current = false;
+      firstExportTracked.current = false;
+      resolvedAt.current = performance.now();
+      setLastRenderFailure(null);
       track('song_resolve_succeeded', {
         duration_ms: Math.round(performance.now() - startedAt),
         has_lyrics: Boolean(hydrated.lyrics),
@@ -936,31 +949,72 @@ export default function CreatorStudio() {
     return parity;
   };
 
-  async function renderVideo(mode: 'cut' | '30' = 'cut') {
+  const classifyRenderFailure = (message: string, stage: string) => {
+    const lower = message.toLowerCase();
+    const nonRetryable =
+      stage === 'validation' ||
+      lower.includes('preset regression') ||
+      lower.includes('visual sync failed') ||
+      lower.includes('invalid') ||
+      lower.includes('unsupported');
+    return { retryable: !nonRetryable };
+  };
+
+  async function renderVideo(mode: 'cut' | '30' = 'cut', attempt = 1) {
     if (!song || rendering) return;
     const renderStartedAt = performance.now();
+    let stage: 'validation' | 'prepare' | 'render' | 'finalize' = 'validation';
     setRendering(true);
+    setRenderStage(stage);
     setProgress(0);
     setError('');
-    track('render_started', {
+    setLastRenderFailure(null);
+    track(attempt > 1 ? 'render_retry' : 'render_started', {
       mode,
+      attempt,
       template,
       preset_id: selectedPresetId,
       aspect,
       plan: DEFAULT_PLAN,
     });
+    const stageTrack = (next: typeof stage) => {
+      stage = next;
+      setRenderStage(next);
+      track('render_stage', {
+        mode,
+        attempt,
+        stage: next,
+        elapsed_ms: Math.round(performance.now() - renderStartedAt),
+        preset_id: selectedPresetId,
+      });
+    };
     try {
+      track('render_stage', {
+        mode,
+        attempt,
+        stage,
+        elapsed_ms: 0,
+        preset_id: selectedPresetId,
+      });
       const parity = assertVisualParity();
       console.info('[SunoDown visual QA]', {
         fingerprint: parity.fingerprint,
         selectedPresetId,
         modified: presetModified,
       });
+
+      stageTrack('prepare');
       const config = studioModel.effects;
-      const startSeconds = trimStart,
-        available = Math.max(1, (trimEnd || song.duration || 30) - trimStart),
-        previewSeconds = mode === '30' ? Math.min(30, available) : available;
+      const startSeconds = trimStart;
+      const available = Math.max(
+        1,
+        (trimEnd || song.duration || 30) - trimStart,
+      );
+      const previewSeconds =
+        mode === '30' ? Math.min(30, available) : available;
       const visual = studioModel.visual;
+
+      stageTrack('render');
       const blob = await generateVisualizerVideoArt(
         renderSong(song),
         visual.aspect,
@@ -982,14 +1036,25 @@ export default function CreatorStudio() {
           background: visual.background,
         },
       );
+
+      stageTrack('finalize');
       if (resultUrl) URL.revokeObjectURL(resultUrl);
       const name = `${safeName(song.title)}${mode === '30' ? '-30s' : ''}.mp4`;
       setResultBlob(blob);
       setResultUrl(URL.createObjectURL(blob));
       setResultName(name);
+      setProgress(100);
+      const totalMs = Math.round(performance.now() - renderStartedAt);
+      const timeToFirstExport =
+        !firstExportTracked.current && resolvedAt.current
+          ? Math.round(performance.now() - resolvedAt.current)
+          : undefined;
+      firstExportTracked.current = true;
       track('render_succeeded', {
         mode,
-        duration_ms: Math.round(performance.now() - renderStartedAt),
+        attempt,
+        duration_ms: totalMs,
+        time_to_first_export_ms: timeToFirstExport,
         output_seconds: Math.round(previewSeconds),
         template,
         preset_id: selectedPresetId,
@@ -997,16 +1062,28 @@ export default function CreatorStudio() {
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Không thể tạo video.';
+      const classification = classifyRenderFailure(message, stage);
       setError(message);
+      setLastRenderFailure({
+        mode,
+        stage,
+        retryable: classification.retryable,
+        attempt,
+        message,
+      });
       track('render_failed', {
         mode,
+        attempt,
         duration_ms: Math.round(performance.now() - renderStartedAt),
+        failure_stage: stage,
+        retryable: classification.retryable,
         template,
         preset_id: selectedPresetId,
         reason: message.slice(0, 120),
       });
     } finally {
       setRendering(false);
+      setRenderStage('idle');
     }
   }
   async function saveVideo() {
@@ -1537,6 +1614,9 @@ export default function CreatorStudio() {
                     template,
                     preset_id: selectedPresetId,
                     aspect,
+                    time_to_first_preview_ms: resolvedAt.current
+                      ? Math.round(performance.now() - resolvedAt.current)
+                      : undefined,
                   });
                 }}
                 onPerformance={(sample) => {
@@ -1694,12 +1774,35 @@ export default function CreatorStudio() {
               >
                 <Upload />{' '}
                 {rendering
-                  ? `Rendering ${Math.round(progress)}%`
+                  ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
                   : `Export ${fmt(Math.max(0, trimEnd - trimStart))} video`}
               </button>
               {rendering && (
                 <div className="sd-progress">
                   <i style={{ width: `${progress}%` }} />
+                </div>
+              )}
+              {lastRenderFailure && (
+                <div className="sd-render-retry" role="status">
+                  <span>
+                    Lỗi ở bước <b>{lastRenderFailure.stage}</b>
+                    {lastRenderFailure.retryable
+                      ? ' · có thể thử lại'
+                      : ' · cần chỉnh cấu hình trước khi render lại'}
+                  </span>
+                  {lastRenderFailure.retryable && (
+                    <button
+                      disabled={rendering}
+                      onClick={() =>
+                        renderVideo(
+                          lastRenderFailure.mode,
+                          lastRenderFailure.attempt + 1,
+                        )
+                      }
+                    >
+                      Thử lại render
+                    </button>
+                  )}
                 </div>
               )}
               <div className="sd-downloads">
@@ -1755,7 +1858,7 @@ export default function CreatorStudio() {
             <button disabled={rendering} onClick={() => renderVideo('cut')}>
               <Upload />
               {rendering
-                ? `Rendering ${Math.round(progress)}%`
+                ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
                 : 'Create & export video'}
             </button>
             <nav>

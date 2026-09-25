@@ -97,6 +97,12 @@ export async function GET(request: NextRequest) {
     const deviceSessions = new Map<string, Set<string>>();
     const perf = new Map<string, { fps: number; dropped: number; samples: number }>();
     const failures = new Map<string, number>();
+    const failureStages = new Map<string, number>();
+    let retries = 0;
+    let firstPreviewTotal = 0;
+    let firstPreviewSamples = 0;
+    let firstExportTotal = 0;
+    let firstExportSamples = 0;
 
     let rendersOk = 0;
     let rendersFailed = 0;
@@ -116,8 +122,23 @@ export async function GET(request: NextRequest) {
         deviceSessions.get(device)!.add(row.session_id);
       }
 
+      if (row.event_name === 'preview_played') {
+        const value = Number(data.time_to_first_preview_ms);
+        if (Number.isFinite(value) && value >= 0) {
+          firstPreviewTotal += value;
+          firstPreviewSamples += 1;
+        }
+      }
+
+      if (row.event_name === 'render_retry') retries += 1;
+
       if (row.event_name === 'render_succeeded') {
         rendersOk += 1;
+        const firstExport = Number(data.time_to_first_export_ms);
+        if (Number.isFinite(firstExport) && firstExport >= 0) {
+          firstExportTotal += firstExport;
+          firstExportSamples += 1;
+        }
         const duration = Number(data.duration_ms);
         if (Number.isFinite(duration) && duration >= 0) {
           renderDurationTotal += duration;
@@ -136,6 +157,11 @@ export async function GET(request: NextRequest) {
         const reason =
           typeof data.reason === 'string' && data.reason ? data.reason.slice(0, 120) : 'Unknown';
         failures.set(reason, (failures.get(reason) || 0) + 1);
+        const stage =
+          typeof data.failure_stage === 'string' && data.failure_stage
+            ? data.failure_stage
+            : 'unknown';
+        failureStages.set(stage, (failureStages.get(stage) || 0) + 1);
       }
 
       if (row.event_name === 'video_saved') saves += 1;
@@ -190,6 +216,13 @@ export async function GET(request: NextRequest) {
           avgRenderMs: renderDurationSamples
             ? Math.round(renderDurationTotal / renderDurationSamples)
             : 0,
+          avgFirstPreviewMs: firstPreviewSamples
+            ? Math.round(firstPreviewTotal / firstPreviewSamples)
+            : 0,
+          avgFirstExportMs: firstExportSamples
+            ? Math.round(firstExportTotal / firstExportSamples)
+            : 0,
+          retries,
         },
         funnel,
         topPresets: top(presetExports, 'preset'),
@@ -209,6 +242,9 @@ export async function GET(request: NextRequest) {
           .sort((a, b) => b[1] - a[1])
           .slice(0, 6)
           .map(([reason, count]) => ({ reason, count })),
+        failureStages: [...failureStages.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([stage, count]) => ({ stage, count })),
       },
       {
         headers: {

@@ -10,6 +10,8 @@ const ALLOWED = new Set([
   'preview_played',
   'manual_edit',
   'render_started',
+  'render_stage',
+  'render_retry',
   'render_succeeded',
   'render_failed',
   'video_saved',

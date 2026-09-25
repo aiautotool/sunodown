@@ -26,6 +26,9 @@ type Report = {
     saves: number;
     resumes: number;
     avgRenderMs: number;
+    avgFirstPreviewMs: number;
+    avgFirstExportMs: number;
+    retries: number;
   };
   funnel: Array<{
     event: string;
@@ -43,6 +46,7 @@ type Report = {
   }>;
   devices: Array<{ device: string; sessions: number }>;
   failures: Array<{ reason: string; count: number }>;
+  failureStages: Array<{ stage: string; count: number }>;
 };
 
 const LABELS: Record<string, string> = {
@@ -219,6 +223,8 @@ export function AdminAnalyticsDashboard() {
         <article><span><BarChart3 /> Render success</span><b>{report.summary.renderSuccessRate}%</b><small>{report.summary.rendersOk} ok · {report.summary.rendersFailed} fail</small></article>
         <article><span><Gauge /> Avg render</span><b>{formatMs(report.summary.avgRenderMs)}</b><small>successful renders</small></article>
         <article><span><Sparkles /> Saves</span><b>{report.summary.saves}</b><small>{report.summary.resumes} project resumes</small></article>
+        <article><span><Gauge /> First preview</span><b>{formatMs(report.summary.avgFirstPreviewMs)}</b><small>resolve → first play</small></article>
+        <article><span><Gauge /> First export</span><b>{formatMs(report.summary.avgFirstExportMs)}</b><small>{report.summary.retries} render retries</small></article>
       </section>
 
       <section className="sd-admin-grid">
@@ -295,9 +301,20 @@ export function AdminAnalyticsDashboard() {
 
         <article className="wide">
           <div className="sd-admin-card-title">
-            <div><b>Render failures</b><span>Chỉ aggregate reason, không có URL/media/lyrics</span></div>
+            <div><b>Render failures</b><span>Aggregate reason + failure stage, không lưu URL/media/lyrics</span></div>
           </div>
           <div className="sd-failures">
+            {report.failureStages.length > 0 && (
+              <div>
+                <TriangleAlert />
+                <span>
+                  Stage: {report.failureStages
+                    .map((item) => `${item.stage} (${item.count})`)
+                    .join(' · ')}
+                </span>
+                <b>{report.summary.rendersFailed}</b>
+              </div>
+            )}
             {report.failures.length ? report.failures.map((item) => (
               <div key={item.reason}>
                 <TriangleAlert />

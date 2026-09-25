@@ -7,6 +7,8 @@ export type AnalyticsEventName =
   | 'preview_played'
   | 'manual_edit'
   | 'render_started'
+  | 'render_stage'
+  | 'render_retry'
   | 'render_succeeded'
   | 'render_failed'
   | 'video_saved'
@@ -29,11 +31,14 @@ type AnalyticsEvent = {
   payload: AnalyticsPayload;
 };
 
-const SESSION_KEY = 'sunodown-v14-analytics-session';
-const QUEUE_LIMIT = 40;
+const SESSION_KEY = 'sunodown-v15-analytics-session';
+const QUEUE_KEY = 'sunodown-v15-analytics-queue';
+const QUEUE_LIMIT = 120;
 const FLUSH_SIZE = 12;
 
 let queue: AnalyticsEvent[] = [];
+let hydrated = false;
+let flushing = false;
 let flushTimer: number | undefined;
 
 function randomId(prefix: string) {
@@ -68,30 +73,59 @@ function sanitizePayload(payload: AnalyticsPayload) {
   return clean;
 }
 
-async function deliver(events: AnalyticsEvent[]) {
-  if (!events.length || typeof window === 'undefined') return;
-  const body = JSON.stringify({ events });
-  if (navigator.sendBeacon) {
-    const sent = navigator.sendBeacon(
-      '/api/analytics',
-      new Blob([body], { type: 'application/json' }),
-    );
-    if (sent) return;
-  }
-  await fetch('/api/analytics', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body,
-    keepalive: true,
-    cache: 'no-store',
-  }).catch(() => undefined);
+function persistQueue() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue.slice(-QUEUE_LIMIT)));
+  } catch {}
 }
 
-export function flushAnalytics() {
-  if (typeof window === 'undefined' || !queue.length) return;
-  const events = queue.splice(0, FLUSH_SIZE);
-  void deliver(events);
-  if (queue.length) window.setTimeout(flushAnalytics, 250);
+function hydrateQueue() {
+  if (hydrated || typeof window === 'undefined') return;
+  hydrated = true;
+  try {
+    const stored = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+    if (Array.isArray(stored)) queue = stored.slice(-QUEUE_LIMIT);
+  } catch {
+    queue = [];
+  }
+}
+
+async function deliver(events: AnalyticsEvent[]) {
+  if (!events.length || typeof window === 'undefined') return true;
+  try {
+    const response = await fetch('/api/analytics', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ events }),
+      keepalive: true,
+      cache: 'no-store',
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function flushAnalytics() {
+  if (typeof window === 'undefined' || flushing) return;
+  hydrateQueue();
+  if (!queue.length) return;
+  flushing = true;
+  try {
+    const events = queue.slice(0, FLUSH_SIZE);
+    const delivered = await deliver(events);
+    if (delivered) {
+      queue.splice(0, events.length);
+      persistQueue();
+      if (queue.length) window.setTimeout(() => void flushAnalytics(), 300);
+    } else {
+      persistQueue();
+      window.setTimeout(() => void flushAnalytics(), 5000);
+    }
+  } finally {
+    flushing = false;
+  }
 }
 
 export function track(
@@ -99,6 +133,7 @@ export function track(
   payload: AnalyticsPayload = {},
 ) {
   if (typeof window === 'undefined') return;
+  hydrateQueue();
   queue.push({
     version: 1,
     event,
@@ -109,16 +144,19 @@ export function track(
     payload: sanitizePayload(payload),
   });
   if (queue.length > QUEUE_LIMIT) queue = queue.slice(-QUEUE_LIMIT);
+  persistQueue();
   if (queue.length >= FLUSH_SIZE) {
-    flushAnalytics();
+    void flushAnalytics();
     return;
   }
   if (flushTimer) window.clearTimeout(flushTimer);
-  flushTimer = window.setTimeout(flushAnalytics, 1400);
+  flushTimer = window.setTimeout(() => void flushAnalytics(), 1400);
 }
 
 export function initAnalytics() {
   if (typeof window === 'undefined') return () => {};
+  hydrateQueue();
+  void flushAnalytics();
   track('session_started', {
     device: /iPhone|iPad|iPod/i.test(navigator.userAgent)
       ? 'ios'
@@ -128,12 +166,15 @@ export function initAnalytics() {
     viewport_w: window.innerWidth,
     viewport_h: window.innerHeight,
   });
-  const flush = () => flushAnalytics();
+  const flush = () => void flushAnalytics();
+  const online = () => void flushAnalytics();
   window.addEventListener('pagehide', flush);
+  window.addEventListener('online', online);
   document.addEventListener('visibilitychange', flush);
   return () => {
     window.removeEventListener('pagehide', flush);
+    window.removeEventListener('online', online);
     document.removeEventListener('visibilitychange', flush);
-    flushAnalytics();
+    void flushAnalytics();
   };
 }
