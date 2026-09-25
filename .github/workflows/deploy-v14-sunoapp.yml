@@ -10,7 +10,7 @@ permissions:
   statuses: write
 
 concurrency:
-  group: sunodown-v16-sunoapp
+  group: sunodown-v16-sunoapp-v2
   cancel-in-progress: true
 
 jobs:
