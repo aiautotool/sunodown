@@ -676,6 +676,7 @@ function applyCapCutLineAnchors(
           matched: number;
           leftCount: number;
           nextCursor: number;
+          ranked: number;
         }
       | null = null;
 
@@ -694,10 +695,7 @@ function applyCapCutLineAnchors(
         const overlap = tokenOverlap(lines[lineIndex], text);
         const distancePenalty = Math.min(0.12, (startIndex - cursor) * 0.0025);
         const ranked = overlap.score - distancePenalty;
-        const bestRanked = best
-          ? best.score -
-            Math.min(0.12, (best.nextCursor - span - cursor) * 0.0025)
-          : Number.NEGATIVE_INFINITY;
+        const bestRanked = best?.ranked ?? Number.NEGATIVE_INFINITY;
 
         if (!best || ranked > bestRanked) {
           best = {
@@ -707,6 +705,7 @@ function applyCapCutLineAnchors(
             matched: overlap.matched,
             leftCount: overlap.leftCount,
             nextCursor: startIndex + span,
+            ranked,
           };
         }
 
@@ -722,6 +721,7 @@ function applyCapCutLineAnchors(
             matched: overlap.matched,
             leftCount: overlap.leftCount,
             nextCursor: startIndex + span,
+            ranked,
           };
           startIndex = utterances.length;
           break;
