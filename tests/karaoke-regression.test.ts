@@ -13,6 +13,7 @@ import {
   alignKnownLyricsGlobally,
   alignKnownLyricsToSegments,
 } from '../app/lib/karaoke-known-lyrics-align.ts';
+import { validateKaraokeTimeline } from '../app/lib/karaoke-validation.ts';
 
 void test('removes bracketed and unambiguous bare chords from every karaoke input', () => {
   const input =
@@ -339,4 +340,81 @@ void test('global aligner recovers useful subtitle cues when strict local matchi
   assert.ok(aligned.timeline.length >= 2);
   assert.ok((aligned.firstVocalAt ?? 0) > 23);
   assert.ok(aligned.timeline.every((line) => line.start > 23));
+});
+
+
+void test('validator never lets a cue start before its first timed word', () => {
+  const report = validateKaraokeTimeline(
+    [
+      {
+        text: 'Bắt đầu hát',
+        start: 18,
+        end: 22,
+        words: [
+          { text: 'Bắt', start: 20.2, end: 20.5 },
+          { text: 'đầu', start: 20.55, end: 20.9 },
+          { text: 'hát', start: 21, end: 21.5 },
+        ],
+      },
+    ],
+    30,
+    { lyrics: 'Bắt đầu hát', source: 'timed' },
+  );
+
+  assert.equal(report.timeline[0].start, 20.2);
+  assert.equal(report.firstVocalAt, 20.2);
+  assert.ok(report.issues.some((issue) => issue.code === 'cue_before_first_word'));
+});
+
+void test('estimated timing is explicitly low-confidence fallback material', () => {
+  const report = validateKaraokeTimeline(
+    [
+      {
+        text: 'Một câu ước tính',
+        start: 2,
+        end: 5,
+        words: [
+          { text: 'Một', start: 2, end: 3 },
+          { text: 'câu', start: 3, end: 4 },
+          { text: 'ước', start: 4, end: 4.5 },
+          { text: 'tính', start: 4.5, end: 5 },
+        ],
+      },
+    ],
+    20,
+    { lyrics: 'Một câu ước tính', source: 'estimated' },
+  );
+
+  assert.equal(report.source, 'estimated');
+  assert.ok(report.confidence <= 35);
+});
+
+void test('validator penalizes sparse known-lyrics alignment', () => {
+  const lyrics = [
+    'câu thứ nhất',
+    'câu thứ hai',
+    'câu thứ ba',
+    'câu thứ tư',
+    'câu thứ năm',
+  ].join('\n');
+  const report = validateKaraokeTimeline(
+    [
+      {
+        text: 'câu thứ nhất',
+        start: 12,
+        end: 14,
+        words: [
+          { text: 'câu', start: 12, end: 12.4 },
+          { text: 'thứ', start: 12.5, end: 13 },
+          { text: 'nhất', start: 13.1, end: 13.8 },
+        ],
+      },
+    ],
+    60,
+    { lyrics, source: 'timed' },
+  );
+
+  assert.ok(report.coverage < 0.45);
+  assert.ok(report.issues.some((issue) => issue.code === 'low_lyric_coverage'));
+  assert.ok(report.confidence < 60);
 });
