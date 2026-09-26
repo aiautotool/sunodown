@@ -14,10 +14,15 @@ export type BackgroundConfig={
   dim:number;
   overlayOpacity:number;
   loopVideo:boolean;
+  positionX?:number;
+  positionY?:number;
+  zoom?:number;
+  videoStart?:number;
+  videoEnd?:number;
 };
 
 export const DEFAULT_BACKGROUND_CONFIG:BackgroundConfig={
-  mode:'suno',fit:'cover',blur:0,dim:0,overlayOpacity:0,loopVideo:true,
+  mode:'suno',fit:'cover',blur:0,dim:0,overlayOpacity:0,loopVideo:true,positionX:50,positionY:50,zoom:100,videoStart:0,
 };
 
 export const BACKGROUND_PRESETS=[
@@ -42,6 +47,11 @@ export function sanitizeStoredBackground(value:any):BackgroundConfig{
     dim:Math.max(0,Math.min(100,Number(value?.dim)||0)),
     overlayOpacity:Math.max(0,Math.min(80,Number(value?.overlayOpacity)||0)),
     loopVideo:value?.loopVideo!==false,
+    positionX:Math.max(0,Math.min(100,Number(value?.positionX) || 50)),
+    positionY:Math.max(0,Math.min(100,Number(value?.positionY) || 50)),
+    zoom:Math.max(50,Math.min(250,Number(value?.zoom) || 100)),
+    videoStart:Math.max(0,Number(value?.videoStart) || 0),
+    videoEnd:Number.isFinite(Number(value?.videoEnd))?Math.max(0,Number(value.videoEnd)):undefined,
   };
 }
 
@@ -81,8 +91,12 @@ export function drawPresetBackground(ctx:CanvasRenderingContext2D,id:string|unde
 
 export function drawMediaBackground(ctx:CanvasRenderingContext2D,source:CanvasImageSource,sourceW:number,sourceH:number,w:number,h:number,config:BackgroundConfig){
   const fit=config.fit||'cover';
-  const scale=fit==='cover'?Math.max(w/sourceW,h/sourceH):Math.min(w/sourceW,h/sourceH);
-  const dw=sourceW*scale,dh=sourceH*scale,x=(w-dw)/2,y=(h-dh)/2;
+  const baseScale=fit==='cover'?Math.max(w/sourceW,h/sourceH):Math.min(w/sourceW,h/sourceH);
+  const scale=baseScale*Math.max(.5,Math.min(2.5,(config.zoom||100)/100));
+  const dw=sourceW*scale,dh=sourceH*scale;
+  const roomX=Math.max(0,dw-w),roomY=Math.max(0,dh-h);
+  const x=fit==='cover'?-(roomX*Math.max(0,Math.min(100,config.positionX??50))/100):(w-dw)/2;
+  const y=fit==='cover'?-(roomY*Math.max(0,Math.min(100,config.positionY??50))/100):(h-dh)/2;
   ctx.save();
   if(fit==='contain'){ctx.fillStyle='#050611';ctx.fillRect(0,0,w,h)}
   if(config.blur>0)ctx.filter=`blur(${config.blur}px)`;
@@ -95,10 +109,20 @@ export function applyBackgroundFinish(ctx:CanvasRenderingContext2D,w:number,h:nu
   if(config.overlayOpacity>0){const a=config.overlayOpacity/100;const g=ctx.createLinearGradient(0,0,w,h);g.addColorStop(0,`rgba(76,29,149,${a*.55})`);g.addColorStop(1,`rgba(8,47,73,${a*.45})`);ctx.fillStyle=g;ctx.fillRect(0,0,w,h)}
 }
 
-export async function seekVideoFrame(video:HTMLVideoElement,time:number,loop=true){
+export function backgroundVideoTime(time:number,duration:number,config:BackgroundConfig){
+  const maxDuration=Math.max(.02,duration);
+  const start=Math.max(0,Math.min(config.videoStart||0,Math.max(0,maxDuration-.02)));
+  const requestedEnd=Number.isFinite(config.videoEnd as number)?Number(config.videoEnd):maxDuration;
+  const end=Math.max(start+.02,Math.min(requestedEnd,maxDuration));
+  const span=Math.max(.02,end-start);
+  return config.loopVideo?start+(((Math.max(0,time)%span)+span)%span):Math.min(start+Math.max(0,time),end-.02);
+}
+
+export async function seekVideoFrame(video:HTMLVideoElement,time:number,loop=true,start=0,end?:number){
   const duration=video.duration;
   if(!Number.isFinite(duration)||duration<=0)throw new Error('Trình duyệt không đọc được video nền.');
-  const target=loop?((time%duration)+duration)%duration:Math.min(Math.max(0,time),Math.max(0,duration-.02));
+  const config={...DEFAULT_BACKGROUND_CONFIG,loopVideo:loop,videoStart:start,videoEnd:end};
+  const target=backgroundVideoTime(time,duration,config);
   if(Math.abs(video.currentTime-target)<.055)return;
   await new Promise<void>((resolve,reject)=>{
     const timer=window.setTimeout(()=>{cleanup();reject(new Error('Không lấy được frame từ video nền.'))},2500);
@@ -110,5 +134,5 @@ export async function seekVideoFrame(video:HTMLVideoElement,time:number,loop=tru
 }
 
 export function backgroundFingerprint(config:BackgroundConfig){
-  return [config.mode,config.presetId||'',config.imageFingerprint||'',config.videoFingerprint||'',config.fit,config.blur,config.dim,config.overlayOpacity,config.loopVideo?'1':'0'].join(':');
+  return [config.mode,config.presetId||'',config.imageFingerprint||'',config.videoFingerprint||'',config.fit,config.blur,config.dim,config.overlayOpacity,config.loopVideo?'1':'0',config.positionX,config.positionY,config.zoom,config.videoStart,config.videoEnd??''].join(':');
 }

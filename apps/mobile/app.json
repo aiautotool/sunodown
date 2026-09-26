@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "SunoDown",
+    "slug": "sunodown-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "sunodown",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.aiautotool.sunodown",
+      "infoPlist": {
+        "NSPhotoLibraryAddUsageDescription": "SunoDown needs permission to save rendered videos to your library."
+      }
+    },
+    "android": {
+      "package": "com.aiautotool.sunodown"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow SunoDown to access your media.",
+          "savePhotosPermission": "Allow SunoDown to save rendered videos."
+        }
+      ]
+    ],
+    "extra": {
+      "apiBaseUrl": "https://suno.aiautotool.com"
+    }
+  }
+}

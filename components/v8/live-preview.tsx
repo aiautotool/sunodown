@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Pause, Play } from 'lucide-react';
 import {
   createLiveFramePainter,
+  withSubtitleLayout,
   type OverlayLayout,
   type OverlayTextStyles,
+  type PreviewAudioAnalysis,
 } from '../v4/renderer-safe';
 import {
   VIDEO_SIZES,
@@ -13,6 +15,7 @@ import {
   type VideoAspect,
   type VisualTemplate,
   type WaveStyle,
+  type WaveAppearance,
   type MotionIntensity,
   type LyricsMode,
 } from '../v4/types';
@@ -26,6 +29,7 @@ import {
 import {
   DEFAULT_BACKGROUND_CONFIG,
   applyBackgroundFinish,
+  backgroundVideoTime,
   drawMediaBackground,
   drawPresetBackground,
   type BackgroundConfig,
@@ -34,9 +38,11 @@ import type { MediaClip } from '@/components/editor-timeline';
 
 type Props = {
   song: Song;
+  audioBinary?: Blob | null;
   aspect: VideoAspect;
   template: VisualTemplate;
   wave: WaveStyle;
+  waveAppearance?: WaveAppearance;
   motion: MotionIntensity;
   lyrics: LyricsMode;
   karaokeTimeline?: KaraokeLine[];
@@ -45,13 +51,24 @@ type Props = {
   layout?: OverlayLayout;
   subtitleStyle?: KaraokeDrawStyle;
   overlayTextStyles?: OverlayTextStyles;
+  effects?: EffectConfig;
   onLayoutChange?: (layout: OverlayLayout) => void;
   start: number;
+  end?: number;
+  seekTo?: number;
+  pauseSignal?: number;
   exporting: boolean;
   resultUrl?: string;
   autoPlay?: boolean;
   fullPlayback?: boolean;
   onTimeChange?: (time: number) => void;
+  onPreviewPlay?: () => void;
+  onPerformance?: (sample: {
+    fps: number;
+    droppedFrames: number;
+    targetFps: number;
+    deviceClass: 'mobile' | 'desktop';
+  }) => void;
 };
 
 function fmt(value: number) {
@@ -59,9 +76,23 @@ function fmt(value: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+function clampPreviewTime(value: number, start: number, end: number) {
+  return Math.max(start, Math.min(end, value));
+}
+
 export function LivePreview(props: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
+  const spatialContext = useRef<AudioContext | null>(null);
+  const spatialSource = useRef<MediaElementAudioSourceNode | null>(null);
+  const spatialPan = useRef<StereoPannerNode | null>(null);
+  const masterEqLow = useRef<BiquadFilterNode | null>(null);
+  const masterEqPresence = useRef<BiquadFilterNode | null>(null);
+  const masterComp = useRef<DynamicsCompressorNode | null>(null);
+  const masterGain = useRef<GainNode | null>(null);
+  const spectrumAnalyser = useRef<AnalyserNode | null>(null);
+  const spectrumBins = useRef<Uint8Array | null>(null);
+  const realtimeBands = useRef({ bass: .04, lowMid: .04, vocal: .04, high: .04 });
   const video = useRef<HTMLVideoElement>(null);
   const current = useRef(props);
   current.current = props;
@@ -78,6 +109,8 @@ export function LivePreview(props: Props) {
   );
   const backgroundVideo = useRef<HTMLVideoElement | null>(null);
   const lastTimeNotify = useRef(0);
+  const audioAnalysis = useRef<PreviewAudioAnalysis | null>(null);
+  const [audioAnalysisVersion, setAudioAnalysisVersion] = useState(0);
   const sceneMedia = useRef(
     new Map<string, { bitmap?: ImageBitmap; video?: HTMLVideoElement }>(),
   );
@@ -154,9 +187,13 @@ export function LivePreview(props: Props) {
     };
   }, [mediaSourceKey]);
 
+  const requestedEnd = props.end ?? props.song.duration ?? props.start + 10;
   const previewEnd = props.fullPlayback
-    ? props.song.duration || props.start + 10
-    : Math.min(props.song.duration || props.start + 10, props.start + 10);
+    ? Math.max(props.start + 0.1, requestedEnd)
+    : Math.min(
+        Math.max(props.start + 0.1, requestedEnd),
+        props.start + 10,
+      );
   const previewDuration = Math.max(0.1, previewEnd - props.start);
 
   useEffect(() => {
@@ -168,6 +205,113 @@ export function LivePreview(props: Props) {
   }, []);
 
   useEffect(() => {
+    const updateSpatial = async (event: Event) => {
+      const detail = (event as CustomEvent<{enabled:boolean;mode:'wide'|'immersive'|'orbit';amount:number}>).detail;
+      const element = audio.current;
+      if (!element || !detail) return;
+      try {
+        const Ctx = window.AudioContext || (window as typeof window & {webkitAudioContext?: typeof AudioContext}).webkitAudioContext;
+        if (!Ctx) return;
+        if (!spatialContext.current) spatialContext.current = new Ctx();
+        const ctx = spatialContext.current;
+        if (!spatialSource.current) {
+          spatialSource.current = ctx.createMediaElementSource(element);
+          spatialPan.current = ctx.createStereoPanner();
+          masterEqLow.current = ctx.createBiquadFilter(); masterEqLow.current.type='lowshelf'; masterEqLow.current.frequency.value=180;
+          spectrumAnalyser.current = ctx.createAnalyser(); spectrumAnalyser.current.fftSize=1024; spectrumAnalyser.current.smoothingTimeConstant=.18;
+          masterEqPresence.current = ctx.createBiquadFilter(); masterEqPresence.current.type='peaking'; masterEqPresence.current.frequency.value=3200; masterEqPresence.current.Q.value=.8;
+          masterComp.current = ctx.createDynamicsCompressor(); masterGain.current = ctx.createGain();
+          spatialSource.current.connect(masterEqLow.current).connect(masterEqPresence.current).connect(masterComp.current).connect(masterGain.current).connect(spectrumAnalyser.current).connect(spatialPan.current).connect(ctx.destination);
+        }
+        if (ctx.state === 'suspended') await ctx.resume();
+        const pan = spatialPan.current;
+        if (!pan) return;
+        pan.pan.cancelScheduledValues(ctx.currentTime);
+        if (!detail.enabled) { pan.pan.setValueAtTime(0, ctx.currentTime); return; }
+        const depth = Math.max(.08, Math.min(.96, detail.amount / 100));
+        if (detail.mode === 'orbit') {
+          // Audible left → right → left movement. 2.8 s cycle at 100%, slower when subtle.
+          const half = 1.4 + (1-depth) * 1.6, now = ctx.currentTime;
+          pan.pan.setValueAtTime(-depth, now);
+          for (let t=now+half, side=1; t<now+120; t+=half, side*=-1) pan.pan.linearRampToValueAtTime(side*depth,t);
+        } else {
+          // These modes stay centered; their rendered version adds width/depth without forced travel.
+          pan.pan.setValueAtTime(0, ctx.currentTime);
+        }
+      } catch {
+        // Playback still works normally if Web Audio is unavailable.
+      }
+    };
+    window.addEventListener('suno-spatial-change', updateSpatial);
+    return () => {
+      window.removeEventListener('suno-spatial-change', updateSpatial);
+      spatialPan.current?.pan.cancelScheduledValues(spatialContext.current?.currentTime || 0);
+    };
+  }, []);
+
+  useEffect(() => {
+    const updateMaster = async (event: Event) => {
+      const detail=(event as CustomEvent<{profile:'original'|'clean'|'tiktok-loud'|'punchy'|'max-loud'}>).detail;
+      const element=audio.current;if(!element||!detail)return;
+      try{
+        const Ctx=window.AudioContext||(window as typeof window & {webkitAudioContext?:typeof AudioContext}).webkitAudioContext;
+        if(!Ctx)return;
+        if(!spatialContext.current)spatialContext.current=new Ctx();
+        const ctx=spatialContext.current;
+        if(!spatialSource.current){
+          spatialSource.current=ctx.createMediaElementSource(element);spatialPan.current=ctx.createStereoPanner();
+          masterEqLow.current=ctx.createBiquadFilter();masterEqLow.current.type='lowshelf';masterEqLow.current.frequency.value=180;
+          masterEqPresence.current=ctx.createBiquadFilter();masterEqPresence.current.type='peaking';masterEqPresence.current.frequency.value=3200;masterEqPresence.current.Q.value=.8;
+          masterComp.current=ctx.createDynamicsCompressor();masterGain.current=ctx.createGain();
+          spatialSource.current.connect(masterEqLow.current).connect(masterEqPresence.current).connect(masterComp.current).connect(masterGain.current).connect(spatialPan.current).connect(ctx.destination);
+        }
+        if(ctx.state==='suspended')await ctx.resume();
+        const cfg=detail.profile==='original'?{low:0,pres:0,threshold:0,ratio:1,gain:1}:{clean:{low:0,pres:.5,threshold:-14,ratio:1.6,gain:1},'tiktok-loud':{low:1.5,pres:2.2,threshold:-22,ratio:3.5,gain:1.22},punchy:{low:2.8,pres:1.2,threshold:-18,ratio:2.2,gain:1.12},'max-loud':{low:2,pres:2.8,threshold:-26,ratio:5,gain:1.38}}[detail.profile];
+        masterEqLow.current!.gain.setTargetAtTime(cfg.low,ctx.currentTime,.025);masterEqPresence.current!.gain.setTargetAtTime(cfg.pres,ctx.currentTime,.025);
+        masterComp.current!.threshold.setTargetAtTime(cfg.threshold,ctx.currentTime,.025);masterComp.current!.ratio.setTargetAtTime(cfg.ratio,ctx.currentTime,.025);
+        masterComp.current!.attack.setTargetAtTime(detail.profile==='punchy'?.025:.006,ctx.currentTime,.025);masterComp.current!.release.setTargetAtTime(.12,ctx.currentTime,.025);
+        masterGain.current!.gain.setTargetAtTime(cfg.gain,ctx.currentTime,.025);
+        if(!spectrumAnalyser.current){spectrumAnalyser.current=ctx.createAnalyser();spectrumAnalyser.current.fftSize=1024;spectrumAnalyser.current.smoothingTimeConstant=.18;masterGain.current!.disconnect();masterGain.current!.connect(spectrumAnalyser.current).connect(spatialPan.current!);}
+      }catch{}
+    };
+    window.addEventListener('suno-master-preview',updateMaster);
+    return()=>window.removeEventListener('suno-master-preview',updateMaster);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    audioAnalysis.current = null;
+    setAudioAnalysisVersion((value) => value + 1);
+    (async () => {
+      try {
+        let binary = props.audioBinary;
+        if (!binary) { const response = await fetch(props.song.audio, { cache: 'no-store' }); if (!response.ok) return; binary = await response.blob(); }
+        const context = new AudioContext();
+        try {
+          const decoded = await context.decodeAudioData(await binary.arrayBuffer());
+          if (cancelled) return;
+          const left = decoded.getChannelData(0), right = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : left;
+          const samples = new Float32Array(left.length);
+          for (let i=0;i<samples.length;i++) samples[i]=(left[i]+right[i])*.5;
+          audioAnalysis.current = { samples, rate: decoded.sampleRate };
+          setAudioAnalysisVersion((value) => value + 1);
+        } finally {
+          await context.close();
+        }
+      } catch {
+        if (!cancelled) {
+          audioAnalysis.current = null;
+          setAudioAnalysisVersion((value) => value + 1);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      audioAnalysis.current = null;
+    };
+  }, [props.song.audio, props.audioBinary]);
+
+  useEffect(() => {
     const controller = new AbortController();
     let image: ImageBitmap | null = null;
     setBitmap(null);
@@ -176,13 +320,15 @@ export function LivePreview(props: Props) {
       try {
         if (!props.song.picture)
           throw new Error('Bài hát chưa có ảnh bìa để xem trước.');
-        const response = await fetch(props.song.picture, {
-          signal: controller.signal,
-        });
+        const pictureUrl = /^https:\/\//i.test(props.song.picture)
+          ? `/api/image?source=${encodeURIComponent(props.song.picture)}`
+          : props.song.picture;
+        let response = await fetch(pictureUrl, { signal: controller.signal, cache: 'no-store' });
+        // Compatibility fallback for already same-origin/blob cover URLs.
+        if (!response.ok && pictureUrl !== props.song.picture)
+          response = await fetch(props.song.picture, { signal: controller.signal, cache: 'no-store' });
         if (!response.ok)
-          throw new Error(
-            'Không tải được ảnh xem trước. Hãy tải lại thông tin bài hát.',
-          );
+          throw new Error('Không tải được ảnh xem trước. Hãy tải lại thông tin bài hát.');
         image = await createImageBitmap(await response.blob());
         if (controller.signal.aborted) {
           return;
@@ -285,18 +431,35 @@ export function LivePreview(props: Props) {
   useEffect(() => {
     const player = audio.current;
     if (!player) return;
+    const target = clampPreviewTime(
+      props.seekTo ?? props.start,
+      props.start,
+      previewEnd,
+    );
     player.pause();
-    player.currentTime = props.start;
-    setTime(props.start);
+    player.currentTime = target;
+    setTime(target);
     setPlaying(false);
-  }, [props.song.audio, props.start, props.resultUrl]);
+    props.onTimeChange?.(target);
+  }, [
+    props.song.audio,
+    props.start,
+    props.seekTo,
+    props.pauseSignal,
+    props.resultUrl,
+    previewEnd,
+  ]);
 
   useEffect(() => {
     if (!props.autoPlay || !bitmap || props.exporting || props.resultUrl)
       return;
     const player = audio.current;
     if (!player) return;
-    player.currentTime = props.start;
+    player.currentTime = clampPreviewTime(
+      props.seekTo ?? props.start,
+      props.start,
+      previewEnd,
+    );
     void player
       .play()
       .then(() => setPlaying(true))
@@ -306,8 +469,11 @@ export function LivePreview(props: Props) {
     bitmap,
     props.song.audio,
     props.start,
+    props.seekTo,
+    previewEnd,
     props.exporting,
     props.resultUrl,
+    props.end,
   ]);
 
   useEffect(() => {
@@ -322,17 +488,48 @@ export function LivePreview(props: Props) {
     const context = canvas.current?.getContext('2d');
     if (!context) return;
     const paint = createLiveFramePainter(bitmap);
+    const mobilePreview =
+      typeof navigator !== 'undefined' &&
+      (/iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent) ||
+        (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent)));
+    const targetFps = mobilePreview ? 24 : 30;
+    const maxSurface = mobilePreview ? 520 : 640;
     let frame = 0;
     let previous = 0;
+    let perfStarted = performance.now();
+    let perfFrames = 0;
 
     const draw = (now: number) => {
       frame = requestAnimationFrame(draw);
-      if (now - previous < 1000 / 30) return;
+      if (now - previous < 1000 / targetFps) return;
       previous = now;
       if (document.hidden) return;
+      perfFrames += 1;
+      if (now - perfStarted >= 5000) {
+        const elapsed = Math.max(1, now - perfStarted);
+        const fps = (perfFrames * 1000) / elapsed;
+        const expected = (elapsed / 1000) * targetFps;
+        current.current.onPerformance?.({
+          fps: Math.round(fps * 10) / 10,
+          droppedFrames: Math.max(0, Math.round(expected - perfFrames)),
+          targetFps,
+          deviceClass: mobilePreview ? 'mobile' : 'desktop',
+        });
+        perfStarted = now;
+        perfFrames = 0;
+      }
 
       const p = current.current;
       const player = audio.current;
+      const analyser=spectrumAnalyser.current;
+      if(analyser&&player&&!player.paused){
+        let bins=spectrumBins.current;
+        if(!bins||bins.length!==analyser.frequencyBinCount){bins=new Uint8Array(analyser.frequencyBinCount);spectrumBins.current=bins;}
+        analyser.getByteFrequencyData(bins);const hz=(spatialContext.current?.sampleRate||48000)/analyser.fftSize;
+        const avg=(lo:number,hi:number)=>{let s=0,n=0;for(let k=Math.max(1,Math.floor(lo/hz));k<Math.min(bins.length,Math.ceil(hi/hz));k++){s+=bins[k];n++}return n?s/n/255:0};
+        const q={bass:avg(35,180),lowMid:avg(180,800),vocal:avg(800,4000),high:avg(4000,12000)},o=realtimeBands.current;
+        const env=(a:number,b:number,attack:number,release:number)=>a+(b-a)*(b>a?attack:release);
+        realtimeBands.current={bass:env(o.bass,q.bass,.86,.14),lowMid:env(o.lowMid,q.lowMid,.58,.11),vocal:env(o.vocal,q.vocal,.38,.065),high:env(o.high,q.high,.76,.24)};}
       let absoluteTime = player?.currentTime ?? p.start;
       const end = p.fullPlayback
         ? p.song.duration || p.start + 10
@@ -351,7 +548,7 @@ export function LivePreview(props: Props) {
       }
       const size = VIDEO_SIZES[p.aspect];
       const surface = context.canvas;
-      const scale = Math.min(1, 640 / Math.max(size.width, size.height));
+      const scale = Math.min(1, maxSurface / Math.max(size.width, size.height));
       const width = Math.round(size.width * scale),
         height = Math.round(size.height * scale);
       if (surface.width !== width || surface.height !== height) {
@@ -424,10 +621,7 @@ export function LivePreview(props: Props) {
       ) {
         const v = backgroundVideo.current,
           d = v.duration,
-          target =
-            background.loopVideo && d > 0
-              ? absoluteTime % d
-              : Math.min(absoluteTime, Math.max(0, d - 0.02));
+          target = backgroundVideoTime(absoluteTime, d, background);
         if (Math.abs(v.currentTime - target) > 0.12)
           try {
             v.currentTime = target;
@@ -448,41 +642,42 @@ export function LivePreview(props: Props) {
       if (!bitmap.width) return;
       paint(
         context,
-        { ...p.song, title: '__HIDE_META__', creator: null },
+        p.song,
         size.width,
         size.height,
         absoluteTime,
         p.template,
         p.wave,
         p.motion,
-        hasExactLyrics ? 'off' : p.lyrics,
+        // Creator Studio subtitles must have one source of truth. Never fall
+        // back to the legacy estimated lyric renderer when the synced timeline
+        // is empty, otherwise preview text can disagree with the Subtitle track.
+        'off',
         customBackground,
         p.layout,
         p.overlayTextStyles,
+        audioAnalysis.current,
+        realtimeBands.current,
+        p.waveAppearance,
       );
       if (hasExactLyrics) {
-        const q = p.layout?.subtitle || { x: 50, y: 58, scale: 100 },
-          s = q.scale / 100;
-        context.save();
-        context.translate((size.width * q.x) / 100, (size.height * q.y) / 100);
-        context.scale(s, s);
-        context.translate(-size.width * 0.5, -(size.height - 119));
-        drawKaraokeOverlay(
-          context,
-          p.karaokeTimeline!,
-          absoluteTime,
-          size.width,
-          size.height,
-          p.subtitleStyle,
+        withSubtitleLayout(context, size.width, size.height, p.layout, () =>
+          drawKaraokeOverlay(
+            context,
+            p.karaokeTimeline!,
+            absoluteTime,
+            size.width,
+            size.height,
+            p.subtitleStyle,
+          ),
         );
-        context.restore();
       }
       drawVideoEffects(
         context,
         size.width,
         size.height,
         absoluteTime,
-        effects.current,
+        p.effects || effects.current,
       );
     };
 
@@ -495,6 +690,7 @@ export function LivePreview(props: Props) {
     props.aspect,
     props.template,
     props.wave,
+    props.waveAppearance,
     props.motion,
     props.lyrics,
     props.mediaClips,
@@ -503,6 +699,8 @@ export function LivePreview(props: Props) {
     props.layout,
     props.subtitleStyle,
     props.overlayTextStyles,
+    props.effects,
+    audioAnalysisVersion,
     props.exporting,
     props.resultUrl,
   ]);
@@ -516,6 +714,7 @@ export function LivePreview(props: Props) {
       try {
         await player.play();
         setPlaying(true);
+        props.onPreviewPlay?.();
       } catch {
         setStatus('Trình duyệt chặn phát tự động. Hãy bấm Play lại.');
       }
@@ -529,8 +728,11 @@ export function LivePreview(props: Props) {
     const player = audio.current;
     if (!player) return;
     const next = Math.max(props.start, Math.min(previewEnd, value));
+    player.pause();
     player.currentTime = next;
     setTime(next);
+    setPlaying(false);
+    props.onTimeChange?.(next);
   }
 
   const size = VIDEO_SIZES[props.aspect];
@@ -548,6 +750,11 @@ export function LivePreview(props: Props) {
               ? 'Kết quả thay trực tiếp khung preview.'
               : 'Hình ảnh, lyrics và nhạc chạy cùng một timeline.'}
           </p>
+          {!props.resultUrl && (
+            <span className="sd-preview-performance">
+              Preview tự cân bằng chất lượng để giữ chuyển động mượt trên mobile
+            </span>
+          )}
         </div>
         {!props.resultUrl && (
           <button
@@ -684,23 +891,6 @@ export function LivePreview(props: Props) {
                       touchAction: 'none',
                     }}
                   >
-                    {(key === 'title' || key === 'creator') && (
-                      <strong
-                        className={`sd-dom-overlay-text ${key}`}
-                        style={{
-                          color:
-                            p.overlayTextStyles?.[key].color ||
-                            (key === 'title' ? '#ffffff' : '#d1d5db'),
-                          fontFamily:
-                            p.overlayTextStyles?.[key].font || 'system-ui',
-                          fontSize: `${Math.max(10, p.scale * (key === 'title' ? 0.28 : 0.15))}px`,
-                        }}
-                      >
-                        {key === 'title'
-                          ? props.song.title
-                          : props.song.creator || 'Suno'}
-                      </strong>
-                    )}
                     <span
                       className={`pointer-events-none absolute inset-0 rounded-md border transition-colors ${selectedOverlay === key ? 'border-violet-400 bg-violet-400/[.06]' : 'border-transparent'}`}
                     />

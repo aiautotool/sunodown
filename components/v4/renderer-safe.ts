@@ -7,13 +7,17 @@ import type {
   VideoAspect,
   VisualTemplate,
   WaveStyle,
+  WaveAppearance,
 } from './types';
-import { VIDEO_SIZES } from './types';
+import { VIDEO_SIZES, DEFAULT_WAVE_APPEARANCE } from './types';
 import { cleanLyricsForVideo } from './lyrics-clean';
 import {
   convertProcessedAudio,
   renderTikTokLikeAudio,
+  masterAudio,
+  render5DAudio,
 } from '@/app/lib/audio-processing';
+import type { ProductionMasteringConfig } from '@/components/presets/production-preset';
 import {
   drawKaraokeOverlay,
   type KaraokeLine,
@@ -28,6 +32,7 @@ import {
   type BackgroundConfig,
 } from '@/components/v8/background';
 import type { MediaClip } from '@/components/editor-timeline';
+import { drawVideoEffects, type EffectConfig } from '@/components/v8/video-effects';
 
 const MOTION_GAIN: Record<MotionIntensity, number> = {
   low: 0.45,
@@ -49,6 +54,11 @@ export type OverlayTextStyles = {
   title: { font: string; color: string };
   creator: { font: string; color: string };
 };
+export type PreviewAudioAnalysis = {
+  samples: Float32Array;
+  rate: number;
+};
+export type RealtimeSpectrumBands = { bass:number; lowMid:number; vocal:number; high:number };
 export type SafeRenderOptions = {
   motion: MotionIntensity;
   lyrics: LyricsMode;
@@ -58,10 +68,14 @@ export type SafeRenderOptions = {
   karaokeTimeline?: KaraokeLine[];
   background?: BackgroundConfig;
   mediaClips?: MediaClip[];
+  effects?: EffectConfig;
+  waveAppearance?: WaveAppearance;
   loopDuration?: number;
   startSeconds?: number;
   previewSeconds?: number;
   onProgress?: (value: number) => void;
+  productionMastering?: ProductionMasteringConfig;
+  onAudioFallback?: (reason: string) => void;
 };
 
 type AudioTrim = { start: number; end: number; duration: number };
@@ -141,28 +155,39 @@ function wrap(
   if (line && lines.length < maxLines) lines.push(line);
   return lines;
 }
-function amplitude(
-  samples: Float32Array | null,
-  rate: number,
-  t: number,
-  off = 0,
-) {
-  if (!samples) return Math.max(0.08, 0.2 + 0.15 * Math.sin((t + off) * 5));
-  const c = Math.max(
-      0,
-      Math.min(samples.length - 1, Math.floor((t + off) * rate)),
-    ),
-    r = Math.max(64, Math.floor(rate * 0.012)),
-    from = Math.max(0, c - r),
-    to = Math.min(samples.length, c + r),
-    stride = Math.max(1, Math.floor((to - from) / 24));
-  let sum = 0,
-    n = 0;
-  for (let i = from; i < to; i += stride) {
-    sum += Math.abs(samples[i]);
-    n++;
-  }
-  return n ? Math.min(1, (sum / n) * 5.2) : 0.08;
+function amplitude(samples: Float32Array | null, rate: number, t: number) {
+  if (!samples || !rate) return 0.06;
+  const c = Math.max(0, Math.min(samples.length - 1, Math.floor(t * rate)));
+  const r = Math.max(128, Math.floor(rate * 0.022));
+  const from = Math.max(0, c - r), to = Math.min(samples.length, c + r);
+  const stride = Math.max(1, Math.floor((to - from) / 96));
+  let energy = 0, peak = 0, n = 0;
+  for (let i = from; i < to; i += stride) { const v = Math.abs(samples[i]); energy += v * v; peak = Math.max(peak, v); n++; }
+  if (!n) return 0.04;
+  return Math.min(1, Math.max(0.035, Math.sqrt(energy / n) * 6.6 + peak * 0.22));
+}
+type SpectrumBands={bass:number;lowMid:number;vocal:number;high:number};
+function spectrumBands(samples:Float32Array|null,rate:number,t:number):SpectrumBands{
+ if(!samples||!rate)return{bass:.035,lowMid:.035,vocal:.035,high:.035};
+ const N=256,center=Math.max(N/2,Math.min(samples.length-N/2-1,Math.floor(t*rate))),start=Math.floor(center-N/2);
+ let bass=0,lowMid=0,vocal=0,high=0,bc=0,lc=0,vc=0,hc=0;
+ // Small DFT focused on the visual bands. Hann window prevents one transient leaking across every column.
+ for(let k=1;k<N/2;k++){const hz=k*rate/N;if(hz>12000)break;let re=0,im=0;
+  for(let n=0;n<N;n++){const idx=start+n;if(idx<0||idx>=samples.length)continue;const win=.5-.5*Math.cos(2*Math.PI*n/(N-1)),v=samples[idx]*win,a=2*Math.PI*k*n/N;re+=v*Math.cos(a);im-=v*Math.sin(a)}
+  const mag=Math.sqrt(re*re+im*im)/N;
+  if(hz<180){bass+=mag;bc++}else if(hz<800){lowMid+=mag;lc++}else if(hz<4000){vocal+=mag;vc++}else{high+=mag;hc++}
+ }
+ const norm=(v:number,n:number,g:number)=>Math.min(1,Math.max(.025,(n?v/n:0)*g));
+ return{bass:norm(bass,bc,28),lowMid:norm(lowMid,lc,42),vocal:norm(vocal,vc,62),high:norm(high,hc,95)};
+}
+function realtimeSpectrumValue(b:RealtimeSpectrumBands,column:number,total:number){const x=column/Math.max(1,total-1),c=[0,.31,.61,1],v=[b.bass,b.lowMid,b.vocal,b.high];let j=0;while(j<2&&x>c[j+1])j++;const q=(x-c[j])/(c[j+1]-c[j]);return Math.min(1,Math.max(.035,(v[j]*(1-q)+v[j+1]*q)*1.9));}
+function spectrumValue(samples:Float32Array|null,rate:number,t:number,column:number,total:number){
+ const b=spectrumBands(samples,rate,t),x=column/Math.max(1,total-1);
+ // Left→right maps low→high frequency while softly blending neighboring musical bands.
+ const centers=[0,.31,.61,1],vals=[b.bass,b.lowMid,b.vocal,b.high];
+ let j=0;while(j<centers.length-2&&x>centers[j+1])j++;
+ const q=(x-centers[j])/(centers[j+1]-centers[j]),v=vals[j]*(1-q)+vals[j+1]*q;
+ return Math.min(1,Math.max(.035,v*2.35));
 }
 function extractPalette(bmp: ImageBitmap): Palette {
   const c = document.createElement('canvas');
@@ -383,18 +408,41 @@ function drawWaveBase(
   h: number,
   style: WaveStyle,
   p: Palette,
+  realtimeBands?: RealtimeSpectrumBands,
+  appearance?: WaveAppearance,
 ) {
+  const look={...DEFAULT_WAVE_APPEARANCE,...appearance};
   const ph = Math.max(110, Math.round(h * 0.14)),
     top = h - ph,
-    n = Math.max(42, Math.min(92, Math.round(w / 14))),
+    n = Math.max(34, Math.min(120, Math.round(34 + look.density * 0.86))),
     usable = w * 0.84,
     start = w * 0.08,
     cy = h - ph * 0.42,
     max = ph * 0.52,
-    vals = Array.from({ length: n }, (_, i) =>
-      Math.max(0.05, amplitude(samples, rate, t, (i / (n - 1) - 0.5) * 0.7)),
-    ),
-    grad = waveGradient(ctx, w, p);
+    rawVals = Array.from({ length: n }, (_, i) => realtimeBands ? realtimeSpectrumValue(realtimeBands,i,n) : spectrumValue(samples, rate, t, i, n)),
+    smooth = Math.max(0,Math.min(1,look.smoothing/100)),
+    rawMin=Math.min(...rawVals),rawMax=Math.max(...rawVals),rawSpan=Math.max(.0001,rawMax-rawMin),
+    currentBands=samples&&rate?spectrumBands(samples,rate,t):null,
+    previousBands=samples&&rate?spectrumBands(samples,rate,Math.max(0,t-.09)):null,
+    spectralFlux=currentBands&&previousBands?Math.max(0,
+      (currentBands.bass-previousBands.bass)*1.7+
+      (currentBands.lowMid-previousBands.lowMid)*1.2+
+      (currentBands.vocal-previousBands.vocal)*.9+
+      (currentBands.high-previousBands.high)*.65):0,
+    avgEnergy=rawVals.reduce((sum,v)=>sum+v,0)/Math.max(1,rawVals.length),
+    flatness=Math.max(0,Math.min(1,(.22-rawSpan)/.22)),
+    adaptiveVals=rawVals.map((v,i)=>{
+      const normalized=(v-rawMin)/rawSpan;
+      const shaped=.055+Math.pow(Math.max(.001,v),.72)*.72+normalized*(.18+flatness*.16);
+      const transient=Math.min(.28,spectralFlux*3.8)*(0.45+0.55*Math.sin((i/n)*Math.PI));
+      const living=flatness*(.035+.085*Math.min(1,avgEnergy*1.6))*(.5+.5*Math.sin(t*(5.2+avgEnergy*4.4)+i*.52));
+      return Math.max(.04,Math.min(1,shaped+transient+living));
+    }),
+    vals = adaptiveVals.map((v,i)=>{const a=adaptiveVals[Math.max(0,i-1)],b=adaptiveVals[Math.min(adaptiveVals.length-1,i+1)];return v*(1-smooth*.72)+((a+v+b)/3)*(smooth*.72)}),
+    grad = ctx.createLinearGradient(w * 0.08, 0, w * 0.92, 0);
+  grad.addColorStop(0,look.color);
+  grad.addColorStop(.5,look.color2);
+  grad.addColorStop(1,look.color);
   const radial = [
     'circle',
     'circle-bars',
@@ -411,8 +459,9 @@ function drawWaveBase(
   ctx.save();
   ctx.fillStyle = grad;
   ctx.strokeStyle = grad;
-  ctx.shadowColor = rgb(p[1], 0.55);
-  ctx.shadowBlur = 12;
+  ctx.globalAlpha=Math.max(.1,Math.min(1,look.opacity/100));
+  ctx.shadowColor = look.color2;
+  ctx.shadowBlur = Math.max(0,look.glow*.28);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   if (radial) {
@@ -512,7 +561,7 @@ function drawWaveBase(
   for (let i = 0; i < n; i++) {
     const a = vals[i],
       x = start + (i / (n - 1)) * usable - bw / 2,
-      pulse = 0.82 + 0.18 * Math.sin(t * 7 + i * 0.3),
+      pulse = 1,
       hh = Math.max(5, max * a * pulse) * (style === 'pulse' ? 1.45 : 1);
     ctx.beginPath();
     if (style === 'mirror') {
@@ -542,6 +591,8 @@ function drawWave(
   p: Palette,
   layout?: OverlayLayout,
   textStyles?: OverlayTextStyles,
+  realtimeBands?: RealtimeSpectrumBands,
+  appearance?: WaveAppearance,
 ) {
   const pos = layout?.wave || { x: 50, y: 86, scale: 100 },
     sx = pos.scale / 100;
@@ -549,10 +600,10 @@ function drawWave(
   ctx.translate((w * pos.x) / 100, (h * pos.y) / 100);
   ctx.scale(sx, sx);
   ctx.translate(-w * 0.5, -h * 0.86);
-  drawWaveBase(ctx, samples, rate, t, w, h, style, p);
+  drawWaveBase(ctx, samples, rate, t, w, h, style, p, realtimeBands, appearance);
   ctx.restore();
 }
-function withSubtitleLayout(
+export function withSubtitleLayout(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
@@ -568,6 +619,481 @@ function withSubtitleLayout(
   draw();
   ctx.restore();
 }
+function sceneEnergy(level: number, gain: number) {
+  return Math.max(0, Math.min(1, level * (0.82 + gain * 0.22)));
+}
+
+function drawRoundImage(
+  ctx: CanvasRenderingContext2D,
+  bmp: ImageBitmap,
+  cx: number,
+  cy: number,
+  radius: number,
+  rotation = 0,
+) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation);
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.clip();
+  const side = radius * 2;
+  const s = Math.max(side / bmp.width, side / bmp.height);
+  const iw = bmp.width * s, ih = bmp.height * s;
+  ctx.drawImage(bmp, -iw / 2, -ih / 2, iw, ih);
+  ctx.restore();
+}
+
+function drawVinylDisc(
+  ctx: CanvasRenderingContext2D,
+  bmp: ImageBitmap,
+  w: number,
+  h: number,
+  t: number,
+  level: number,
+  gain: number,
+  gold = false,
+) {
+  const portrait = h > w * 1.2;
+  const energy = sceneEnergy(level, gain);
+  const r = Math.min(w * (portrait ? .34 : .235), h * .245);
+  const cx = w * .5;
+  const cy = portrait ? h * .365 : h * .405;
+  const pulse = 1 + energy * .022;
+  const rotation = t * (gold ? .34 : .58) * (.9 + gain * .16);
+
+  // Platter/depth shadow: gives the record a physical object feel.
+  ctx.save();
+  ctx.translate(cx, cy + r * .06);
+  ctx.scale(pulse * 1.035, pulse * .34);
+  const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.15);
+  shadow.addColorStop(0, gold ? 'rgba(244,191,64,.25)' : 'rgba(112,74,255,.26)');
+  shadow.addColorStop(.58, 'rgba(0,0,0,.36)');
+  shadow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shadow;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 1.18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(pulse, pulse);
+  ctx.rotate(rotation);
+
+  const grad = ctx.createRadialGradient(-r * .18, -r * .22, r * .05, 0, 0, r);
+  if (gold) {
+    grad.addColorStop(0, '#fff2a8');
+    grad.addColorStop(.16, '#c48a21');
+    grad.addColorStop(.34, '#f2c759');
+    grad.addColorStop(.52, '#8b5e13');
+    grad.addColorStop(.72, '#e1aa31');
+    grad.addColorStop(1, '#5f3c0b');
+  } else {
+    grad.addColorStop(0, '#2a2b37');
+    grad.addColorStop(.2, '#11121a');
+    grad.addColorStop(.42, '#05060a');
+    grad.addColorStop(.68, '#171822');
+    grad.addColorStop(1, '#020307');
+  }
+  ctx.fillStyle = grad;
+  ctx.shadowColor = gold ? 'rgba(255,204,91,.48)' : 'rgba(126,90,255,.42)';
+  ctx.shadowBlur = r * (.16 + energy * .08);
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Dense grooves make the vinyl unmistakable even on small mobile previews.
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = Math.max(1, r * .005);
+  for (let i = .26; i < .96; i += .035) {
+    const alpha = i % .07 < .02 ? .15 : .08;
+    ctx.strokeStyle = gold
+      ? `rgba(255,243,184,${alpha + .03})`
+      : `rgba(255,255,255,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * i, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Rotating specular sweep.
+  ctx.strokeStyle = gold ? 'rgba(255,249,210,.55)' : 'rgba(207,196,255,.28)';
+  ctx.lineWidth = Math.max(3, r * .025);
+  ctx.beginPath();
+  ctx.arc(0, 0, r * .82, -.5, .28);
+  ctx.stroke();
+  ctx.restore();
+
+  drawRoundImage(ctx, bmp, cx, cy, r * .31, rotation * .96);
+
+  ctx.save();
+  const labelRing = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * .36);
+  labelRing.addColorStop(0, gold ? '#f5d56b' : '#e7ddff');
+  labelRing.addColorStop(.18, gold ? '#b47b1e' : '#8b69dc');
+  labelRing.addColorStop(.22, 'rgba(10,10,16,.88)');
+  labelRing.addColorStop(1, 'rgba(10,10,16,0)');
+  ctx.fillStyle = labelRing;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * .37, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = gold ? '#fff0ae' : '#ded5ff';
+  ctx.beginPath();
+  ctx.arc(cx, cy, Math.max(3, r * .035), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  if (gold) {
+    // Gold scene uses a presentation plaque instead of a tonearm.
+    const plaqueW = Math.min(w * .46, r * 1.5);
+    const plaqueH = Math.max(46, h * .055);
+    const px = cx - plaqueW / 2;
+    const py = Math.min(h - plaqueH - h * .12, cy + r * .96);
+    ctx.save();
+    const pg = ctx.createLinearGradient(px, py, px + plaqueW, py + plaqueH);
+    pg.addColorStop(0, '#33200d');
+    pg.addColorStop(.48, '#8d6427');
+    pg.addColorStop(1, '#241708');
+    ctx.fillStyle = pg;
+    ctx.strokeStyle = 'rgba(255,224,151,.68)';
+    ctx.lineWidth = Math.max(1, w * .0018);
+    ctx.beginPath();
+    ctx.roundRect(px, py, plaqueW, plaqueH, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,237,191,.95)';
+    ctx.font = `700 ${Math.max(12, Math.round(w * .018))}px Georgia,serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('GOLD RECORD', cx, py + plaqueH * .58);
+    ctx.restore();
+  } else {
+    // Tonearm + head, with a tiny music-reactive tracking motion.
+    ctx.save();
+    ctx.strokeStyle = 'rgba(225,229,239,.82)';
+    ctx.lineWidth = Math.max(5, w * .006);
+    ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(0,0,0,.58)';
+    ctx.shadowBlur = 12;
+    const ax = cx + r * .92, ay = cy - r * .96;
+    const needleX = cx + r * (.58 - energy * .025);
+    const needleY = cy - r * (.16 + energy * .02);
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(needleX, needleY);
+    ctx.stroke();
+    ctx.fillStyle = '#2c313d';
+    ctx.beginPath();
+    ctx.arc(ax, ay, Math.max(8, r * .09), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.translate(needleX, needleY);
+    ctx.rotate(-.24);
+    ctx.fillStyle = '#c7cbd4';
+    ctx.fillRect(-r * .055, -r * .022, r * .11, r * .044);
+    ctx.restore();
+  }
+}
+
+function drawGlassCard(
+  ctx: CanvasRenderingContext2D,
+  bmp: ImageBitmap,
+  w: number,
+  h: number,
+  t: number,
+  level: number,
+  gain: number,
+  p: Palette,
+) {
+  const energy = sceneEnergy(level, gain);
+  const cw = w * (h > w * 1.2 ? .72 : .58);
+  const ch = Math.min(h * .40, cw * .84);
+  const cx = w / 2 + Math.sin(t * .42) * w * .018 * gain;
+  const cy = h * .37 + Math.cos(t * .34) * h * .012 * gain;
+  const tilt = Math.sin(t * .28) * .035 * gain;
+
+  // Ambient colored orbs behind the glass.
+  ctx.save();
+  const orb = (x:number,y:number,r:number,color:string,alpha:number) => {
+    const g = ctx.createRadialGradient(x,y,0,x,y,r);
+    g.addColorStop(0,color.replace('1)',`${alpha})`));
+    g.addColorStop(1,color.replace('1)','0)'));
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+  };
+  orb(w * (.28 + Math.sin(t*.27)*.04), h*.27, w*.22, rgb(p[1],1), .20 + energy*.16);
+  orb(w * (.72 + Math.cos(t*.23)*.04), h*.47, w*.25, rgb(p[2],1), .14 + energy*.12);
+  ctx.restore();
+
+  // Back glass card for depth.
+  ctx.save();
+  ctx.translate(cx - cw*.06, cy - ch*.04);
+  ctx.rotate(-tilt * .75);
+  ctx.fillStyle='rgba(255,255,255,.045)';
+  ctx.strokeStyle='rgba(255,255,255,.12)';
+  ctx.lineWidth=Math.max(1,w*.0018);
+  ctx.beginPath();ctx.roundRect(-cw*.5,-ch*.5,cw,ch,Math.min(32,cw*.055));ctx.fill();ctx.stroke();
+  ctx.restore();
+
+  // Main card.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(tilt);
+  ctx.shadowColor = rgb(p[1], .52);
+  ctx.shadowBlur = 28 + energy * 42;
+  ctx.fillStyle = 'rgba(12,18,34,.48)';
+  ctx.strokeStyle = 'rgba(255,255,255,.30)';
+  ctx.lineWidth = Math.max(2, w * .002);
+  ctx.beginPath();
+  ctx.roundRect(-cw / 2, -ch / 2, cw, ch, Math.min(32, cw * .055));
+  ctx.fill();
+  ctx.stroke();
+
+  // Glass shine.
+  const shine = ctx.createLinearGradient(-cw*.45,-ch*.45,cw*.35,ch*.35);
+  shine.addColorStop(0,'rgba(255,255,255,.18)');
+  shine.addColorStop(.35,'rgba(255,255,255,.025)');
+  shine.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=shine;
+  ctx.beginPath();ctx.roundRect(-cw/2+4,-ch/2+4,cw-8,ch-8,Math.min(28,cw*.05));ctx.fill();
+
+  ctx.save();
+  const inset = Math.max(12, cw * .03);
+  ctx.beginPath();
+  ctx.roundRect(-cw/2+inset,-ch/2+inset,cw-inset*2,ch-inset*2,Math.min(24,cw*.045));
+  ctx.clip();
+  const iwBox=cw-inset*2, ihBox=ch-inset*2;
+  const s = Math.max(iwBox / bmp.width, ihBox / bmp.height);
+  const iw = bmp.width * s, ih = bmp.height * s;
+  ctx.globalAlpha = .86;
+  ctx.drawImage(bmp, -iw/2, -ih/2, iw, ih);
+  ctx.restore();
+
+  // Music-reactive edge meter.
+  ctx.strokeStyle = rgb(p[1], .78);
+  ctx.lineWidth = Math.max(3, w * .004);
+  ctx.beginPath();
+  ctx.roundRect(-cw/2+7,-ch/2+7,cw-14,ch-14,Math.min(28,cw*.05));
+  ctx.stroke();
+  ctx.fillStyle=rgb(p[1], .76);
+  const meterH=Math.max(6,ch*.018);
+  ctx.fillRect(-cw*.38,ch*.5-meterH*2,cw*(.22+.58*energy),meterH);
+  ctx.restore();
+}
+
+function drawEditorial(
+  ctx: CanvasRenderingContext2D,
+  bmp: ImageBitmap,
+  song: Song,
+  w: number,
+  h: number,
+  t: number,
+  level: number,
+  gain: number,
+) {
+  const portrait = h > w * 1.2;
+  const energy = sceneEnergy(level, gain);
+  const margin = w * .055;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(5,8,14,.34)';
+  ctx.fillRect(0, 0, w, h);
+
+  // Magazine border + editorial grid.
+  ctx.strokeStyle = 'rgba(242,228,196,.78)';
+  ctx.lineWidth = Math.max(2, w * .002);
+  ctx.strokeRect(margin, h * .07, w - margin * 2, h * .84);
+  ctx.globalAlpha=.28;
+  ctx.beginPath();
+  ctx.moveTo(w*.51,h*.08);ctx.lineTo(w*.51,h*.90);
+  ctx.moveTo(margin,h*.28);ctx.lineTo(w-margin,h*.28);
+  ctx.stroke();
+  ctx.globalAlpha=1;
+
+  ctx.fillStyle = 'rgba(244,232,202,.96)';
+  ctx.font = `900 ${Math.round(w * (portrait ? .112 : .072))}px Georgia,serif`;
+  ctx.textAlign = 'left';
+  ctx.fillText('MUSIC', margin*1.35, h * .18);
+  ctx.font = `700 ${Math.round(w * .022)}px system-ui,sans-serif`;
+  ctx.letterSpacing = '0.16em';
+  ctx.fillText('EDITORIAL / VISUAL ISSUE', margin*1.42, h * .225);
+  ctx.letterSpacing = '0px';
+
+  // Side copy behaves like real editorial furniture.
+  ctx.save();
+  ctx.translate(w*.90,h*.34);
+  ctx.rotate(Math.PI/2);
+  ctx.font=`700 ${Math.max(10,Math.round(w*.016))}px system-ui,sans-serif`;
+  ctx.fillStyle='rgba(244,232,202,.72)';
+  ctx.fillText('SUNODOWN — MUSIC LIVES FURTHER',0,0);
+  ctx.restore();
+
+  // Audio-reactive rule.
+  ctx.fillStyle='rgba(244,232,202,.72)';
+  ctx.fillRect(margin*1.35,h*.245,w*(.12+.24*energy),Math.max(2,h*.0025));
+  ctx.restore();
+
+  const size = Math.min(w * (portrait ? .56 : .42), h * .34);
+  const x = portrait ? w * .50 : w * .64;
+  const y = portrait ? h * .43 : h * .45;
+  const drift=Math.sin(t*.28)*w*.009*gain;
+  ctx.save();
+  ctx.translate(x+drift, y);
+  ctx.rotate(-.055 + Math.sin(t*.20)*.012*gain);
+  ctx.shadowColor='rgba(0,0,0,.45)';
+  ctx.shadowBlur=22;
+  ctx.fillStyle = '#efe6d3';
+  ctx.fillRect(-size * .535, -size * .535, size * 1.07, size * 1.07);
+  ctx.shadowBlur=0;
+  ctx.beginPath();
+  ctx.rect(-size * .47, -size * .47, size * .94, size * .94);
+  ctx.clip();
+  const s = Math.max((size * .94) / bmp.width, (size * .94) / bmp.height);
+  const iw=bmp.width*s, ih=bmp.height*s;
+  ctx.drawImage(bmp,-iw/2,-ih/2,iw,ih);
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle='rgba(244,232,202,.88)';
+  ctx.font=`italic 700 ${Math.max(16,Math.round(w*.026))}px Georgia,serif`;
+  ctx.textAlign='left';
+  const kicker=(song.creator || 'MUSIC').toUpperCase();
+  ctx.fillText(kicker,margin*1.4,h*.62);
+  ctx.font=`600 ${Math.max(9,Math.round(w*.014))}px system-ui,sans-serif`;
+  ctx.fillStyle='rgba(244,232,202,.56)';
+  ctx.fillText('01  /  FEATURE STORY',margin*1.4,h*.655);
+  ctx.restore();
+}
+
+function drawSpotlight(
+  ctx: CanvasRenderingContext2D,
+  bmp: ImageBitmap,
+  w: number,
+  h: number,
+  t: number,
+  level: number,
+  gain: number,
+  p: Palette,
+) {
+  const energy=sceneEnergy(level,gain);
+  const cx=w/2, top=h*.045, floorY=h*.69;
+  const sweep=Math.sin(t*.46)*w*.09*gain;
+
+  ctx.save();
+  ctx.globalCompositeOperation='screen';
+  const cone=(originX:number,targetX:number,color:[number,number,number],alpha:number)=>{
+    const g=ctx.createLinearGradient(originX,top,targetX,floorY);
+    g.addColorStop(0,rgb(color,alpha));
+    g.addColorStop(.68,rgb(color,alpha*.18));
+    g.addColorStop(1,rgb(color,0));
+    ctx.fillStyle=g;
+    ctx.beginPath();
+    ctx.moveTo(originX-w*.025,top);
+    ctx.lineTo(originX+w*.025,top);
+    ctx.lineTo(targetX+w*(.22+energy*.05),floorY);
+    ctx.lineTo(targetX-w*(.22+energy*.05),floorY);
+    ctx.closePath();ctx.fill();
+  };
+  cone(w*.30+sweep,cx-w*.10,p[0],.42+energy*.20);
+  cone(w*.70-sweep,cx+w*.10,p[1],.38+energy*.18);
+  ctx.restore();
+
+  // Stage floor + reflected halo.
+  ctx.save();
+  const floor=ctx.createRadialGradient(cx,floorY,0,cx,floorY,w*.36);
+  floor.addColorStop(0,rgb(p[1],.18+energy*.16));
+  floor.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=floor;
+  ctx.beginPath();ctx.ellipse(cx,floorY,w*.36,h*.055,0,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+
+  // Floating album tile.
+  const size=Math.min(w*.54,h*.34);
+  const floatY=Math.sin(t*.52)*h*.009*gain;
+  ctx.save();
+  ctx.translate(cx,h*.39+floatY);
+  ctx.rotate(Math.sin(t*.30)*.032*gain);
+  ctx.shadowColor=rgb(p[1],.58);
+  ctx.shadowBlur=34+energy*40;
+  ctx.fillStyle='#101521';
+  ctx.fillRect(-size/2,-size/2,size,size);
+  ctx.beginPath();ctx.rect(-size*.47,-size*.47,size*.94,size*.94);ctx.clip();
+  const s=Math.max((size*.94)/bmp.width,(size*.94)/bmp.height);
+  ctx.drawImage(bmp,-bmp.width*s/2,-bmp.height*s/2,bmp.width*s,bmp.height*s);
+  ctx.restore();
+
+  // Stage particles react to energy.
+  ctx.save();
+  ctx.fillStyle=rgb(p[1],.64);
+  const count=10+Math.round(energy*12);
+  for(let i=0;i<count;i++){
+    const phase=i*1.97;
+    const x=cx+Math.sin(phase+t*(.35+i%3*.08))*w*(.18+(i%4)*.025);
+    const y=h*.18+((i*79+t*18)%(h*.42));
+    const r=1.4+(i%3)*.8+energy*1.5;
+    ctx.globalAlpha=.18+(i%5)*.08;
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawLyricsFocusScene(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  t: number,
+  level: number,
+  gain: number,
+  p: Palette,
+) {
+  const energy=sceneEnergy(level,gain);
+  ctx.save();
+  const g=ctx.createLinearGradient(0,h*.16,0,h*.80);
+  g.addColorStop(0,'rgba(4,7,15,.10)');
+  g.addColorStop(.38,'rgba(3,6,14,.66)');
+  g.addColorStop(.62,'rgba(3,6,14,.70)');
+  g.addColorStop(1,'rgba(3,6,14,.12)');
+  ctx.fillStyle=g;
+  ctx.fillRect(0,h*.14,w,h*.68);
+
+  // Focus window.
+  ctx.fillStyle='rgba(10,13,26,.34)';
+  ctx.strokeStyle=rgb(p[1],.18+energy*.24);
+  ctx.lineWidth=Math.max(1,w*.0015);
+  ctx.beginPath();
+  ctx.roundRect(w*.07,h*.36,w*.86,h*.28,Math.min(28,w*.035));
+  ctx.fill();ctx.stroke();
+
+  // Audio-reactive guide waveform behind lyric text.
+  ctx.strokeStyle=rgb(p[1],.30+energy*.38);
+  ctx.lineWidth=Math.max(2,w*.0024);
+  ctx.shadowColor=rgb(p[1],.36);
+  ctx.shadowBlur=12+energy*18;
+  ctx.beginPath();
+  const cy=h*.50;
+  for(let i=0;i<=64;i++){
+    const x=w*.08+(i/64)*w*.84;
+    const envelope=Math.sin((i/64)*Math.PI);
+    const y=cy+Math.sin(i*.62+t*(4.0+gain*.5))*h*(.004+energy*.022)*envelope;
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+  }
+  ctx.stroke();
+  ctx.shadowBlur=0;
+
+  // Quote marks / focus furniture.
+  ctx.font=`900 ${Math.round(w*.18)}px Georgia,serif`;
+  ctx.fillStyle=rgb(p[1],.10+energy*.08);
+  ctx.textAlign='left';
+  ctx.fillText('“',w*.055,h*.43);
+
+  // Beat indicator segments.
+  const segments=7;
+  for(let i=0;i<segments;i++){
+    const segEnergy=Math.max(.08,energy*(.45+.55*Math.sin(t*2.6+i*.9)*.5+.5));
+    ctx.fillStyle=rgb(p[i%p.length],.18+segEnergy*.26);
+    const sw=w*.012, sh=h*(.012+.022*segEnergy);
+    ctx.fillRect(w*.12+i*w*.03,h*.67-sh,sw,sh);
+  }
+  ctx.restore();
+}
+
 function drawTemplate(
   ctx: CanvasRenderingContext2D,
   bmp: ImageBitmap,
@@ -583,48 +1109,52 @@ function drawTemplate(
   layout?: OverlayLayout,
   textStyles?: OverlayTextStyles,
 ) {
-  if (preserveBackground) {
-    drawMeta(
-      ctx,
-      song,
-      w,
-      h * 0.67,
-      'center',
-      0.72,
-      template,
-      p,
-      h,
-      layout,
-      textStyles,
-    );
-    return;
-  }
   const gain = MOTION_GAIN[motion];
-  ctx.fillStyle = '#080812';
-  ctx.fillRect(0, 0, w, h);
-  const zoom = 1.06 + 0.025 * Math.sin(t * 0.45) * gain + level * 0.025 * gain,
-    dx = Math.sin(t * 0.22) * w * 0.018 * gain,
-    dy = Math.cos(t * 0.18) * h * 0.014 * gain;
-  /* Suno mode uses one image only: the thumbnail fills the canvas. Never draw a second centered copy. */ coverFill(
-    ctx,
-    bmp,
-    w,
-    h,
-    1,
-    0,
-    zoom,
-    dx,
-    dy,
-  );
-  ctx.fillStyle = 'rgba(3,4,12,.18)';
-  ctx.fillRect(0, 0, w, h);
+  const energy = sceneEnergy(level, gain);
+
+  if (!preserveBackground) {
+    ctx.fillStyle = '#070812';
+    ctx.fillRect(0, 0, w, h);
+    const zoom = 1.04 + .015 * Math.sin(t * .42) * gain + energy * .018;
+    const dx = Math.sin(t * .22) * w * .011 * gain;
+    const dy = Math.cos(t * .18) * h * .009 * gain;
+    const coverAlpha = template === 'cover-motion' ? .96 : template === 'lyrics-focus' ? .42 : .56;
+    const blur = template === 'cover-motion' ? 0 : template === 'editorial' ? 18 : 26;
+    coverFill(ctx, bmp, w, h, coverAlpha, blur, zoom, dx, dy);
+    ctx.fillStyle = template === 'cover-motion'
+      ? 'rgba(3,4,12,.15)'
+      : template === 'editorial'
+        ? 'rgba(7,8,14,.50)'
+        : 'rgba(3,4,12,.43)';
+    ctx.fillRect(0, 0, w, h);
+  } else {
+    ctx.fillStyle = template === 'editorial'
+      ? 'rgba(3,4,12,.26)'
+      : 'rgba(3,4,12,.12)';
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  if (template === 'vinyl') {
+    drawVinylDisc(ctx, bmp, w, h, t, level, gain, false);
+  } else if (template === 'gold-record') {
+    drawVinylDisc(ctx, bmp, w, h, t, level, gain, true);
+  } else if (template === 'glass-card') {
+    drawGlassCard(ctx, bmp, w, h, t, level, gain, p);
+  } else if (template === 'editorial') {
+    drawEditorial(ctx, bmp, song, w, h, t, level, gain);
+  } else if (template === 'spotlight') {
+    drawSpotlight(ctx, bmp, w, h, t, level, gain, p);
+  } else if (template === 'lyrics-focus') {
+    drawLyricsFocusScene(ctx, w, h, t, level, gain, p);
+  }
+
   drawMeta(
     ctx,
     song,
     w,
-    h * 0.67,
+    h * .67,
     'center',
-    0.72,
+    template === 'editorial' ? .60 : template === 'lyrics-focus' ? .68 : .72,
     template,
     p,
     h,
@@ -647,6 +1177,9 @@ export function createLiveFramePainter(bitmap: ImageBitmap) {
     preserveBackground = false,
     layout?: OverlayLayout,
     textStyles?: OverlayTextStyles,
+    audioAnalysis?: PreviewAudioAnalysis | null,
+    realtimeBands?: RealtimeSpectrumBands,
+    waveAppearance?: WaveAppearance,
   ) => {
     drawTemplate(
       ctx,
@@ -655,7 +1188,7 @@ export function createLiveFramePainter(bitmap: ImageBitmap) {
       w,
       h,
       time,
-      amplitude(null, 0, time),
+      amplitude(audioAnalysis?.samples || null, audioAnalysis?.rate || 0, time),
       template,
       motion,
       palette,
@@ -666,7 +1199,20 @@ export function createLiveFramePainter(bitmap: ImageBitmap) {
     withSubtitleLayout(ctx, w, h, layout, () =>
       drawLyrics(ctx, song, w, h, time, song.duration || 1, lyrics),
     );
-    drawWave(ctx, null, 0, time, w, h, wave, palette, layout);
+    drawWave(
+      ctx,
+      audioAnalysis?.samples || null,
+      audioAnalysis?.rate || 0,
+      time,
+      w,
+      h,
+      wave,
+      palette,
+      layout,
+      undefined,
+      realtimeBands,
+      waveAppearance,
+    );
   };
 }
 function isMobileRenderDevice() {
@@ -739,28 +1285,75 @@ export async function generateVisualizerVideoSafe(
     mobile = isMobileRenderDevice();
   let processedWav: Blob | null = null,
     audioBlob: Blob = originalAudio;
-  if (!mobile) {
-    options.onProgress?.(6);
-    processedWav = await renderTikTokLikeAudio(originalAudio);
-    options.onProgress?.(8);
-    try {
-      audioBlob = await convertProcessedAudio(processedWav, 'm4a');
-    } catch {
-      audioBlob = await convertProcessedAudio(processedWav, 'mp3');
+  options.onProgress?.(6);
+  const mastering = options.productionMastering;
+  let masteringFallback = false;
+  if (mobile) await yieldToBrowser();
+  try {
+    if (mastering?.profile && mastering.profile !== 'original') {
+      processedWav = (await masterAudio(originalAudio, mastering.profile, mastering.advanced)).blob;
+      if (mobile) await yieldToBrowser();
+      if (mastering.spatial?.enabled) {
+        processedWav = await render5DAudio(processedWav, mastering.spatial.amount/100, mastering.spatial.mode);
+        if (mobile) await yieldToBrowser();
+      }
+    } else if (!mastering) {
+      processedWav = await renderTikTokLikeAudio(originalAudio);
     }
-  } else {
     options.onProgress?.(8);
+    if (processedWav) {
+      try {
+        audioBlob = await convertProcessedAudio(processedWav, 'm4a');
+      } catch (m4aError) {
+        try {
+          audioBlob = await convertProcessedAudio(processedWav, 'mp3');
+        } catch (mp3Error) {
+          if (!mobile) throw mp3Error;
+          masteringFallback = true;
+          processedWav = null;
+          audioBlob = originalAudio;
+          console.warn('[SunoDown render] mobile mastered audio encode failed, using original audio', m4aError, mp3Error);
+        }
+      }
+      if (mobile) await yieldToBrowser();
+    }
+  } catch (processingError) {
+    if (!mobile) throw processingError;
+    masteringFallback = true;
+    processedWav = null;
+    audioBlob = originalAudio;
+    options.onProgress?.(8);
+    console.warn('[SunoDown render] mobile audio mastering/decode failed, using original audio', processingError);
     await yieldToBrowser();
   }
-  const input = new Input({
+  let input = new Input({
       source: new BlobSource(audioBlob),
       formats: ALL_FORMATS,
-    }),
+    });
+  let track = await input.getPrimaryAudioTrack();
+  if (!track && mobile && audioBlob !== originalAudio) {
+    masteringFallback = true;
+    processedWav = null;
+    audioBlob = originalAudio;
+    input = new Input({ source: new BlobSource(originalAudio), formats: ALL_FORMATS });
     track = await input.getPrimaryAudioTrack();
+  }
   if (!track) throw new Error('Không có luồng âm thanh hợp lệ.');
-  const codec = await track.getCodec(),
+  let codec = await track.getCodec(),
     decoderConfig = await track.getDecoderConfig(),
     sourceDuration = await input.computeDuration();
+  if ((!codec || !decoderConfig || !Number.isFinite(sourceDuration) || sourceDuration <= 0) && mobile && audioBlob !== originalAudio) {
+    masteringFallback = true;
+    processedWav = null;
+    audioBlob = originalAudio;
+    input = new Input({ source: new BlobSource(originalAudio), formats: ALL_FORMATS });
+    track = await input.getPrimaryAudioTrack();
+    if (track) {
+      codec = await track.getCodec();
+      decoderConfig = await track.getDecoderConfig();
+      sourceDuration = await input.computeDuration();
+    }
+  }
   if (
     !codec ||
     !decoderConfig ||
@@ -768,6 +1361,7 @@ export async function generateVisualizerVideoSafe(
     sourceDuration <= 0
   )
     throw new Error('Không đọc được âm thanh.');
+  if (masteringFallback) options.onAudioFallback?.('mobile_decode_or_encode');
   const trim = storedAudioTrim(sourceDuration),
     trimStart = trim?.start || 0,
     trimEnd = trim?.end || sourceDuration,
@@ -788,7 +1382,7 @@ export async function generateVisualizerVideoSafe(
     end = start + duration;
   let samples: Float32Array | null = null,
     rate = 48000;
-  if (!mobile && processedWav) {
+  if (processedWav) {
     try {
       const ac = new AudioContext(),
         d = await ac.decodeAudioData(await processedWav.arrayBuffer());
@@ -891,7 +1485,13 @@ export async function generateVisualizerVideoSafe(
         );
         applyBackgroundFinish(ctx, width, height, background);
       } else if (background.mode === 'video' && backgroundVideo) {
-        await seekVideoFrame(backgroundVideo, absoluteT, background.loopVideo);
+        await seekVideoFrame(
+          backgroundVideo,
+          absoluteT,
+          background.loopVideo,
+          background.videoStart || 0,
+          background.videoEnd,
+        );
         drawMediaBackground(
           ctx,
           backgroundVideo,
@@ -949,7 +1549,19 @@ export async function generateVisualizerVideoSafe(
         waveStyle,
         palette,
         options.layout,
+        undefined,
+        undefined,
+        options.waveAppearance,
       );
+      if (options.effects?.effects?.length) {
+        drawVideoEffects(
+          ctx,
+          width,
+          height,
+          songT,
+          options.effects,
+        );
+      }
       await videoSource.add(localT, Math.min(fd, duration - localT), {
         keyFrame: i % (fps * 2) === 0,
       });

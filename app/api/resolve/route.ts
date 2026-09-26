@@ -24,6 +24,18 @@ async function resolveClipId(input:string){
  return clipIdFromPage(await r.text());
 }
 function firstString(...values:unknown[]){return values.find(v=>typeof v==='string'&&v.trim()) as string|undefined}
+function mediaSource(mediaUrls:Array<Record<string,unknown>>,format:'mp3'|'m4a'){
+ const match=mediaUrls.find(m=>{
+  if(typeof m.url!=='string')return false;
+  const type=String(m.content_type??'').toLowerCase();
+  let pathname='';
+  try{pathname=new URL(m.url).pathname.toLowerCase()}catch{}
+  return format==='mp3'
+   ? type.includes('mp3')||type.includes('mpeg')||pathname.endsWith('.mp3')
+   : type.includes('m4a')||pathname.endsWith('.m4a');
+ });
+ return typeof match?.url==='string'?match.url:undefined;
+}
 export async function POST(request:NextRequest){
  try{
   const {input}=await request.json();
@@ -35,7 +47,8 @@ export async function POST(request:NextRequest){
   const clip=await clipResponse.json() as Record<string,unknown>;
   const metadata=clip.metadata&&typeof clip.metadata==='object'?clip.metadata as Record<string,unknown>:null;
   const mediaUrls=Array.isArray(clip.media_urls)?clip.media_urls as Array<Record<string,unknown>>:[];
-  const audioSource=mediaUrls.find(m=>typeof m.url==='string'&&String(m.content_type).startsWith('m4a'))?.url??mediaUrls.find(m=>typeof m.url==='string'&&String(m.content_type).startsWith('mp3'))?.url??clip.audio_url;
+  // Browser AI sync uses decodeAudioData(). MP3 is substantially more reliable than decrypted M4A/audio/mp4 on iPhone Safari, so prefer MP3 and keep M4A only as a fallback.
+  const audioSource=mediaSource(mediaUrls,'mp3')??mediaSource(mediaUrls,'m4a')??clip.audio_url;
   if(typeof audioSource!=='string'||audioSource.includes('/api/forbidden'))return NextResponse.json({error:'Suno chưa cung cấp nguồn âm thanh cho bài này.'},{status:502});
   const videoSource=typeof clip.video_url==='string'&&clip.video_url.startsWith('https://')?clip.video_url:null;
   const picture=typeof clip.image_large_url==='string'?clip.image_large_url:typeof clip.image_url==='string'?clip.image_url:null;

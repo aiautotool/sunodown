@@ -1,0 +1,152 @@
+name: Mobile v17
+
+on:
+  push:
+    branches: [v17]
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/core/**'
+      - '.github/workflows/mobile-v17.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sunodown-mobile-v17
+  cancel-in-progress: true
+
+jobs:
+  expo-export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run export
+
+  android-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm install --no-audit --no-fund
+      - run: npx expo prebuild --platform android --clean --no-install
+      - name: Install SunoDown Android launcher icon
+        run: |
+          mkdir -p android/app/src/main/res/drawable
+          mkdir -p android/app/src/main/res/mipmap-anydpi
+          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
+          cat > android/app/src/main/res/values/sunodown_icon_colors.xml <<'EOF'
+          <resources>
+            <color name="sunodown_icon_bg">#070B14</color>
+          </resources>
+          EOF
+          cat > android/app/src/main/res/drawable/sunodown_foreground.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+            <path android:fillColor="#00D9FF"
+              android:pathData="M31,22 L82,54 L31,86 Z"/>
+            <path android:fillColor="#7C3AED"
+              android:pathData="M37,29 L74,54 L37,79 Z"/>
+            <path android:fillColor="#FFFFFF"
+              android:pathData="M47,42 L51,42 L51,66 L47,66 Z"/>
+            <path android:fillColor="#D8B4FE"
+              android:pathData="M55,36 L59,36 L59,72 L55,72 Z"/>
+            <path android:fillColor="#F472B6"
+              android:pathData="M63,44 L67,44 L67,64 L63,64 Z"/>
+          </vector>
+          EOF
+          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@color/sunodown_icon_bg"/>
+            <foreground android:drawable="@drawable/sunodown_foreground"/>
+          </adaptive-icon>
+          EOF
+          cp android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          cat > android/app/src/main/res/mipmap-anydpi/ic_launcher.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+            <path android:fillColor="#070B14" android:pathData="M0,0 H108 V108 H0 Z"/>
+            <path android:fillColor="#00D9FF" android:pathData="M31,22 L82,54 L31,86 Z"/>
+            <path android:fillColor="#7C3AED" android:pathData="M37,29 L74,54 L37,79 Z"/>
+            <path android:fillColor="#FFFFFF" android:pathData="M47,42 L51,42 L51,66 L47,66 Z"/>
+            <path android:fillColor="#D8B4FE" android:pathData="M55,36 L59,36 L59,72 L55,72 Z"/>
+            <path android:fillColor="#F472B6" android:pathData="M63,44 L67,44 L67,64 L63,64 Z"/>
+          </vector>
+          EOF
+          cp android/app/src/main/res/mipmap-anydpi/ic_launcher.xml android/app/src/main/res/mipmap-anydpi/ic_launcher_round.xml
+      - name: Build standalone release APK with bundled JS
+        run: ./gradlew assembleRelease
+        working-directory: apps/mobile/android
+      - name: Verify standalone APK contents
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+
+          echo "APK size: $(stat -c%s "$APK") bytes"
+          echo "Checking packaged React Native bundle..."
+          unzip -p "$APK" assets/index.android.bundle > /tmp/index.android.bundle
+          test -s /tmp/index.android.bundle
+          echo "JS bundle size: $(stat -c%s /tmp/index.android.bundle) bytes"
+
+          echo "Checking launcher icon declared in manifest/resources..."
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+          test -x "$AAPT"
+          "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
+          grep -q "application-icon-" /tmp/apk-badging.txt
+          grep -q "package: name='com.aiautotool.sunodown'" /tmp/apk-badging.txt
+
+          echo "Standalone APK audit passed."
+        working-directory: apps/mobile
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sunodown-mobile-v17-release-apk
+          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  ios-simulator:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - run: npm install --no-audit --no-fund
+      - run: npx expo prebuild --platform ios --clean --no-install
+      - run: pod install
+        working-directory: apps/mobile/ios
+      - name: Build iOS simulator app
+        run: |
+          set -o pipefail
+          xcodebuild             -workspace SunoDown.xcworkspace             -scheme SunoDown             -configuration Debug             -sdk iphonesimulator             -destination 'generic/platform=iOS Simulator'             CODE_SIGNING_ALLOWED=NO             build
+        working-directory: apps/mobile/ios
