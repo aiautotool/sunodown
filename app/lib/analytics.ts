@@ -4,6 +4,8 @@ export type AnalyticsEventName =
   | 'song_resolve_succeeded'
   | 'song_resolve_failed'
   | 'quick_create_started'
+  | 'karaoke_auto_sync_succeeded'
+  | 'karaoke_auto_sync_fallback'
   | 'suggested_preset_selected'
   | 'production_recipe_applied'
   | 'customize_opened'

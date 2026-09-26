@@ -16,6 +16,8 @@ type SyncOptions = {
   onStage?: (stage: KaraokeSyncStage, message: string) => void;
 };
 
+type TranscriptionOptions = Omit<SyncOptions, 'lyrics'>;
+
 type WorkerChunk = {
   text: string;
   timestamp: [number | null, number | null];
@@ -126,6 +128,56 @@ function transcribe(
       [transferable],
     );
   });
+}
+
+function roughWordsToLines(words: RoughWord[]): KaraokeLine[] {
+  const lines: KaraokeLine[] = [];
+  let current: RoughWord[] = [];
+
+  const flush = () => {
+    if (!current.length) return;
+    lines.push({
+      text: current.map((word) => word.text).join(' ').replace(/\s+([,.;!?])/g, '$1'),
+      start: current[0].start,
+      end: current[current.length - 1].end,
+      words: current.map((word) => ({ ...word })),
+    });
+    current = [];
+  };
+
+  for (const word of words) {
+    const previous = current[current.length - 1];
+    const pause = previous ? word.start - previous.end : 0;
+    const characterCount = current.reduce((total, item) => total + item.text.length + 1, 0);
+    if (current.length && (pause > 0.85 || current.length >= 10 || characterCount + word.text.length > 58)) {
+      flush();
+    }
+    current.push(word);
+    if (/[.!?…]$/.test(word.text) && current.length >= 3) flush();
+  }
+  flush();
+  return lines;
+}
+
+export async function transcribeLocalKaraokeTimeline({
+  audio,
+  duration,
+  language = 'vi',
+  onStage,
+}: TranscriptionOptions): Promise<KaraokeLine[]> {
+  onStage?.('decode', 'Đang chuẩn hóa audio 16 kHz…');
+  const pcm16k = await decodeAndResample(audio);
+  onStage?.('transcribe', 'Đang tự động tạo subtitle trên thiết bị…');
+  const roughWords = await transcribe(pcm16k, language, onStage);
+  if (!roughWords.length) throw new Error('Không nhận diện được lời trong audio.');
+
+  const timeline = roughWordsToLines(roughWords).map((line) => ({
+    ...line,
+    start: Math.max(0, Math.min(duration, line.start)),
+    end: Math.max(line.start + 0.01, Math.min(duration, line.end)),
+  }));
+  onStage?.('done', 'Đã tự động tạo subtitle từ audio.');
+  return timeline;
 }
 
 export async function buildLocalKaraokeTimeline({

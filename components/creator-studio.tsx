@@ -59,7 +59,10 @@ import {
 } from '@/app/lib/audio-processing';
 import { buildEstimatedKaraokeTimeline, exportSrt } from '@/app/lib/karaoke';
 import { buildCapCutKaraokeTimeline } from '@/app/lib/karaoke-capcut-sync';
-import { buildLocalKaraokeTimeline } from '@/app/lib/karaoke-local-sync';
+import {
+  buildLocalKaraokeTimeline,
+  transcribeLocalKaraokeTimeline,
+} from '@/app/lib/karaoke-local-sync';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 import { initAnalytics, track } from '@/app/lib/analytics';
 import { DEFAULT_PLAN, canUse } from '@/app/lib/entitlements';
@@ -595,6 +598,7 @@ export default function CreatorStudio() {
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeLine[]>([]);
   const [karaokeSyncStatus, setKaraokeSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'fallback'>('idle');
   const [karaokeSyncMessage, setKaraokeSyncMessage] = useState('');
+  const [subtitleNotice, setSubtitleNotice] = useState('');
   const [audioBinary, setAudioBinary] = useState<Blob | null>(null);
   const mediaCache = useRef<Map<string, Blob>>(new Map());
   const [mediaClips, setMediaClips] = useState<MediaClip[]>([]);
@@ -649,6 +653,12 @@ export default function CreatorStudio() {
   const resolvedAt = useRef<number | null>(null);
   const lastPerfTrack = useRef(0);
   const karaokeSyncRun = useRef(0);
+
+  useEffect(() => {
+    if (!subtitleNotice) return;
+    const timeout = window.setTimeout(() => setSubtitleNotice(''), 5200);
+    return () => window.clearTimeout(timeout);
+  }, [subtitleNotice]);
 
   const currentPresetConfig = (): StudioPresetConfig =>
     structuredClone(visualSnapshot);
@@ -948,6 +958,91 @@ export default function CreatorStudio() {
     localStorage.setItem('sunodown-v16-favorite-presets', JSON.stringify(next));
   };
 
+  async function generateSubtitlesInBackground(
+    target: Song,
+    audio: Blob,
+    duration: number,
+    syncRun: number,
+  ) {
+    setKaraokeSyncStatus('syncing');
+    setKaraokeSyncMessage(
+      target.lyrics
+        ? 'Đang tìm timestamp cho subtitle trong nền…'
+        : 'Đang tự động tạo subtitle từ audio trong nền…',
+    );
+
+    let timeline: KaraokeLine[] = [];
+    let message = '';
+    let engine = target.lyrics ? 'capcut' : 'local-whisper-transcription';
+    try {
+      if (target.lyrics) {
+        try {
+          timeline = await buildCapCutKaraokeTimeline({
+            audio,
+            lyrics: target.lyrics,
+            duration,
+            language: 'vi-VN',
+          });
+          message = 'Đã tìm thấy subtitle và căn theo giọng hát.';
+        } catch (capcutError) {
+          if (karaokeSyncRun.current !== syncRun) return;
+          console.warn('[karaoke-known-lyrics-align]', capcutError);
+          engine = 'local-whisper-after-capcut';
+          timeline = await buildLocalKaraokeTimeline({
+            audio,
+            lyrics: target.lyrics,
+            duration,
+            language: 'vi',
+            onStage: (_stage, stageMessage) => {
+              if (karaokeSyncRun.current === syncRun) setKaraokeSyncMessage(stageMessage);
+            },
+          });
+          message = 'Đã tìm thấy subtitle và căn trên thiết bị.';
+        }
+      } else {
+        timeline = await transcribeLocalKaraokeTimeline({
+          audio,
+          duration,
+          language: 'vi',
+          onStage: (_stage, stageMessage) => {
+            if (karaokeSyncRun.current === syncRun) setKaraokeSyncMessage(stageMessage);
+          },
+        });
+        message = 'Đã tạo subtitle tự động từ file audio.';
+      }
+
+      if (karaokeSyncRun.current !== syncRun) return;
+      if (!timeline.length) throw new Error('Không tìm thấy lời có timestamp.');
+      setKaraokeTimeline(timeline);
+      setKaraokeSyncStatus('synced');
+      setKaraokeSyncMessage(message);
+      setLyrics((mode) => mode === 'off' ? 'focus' : mode);
+      setSubtitleNotice(message);
+      track('karaoke_auto_sync_succeeded', { engine, lines: timeline.length });
+    } catch (syncError) {
+      if (karaokeSyncRun.current !== syncRun) return;
+      console.warn('[karaoke-background-sync]', syncError);
+      if (target.lyrics) {
+        timeline = buildEstimatedKaraokeTimeline(target.lyrics, duration);
+      }
+      if (timeline.length) {
+        setKaraokeTimeline(timeline);
+        setKaraokeSyncStatus('fallback');
+        setKaraokeSyncMessage('Đang dùng timing dự phòng; subtitle vẫn có thể chỉnh trên timeline.');
+        setLyrics((mode) => mode === 'off' ? 'focus' : mode);
+      } else {
+        const reason = syncError instanceof Error ? syncError.message : 'Lỗi không xác định';
+        setKaraokeSyncStatus('idle');
+        setKaraokeSyncMessage(`Không thể tự động tạo subtitle: ${reason}`);
+      }
+      track('karaoke_auto_sync_fallback', {
+        engine,
+        reason: syncError instanceof Error ? syncError.message.slice(0, 120) : 'unknown',
+        lines: timeline.length,
+      });
+    }
+  }
+
   async function resolve(value = url): Promise<Song | null> {
     const startedAt = performance.now();
     if (!valid(value)) {
@@ -956,9 +1051,8 @@ export default function CreatorStudio() {
       return null;
     }
 
-    // A new song is transactional: hide every piece of the previous song,
-    // invalidate old async work, prepare the complete next state off-screen,
-    // and reveal the editor only after media + subtitle timing are ready.
+    // Prepare only the media needed by the editor. Subtitle discovery starts
+    // after the editor is visible and never blocks navigation into Studio.
     const syncRun = ++karaokeSyncRun.current;
     setSong(null);
     setKaraokeTimeline([]);
@@ -1010,111 +1104,19 @@ export default function CreatorStudio() {
       if (karaokeSyncRun.current !== syncRun) return null;
 
       const duration = hydrated.duration || 30;
-      let finalTimeline: KaraokeLine[] = [];
-      let syncStatus: 'idle' | 'synced' | 'fallback' =
-        hydrated.lyrics ? 'fallback' : 'idle';
-      let syncMessage = '';
-
-      if (hydrated.lyrics) {
-        setInitProgress(46);
-        setInitTitle('Đang căn lời bài hát');
-        setInitDetail('AI đang nghe giọng hát và xác định timestamp…');
-
-        try {
-          finalTimeline = await buildCapCutKaraokeTimeline({
-            audio: source,
-            lyrics: hydrated.lyrics,
-            duration,
-            language: 'vi-VN',
-            onStage: () => {
-              if (karaokeSyncRun.current !== syncRun) return;
-              setInitProgress((value) => Math.max(value, 58));
-              setInitDetail('Đang nhận diện từng câu và từng từ…');
-            },
-          });
-          if (karaokeSyncRun.current !== syncRun) return null;
-          syncStatus = 'synced';
-          syncMessage = 'Đã căn subtitle theo giọng hát.';
-          setInitProgress(82);
-          setInitDetail('Đã có timestamp lời bài hát.');
-          track('karaoke_auto_sync_succeeded', {
-            engine: 'capcut',
-            lines: finalTimeline.length,
-          });
-        } catch (capcutError) {
-          if (karaokeSyncRun.current !== syncRun) return null;
-          const capcutReason =
-            capcutError instanceof Error ? capcutError.message : 'Lỗi không xác định';
-          console.warn('[karaoke-known-lyrics-align]', capcutError);
-          setInitProgress(64);
-          setInitDetail('CapCut chưa sẵn sàng; chuyển sang nhận diện trên thiết bị…');
-
-          try {
-            finalTimeline = await buildLocalKaraokeTimeline({
-              audio: source,
-              lyrics: hydrated.lyrics,
-              duration,
-              language: 'vi',
-              onStage: (_stage, message) => {
-                if (karaokeSyncRun.current !== syncRun) return;
-                setInitProgress((value) => Math.max(value, 70));
-                setInitDetail(message);
-              },
-            });
-            if (karaokeSyncRun.current !== syncRun) return null;
-            syncStatus = 'synced';
-            syncMessage = 'Đã căn subtitle bằng nhận diện giọng hát trên thiết bị.';
-            setInitProgress(82);
-            setInitDetail('Đã có timestamp lời bài hát.');
-            track('karaoke_auto_sync_succeeded', {
-              engine: 'local-whisper-after-capcut',
-              lines: finalTimeline.length,
-              capcut_reason: capcutReason.slice(0, 120),
-            });
-          } catch (localError) {
-            if (karaokeSyncRun.current !== syncRun) return null;
-            const localReason =
-              localError instanceof Error ? localError.message : 'Lỗi không xác định';
-            console.warn('[karaoke-local-fallback]', localError);
-            finalTimeline = buildEstimatedKaraokeTimeline(
-              hydrated.lyrics,
-              duration,
-            );
-            syncStatus = 'fallback';
-            syncMessage = finalTimeline.length
-              ? 'Đang dùng timing dự phòng; subtitle vẫn có thể chỉnh trực tiếp trên timeline.'
-              : `Không tạo được subtitle: ${localReason}`;
-            setInitProgress(82);
-            setInitDetail(
-              finalTimeline.length
-                ? 'Đã tạo timing dự phòng để subtitle không bị mất.'
-                : 'Không thể tạo timeline subtitle.',
-            );
-            track('karaoke_auto_sync_fallback', {
-              engine: 'estimated-after-capcut-and-local',
-              capcut_reason: capcutReason.slice(0, 120),
-              local_reason: localReason.slice(0, 120),
-              lines: finalTimeline.length,
-            });
-          }
-        }
-      }
-
-      setInitProgress(90);
+      setInitProgress(82);
       setInitTitle('Đang dựng Studio');
-      setInitDetail('Ghép audio, preview, timeline và subtitle…');
+      setInitDetail('Ghép audio và preview…');
       if (karaokeSyncRun.current !== syncRun) return null;
 
-      // Commit the complete song atomically. Nothing from the new song becomes
-      // visible in the editor before all critical initialization above is done.
       setPlaybackStart(0);
       setPreviewTime(0);
       setTrimStart(0);
       setTrimEnd(duration);
       setAudioBinary(source);
-      setKaraokeTimeline(finalTimeline);
-      setKaraokeSyncStatus(syncStatus);
-      setKaraokeSyncMessage(syncMessage);
+      setKaraokeTimeline([]);
+      setKaraokeSyncStatus('syncing');
+      setKaraokeSyncMessage('Subtitle sẽ được tìm trong nền…');
       setMediaClips(hydrated.picture ? [{
         id: crypto.randomUUID(),
         type: 'image',
@@ -1136,6 +1138,7 @@ export default function CreatorStudio() {
       setInitTitle('Sẵn sàng');
       setInitDetail('Mọi dữ liệu đã được khởi tạo.');
       setSong(hydrated);
+      void generateSubtitlesInBackground(hydrated, source, duration, syncRun);
 
       track('quick_create_started', {
         has_lyrics: Boolean(hydrated.lyrics),
@@ -1145,7 +1148,7 @@ export default function CreatorStudio() {
         duration_ms: Math.round(performance.now() - startedAt),
         has_lyrics: Boolean(hydrated.lyrics),
         song_duration_s: Math.round(hydrated.duration || 0),
-        subtitle_status: syncStatus,
+        subtitle_status: 'background_started',
       });
       return hydrated;
     } catch (e) {
@@ -1658,6 +1661,7 @@ export default function CreatorStudio() {
       setError('Hãy chọn file audio MP3, WAV, M4A, AAC, OGG hoặc FLAC.');
       return;
     }
+    const syncRun = ++karaokeSyncRun.current;
     setBusy(true);
     setError('');
     setInitProgress(12);
@@ -1686,6 +1690,12 @@ export default function CreatorStudio() {
       setSong({ title, creator: 'Local audio', duration, audio, picture });
       setQuickMode(true);
       setInitProgress(100);
+      void generateSubtitlesInBackground(
+        { title, creator: 'Local audio', duration, audio, picture },
+        file,
+        duration,
+        syncRun,
+      );
       track('quick_create_started', { has_lyrics: false, style_hint: 'local_audio' });
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : 'Không thể mở file audio.');
@@ -1812,6 +1822,16 @@ export default function CreatorStudio() {
           {navigationOpen && navigationMenu}
         </div>
       </header>
+      {subtitleNotice && (
+        <output className="sd-subtitle-notice" aria-live="polite">
+          <span><Sparkles /></span>
+          <div>
+            <b>Đã tìm thấy subtitle</b>
+            <small>{subtitleNotice}</small>
+          </div>
+          <button type="button" aria-label="Đóng thông báo" onClick={() => setSubtitleNotice('')}>×</button>
+        </output>
+      )}
       {navigationOpen && <button className="sd-nav-backdrop" aria-label="Đóng menu" onClick={() => setNavigationOpen(false)} />}
       {view !== 'create' && (
         <section className="sd-section-panel">
@@ -1915,18 +1935,15 @@ export default function CreatorStudio() {
               <span>
                 {initProgress < 25
                   ? 'Metadata'
-                  : initProgress < 46
+                  : initProgress < 82
                     ? 'Audio'
-                    : initProgress < 90
-                      ? 'Subtitle'
-                      : 'Studio'}
+                    : 'Studio'}
               </span>
             </div>
             <div className="sd-init-steps">
               <span className={initProgress >= 24 ? 'done' : 'active'}>01 · Bài hát</span>
-              <span className={initProgress >= 46 ? 'done' : initProgress >= 24 ? 'active' : ''}>02 · Audio</span>
-              <span className={initProgress >= 90 ? 'done' : initProgress >= 46 ? 'active' : ''}>03 · Subtitle</span>
-              <span className={initProgress >= 100 ? 'done' : initProgress >= 90 ? 'active' : ''}>04 · Studio</span>
+              <span className={initProgress >= 82 ? 'done' : initProgress >= 24 ? 'active' : ''}>02 · Audio</span>
+              <span className={initProgress >= 100 ? 'done' : initProgress >= 82 ? 'active' : ''}>03 · Studio</span>
             </div>
           </div>
         </main>
