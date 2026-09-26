@@ -4,6 +4,11 @@ import {
   alignKnownLyricsToSegments,
   type KaraokeSegment,
 } from '@/app/lib/karaoke-known-lyrics-align';
+import {
+  normalizeKaraokeTimeline,
+  visibleLyricLines,
+  type KaraokeLine,
+} from '@/app/lib/karaoke';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 
 export const runtime = 'edge';
@@ -575,6 +580,133 @@ function capCutSegments(payload: any): KaraokeSegment[] {
     );
 }
 
+
+function simpleTokens(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function simpleOverlap(a: string, b: string) {
+  const left = simpleTokens(a);
+  const right = simpleTokens(b);
+  if (!left.length || !right.length) return { score: 0, matched: 0 };
+  const counts = new Map<string, number>();
+  for (const token of right) counts.set(token, (counts.get(token) || 0) + 1);
+  let matched = 0;
+  for (const token of left) {
+    const count = counts.get(token) || 0;
+    if (!count) continue;
+    matched++;
+    counts.set(token, count - 1);
+  }
+  const recall = matched / left.length;
+  const precision = matched / right.length;
+  return {
+    score:
+      precision + recall
+        ? (2 * precision * recall) / (precision + recall)
+        : 0,
+    matched,
+  };
+}
+
+function proportionalCueWords(text: string, start: number, end: number) {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const span = Math.max(0.08, end - start);
+  return words.map((word, index) => ({
+    text: word,
+    start: start + (span * index) / words.length,
+    end: start + (span * (index + 1)) / words.length,
+  }));
+}
+
+function buildCapCutSegmentFallback(
+  lyrics: string,
+  segments: KaraokeSegment[],
+  duration: number,
+): KaraokeLine[] {
+  const lines = visibleLyricLines(lyrics);
+  if (!lines.length || !segments.length) return [];
+
+  let firstSegment = -1;
+  let firstLine = -1;
+  for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
+    let bestLine = -1;
+    let bestScore = 0;
+    let bestMatched = 0;
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      const overlap = simpleOverlap(lines[lineIndex], segments[segmentIndex].text);
+      if (
+        overlap.score > bestScore ||
+        (overlap.score === bestScore && overlap.matched > bestMatched)
+      ) {
+        bestLine = lineIndex;
+        bestScore = overlap.score;
+        bestMatched = overlap.matched;
+      }
+    }
+    if (bestLine >= 0 && bestMatched >= 2 && bestScore >= 0.22) {
+      firstSegment = segmentIndex;
+      firstLine = bestLine;
+      break;
+    }
+  }
+
+  if (firstSegment < 0 || firstLine < 0) return [];
+
+  const cues: KaraokeLine[] = [];
+  let lineCursor = firstLine;
+  for (
+    let segmentIndex = firstSegment;
+    segmentIndex < segments.length && lineCursor < lines.length;
+    segmentIndex++
+  ) {
+    const segment = segments[segmentIndex];
+    let bestLine = -1;
+    let bestScore = 0;
+    let bestMatched = 0;
+    const searchEnd = Math.min(lines.length, lineCursor + 5);
+
+    for (let lineIndex = lineCursor; lineIndex < searchEnd; lineIndex++) {
+      const overlap = simpleOverlap(lines[lineIndex], segment.text);
+      if (
+        overlap.score > bestScore ||
+        (overlap.score === bestScore && overlap.matched > bestMatched)
+      ) {
+        bestLine = lineIndex;
+        bestScore = overlap.score;
+        bestMatched = overlap.matched;
+      }
+    }
+
+    if (bestLine < 0 || bestMatched < 1 || bestScore < 0.12) continue;
+
+    const text = lines[bestLine];
+    const start = Math.max(0, segment.start - 0.02);
+    const end = Math.min(
+      duration,
+      Math.max(start + 0.1, segment.end + 0.05),
+    );
+    cues.push({
+      text,
+      start,
+      end,
+      words: proportionalCueWords(text, start, end),
+    });
+    lineCursor = bestLine + 1;
+  }
+
+  return normalizeKaraokeTimeline(cues, duration);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const form = await request.formData();
@@ -622,23 +754,37 @@ export async function POST(request: NextRequest) {
         ? global
         : strict;
 
-    if (!aligned.timeline.length) {
-      throw new Error('Không tạo được cue subtitle từ dữ liệu nhận diện.');
+    const segmentFallback = aligned.timeline.length
+      ? []
+      : buildCapCutSegmentFallback(cleaned, segments, duration);
+    const finalTimeline = aligned.timeline.length
+      ? aligned.timeline
+      : segmentFallback;
+
+    if (!finalTimeline.length) {
+      throw new Error('CapCut không trả về cue có thể ghép với lyrics.');
     }
 
     return NextResponse.json({
-      engine:
-        global && aligned === global
+      engine: aligned.timeline.length
+        ? global && aligned === global
           ? 'known-lyrics-capcut-global'
-          : 'known-lyrics-capcut',
-      timeline: aligned.timeline,
+          : 'known-lyrics-capcut'
+        : 'capcut-segment-fallback',
+      timeline: finalTimeline,
       words: segments.reduce((sum, segment) => sum + segment.words.length, 0),
-      matchedLines: aligned.matched,
+      matchedLines: aligned.timeline.length
+        ? aligned.matched
+        : segmentFallback.length,
       totalLines: aligned.total,
-      lineAnchorCoverage: aligned.coverage,
-      firstVocalAt: aligned.firstVocalAt,
+      lineAnchorCoverage: aligned.timeline.length
+        ? aligned.coverage
+        : segmentFallback.length / Math.max(1, aligned.total),
+      firstVocalAt:
+        aligned.firstVocalAt ?? segmentFallback[0]?.start ?? null,
       strictMatchedLines: strict.matched,
       globalMatchedLines: global?.matched ?? null,
+      segmentFallbackLines: segmentFallback.length,
     });
   } catch (error) {
     console.error('[capcut-karaoke]', error);
