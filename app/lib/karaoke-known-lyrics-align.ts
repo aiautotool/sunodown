@@ -153,12 +153,16 @@ function trustedCandidate(
   );
   const expected = tokenList(lyric).length;
   const minimumScore = firstAnchor
-    ? 0.72
-    : expected <= 2
-      ? 0.72
+    ? expected <= 2
+      ? 0.68
       : expected <= 4
         ? 0.6
-        : 0.55;
+        : 0.56
+    : expected <= 2
+      ? 0.7
+      : expected <= 4
+        ? 0.58
+        : 0.52;
   const recall =
     expected > 0 ? stats.matchedTokens / expected : 0;
   const minimumRecall =
@@ -174,6 +178,74 @@ function trustedCandidate(
   return (
     candidate.score >= minimumScore &&
     (strongSegmentText || enoughTokens)
+  );
+}
+
+function bestCandidateInRange(
+  segments: KaraokeSegment[],
+  lyric: string,
+  from: number,
+  to: number,
+) {
+  let best: Candidate | null = null;
+  for (let segmentIndex = from; segmentIndex < to; segmentIndex++) {
+    for (
+      let span = 1;
+      span <= 2 && segmentIndex + span <= segments.length;
+      span++
+    ) {
+      const endIndex = segmentIndex + span - 1;
+      if (
+        span > 1 &&
+        segments[endIndex].start - segments[endIndex - 1].end > 1.5
+      ) {
+        break;
+      }
+      const candidate = buildCandidate(
+        segments,
+        segmentIndex,
+        endIndex,
+        lyric,
+      );
+      if (
+        !best ||
+        candidate.score > best.score + 0.035 ||
+        (Math.abs(candidate.score - best.score) <= 0.035 &&
+          candidate.start < best.start)
+      ) {
+        best = candidate;
+      }
+      if (candidate.score >= 0.88) return candidate;
+    }
+  }
+  return best;
+}
+
+function firstAnchorConfirmed(
+  lines: string[],
+  lineIndex: number,
+  segments: KaraokeSegment[],
+  candidate: Candidate,
+) {
+  if (!trustedCandidate(lines[lineIndex], candidate, true)) return false;
+  const nextLyric = lines[lineIndex + 1];
+  if (!nextLyric) return candidate.score >= 0.78;
+
+  const confirmFrom = candidate.endIndex + 1;
+  const confirmTo = Math.min(segments.length, confirmFrom + 6);
+  const confirmation = bestCandidateInRange(
+    segments,
+    nextLyric,
+    confirmFrom,
+    confirmTo,
+  );
+  if (!confirmation) return false;
+
+  const gap = confirmation.start - candidate.end;
+  return (
+    gap >= -0.15 &&
+    gap <= 12 &&
+    trustedCandidate(nextLyric, confirmation, false)
   );
 }
 
@@ -259,46 +331,38 @@ export function alignKnownLyricsToSegments(
       ? Math.min(usable.length, cursor + 6)
       : usable.length;
 
-    for (let segmentIndex = cursor; segmentIndex < searchEnd; segmentIndex++) {
-      for (let span = 1; span <= 2 && segmentIndex + span <= usable.length; span++) {
-        const endIndex = segmentIndex + span - 1;
-        if (
-          span > 1 &&
-          usable[endIndex].start - usable[endIndex - 1].end > 1.5
-        ) {
-          break;
-        }
-        const candidate = buildCandidate(
+    if (!firstAnchorFound) {
+      // Opening vocal uses two-line confirmation. This allows a realistic
+      // threshold for sung Vietnamese while still rejecting hallucinated intro
+      // text: one accidental phrase is not enough to start karaoke.
+      for (let segmentIndex = cursor; segmentIndex < searchEnd; segmentIndex++) {
+        const localBest = bestCandidateInRange(
           usable,
-          segmentIndex,
-          endIndex,
           lyric,
+          segmentIndex,
+          Math.min(searchEnd, segmentIndex + 2),
         );
-
-        // Prefer the earliest candidate once scores are close. This is crucial
-        // for repeated chorus lines: locality/chronology beats a later perfect
-        // duplicate.
-        if (
-          !best ||
-          candidate.score > best.score + 0.035 ||
-          (Math.abs(candidate.score - best.score) <= 0.035 &&
-            candidate.start < best.start)
-        ) {
-          best = candidate;
-        }
-
-        if (
-          candidate.score >= 0.86 &&
-          trustedCandidate(lyric, candidate, !firstAnchorFound)
-        ) {
-          best = candidate;
-          segmentIndex = searchEnd;
+        if (!localBest) continue;
+        if (firstAnchorConfirmed(lines, lineIndex, usable, localBest)) {
+          best = localBest;
           break;
         }
       }
+    } else {
+      best = bestCandidateInRange(
+        usable,
+        lyric,
+        cursor,
+        searchEnd,
+      );
     }
 
-    if (!best || !trustedCandidate(lyric, best, !firstAnchorFound)) {
+    if (
+      !best ||
+      (!firstAnchorFound
+        ? !firstAnchorConfirmed(lines, lineIndex, usable, best)
+        : !trustedCandidate(lyric, best, false))
+    ) {
       // Honest gap. Do not advance the ASR cursor and, critically, do not
       // invent a time before the first vocal.
       continue;
