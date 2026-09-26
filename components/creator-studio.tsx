@@ -976,7 +976,10 @@ export default function CreatorStudio() {
         title: data.title || 'Suno song',
         creator: data.creator || 'Suno',
         picture: data.picture || '',
-        lyrics: typeof data.lyrics === 'string' ? data.lyrics : '',
+        lyrics:
+          typeof data.lyrics === 'string'
+            ? cleanLyricsForVideo(data.lyrics)
+            : '',
         style: typeof data.style === 'string' ? data.style : '',
         tags: typeof data.tags === 'string' ? data.tags : '',
       };
