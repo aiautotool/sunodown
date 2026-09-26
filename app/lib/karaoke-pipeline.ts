@@ -13,6 +13,11 @@ import {
   validateKaraokeTimeline,
   type KaraokeValidationReport,
 } from './karaoke-validation';
+import {
+  extractAudioRhythmOnsets,
+  refineKaraokeTimelineToRhythm,
+  type RhythmOnset,
+} from './karaoke-rhythm';
 
 export type KaraokeEngineId =
   | 'capcut'
@@ -87,6 +92,21 @@ export async function runKaraokePipeline({
   const attempts: KaraokePipelineResult['attempts'] = [];
   const hasLyrics = Boolean(lyrics?.trim());
   let bestTimed: Candidate | null = null;
+  let rhythmOnsetsPromise: Promise<RhythmOnset[]> | null = null;
+
+  const refineToSungRhythm = async (
+    timeline: KaraokeLine[],
+    engine: KaraokeEngineId,
+  ) => {
+    onProgress?.({
+      stage: 'align',
+      engine,
+      message: 'Đang tinh chỉnh word timing theo onset và nhịp hát…',
+    });
+    rhythmOnsetsPromise ||= extractAudioRhythmOnsets(audio).catch(() => []);
+    const onsets = await rhythmOnsetsPromise;
+    return refineKaraokeTimelineToRhythm(timeline, onsets, duration);
+  };
 
   onProgress?.({
     stage: 'prepare',
@@ -100,12 +120,13 @@ export async function runKaraokePipeline({
         engine: 'capcut',
         message: 'Đang tìm timestamp theo giọng hát…',
       });
-      const timeline = await buildCapCutKaraokeTimeline({
+      const rawTimeline = await buildCapCutKaraokeTimeline({
         audio,
         lyrics: lyrics!,
         duration,
         language: language === 'vi' ? 'vi-VN' : language,
       });
+      const timeline = await refineToSungRhythm(rawTimeline, 'capcut');
       onProgress?.({
         stage: 'validate',
         engine: 'capcut',
@@ -153,7 +174,7 @@ export async function runKaraokePipeline({
         engine: 'local-whisper',
         message: 'Đang chuyển sang Whisper trên thiết bị…',
       });
-      const timeline = await buildLocalKaraokeTimeline({
+      const rawTimeline = await buildLocalKaraokeTimeline({
         audio,
         lyrics: lyrics!,
         duration,
@@ -165,6 +186,7 @@ export async function runKaraokePipeline({
             message,
           }),
       });
+      const timeline = await refineToSungRhythm(rawTimeline, 'local-whisper');
       onProgress?.({
         stage: 'validate',
         engine: 'local-whisper',
@@ -213,7 +235,7 @@ export async function runKaraokePipeline({
         engine: 'local-whisper-transcription',
         message: 'Đang tự động nhận diện lời từ audio…',
       });
-      const timeline = await transcribeLocalKaraokeTimeline({
+      const rawTimeline = await transcribeLocalKaraokeTimeline({
         audio,
         duration,
         language,
@@ -224,6 +246,10 @@ export async function runKaraokePipeline({
             message,
           }),
       });
+      const timeline = await refineToSungRhythm(
+        rawTimeline,
+        'local-whisper-transcription',
+      );
       const quality = validateKaraokeTimeline(timeline, duration, {
         source: 'timed',
       });
