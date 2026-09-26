@@ -2,9 +2,9 @@ name: Build SunoDown
 
 on:
   push:
-    branches: [main, v13, v17, v18]
+    branches: [main, v13, v17, v18, v19]
   pull_request:
-    branches: [main, v13, v17, v18]
+    branches: [main, v13, v17, v18, v19]
   workflow_dispatch:
 
 permissions:
