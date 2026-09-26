@@ -6,6 +6,7 @@ import type {
   MotionIntensity,
   VideoAspect,
   VisualTemplate,
+  WaveAppearance,
   WaveStyle,
 } from '@/components/v4/types';
 import type { VideoEffect } from '@/components/v8/video-effects';
@@ -13,16 +14,25 @@ import type { OverlayTextStyles } from '@/components/v4/renderer-safe';
 import type { KaraokeDrawStyle } from '@/app/lib/karaoke';
 import type { BackgroundConfig } from '@/components/v8/background';
 import type { ProjectRepository } from '@/packages/core/src/persistence';
+import type { TimelineTrackState } from '@/components/editor-timeline';
+import type {
+  ProductionExportConfig,
+  ProductionMasteringConfig,
+} from '@/components/presets/production-preset';
 
 export type SavedProject = {
+  schemaVersion?: number;
   url: string;
   title: string;
   updatedAt: number;
   wave: WaveStyle;
+  waveAppearance?: WaveAppearance;
   template: VisualTemplate;
   aspect: VideoAspect;
   lyrics: LyricsMode;
   motion?: MotionIntensity;
+  quickMode?: boolean;
+  activePanel?: string;
   selectedPresetId?: string | null;
   presetModified?: boolean;
   presetOverrideFields?: Array<'template'|'wave'|'waveAppearance'|'motion'|'aspect'|'lyrics'|'effects'|'layout'|'textStyles'|'subtitleStyle'|'background'>;
@@ -38,6 +48,11 @@ export type SavedProject = {
   };
   trimStart: number;
   trimEnd: number;
+  mastering?: ProductionMasteringConfig;
+  exportConfig?: ProductionExportConfig;
+  timelineTracks?: TimelineTrackState;
+  karaokeSyncStatus?: 'idle' | 'syncing' | 'synced' | 'fallback';
+  karaokeSyncMessage?: string;
   karaokeTimeline: KaraokeLine[];
   media: Array<Omit<MediaClip, 'url'> & { blob: Blob }>;
   audioAsset?: {

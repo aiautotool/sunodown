@@ -65,6 +65,7 @@ type Props = {
   subtitleSyncStatus?: 'idle' | 'syncing' | 'synced' | 'fallback';
   subtitleSyncMessage?: string;
   onTrackStateChange?: (state: TimelineTrackState) => void;
+  trackState?: TimelineTrackState;
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -102,6 +103,10 @@ export function EditorTimeline(props: Props) {
     subtitle: { hidden: false, muted: false, locked: false },
     effects: { hidden: false, muted: false, locked: false },
   });
+
+  useEffect(() => {
+    if (props.trackState) setTracks(structuredClone(props.trackState));
+  }, [props.trackState]);
   const clipboard = useRef<{ kind: 'clip' | 'subtitle'; value: MediaClip | KaraokeLine } | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const touchDistance = useRef<number | null>(null);
