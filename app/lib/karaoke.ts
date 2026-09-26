@@ -648,27 +648,97 @@ export function alignRoughWordsToLyrics(
       };
       anchoredIndexes.push(wordIndex);
     }
-    // Interpolate missing words only inside this line. Never spread them over
-    // a multi-second musical break between unrelated anchors.
+    // Fill words Whisper misheard without throwing away the rhythm it heard.
+    //
+    // When two trusted lyric anchors have skipped ASR words between them, those
+    // skipped words still contain useful onset/offset timing. Map missing lyric
+    // words monotonically onto those ASR timings ("rhythm bridge"). This keeps
+    // fast vocals, syncopation and short breaths instead of flattening the gap
+    // into equally spaced words.
+    //
+    // If the skipped ASR span is implausibly large (usually an ad-lib or an
+    // instrumental hallucination), fall back to character-weighted
+    // interpolation only inside the two trusted anchors.
     const boundaries = [-1, ...anchoredIndexes, words.length];
     for (let b = 0; b < boundaries.length - 1; b++) {
       const left = boundaries[b],
         right = boundaries[b + 1],
         count = right - left - 1;
       if (count <= 0) continue;
-      const low = left >= 0 ? words[left].end : start,
-        high = right < words.length ? words[right].start : end;
-      const available = Math.max(0.04 * count, high - low),
-        step = available / count;
-      for (let k = 0; k < count; k++) {
-        const index = left + 1 + k,
-          wordStart = low + step * k,
-          wordEnd = Math.min(
-            high,
-            Math.max(wordStart + 0.02, low + step * (k + 1)),
+
+      const low = left >= 0 ? words[left].end : start;
+      const high = right < words.length ? words[right].start : end;
+      const leftAsr =
+        left >= 0 ? matches[indexes[left]] : null;
+      const rightAsr =
+        right < words.length ? matches[indexes[right]] : null;
+
+      const bridge =
+        leftAsr != null &&
+        rightAsr != null &&
+        rightAsr > leftAsr + 1
+          ? asr.slice(leftAsr + 1, rightAsr)
+          : [];
+
+      const bridgeLooksLikeVocalRhythm =
+        bridge.length >= count &&
+        bridge.length <= count * 2 + 1 &&
+        bridge.every(
+          (item, index) =>
+            item.start >= low - 0.12 &&
+            item.end <= high + 0.12 &&
+            (index === 0 || item.start >= bridge[index - 1].end - 0.08),
+        );
+
+      if (bridgeLooksLikeVocalRhythm) {
+        for (let k = 0; k < count; k++) {
+          // Spread selections over the skipped ASR run while preserving order.
+          // This also tolerates a small number of ASR filler/ad-lib tokens.
+          const bridgeIndex = Math.min(
+            bridge.length - 1,
+            Math.floor(((k + 0.5) * bridge.length) / count),
           );
-        words[index] = { ...words[index], start: wordStart, end: wordEnd };
+          const timing = bridge[bridgeIndex];
+          const index = left + 1 + k;
+          words[index] = {
+            ...words[index],
+            start: Math.max(low, Math.min(high, timing.start)),
+            end: Math.min(
+              high,
+              Math.max(
+                Math.max(low, Math.min(high, timing.start)) + 0.02,
+                timing.end,
+              ),
+            ),
+          };
+        }
+        continue;
       }
+
+      // No trustworthy skipped ASR timing: interpolate by character/syllable
+      // weight rather than equally. Longer Vietnamese words/syllables receive a
+      // little more of the sung span, matching karaoke_gen's practical timing
+      // strategy while remaining deterministic.
+      const missing = Array.from({ length: count }, (_, k) => left + 1 + k);
+      const weights = missing.map((index) => wordWeight(words[index].text));
+      const totalWeight = Math.max(
+        1,
+        weights.reduce((sum, value) => sum + value, 0),
+      );
+      const available = Math.max(0.04 * count, high - low);
+      let cursor = low;
+      missing.forEach((index, k) => {
+        const remaining = high - cursor;
+        const proportional = available * (weights[k] / totalWeight);
+        const minimumTail = 0.02 * (missing.length - k - 1);
+        const wordStart = cursor;
+        const wordEnd = Math.min(
+          high - minimumTail,
+          Math.max(wordStart + 0.02, wordStart + proportional),
+        );
+        words[index] = { ...words[index], start: wordStart, end: wordEnd };
+        cursor = wordEnd;
+      });
     }
     return { text, start, end, words };
   });
