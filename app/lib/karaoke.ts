@@ -209,6 +209,17 @@ export function activeKaraokeLine(lines: KaraokeLine[], time: number) {
     index: -1,
   };
 }
+
+export function karaokeOverlayState(lines: KaraokeLine[], time: number) {
+  const state = activeKaraokeLine(lines, time);
+  return state.line
+    ? state
+    : {
+        line: null as KaraokeLine | null,
+        next: null as KaraokeLine | null,
+        index: -1,
+      };
+}
 function fmtSrt(seconds: number) {
   const ms = Math.max(0, Math.round(seconds * 1000)),
     h = Math.floor(ms / 3600000),
@@ -430,7 +441,7 @@ export function drawKaraokeOverlay(
   height: number,
   style: KaraokeDrawStyle = {},
 ) {
-  const { line, next } = activeKaraokeLine(lines, time);
+  const { line, next } = karaokeOverlayState(lines, time);
   // Never pre-roll the upcoming lyric. During intro/instrumental gaps there is
   // no active cue, so the preview must stay completely subtitle-free. The
   // upcoming line is only shown as secondary context while a current line is
