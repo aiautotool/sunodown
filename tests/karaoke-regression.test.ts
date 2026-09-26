@@ -14,6 +14,7 @@ import {
   alignKnownLyricsToSegments,
 } from '../app/lib/karaoke-known-lyrics-align.ts';
 import { validateKaraokeTimeline } from '../app/lib/karaoke-validation.ts';
+import { refineKaraokeTimelineToRhythm } from '../app/lib/karaoke-rhythm.ts';
 
 void test('removes bracketed and unambiguous bare chords from every karaoke input', () => {
   const input =
@@ -417,4 +418,71 @@ void test('validator penalizes sparse known-lyrics alignment', () => {
   assert.ok(report.coverage < 0.45);
   assert.ok(report.issues.some((issue) => issue.code === 'low_lyric_coverage'));
   assert.ok(report.confidence < 60);
+});
+
+
+void test('rhythm bridge keeps skipped ASR word timing for a misheard lyric word', () => {
+  const timeline = alignRoughWordsToLyrics(
+    'xin chào em nhé',
+    [
+      { text: 'xin', start: 1.0, end: 1.18 },
+      { text: 'la', start: 1.34, end: 1.58 },
+      { text: 'em', start: 1.92, end: 2.12 },
+      { text: 'nhé', start: 2.28, end: 2.55 },
+    ],
+    5,
+  );
+
+  const word = timeline[0]?.words.find((item) => item.text === 'chào');
+  assert.ok(word);
+  assert.ok(Math.abs(word.start - 1.34) < 0.03);
+  assert.ok(Math.abs(word.end - 1.58) < 0.04);
+});
+
+void test('rhythm refinement snaps a word to a strong nearby onset without showing it early', () => {
+  const refined = refineKaraokeTimelineToRhythm(
+    [
+      {
+        text: 'Bắt đầu',
+        start: 9.8,
+        end: 10.8,
+        words: [
+          { text: 'Bắt', start: 10.0, end: 10.28 },
+          { text: 'đầu', start: 10.42, end: 10.72 },
+        ],
+      },
+    ],
+    [
+      { time: 9.82, strength: 1 },
+      { time: 10.075, strength: 1 },
+      { time: 10.45, strength: 0.9 },
+    ],
+    20,
+  );
+
+  assert.ok(refined[0].start >= 10);
+  assert.ok(Math.abs(refined[0].words[0].start - 10.075) < 0.01);
+  assert.ok(Math.abs(refined[0].words[1].start - 10.45) < 0.01);
+});
+
+void test('rhythm refinement preserves a real breath instead of stretching highlight', () => {
+  const refined = refineKaraokeTimelineToRhythm(
+    [
+      {
+        text: 'anh nhớ em',
+        start: 1,
+        end: 2.7,
+        words: [
+          { text: 'anh', start: 1, end: 1.2 },
+          { text: 'nhớ', start: 1.9, end: 2.1 },
+          { text: 'em', start: 2.3, end: 2.55 },
+        ],
+      },
+    ],
+    [{ time: 8, strength: 1 }],
+    10,
+  );
+
+  assert.ok(refined[0].words[0].end <= 1.21);
+  assert.ok(refined[0].words[1].start >= 1.89);
 });
