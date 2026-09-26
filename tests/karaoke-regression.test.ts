@@ -423,17 +423,17 @@ void test('validator penalizes sparse known-lyrics alignment', () => {
 
 void test('rhythm bridge keeps skipped ASR word timing for a misheard lyric word', () => {
   const timeline = alignRoughWordsToLyrics(
-    'xin chào em nhé',
+    'ngày mai mình gặp',
     [
-      { text: 'xin', start: 1.0, end: 1.18 },
-      { text: 'la', start: 1.34, end: 1.58 },
-      { text: 'em', start: 1.92, end: 2.12 },
-      { text: 'nhé', start: 2.28, end: 2.55 },
+      { text: 'ngày', start: 1.0, end: 1.18 },
+      { text: 'bye', start: 1.34, end: 1.58 },
+      { text: 'mình', start: 1.92, end: 2.12 },
+      { text: 'gặp', start: 2.28, end: 2.55 },
     ],
     5,
   );
 
-  const word = timeline[0]?.words.find((item) => item.text === 'chào');
+  const word = timeline[0]?.words.find((item) => item.text === 'mai');
   assert.ok(word);
   assert.ok(Math.abs(word.start - 1.34) < 0.03);
   assert.ok(Math.abs(word.end - 1.58) < 0.04);
@@ -485,4 +485,16 @@ void test('rhythm refinement preserves a real breath instead of stretching highl
 
   assert.ok(refined[0].words[0].end <= 1.21);
   assert.ok(refined[0].words[1].start >= 1.89);
+});
+
+
+void test('a lone short common word cannot anchor karaoke into an intro hallucination', () => {
+  const timeline = alignRoughWordsToLyrics(
+    'anh yêu',
+    [{ text: 'anh', start: 0.5, end: 0.72 }],
+    30,
+  );
+
+  assert.ok(timeline.length > 0);
+  assert.ok(timeline[0].start >= 1.7);
 });
