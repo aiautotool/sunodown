@@ -13,6 +13,8 @@ import {
   alignKnownLyricsGlobally,
   alignKnownLyricsToSegments,
 } from '../app/lib/karaoke-known-lyrics-align.ts';
+import { validateKaraokeTimeline } from '../app/lib/karaoke-validation.ts';
+import { refineKaraokeTimelineToRhythm } from '../app/lib/karaoke-rhythm.ts';
 
 void test('removes bracketed and unambiguous bare chords from every karaoke input', () => {
   const input =
@@ -339,4 +341,160 @@ void test('global aligner recovers useful subtitle cues when strict local matchi
   assert.ok(aligned.timeline.length >= 2);
   assert.ok((aligned.firstVocalAt ?? 0) > 23);
   assert.ok(aligned.timeline.every((line) => line.start > 23));
+});
+
+
+void test('validator never lets a cue start before its first timed word', () => {
+  const report = validateKaraokeTimeline(
+    [
+      {
+        text: 'Bắt đầu hát',
+        start: 18,
+        end: 22,
+        words: [
+          { text: 'Bắt', start: 20.2, end: 20.5 },
+          { text: 'đầu', start: 20.55, end: 20.9 },
+          { text: 'hát', start: 21, end: 21.5 },
+        ],
+      },
+    ],
+    30,
+    { lyrics: 'Bắt đầu hát', source: 'timed' },
+  );
+
+  assert.equal(report.timeline[0].start, 20.2);
+  assert.equal(report.firstVocalAt, 20.2);
+  assert.ok(report.issues.some((issue) => issue.code === 'cue_before_first_word'));
+});
+
+void test('estimated timing is explicitly low-confidence fallback material', () => {
+  const report = validateKaraokeTimeline(
+    [
+      {
+        text: 'Một câu ước tính',
+        start: 2,
+        end: 5,
+        words: [
+          { text: 'Một', start: 2, end: 3 },
+          { text: 'câu', start: 3, end: 4 },
+          { text: 'ước', start: 4, end: 4.5 },
+          { text: 'tính', start: 4.5, end: 5 },
+        ],
+      },
+    ],
+    20,
+    { lyrics: 'Một câu ước tính', source: 'estimated' },
+  );
+
+  assert.equal(report.source, 'estimated');
+  assert.ok(report.confidence <= 35);
+});
+
+void test('validator penalizes sparse known-lyrics alignment', () => {
+  const lyrics = [
+    'câu thứ nhất',
+    'câu thứ hai',
+    'câu thứ ba',
+    'câu thứ tư',
+    'câu thứ năm',
+  ].join('\n');
+  const report = validateKaraokeTimeline(
+    [
+      {
+        text: 'câu thứ nhất',
+        start: 12,
+        end: 14,
+        words: [
+          { text: 'câu', start: 12, end: 12.4 },
+          { text: 'thứ', start: 12.5, end: 13 },
+          { text: 'nhất', start: 13.1, end: 13.8 },
+        ],
+      },
+    ],
+    60,
+    { lyrics, source: 'timed' },
+  );
+
+  assert.ok(report.coverage < 0.45);
+  assert.ok(report.issues.some((issue) => issue.code === 'low_lyric_coverage'));
+  assert.ok(report.confidence < 60);
+});
+
+
+void test('rhythm bridge keeps skipped ASR word timing for a misheard lyric word', () => {
+  const timeline = alignRoughWordsToLyrics(
+    'ngày mai mình gặp',
+    [
+      { text: 'ngày', start: 1.0, end: 1.18 },
+      { text: 'bye', start: 1.34, end: 1.58 },
+      { text: 'mình', start: 1.92, end: 2.12 },
+      { text: 'gặp', start: 2.28, end: 2.55 },
+    ],
+    5,
+  );
+
+  const word = timeline[0]?.words.find((item) => item.text === 'mai');
+  assert.ok(word);
+  assert.ok(Math.abs(word.start - 1.34) < 0.03);
+  assert.ok(Math.abs(word.end - 1.58) < 0.04);
+});
+
+void test('rhythm refinement snaps a word to a strong nearby onset without showing it early', () => {
+  const refined = refineKaraokeTimelineToRhythm(
+    [
+      {
+        text: 'Bắt đầu',
+        start: 9.8,
+        end: 10.8,
+        words: [
+          { text: 'Bắt', start: 10.0, end: 10.28 },
+          { text: 'đầu', start: 10.42, end: 10.72 },
+        ],
+      },
+    ],
+    [
+      { time: 9.82, strength: 1 },
+      { time: 10.075, strength: 1 },
+      { time: 10.45, strength: 0.9 },
+    ],
+    20,
+  );
+
+  assert.ok(refined[0].start >= 10);
+  assert.ok(Math.abs(refined[0].words[0].start - 10.075) < 0.01);
+  assert.ok(Math.abs(refined[0].words[1].start - 10.45) < 0.01);
+});
+
+void test('rhythm refinement preserves a real breath instead of stretching highlight', () => {
+  const refined = refineKaraokeTimelineToRhythm(
+    [
+      {
+        text: 'anh nhớ em',
+        start: 1,
+        end: 2.7,
+        words: [
+          { text: 'anh', start: 1, end: 1.2 },
+          { text: 'nhớ', start: 1.9, end: 2.1 },
+          { text: 'em', start: 2.3, end: 2.55 },
+        ],
+      },
+    ],
+    [{ time: 8, strength: 1 }],
+    10,
+  );
+
+  assert.ok(refined[0].words[0].end <= 1.21);
+  assert.ok(refined[0].words[1].start >= 1.89);
+});
+
+
+void test('a lone short common word cannot anchor karaoke into an intro hallucination', () => {
+  const timeline = alignRoughWordsToLyrics(
+    'anh yêu',
+    [{ text: 'anh', start: 0.5, end: 0.72 }],
+    30,
+  );
+
+  assert.ok(timeline.length > 0);
+  assert.ok(timeline[0].start >= 1.7);
 });

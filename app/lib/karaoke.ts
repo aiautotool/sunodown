@@ -602,10 +602,30 @@ export function alignRoughWordsToLyrics(
     } else if (i > 0 && (j === 0 || step === 1)) i--;
     else j--;
   }
+  // Do not let a single weak/common word become a timeline anchor. Sung ASR
+  // hallucinates short words in intros surprisingly often. Trust a match when
+  // it is part of a consecutive run, or when it is an exceptionally strong,
+  // unique lexical anchor.
+  const trustedMatches = matches.map((asrIndex, lyricIndex) => {
+    if (asrIndex == null) return null;
+    const previous = lyricIndex > 0 ? matches[lyricIndex - 1] : null;
+    const next = lyricIndex + 1 < matches.length ? matches[lyricIndex + 1] : null;
+    const consecutive =
+      (previous != null && previous === asrIndex - 1) ||
+      (next != null && next === asrIndex + 1);
+    const token = lyricTokens[lyricIndex].text;
+    const key = normalizeToken(token);
+    const strongUnique =
+      key.length >= 4 &&
+      tokenSimilarity(token, asr[asrIndex].text) >= 0.88 &&
+      (frequencies.get(key) || 0) === 1;
+    return consecutive || strongUnique ? asrIndex : null;
+  });
+
   const lineAnchors = lines.map((text, lineIndex) => {
     const indexes = lineTokenIndexes[lineIndex];
     const matched = indexes
-      .map((index) => matches[index])
+      .map((index) => trustedMatches[index])
       .filter((value): value is number => value != null);
     if (!matched.length) return null;
     return { start: asr[matched[0]].start, end: asr[matched.at(-1)!].end };
@@ -638,7 +658,7 @@ export function alignRoughWordsToLyrics(
     const words = retimeWords(text, start, end);
     const anchoredIndexes: number[] = [];
     for (let wordIndex = 0; wordIndex < indexes.length; wordIndex++) {
-      const asrIndex = matches[indexes[wordIndex]];
+      const asrIndex = trustedMatches[indexes[wordIndex]];
       if (asrIndex == null) continue;
       const recognized = asr[asrIndex];
       words[wordIndex] = {
@@ -648,27 +668,103 @@ export function alignRoughWordsToLyrics(
       };
       anchoredIndexes.push(wordIndex);
     }
-    // Interpolate missing words only inside this line. Never spread them over
-    // a multi-second musical break between unrelated anchors.
+    // Fill words Whisper misheard without throwing away the rhythm it heard.
+    //
+    // When two trusted lyric anchors have skipped ASR words between them, those
+    // skipped words still contain useful onset/offset timing. Map missing lyric
+    // words monotonically onto those ASR timings ("rhythm bridge"). This keeps
+    // fast vocals, syncopation and short breaths instead of flattening the gap
+    // into equally spaced words.
+    //
+    // If the skipped ASR span is implausibly large (usually an ad-lib or an
+    // instrumental hallucination), fall back to character-weighted
+    // interpolation only inside the two trusted anchors.
     const boundaries = [-1, ...anchoredIndexes, words.length];
     for (let b = 0; b < boundaries.length - 1; b++) {
       const left = boundaries[b],
         right = boundaries[b + 1],
         count = right - left - 1;
       if (count <= 0) continue;
-      const low = left >= 0 ? words[left].end : start,
-        high = right < words.length ? words[right].start : end;
-      const available = Math.max(0.04 * count, high - low),
-        step = available / count;
-      for (let k = 0; k < count; k++) {
-        const index = left + 1 + k,
-          wordStart = low + step * k,
-          wordEnd = Math.min(
-            high,
-            Math.max(wordStart + 0.02, low + step * (k + 1)),
+
+      const low = left >= 0 ? words[left].end : start;
+      const high = right < words.length ? words[right].start : end;
+      const leftAsr =
+        left >= 0 ? trustedMatches[indexes[left]] : null;
+      const rightAsr =
+        right < words.length ? trustedMatches[indexes[right]] : null;
+
+      const bridge =
+        leftAsr != null &&
+        rightAsr != null &&
+        rightAsr > leftAsr + 1
+          ? asr.slice(leftAsr + 1, rightAsr)
+          : [];
+
+      const bridgeLooksLikeVocalRhythm =
+        bridge.length >= count &&
+        bridge.length <= count * 2 + 1 &&
+        bridge.every(
+          (item, index) =>
+            item.start >= low - 0.12 &&
+            item.end <= high + 0.12 &&
+            (index === 0 || item.start >= bridge[index - 1].end - 0.08),
+        );
+
+      if (bridgeLooksLikeVocalRhythm) {
+        for (let k = 0; k < count; k++) {
+          // Spread selections over the skipped ASR run while preserving order.
+          // This also tolerates a small number of ASR filler/ad-lib tokens.
+          const bridgeIndex = Math.min(
+            bridge.length - 1,
+            Math.floor(((k + 0.5) * bridge.length) / count),
           );
-        words[index] = { ...words[index], start: wordStart, end: wordEnd };
+          const timing = bridge[bridgeIndex];
+          const index = left + 1 + k;
+          words[index] = {
+            ...words[index],
+            start: Math.max(low, Math.min(high, timing.start)),
+            end: Math.min(
+              high,
+              Math.max(
+                Math.max(low, Math.min(high, timing.start)) + 0.02,
+                timing.end,
+              ),
+            ),
+          };
+        }
+        continue;
       }
+
+      // No trustworthy skipped ASR timing: interpolate by character/syllable
+      // weight rather than equally. Longer Vietnamese words/syllables receive a
+      // little more of the sung span, matching karaoke_gen's practical timing
+      // strategy while remaining deterministic.
+      const missing = Array.from({ length: count }, (_, k) => left + 1 + k);
+      const weights = missing.map((index) => wordWeight(words[index].text));
+      const totalWeight = Math.max(
+        1,
+        weights.reduce((sum, value) => sum + value, 0),
+      );
+      const available = Math.max(0.04 * count, high - low);
+      let cursor = low;
+      missing.forEach((index, k) => {
+        const proportional = available * (weights[k] / totalWeight);
+        const minimumTail = 0.02 * (missing.length - k - 1);
+        const wordStart = Math.min(high, cursor);
+        const latestEnd = Math.max(
+          wordStart + 0.01,
+          high - minimumTail,
+        );
+        const wordEnd = Math.min(
+          high,
+          Math.max(
+            wordStart + 0.01,
+            Math.min(latestEnd, wordStart + proportional),
+          ),
+        );
+        words[index] = { ...words[index], start: wordStart, end: wordEnd };
+        cursor = wordEnd;
+      });
     }
     return { text, start, end, words };
   });
