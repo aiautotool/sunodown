@@ -996,6 +996,17 @@ export default function CreatorStudio() {
           if (karaokeSyncRun.current !== syncRun) return;
           console.warn('[karaoke-known-lyrics-align]', capcutError);
           engine = 'local-whisper-after-capcut';
+          const provisional = buildEstimatedKaraokeTimeline(
+            target.lyrics,
+            duration,
+          );
+          if (provisional.length) {
+            setKaraokeTimeline(provisional);
+            setLyrics((mode) => mode === 'off' ? 'focus' : mode);
+            setKaraokeSyncMessage(
+              `Đã có ${provisional.length} câu tạm · đang căn chính xác trên thiết bị…`,
+            );
+          }
           timeline = await buildLocalKaraokeTimeline({
             audio,
             lyrics: target.lyrics,
@@ -2221,7 +2232,9 @@ export default function CreatorStudio() {
                 <span>
                   <b>
                     {karaokeSyncStatus === 'syncing'
-                      ? 'Đang tự động tìm subtitle…'
+                      ? karaokeTimeline.length
+                        ? `Đã có ${karaokeTimeline.length} câu tạm · đang căn chính xác…`
+                        : 'Đang tự động tìm subtitle…'
                       : karaokeSyncStatus === 'synced'
                         ? `Đã tải ${karaokeTimeline.length} câu subtitle`
                         : 'Subtitle đang dùng timing dự phòng'}

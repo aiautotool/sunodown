@@ -74,7 +74,14 @@ function transcribe(
       { type: 'module' },
     );
 
-    const cleanup = () => worker.terminate();
+    const timeout = window.setTimeout(() => {
+      worker.terminate();
+      reject(new Error('Nhận diện trên thiết bị quá thời gian cho phép.'));
+    }, 120_000);
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      worker.terminate();
+    };
     worker.onerror = (event) => {
       cleanup();
       reject(new Error(event.message || 'Không khởi động được Whisper local.'));
