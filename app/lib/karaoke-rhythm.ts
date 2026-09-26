@@ -2,7 +2,7 @@ import {
   normalizeKaraokeTimeline,
   type KaraokeLine,
   type KaraokeWord,
-} from './karaoke';
+} from './karaoke.ts';
 
 export type RhythmOnset = {
   time: number;
