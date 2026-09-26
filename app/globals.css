@@ -618,7 +618,7 @@ html.sd-booting,html.sd-booting body{overflow:hidden}
 .sd-audio-track{margin-top:0}.sd-video-track,.sd-subtitle-track,.sd-effects-track{margin-top:0}
 @media(max-width:800px){
   .sd-edit-timeline{border-radius:12px}.sd-edit-timeline>header{padding:8px;gap:6px}.sd-timeline-help{display:none}.sd-timeline-title{min-width:0;flex:1}.sd-add-media{font-size:0;width:34px;padding:0}.sd-add-media svg{margin:0}.sd-timeline-canvas{height:220px}
-  .sd-track{height:40px;transition:height .18s ease}.sd-track.expanded{height:86px}.sd-track:not(.expanded)>.sd-waveform-clip,.sd-track:not(.expanded)>.sd-base-clip,.sd-track:not(.expanded)>.sd-timeline-clip,.sd-track:not(.expanded)>.sd-sub-clip,.sd-track:not(.expanded)>.sd-timeline-effect{display:none}
+  .sd-track{height:76px;transition:height .18s ease}.sd-track.expanded{height:86px}
   .sd-track-label{top:8px!important}.sd-track.expanded .sd-track-label{top:5px!important}.sd-waveform-clip,.sd-base-clip,.sd-timeline-clip,.sd-sub-clip{top:34px}.sd-timeline-effect{top:36px}
   .sd-edge{opacity:.75!important;width:12px!important}.sd-timeline-scroll{touch-action:pan-x}.sd-playhead span{display:none}
 }

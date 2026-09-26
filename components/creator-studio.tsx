@@ -642,6 +642,23 @@ export default function CreatorStudio() {
   );
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
+  const timelineMediaClips = useMemo<MediaClip[]>(
+    () =>
+      mediaClips.length
+        ? mediaClips
+        : song?.picture
+          ? [{
+              id: 'fallback-cover',
+              type: 'image',
+              url: song.picture,
+              name: song.title || 'Ảnh bìa',
+              start: 0,
+              end: song.duration || trimEnd || 1,
+              isDefault: true,
+            }]
+          : [],
+    [mediaClips, song?.picture, song?.title, song?.duration, trimEnd],
+  );
   const timer = useRef<number | undefined>(undefined);
   const editedFieldsTracked = useRef(new Set<keyof StudioPresetConfig>());
   const previewPlayTracked = useRef(false);
@@ -2395,7 +2412,7 @@ export default function CreatorStudio() {
                 markPresetField('lyrics');
                 setKaraokeTimeline(lines);
               }}
-              clips={mediaClips}
+              clips={timelineMediaClips}
               onClipsChange={setMediaClips}
               onTrackStateChange={setTimelineTracks}
               trackState={timelineTracks}

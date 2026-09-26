@@ -6,6 +6,7 @@ export type AnalyticsEventName =
   | 'quick_create_started'
   | 'karaoke_auto_sync_succeeded'
   | 'karaoke_auto_sync_fallback'
+  | 'karaoke_auto_sync_failed'
   | 'suggested_preset_selected'
   | 'production_recipe_applied'
   | 'customize_opened'
