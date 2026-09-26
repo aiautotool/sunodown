@@ -5,7 +5,7 @@ import {
   type KaraokeLine,
   type KaraokeWord,
   type RoughWord,
-} from './karaoke';
+} from './karaoke.ts';
 
 export type KaraokeSegment = {
   text: string;
