@@ -9,6 +9,7 @@
     "dev": "vinext dev",
     "build": "vinext build && cp -R dist/client/_next dist/client/assets-next",
     "start": "wrangler dev --config dist/server/wrangler.json",
+    "local:start": "bash scripts/start-local.sh",
     "preview:local": "node scripts/local-preview.mjs",
     "lint": "oxlint",
     "format": "oxfmt",

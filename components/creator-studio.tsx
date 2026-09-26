@@ -57,6 +57,7 @@ import {
 } from '@/app/lib/audio-processing';
 import { buildEstimatedKaraokeTimeline, exportSrt } from '@/app/lib/karaoke';
 import { buildCapCutKaraokeTimeline } from '@/app/lib/karaoke-capcut-sync';
+import { buildLocalKaraokeTimeline } from '@/app/lib/karaoke-local-sync';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 import { initAnalytics, track } from '@/app/lib/analytics';
 import { DEFAULT_PLAN, canUse } from '@/app/lib/entitlements';
@@ -1030,22 +1031,60 @@ export default function CreatorStudio() {
           });
         } catch (capcutError) {
           if (karaokeSyncRun.current !== syncRun) return null;
-          const reason =
+          const capcutReason =
             capcutError instanceof Error ? capcutError.message : 'Lỗi không xác định';
           console.warn('[karaoke-known-lyrics-align]', capcutError);
+          setInitProgress(64);
+          setInitDetail('CapCut chưa sẵn sàng; chuyển sang nhận diện trên thiết bị…');
 
-          // Accuracy-first policy: never manufacture subtitle timing when no
-          // reliable vocal anchor exists. A missing cue is preferable to a cue
-          // that appears during an instrumental intro.
-          finalTimeline = [];
-          syncStatus = 'fallback';
-          syncMessage = '';
-          setInitProgress(82);
-          setInitDetail('Không đủ vocal anchor tin cậy; giữ timeline trống.');
-          track('karaoke_auto_sync_fallback', {
-            engine: 'known-lyrics-capcut',
-            reason: reason.slice(0, 120),
-          });
+          try {
+            finalTimeline = await buildLocalKaraokeTimeline({
+              audio: source,
+              lyrics: hydrated.lyrics,
+              duration,
+              language: 'vi',
+              onStage: (_stage, message) => {
+                if (karaokeSyncRun.current !== syncRun) return;
+                setInitProgress((value) => Math.max(value, 70));
+                setInitDetail(message);
+              },
+            });
+            if (karaokeSyncRun.current !== syncRun) return null;
+            syncStatus = 'synced';
+            syncMessage = 'Đã căn subtitle bằng nhận diện giọng hát trên thiết bị.';
+            setInitProgress(82);
+            setInitDetail('Đã có timestamp lời bài hát.');
+            track('karaoke_auto_sync_succeeded', {
+              engine: 'local-whisper-after-capcut',
+              lines: finalTimeline.length,
+              capcut_reason: capcutReason.slice(0, 120),
+            });
+          } catch (localError) {
+            if (karaokeSyncRun.current !== syncRun) return null;
+            const localReason =
+              localError instanceof Error ? localError.message : 'Lỗi không xác định';
+            console.warn('[karaoke-local-fallback]', localError);
+            finalTimeline = buildEstimatedKaraokeTimeline(
+              hydrated.lyrics,
+              duration,
+            );
+            syncStatus = 'fallback';
+            syncMessage = finalTimeline.length
+              ? 'Đang dùng timing dự phòng; subtitle vẫn có thể chỉnh trực tiếp trên timeline.'
+              : `Không tạo được subtitle: ${localReason}`;
+            setInitProgress(82);
+            setInitDetail(
+              finalTimeline.length
+                ? 'Đã tạo timing dự phòng để subtitle không bị mất.'
+                : 'Không thể tạo timeline subtitle.',
+            );
+            track('karaoke_auto_sync_fallback', {
+              engine: 'estimated-after-capcut-and-local',
+              capcut_reason: capcutReason.slice(0, 120),
+              local_reason: localReason.slice(0, 120),
+              lines: finalTimeline.length,
+            });
+          }
         }
       }
 

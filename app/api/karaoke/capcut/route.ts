@@ -14,6 +14,7 @@ import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 export const runtime = 'edge';
 
 const BASE_URL = 'https://editor-api-sg.capcutapi.com';
+// Private signing scope used by CapCut's VOD upload client.
 const VOD_REGION = 'sdwdmwlll';
 const VOD_SERVICE = 'vod';
 const DEVICE = {
@@ -226,8 +227,9 @@ function encodeAws(value: string) {
 }
 
 function canonicalQuery(url: string) {
+  const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   const entries = Array.from(new URL(url).searchParams.entries()).sort(
-    ([ak, av], [bk, bv]) => ak.localeCompare(bk) || av.localeCompare(bv),
+    ([ak, av], [bk, bv]) => compare(ak, bk) || compare(av, bv),
   );
   return entries.map(([k, v]) => `${encodeAws(k)}=${encodeAws(v)}`).join('&');
 }
@@ -334,7 +336,21 @@ async function checkedJson(response: Response, label: string) {
       `${label}: ${data?.message || data?.error || `HTTP ${response.status}`}`,
     );
   }
+  const serviceError = data?.ResponseMetadata?.Error;
+  if (serviceError?.Code || serviceError?.Message) {
+    throw new Error(
+      `${label}: ${serviceError.Code || 'CapCutError'}${
+        serviceError.Message ? ` - ${serviceError.Message}` : ''
+      }`,
+    );
+  }
   return data;
+}
+
+function objectKeys(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.keys(value as Record<string, unknown>).slice(0, 16)
+    : [];
 }
 
 async function uploadToCapCut(audio: File) {
@@ -372,9 +388,29 @@ async function uploadToCapCut(audio: File) {
     headers: await vodHeaders('GET', applyUrl, new Uint8Array(), creds),
   });
   const applyData = await checkedJson(applyResponse, 'CapCut ApplyUploadInner');
-  const node = applyData?.Result?.InnerUploadAddress?.UploadNodes?.[0];
-  const store = node?.StoreInfos?.[0];
-  if (!node || !store) throw new Error('CapCut không cấp upload node.');
+  const uploadAddress =
+    applyData?.Result?.InnerUploadAddress ??
+    applyData?.result?.inner_upload_address ??
+    applyData?.data?.InnerUploadAddress ??
+    applyData?.data?.inner_upload_address;
+  const uploadNodes =
+    uploadAddress?.UploadNodes ??
+    uploadAddress?.upload_nodes ??
+    uploadAddress?.Nodes ??
+    uploadAddress?.nodes;
+  const node = Array.isArray(uploadNodes) ? uploadNodes[0] : uploadNodes;
+  const storeInfos =
+    node?.StoreInfos ?? node?.store_infos ?? node?.StoreInfo ?? node?.store_info;
+  const store = Array.isArray(storeInfos) ? storeInfos[0] : storeInfos;
+  if (!node || !store) {
+    console.error('[capcut-upload-schema]', {
+      top: objectKeys(applyData),
+      result: objectKeys(applyData?.Result ?? applyData?.result),
+      data: objectKeys(applyData?.data),
+      address: objectKeys(uploadAddress),
+    });
+    throw new Error('CapCut thay đổi cấu trúc upload node.');
+  }
 
   const uploadHost = node.UploadHost as string;
   const storeUri = store.StoreUri as string;
@@ -532,8 +568,18 @@ async function runCapCutStt(
     });
     const data = await checkedJson(response, 'CapCut STT query');
     const result = data?.data?.tasks?.[0];
-    if (result?.status === 'failed') throw new Error('CapCut STT xử lý thất bại.');
-    if (result?.status !== 'success') continue;
+    const status = String(result?.status ?? '').toLowerCase();
+    if (['failed', 'fail', 'error', 'cancelled', 'canceled'].includes(status)) {
+      throw new Error(
+        `CapCut STT xử lý thất bại${result?.detail_info ? `: ${result.detail_info}` : '.'}`,
+      );
+    }
+    // Current CapCut desktop API returns "succeed"; older captures used
+    // "success". A non-empty payload is also authoritative at 100% progress.
+    const completed =
+      ['succeed', 'success', 'completed', 'complete', 'done'].includes(status) ||
+      (Number(result?.progress) >= 100 && Boolean(result?.payload));
+    if (!completed) continue;
 
     let payload: any = result.payload || {};
     if (typeof payload === 'string') payload = JSON.parse(payload);
