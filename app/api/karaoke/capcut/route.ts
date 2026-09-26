@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  alignKnownLyricsGlobally,
   alignKnownLyricsToSegments,
   type KaraokeSegment,
 } from '@/app/lib/karaoke-known-lyrics-align';
@@ -607,19 +608,37 @@ export async function POST(request: NextRequest) {
       Number.isFinite(requestedDuration) && requestedDuration > 0
         ? requestedDuration
         : durationMs / 1000;
-    const aligned = alignKnownLyricsToSegments(cleaned, segments, duration);
+    const strict = alignKnownLyricsToSegments(cleaned, segments, duration);
+    const strictEnough =
+      strict.matched >= Math.min(4, strict.total) &&
+      strict.coverage >= 0.24;
+
+    const global = strictEnough
+      ? null
+      : alignKnownLyricsGlobally(cleaned, segments, duration);
+
+    const aligned =
+      global && global.matched > strict.matched
+        ? global
+        : strict;
+
     if (!aligned.timeline.length) {
-      throw new Error('Không tìm thấy vocal anchor đủ tin cậy cho lyrics.');
+      throw new Error('Không tạo được cue subtitle từ dữ liệu nhận diện.');
     }
 
     return NextResponse.json({
-      engine: 'known-lyrics-capcut',
+      engine:
+        global && aligned === global
+          ? 'known-lyrics-capcut-global'
+          : 'known-lyrics-capcut',
       timeline: aligned.timeline,
       words: segments.reduce((sum, segment) => sum + segment.words.length, 0),
       matchedLines: aligned.matched,
       totalLines: aligned.total,
       lineAnchorCoverage: aligned.coverage,
       firstVocalAt: aligned.firstVocalAt,
+      strictMatchedLines: strict.matched,
+      globalMatchedLines: global?.matched ?? null,
     });
   } catch (error) {
     console.error('[capcut-karaoke]', error);
