@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { alignRoughWordsToLyrics, type RoughWord } from '@/app/lib/karaoke';
+import {
+  alignRoughWordsToLyrics,
+  normalizeKaraokeTimeline,
+  visibleLyricLines,
+  type KaraokeLine,
+  type RoughWord,
+} from '@/app/lib/karaoke';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 
 export const runtime = 'edge';
@@ -571,6 +577,165 @@ function roughWordsFromPayload(payload: any): RoughWord[] {
   return words;
 }
 
+
+function normalizedWords(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function tokenOverlapScore(a: string, b: string) {
+  const left = normalizedWords(a);
+  const right = normalizedWords(b);
+  if (!left.length || !right.length) return 0;
+  const counts = new Map<string, number>();
+  for (const token of right) counts.set(token, (counts.get(token) || 0) + 1);
+  let matched = 0;
+  for (const token of left) {
+    const count = counts.get(token) || 0;
+    if (!count) continue;
+    matched++;
+    counts.set(token, count - 1);
+  }
+  const precision = matched / right.length;
+  const recall = matched / left.length;
+  return precision + recall
+    ? (2 * precision * recall) / (precision + recall)
+    : 0;
+}
+
+type CapCutUtterance = {
+  text: string;
+  start: number;
+  end: number;
+};
+
+function capCutUtterances(payload: any): CapCutUtterance[] {
+  const items = Array.isArray(payload?.utterances) ? payload.utterances : [];
+  return items
+    .map((item: any) => ({
+      text: String(item?.text ?? '').trim(),
+      start: Number(item?.start_time) / 1000,
+      end: Number(item?.end_time) / 1000,
+    }))
+    .filter(
+      (item: CapCutUtterance) =>
+        item.text &&
+        Number.isFinite(item.start) &&
+        Number.isFinite(item.end) &&
+        item.end > item.start,
+    );
+}
+
+function retimeLine(text: string, start: number, end: number) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const span = Math.max(0.04 * Math.max(1, words.length), end - start);
+  return words.map((word, index) => ({
+    text: word,
+    start: start + (span * index) / words.length,
+    end: Math.min(end, start + (span * (index + 1)) / words.length),
+  }));
+}
+
+function applyCapCutLineAnchors(
+  lyrics: string,
+  payload: any,
+  timeline: KaraokeLine[],
+  duration: number,
+) {
+  const lines = visibleLyricLines(lyrics);
+  const utterances = capCutUtterances(payload);
+  if (!lines.length || !utterances.length || timeline.length !== lines.length) {
+    return { timeline, coverage: 0 };
+  }
+
+  const anchors: Array<{ start: number; end: number; score: number } | null> =
+    Array.from({ length: lines.length }, () => null);
+  let cursor = 0;
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    let best:
+      | { start: number; end: number; score: number; nextCursor: number }
+      | null = null;
+    const searchEnd = Math.min(utterances.length, cursor + 7);
+
+    for (let startIndex = cursor; startIndex < searchEnd; startIndex++) {
+      for (let span = 1; span <= 3 && startIndex + span <= utterances.length; span++) {
+        const slice = utterances.slice(startIndex, startIndex + span);
+        const text = slice.map((item) => item.text).join(' ');
+        const score = tokenOverlapScore(lines[lineIndex], text);
+        if (!best || score > best.score) {
+          best = {
+            start: slice[0].start,
+            end: slice.at(-1)!.end,
+            score,
+            nextCursor: startIndex + span,
+          };
+        }
+      }
+    }
+
+    // CapCut sentence timing is stronger than inferred whole-song alignment,
+    // but only trust it when the recognized sentence still resembles the
+    // authoritative Suno lyric line.
+    if (best && best.score >= 0.34) {
+      anchors[lineIndex] = {
+        start: best.start,
+        end: best.end,
+        score: best.score,
+      };
+      cursor = best.nextCursor;
+    }
+  }
+
+  const anchoredCount = anchors.filter(Boolean).length;
+  const coverage = anchoredCount / Math.max(1, lines.length);
+  if (coverage < 0.28) return { timeline, coverage };
+
+  const anchoredTimeline = timeline.map((line, index) => {
+    const anchor = anchors[index];
+    if (!anchor) return line;
+
+    const start = Math.max(0, anchor.start - 0.035);
+    const end = Math.min(
+      duration,
+      Math.max(start + 0.08, anchor.end + 0.08),
+    );
+    const plausibleWords = line.words.filter(
+      (word) => word.start >= start - 0.6 && word.end <= end + 0.6,
+    ).length;
+    const keepWordAnchors =
+      line.words.length > 0 && plausibleWords / line.words.length >= 0.6;
+
+    return {
+      ...line,
+      start,
+      end,
+      words: keepWordAnchors
+        ? line.words.map((word) => ({
+            ...word,
+            start: Math.max(start, Math.min(end, word.start)),
+            end: Math.max(
+              Math.max(start, Math.min(end, word.start)) + 0.01,
+              Math.min(end, word.end),
+            ),
+          }))
+        : retimeLine(line.text, start, end),
+    };
+  });
+
+  return {
+    timeline: normalizeKaraokeTimeline(anchoredTimeline, duration),
+    coverage,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const form = await request.formData();
@@ -602,13 +767,22 @@ export async function POST(request: NextRequest) {
     const duration = Number.isFinite(requestedDuration) && requestedDuration > 0
       ? requestedDuration
       : durationMs / 1000;
-    const timeline = alignRoughWordsToLyrics(cleaned, roughWords, duration);
-    if (!timeline.length) throw new Error('Không căn được lyrics với timestamp CapCut.');
+    const roughTimeline = alignRoughWordsToLyrics(cleaned, roughWords, duration);
+    if (!roughTimeline.length)
+      throw new Error('Không căn được lyrics với timestamp CapCut.');
+
+    const anchored = applyCapCutLineAnchors(
+      cleaned,
+      payload,
+      roughTimeline,
+      duration,
+    );
 
     return NextResponse.json({
       engine: 'capcut',
-      timeline,
+      timeline: anchored.timeline,
       words: roughWords.length,
+      lineAnchorCoverage: anchored.coverage,
     });
   } catch (error) {
     console.error('[capcut-karaoke]', error);
