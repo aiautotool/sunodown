@@ -431,7 +431,11 @@ export function drawKaraokeOverlay(
   style: KaraokeDrawStyle = {},
 ) {
   const { line, next } = activeKaraokeLine(lines, time);
-  if (!line && !next) return;
+  // Never pre-roll the upcoming lyric. During intro/instrumental gaps there is
+  // no active cue, so the preview must stay completely subtitle-free. The
+  // upcoming line is only shown as secondary context while a current line is
+  // actually active.
+  if (!line) return;
   const panelWidth = Math.min(width - 96, 1120),
     panelHeight = 154,
     panelX = (width - panelWidth) / 2,
