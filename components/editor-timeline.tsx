@@ -777,8 +777,15 @@ export function EditorTimeline(props: Props) {
                 toggleTrack('subtitle');
               }}
             >
-              CC Subtitle <ChevronDown />
+              CC Subtitle
+              <span className="sd-track-count">{props.subtitles.length}</span>
+              <ChevronDown />
             </button>
+            {!props.subtitles.length && expandedTrack === 'subtitle' && (
+              <div className="sd-sub-empty">
+                Chưa có cue subtitle được căn thời gian
+              </div>
+            )}
             {props.subtitles.map((line, index) => (
               <div
                 key={`${index}-${line.text}`}
