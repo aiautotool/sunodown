@@ -393,3 +393,158 @@ export function alignKnownLyricsToSegments(
     firstVocalAt: normalized[0]?.start ?? null,
   };
 }
+
+
+export function alignKnownLyricsGlobally(
+  lyrics: string,
+  segments: KaraokeSegment[],
+  duration: number,
+): KnownLyricsAlignment {
+  const lines = visibleLyricLines(lyrics);
+  const usable = segments
+    .filter(
+      (segment) =>
+        segment.text.trim() &&
+        Number.isFinite(segment.start) &&
+        Number.isFinite(segment.end) &&
+        segment.end > segment.start,
+    )
+    .sort((a, b) => a.start - b.start);
+
+  if (!lines.length || !usable.length) {
+    return {
+      timeline: [],
+      matched: 0,
+      total: lines.length,
+      coverage: 0,
+      firstVocalAt: null,
+    };
+  }
+
+  const n = lines.length;
+  const m = usable.length;
+  const skipLyricPenalty = -0.22;
+  const skipSegmentPenalty = -0.045;
+  let prev = Array.from({ length: m + 1 }, (_, j) => j * skipSegmentPenalty);
+  const back = Array.from({ length: n + 1 }, () => new Uint8Array(m + 1));
+  const sims = Array.from({ length: n }, () => new Float32Array(m));
+
+  for (let j = 1; j <= m; j++) back[0][j] = 2;
+  for (let i = 1; i <= n; i++) {
+    const cur = Array.from<number>({ length: m + 1 }).fill(0);
+    cur[0] = i * skipLyricPenalty;
+    back[i][0] = 1;
+    for (let j = 1; j <= m; j++) {
+      const sim = similarity(lines[i - 1], usable[j - 1].text).score;
+      sims[i - 1][j - 1] = sim;
+      const matchReward = sim * 2.25 - 0.62;
+      const match = prev[j - 1] + matchReward;
+      const skipLyric = prev[j] + skipLyricPenalty;
+      const skipSegment = cur[j - 1] + skipSegmentPenalty;
+      if (match >= skipLyric && match >= skipSegment) {
+        cur[j] = match;
+        back[i][j] = 0;
+      } else if (skipLyric >= skipSegment) {
+        cur[j] = skipLyric;
+        back[i][j] = 1;
+      } else {
+        cur[j] = skipSegment;
+        back[i][j] = 2;
+      }
+    }
+    prev = cur;
+  }
+
+  const pairs: Array<{ lineIndex: number; segmentIndex: number; score: number }> = [];
+  let i = n;
+  let j = m;
+  while (i > 0 || j > 0) {
+    const step = back[i]?.[j] ?? 0;
+    if (i > 0 && j > 0 && step === 0) {
+      const score = sims[i - 1][j - 1];
+      if (score >= 0.24) {
+        pairs.push({ lineIndex: i - 1, segmentIndex: j - 1, score });
+      }
+      i--;
+      j--;
+    } else if (i > 0 && (j === 0 || step === 1)) {
+      i--;
+    } else {
+      j--;
+    }
+  }
+  pairs.reverse();
+
+  if (!pairs.length) {
+    return {
+      timeline: [],
+      matched: 0,
+      total: lines.length,
+      coverage: 0,
+      firstVocalAt: null,
+    };
+  }
+
+  // Remove weak pre-roll matches. The opening cue must either be convincing on
+  // its own or be confirmed by the next chronologically adjacent lyric cue.
+  let first = 0;
+  while (first < pairs.length) {
+    const current = pairs[first];
+    const next = pairs[first + 1];
+    const currentSegment = usable[current.segmentIndex];
+    const confirmed =
+      current.score >= 0.5 ||
+      (!!next &&
+        next.lineIndex === current.lineIndex + 1 &&
+        next.segmentIndex > current.segmentIndex &&
+        usable[next.segmentIndex].start - currentSegment.end <= 12 &&
+        current.score >= 0.3 &&
+        next.score >= 0.34);
+    if (confirmed) break;
+    first++;
+  }
+
+  const trustedPairs = pairs.slice(first);
+  if (!trustedPairs.length) {
+    return {
+      timeline: [],
+      matched: 0,
+      total: lines.length,
+      coverage: 0,
+      firstVocalAt: null,
+    };
+  }
+
+  const timeline: KaraokeLine[] = trustedPairs.map((pair) => {
+    const segment = usable[pair.segmentIndex];
+    const text = lines[pair.lineIndex];
+    const start = Math.max(0, segment.start - 0.03);
+    const end = Math.min(
+      duration,
+      Math.max(start + 0.1, segment.end + 0.06),
+    );
+    const candidate: Candidate = {
+      startIndex: pair.segmentIndex,
+      endIndex: pair.segmentIndex,
+      start: segment.start,
+      end: segment.end,
+      score: pair.score,
+      words: segment.words,
+    };
+    return {
+      text,
+      start,
+      end,
+      words: localWords(text, candidate, duration),
+    };
+  });
+
+  const normalized = normalizeKaraokeTimeline(timeline, duration);
+  return {
+    timeline: normalized,
+    matched: normalized.length,
+    total: lines.length,
+    coverage: normalized.length / Math.max(1, lines.length),
+    firstVocalAt: normalized[0]?.start ?? null,
+  };
+}
