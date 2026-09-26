@@ -1439,7 +1439,7 @@ export async function generateVisualizerVideoSafe(
         trimT = ((absoluteT % fullDuration) + fullDuration) % fullDuration,
         songT = trimStart + trimT,
         level = amplitude(samples, rate, songT),
-        scene = sceneMedia.find(
+        scene = sceneMedia.findLast(
           ({ clip }) => absoluteT >= clip.start && absoluteT < clip.end,
         ),
         customBackground = Boolean(scene) || background.mode !== 'suno';

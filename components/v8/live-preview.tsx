@@ -34,7 +34,7 @@ import {
   drawPresetBackground,
   type BackgroundConfig,
 } from './background';
-import type { MediaClip } from '@/components/editor-timeline';
+import type { MediaClip, TimelineTrackState } from '@/components/editor-timeline';
 
 type Props = {
   song: Song;
@@ -48,6 +48,7 @@ type Props = {
   karaokeTimeline?: KaraokeLine[];
   background?: BackgroundConfig;
   mediaClips?: MediaClip[];
+  timelineTracks?: TimelineTrackState;
   layout?: OverlayLayout;
   subtitleStyle?: KaraokeDrawStyle;
   overlayTextStyles?: OverlayTextStyles;
@@ -118,6 +119,10 @@ export function LivePreview(props: Props) {
   const mediaSourceKey = (props.mediaClips || [])
     .map((clip) => `${clip.id}:${clip.type}:${clip.url}`)
     .join('|');
+
+  useEffect(() => {
+    if (audio.current) audio.current.muted = Boolean(props.timelineTracks?.audio.muted);
+  }, [props.timelineTracks?.audio.muted]);
 
   useEffect(() => {
     let cancelled = false;
@@ -557,15 +562,15 @@ export function LivePreview(props: Props) {
       }
 
       context.setTransform(scale, 0, 0, scale, 0, 0);
-      const hasExactLyrics = p.lyrics !== 'off' && !!p.karaokeTimeline?.length;
+      const hasExactLyrics = !p.timelineTracks?.subtitle.hidden && p.lyrics !== 'off' && !!p.karaokeTimeline?.length;
       const background = p.background || DEFAULT_BACKGROUND_CONFIG,
-        activeClip = p.mediaClips?.find(
+        activeClip = p.timelineTracks?.visual.hidden ? undefined : p.mediaClips?.findLast(
           (clip) => absoluteTime >= clip.start && absoluteTime < clip.end,
         ),
         activeMedia = activeClip
           ? sceneMedia.current.get(activeClip.id)
           : undefined,
-        customBackground = Boolean(activeMedia) || background.mode !== 'suno';
+        customBackground = p.mediaClips !== undefined || background.mode !== 'suno';
       if (activeMedia?.bitmap?.width) {
         drawMediaBackground(
           context,
@@ -594,6 +599,9 @@ export function LivePreview(props: Props) {
             size.height,
             background,
           );
+      } else if (background.mode === 'suno' && p.mediaClips !== undefined) {
+        context.fillStyle = '#080b12';
+        context.fillRect(0, 0, size.width, size.height);
       } else if (background.mode === 'preset') {
         drawPresetBackground(
           context,
@@ -672,13 +680,15 @@ export function LivePreview(props: Props) {
           ),
         );
       }
-      drawVideoEffects(
-        context,
-        size.width,
-        size.height,
-        absoluteTime,
-        p.effects || effects.current,
-      );
+      if (!p.timelineTracks?.effects.hidden) {
+        drawVideoEffects(
+          context,
+          size.width,
+          size.height,
+          absoluteTime,
+          p.effects || effects.current,
+        );
+      }
     };
 
     frame = requestAnimationFrame(draw);
@@ -694,6 +704,7 @@ export function LivePreview(props: Props) {
     props.motion,
     props.lyrics,
     props.mediaClips,
+    props.timelineTracks,
     sceneVersion,
     props.karaokeTimeline,
     props.layout,

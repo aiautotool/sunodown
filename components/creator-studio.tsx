@@ -12,6 +12,8 @@ import {
   Image as ImageIcon,
   Link2,
   ListMusic,
+  LogIn,
+  LogOut,
   Menu,
   Music2,
   Play,
@@ -62,7 +64,7 @@ import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 import { initAnalytics, track } from '@/app/lib/analytics';
 import { DEFAULT_PLAN, canUse } from '@/app/lib/entitlements';
 import type { KaraokeLine } from '@/app/lib/karaoke';
-import { EditorTimeline, type MediaClip } from '@/components/editor-timeline';
+import { EditorTimeline, type MediaClip, type TimelineTrackState } from '@/components/editor-timeline';
 import { PresetGallery } from '@/components/presets/preset-gallery';
 import { MasteringPanel } from '@/components/mastering-panel';
 import {
@@ -119,6 +121,8 @@ type Song = {
   style?: string;
   tags?: string;
 };
+
+type SignedInUser = { sub: string; email: string; name: string; picture?: string };
 
 const fmt = (n = 0) =>
   `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
@@ -513,6 +517,8 @@ export default function CreatorStudio() {
     'create' | 'projects' | 'library' | 'jobs' | 'settings'
   >('create');
   const [autoPreview, setAutoPreview] = useState(true);
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const [signedInUser, setSignedInUser] = useState<SignedInUser | null>(null);
   const [quickMode, setQuickMode] = useState(true);
   const [projects, setProjects] = useState<{ url: string; title: string }[]>(
     [],
@@ -592,6 +598,12 @@ export default function CreatorStudio() {
   const [audioBinary, setAudioBinary] = useState<Blob | null>(null);
   const mediaCache = useRef<Map<string, Blob>>(new Map());
   const [mediaClips, setMediaClips] = useState<MediaClip[]>([]);
+  const [timelineTracks, setTimelineTracks] = useState<TimelineTrackState>({
+    audio: { hidden: false, muted: false, locked: false },
+    visual: { hidden: false, muted: false, locked: false },
+    subtitle: { hidden: false, muted: false, locked: false },
+    effects: { hidden: false, muted: false, locked: false },
+  });
   const studioModel = useMemo(
     () =>
       createStudioRenderModel({
@@ -1103,6 +1115,17 @@ export default function CreatorStudio() {
       setKaraokeTimeline(finalTimeline);
       setKaraokeSyncStatus(syncStatus);
       setKaraokeSyncMessage(syncMessage);
+      setMediaClips(hydrated.picture ? [{
+        id: crypto.randomUUID(),
+        type: 'image',
+        url: /^https:\/\//i.test(hydrated.picture)
+          ? `/api/image?source=${encodeURIComponent(hydrated.picture)}`
+          : hydrated.picture,
+        name: hydrated.title || 'Cover',
+        start: 0,
+        end: duration,
+        isDefault: true,
+      }] : []);
       setQuickMode(true);
       editedFieldsTracked.current.clear();
       previewPlayTracked.current = false;
@@ -1421,6 +1444,13 @@ export default function CreatorStudio() {
     return cleanupAnalytics;
   }, []);
   useEffect(() => {
+    void fetch('/api/auth/me', { cache: 'no-store' })
+      .then((response) => response.json() as Promise<{ user?: SignedInUser | null }>)
+      .then((data) => setSignedInUser(data.user || null))
+      .catch(() => setSignedInUser(null));
+  }, []);
+
+  useEffect(() => {
     try {
       setProjects(JSON.parse(localStorage.getItem('sundown-projects') || '[]'));
       const storedPresets = normalizeStoredPresets(
@@ -1494,6 +1524,10 @@ export default function CreatorStudio() {
         trimEnd,
         karaokeTimeline,
         media,
+        audioAsset:
+          url.startsWith('local-audio:') && audioBinary
+            ? { blob: audioBinary, duration: song.duration || trimEnd, title: song.title }
+            : undefined,
       });
       const next = [
         { url, title: song.title },
@@ -1518,9 +1552,23 @@ export default function CreatorStudio() {
     setView('create');
     track('project_resumed');
     setUrl(item.url);
-    if (!(await resolve(item.url))) return;
     const project = await loadProjectData(item.url);
     if (!project) return;
+    if (project.audioAsset) {
+      const audio = URL.createObjectURL(project.audioAsset.blob);
+      const coverAsset = project.media.find((clip) => clip.isDefault)?.blob;
+      const picture = coverAsset ? URL.createObjectURL(coverAsset) : undefined;
+      setAudioBinary(project.audioAsset.blob);
+      setSong({
+        title: project.audioAsset.title,
+        creator: 'Local audio',
+        duration: project.audioAsset.duration,
+        audio,
+        picture,
+      });
+      setPlaybackStart(0);
+      setPreviewTime(0);
+    } else if (!(await resolve(item.url))) return;
     setWave(project.wave);
     setTemplate(project.template);
     setAspect(project.aspect);
@@ -1562,6 +1610,88 @@ export default function CreatorStudio() {
         url: URL.createObjectURL(blob),
       })),
     );
+  }
+
+  const readAudioDuration = (source: string) =>
+    new Promise<number>((resolveDuration, reject) => {
+      const player = document.createElement('audio');
+      player.preload = 'metadata';
+      player.onloadedmetadata = () =>
+        Number.isFinite(player.duration) && player.duration > 0
+          ? resolveDuration(player.duration)
+          : reject(new Error('Không đọc được thời lượng audio.'));
+      player.onerror = () => reject(new Error('File audio không hợp lệ hoặc không được trình duyệt hỗ trợ.'));
+      player.src = source;
+    });
+
+  const createAudioCover = (title: string) =>
+    new Promise<Blob>((resolveCover, reject) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1200;
+      canvas.height = 1200;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Không thể tạo ảnh bìa.'));
+      const gradient = ctx.createLinearGradient(0, 0, 1200, 1200);
+      gradient.addColorStop(0, '#17112d');
+      gradient.addColorStop(0.52, '#5234b8');
+      gradient.addColorStop(1, '#111827');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 1200, 1200);
+      ctx.fillStyle = 'rgba(255,255,255,.12)';
+      ctx.beginPath(); ctx.arc(920, 220, 280, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 210px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('♫', 600, 570);
+      ctx.font = '700 58px system-ui';
+      const label = title.length > 28 ? `${title.slice(0, 27)}…` : title;
+      ctx.fillText(label, 600, 760);
+      ctx.fillStyle = 'rgba(255,255,255,.62)';
+      ctx.font = '600 25px system-ui';
+      ctx.fillText('SUNODOWN · LOCAL AUDIO', 600, 825);
+      canvas.toBlob((blob) => blob ? resolveCover(blob) : reject(new Error('Không thể tạo ảnh bìa.')), 'image/png');
+    });
+
+  async function openAudioFile(file?: File) {
+    if (!file) return;
+    if (!file.type.startsWith('audio/') && !/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(file.name)) {
+      setError('Hãy chọn file audio MP3, WAV, M4A, AAC, OGG hoặc FLAC.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setInitProgress(12);
+    setInitTitle('Đang mở file audio');
+    setInitDetail('Đọc metadata và thời lượng…');
+    try {
+      const audio = URL.createObjectURL(file);
+      const duration = await readAudioDuration(audio);
+      const title = file.name.replace(/\.[^.]+$/, '') || 'Local audio';
+      setInitProgress(55);
+      setInitDetail('Tạo cover và timeline mặc định…');
+      const coverBlob = await createAudioCover(title);
+      const picture = URL.createObjectURL(coverBlob);
+      const projectUrl = `local-audio:${Date.now()}:${encodeURIComponent(file.name)}`;
+      setUrl(projectUrl);
+      setAudioBinary(file);
+      setKaraokeTimeline([]);
+      setKaraokeSyncStatus('idle');
+      setKaraokeSyncMessage('');
+      setTrimStart(0);
+      setTrimEnd(duration);
+      setPlaybackStart(0);
+      setPreviewTime(0);
+      setLyrics('off');
+      setMediaClips([{ id: crypto.randomUUID(), type: 'image', url: picture, name: title, start: 0, end: duration, isDefault: true }]);
+      setSong({ title, creator: 'Local audio', duration, audio, picture });
+      setQuickMode(true);
+      setInitProgress(100);
+      track('quick_create_started', { has_lyrics: false, style_hint: 'local_audio' });
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Không thể mở file audio.');
+    } finally {
+      setBusy(false);
+    }
   }
   const invalidateRenderedResult = () => {
     setResultBlob(null);
@@ -1630,6 +1760,34 @@ export default function CreatorStudio() {
     },
   };
 
+  const navigationItems = [
+    [Plus, 'Create', 'create'],
+    [Folder, 'Projects', 'projects'],
+    [BookOpen, 'Library', 'library'],
+    [ListMusic, 'Jobs', 'jobs'],
+    [Settings, 'Settings', 'settings'],
+  ] as const;
+  const navigationMenu = (
+    <nav className="sd-profile-menu" aria-label="Điều hướng chính">
+      <div className="sd-profile-menu-head">
+        <span className="sd-avatar">{signedInUser?.picture ? <img src={signedInUser.picture} alt="" /> : (signedInUser?.name?.[0] || 'S').toUpperCase()}</span>
+        <span><b>{signedInUser?.name || 'SunoDown'}</b><small>{signedInUser?.email || 'Creator Studio'}</small></span>
+      </div>
+      {navigationItems.map(([Icon, label, id]) => (
+        <button key={id} className={view === id ? 'active' : ''} onClick={() => { setView(id); setNavigationOpen(false); }}>
+          <Icon /><span>{label}</span>
+        </button>
+      ))}
+      <div className="sd-profile-auth">
+        {signedInUser ? (
+          <button onClick={() => { void fetch('/api/auth/logout', { method: 'POST' }).then(() => { setSignedInUser(null); setNavigationOpen(false); }); }}><LogOut /><span>Đăng xuất</span></button>
+        ) : (
+          <a href="/api/auth/google"><LogIn /><span>Đăng nhập với Google</span></a>
+        )}
+      </div>
+    </nav>
+  );
+
   return (
     <div className="sd-app">
       <header className="sd-header">
@@ -1648,30 +1806,13 @@ export default function CreatorStudio() {
         )}
         <div className="sd-head-actions">
           <Bell />
-          <span className="sd-avatar">S</span>
-          <ChevronDown />
+          <button className="sd-profile-trigger" aria-label="Mở menu tài khoản" aria-expanded={navigationOpen} onClick={() => setNavigationOpen((open) => !open)}>
+            <span className="sd-avatar">{signedInUser?.picture ? <img src={signedInUser.picture} alt="" /> : (signedInUser?.name?.[0] || 'S').toUpperCase()}</span><ChevronDown />
+          </button>
+          {navigationOpen && navigationMenu}
         </div>
       </header>
-      <aside className="sd-sidebar">
-        <nav>
-          {[
-            [Plus, 'Create', 'create'],
-            [Folder, 'Projects', 'projects'],
-            [BookOpen, 'Library', 'library'],
-            [ListMusic, 'Jobs', 'jobs'],
-            [Settings, 'Settings', 'settings'],
-          ].map(([Icon, label, id]) => (
-            <button
-              key={String(id)}
-              onClick={() => setView(id as typeof view)}
-              className={view === id ? 'active' : ''}
-            >
-              {<Icon />}
-              <span>{String(label)}</span>
-            </button>
-          ))}
-        </nav>
-      </aside>
+      {navigationOpen && <button className="sd-nav-backdrop" aria-label="Đóng menu" onClick={() => setNavigationOpen(false)} />}
       {view !== 'create' && (
         <section className="sd-section-panel">
           <div className="sd-section-head">
@@ -1798,7 +1939,8 @@ export default function CreatorStudio() {
               </span>
               <b>SunoDown</b>
             </div>
-            <Menu />
+            <button className="sd-mobile-menu-trigger" aria-label="Mở menu" onClick={() => setNavigationOpen((open) => !open)}><Menu /></button>
+            {navigationOpen && navigationMenu}
           </div>
           <div className="sd-empty-content">
             <p>CREATOR STUDIO</p>
@@ -1824,6 +1966,30 @@ export default function CreatorStudio() {
             >
               {busy ? 'Đang phân tích…' : 'Phân tích'}
             </button>
+            <div className="sd-source-divider"><span>HOẶC</span></div>
+            <label
+              className="sd-audio-upload"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                void openAudioFile(event.dataTransfer.files[0]);
+              }}
+            >
+              <span className="sd-audio-upload-icon"><Upload /></span>
+              <span>
+                <b>Tải file audio lên</b>
+                <small>Kéo thả hoặc chọn MP3, WAV, M4A, AAC, OGG, FLAC</small>
+              </span>
+              <i>Chọn file</i>
+              <input
+                type="file"
+                accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+                onChange={(event) => {
+                  void openAudioFile(event.target.files?.[0]);
+                  event.currentTarget.value = '';
+                }}
+              />
+            </label>
             {error && <div className="sd-error">{error}</div>}
             <button
               className="sd-resume-project"
@@ -1878,7 +2044,8 @@ export default function CreatorStudio() {
                 <b>{song.title}</b>
                 <span>{fmt(song.duration)} · Suno song</span>
               </div>
-              <Menu />
+              <button className="sd-mobile-menu-trigger" aria-label="Mở menu" onClick={() => setNavigationOpen((open) => !open)}><Menu /></button>
+              {navigationOpen && navigationMenu}
             </div>
             <div className="sd-stage sd-live-preview">
               <LivePreview
@@ -1923,6 +2090,7 @@ export default function CreatorStudio() {
                 }}
                 karaokeTimeline={karaokeTimeline}
                 mediaClips={mediaClips}
+                timelineTracks={timelineTracks}
                 overlayTextStyles={studioModel.visual.textStyles}
                 subtitleStyle={studioModel.visual.subtitleStyle}
                 effects={effectConfig}
@@ -2109,6 +2277,7 @@ export default function CreatorStudio() {
               }}
               clips={mediaClips}
               onClipsChange={setMediaClips}
+              onTrackStateChange={setTimelineTracks}
               audioBinary={audioBinary}
               audioUrl={song.audio}
               visualLabel={`${template} · ${background.mode}`}

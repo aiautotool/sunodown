@@ -2,9 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Copy,
+  Eye,
+  EyeOff,
+  Focus,
   ChevronDown,
   ImagePlus,
+  Lock,
+  Magnet,
   Minus,
+  MousePointer2,
+  Scissors,
+  Trash2,
+  Unlock,
+  Volume2,
+  VolumeX,
   Plus,
   Redo2,
   Sparkles,
@@ -21,12 +33,19 @@ export type MediaClip = {
   name: string;
   start: number;
   end: number;
+  isDefault?: boolean;
 };
+
+export type TimelineTrackState = Record<TrackName, TrackState>;
 
 type Snapshot = {
   subtitles: KaraokeLine[];
   clips: MediaClip[];
 };
+
+type TrackName = 'audio' | 'visual' | 'subtitle' | 'effects';
+type Tool = 'select' | 'razor';
+type TrackState = { hidden: boolean; muted: boolean; locked: boolean };
 
 type Props = {
   duration: number;
@@ -45,6 +64,7 @@ type Props = {
   effectLabels?: string[];
   subtitleSyncStatus?: 'idle' | 'syncing' | 'synced' | 'fallback';
   subtitleSyncMessage?: string;
+  onTrackStateChange?: (state: TimelineTrackState) => void;
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -65,6 +85,8 @@ const cloneSnapshot = (props: Props): Snapshot => ({
 
 export function EditorTimeline(props: Props) {
   const [zoom, setZoom] = useState(1);
+  const [tool, setTool] = useState<Tool>('select');
+  const [snapping, setSnapping] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
   const [expandedTrack, setExpandedTrack] = useState<
     'audio' | 'visual' | 'subtitle' | 'effects'
@@ -73,6 +95,14 @@ export function EditorTimeline(props: Props) {
   const [snapHint, setSnapHint] = useState<number | null>(null);
   const [undoStack, setUndoStack] = useState<Snapshot[]>([]);
   const [redoStack, setRedoStack] = useState<Snapshot[]>([]);
+  const [trackHeight, setTrackHeight] = useState(1);
+  const [tracks, setTracks] = useState<Record<TrackName, TrackState>>({
+    audio: { hidden: false, muted: false, locked: false },
+    visual: { hidden: false, muted: false, locked: false },
+    subtitle: { hidden: false, muted: false, locked: false },
+    effects: { hidden: false, muted: false, locked: false },
+  });
+  const clipboard = useRef<{ kind: 'clip' | 'subtitle'; value: MediaClip | KaraokeLine } | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const touchDistance = useRef<number | null>(null);
   const touchZoom = useRef(1);
@@ -263,6 +293,7 @@ export function EditorTimeline(props: Props) {
   }, [props.clips, props.subtitles, props.playhead, props.duration]);
 
   const snap = (value: number, extra: number[] = []) => {
+    if (!snapping) return clamp(value, 0, props.duration);
     const threshold = Math.max(0.06, 9 / px);
     let best = clamp(Math.round(value / grid) * grid, 0, props.duration);
     let distance = Math.abs(best - value);
@@ -275,6 +306,135 @@ export function EditorTimeline(props: Props) {
     }
     setSnapHint(distance <= threshold ? best : null);
     return clamp(best, 0, props.duration);
+  };
+
+  const updateTrack = (name: TrackName, patch: Partial<TrackState>) =>
+    setTracks((current) => {
+      const next = {
+        ...current,
+        [name]: { ...current[name], ...patch },
+      };
+      props.onTrackStateChange?.(next);
+      return next;
+    });
+
+  const splitSelected = (target = selected, at = props.playhead) => {
+    if (!target) return;
+    if (target.startsWith('sub-')) {
+      const index = Number(target.slice(4));
+      const line = props.subtitles[index];
+      if (!line || at <= line.start + 0.08 || at >= line.end - 0.08) return;
+      pushHistory();
+      const leftWords = line.words.filter((word) => word.start < at);
+      const rightWords = line.words.filter((word) => word.end > at);
+      const next = [...props.subtitles];
+      next.splice(index, 1,
+        { ...line, end: at, words: leftWords },
+        { ...line, start: at, words: rightWords },
+      );
+      props.onSubtitlesChange(next);
+      setSelected(`sub-${index + 1}`);
+      return;
+    }
+    const index = props.clips.findIndex((clip) => clip.id === target);
+    const clip = props.clips[index];
+    if (!clip || at <= clip.start + 0.08 || at >= clip.end - 0.08) return;
+    pushHistory();
+    const right = { ...clip, id: crypto.randomUUID(), start: at, name: `${clip.name} · 2` };
+    const next = [...props.clips];
+    next.splice(index, 1, { ...clip, end: at }, right);
+    props.onClipsChange(next);
+    setSelected(right.id);
+  };
+
+  const deleteSelected = () => {
+    if (!selected) return;
+    pushHistory();
+    if (selected.startsWith('sub-')) {
+      const index = Number(selected.slice(4));
+      props.onSubtitlesChange(props.subtitles.filter((_, i) => i !== index));
+    } else {
+      props.onClipsChange(props.clips.filter((clip) => clip.id !== selected));
+    }
+    setSelected(null);
+  };
+
+  const copySelected = () => {
+    if (!selected) return;
+    if (selected.startsWith('sub-')) {
+      const value = props.subtitles[Number(selected.slice(4))];
+      if (value) clipboard.current = { kind: 'subtitle', value: structuredClone(value) };
+    } else {
+      const value = props.clips.find((clip) => clip.id === selected);
+      if (value) clipboard.current = { kind: 'clip', value: { ...value } };
+    }
+  };
+
+  const paste = () => {
+    const copied = clipboard.current;
+    if (!copied) return;
+    pushHistory();
+    if (copied.kind === 'clip') {
+      const source = copied.value as MediaClip;
+      const length = source.end - source.start;
+      const start = clamp(props.playhead, 0, Math.max(0, props.duration - length));
+      const value = { ...source, id: crypto.randomUUID(), start, end: start + length, name: `${source.name} · copy` };
+      props.onClipsChange([...props.clips, value]);
+      setSelected(value.id);
+    } else {
+      const source = copied.value as KaraokeLine;
+      const length = source.end - source.start;
+      const delta = clamp(props.playhead, 0, Math.max(0, props.duration - length)) - source.start;
+      const value = { ...structuredClone(source), start: source.start + delta, end: source.end + delta, words: source.words.map((word) => ({ ...word, start: word.start + delta, end: word.end + delta })) };
+      props.onSubtitlesChange([...props.subtitles, value].sort((a, b) => a.start - b.start));
+    }
+  };
+
+  const duplicateSelected = () => {
+    copySelected();
+    paste();
+  };
+
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.matches('input,textarea,select,[contenteditable="true"]')) return;
+      const mod = event.metaKey || event.ctrlKey;
+      if (mod && event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+      } else if (mod && event.key.toLowerCase() === 'c') {
+        event.preventDefault(); copySelected();
+      } else if (mod && event.key.toLowerCase() === 'v') {
+        event.preventDefault(); paste();
+      } else if (mod && event.key.toLowerCase() === 'd') {
+        event.preventDefault(); duplicateSelected();
+      } else if (event.key.toLowerCase() === 'b') {
+        setTool('razor');
+      } else if (event.key.toLowerCase() === 'v') {
+        setTool('select');
+      } else if (event.key.toLowerCase() === 's') {
+        event.preventDefault(); splitSelected();
+      } else if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault(); deleteSelected();
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        props.onSeek(clamp(props.playhead + (event.key === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? 1 : 0.1), 0, props.duration));
+      }
+    };
+    window.addEventListener('keydown', keydown);
+    return () => window.removeEventListener('keydown', keydown);
+  });
+
+  const wheelTimeline = (event: React.WheelEvent) => {
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      setZoom((current) => clamp(current * (event.deltaY > 0 ? 0.9 : 1.1), MIN_ZOOM, MAX_ZOOM));
+    } else if (event.altKey) {
+      event.preventDefault();
+      setTrackHeight((current) => clamp(current + (event.deltaY > 0 ? -0.1 : 0.1), 0.7, 1.8));
+    }
   };
 
   const isTimelineControl = (target: EventTarget | null) =>
@@ -492,6 +652,25 @@ export function EditorTimeline(props: Props) {
     props.onEditEnd?.();
   };
 
+  const trackActions = (name: TrackName) => {
+    const state = tracks[name];
+    return (
+      <div className="sd-track-actions" onPointerDown={(event) => event.stopPropagation()}>
+        <button onClick={() => updateTrack(name, { hidden: !state.hidden })} title={state.hidden ? 'Hiện track' : 'Ẩn track'}>
+          {state.hidden ? <EyeOff /> : <Eye />}
+        </button>
+        {(name === 'audio' || name === 'visual') && (
+          <button onClick={() => updateTrack(name, { muted: !state.muted })} title={state.muted ? 'Bật âm thanh' : 'Tắt âm thanh'}>
+            {state.muted ? <VolumeX /> : <Volume2 />}
+          </button>
+        )}
+        <button onClick={() => updateTrack(name, { locked: !state.locked })} title={state.locked ? 'Mở khóa track' : 'Khóa track'}>
+          {state.locked ? <Lock /> : <Unlock />}
+        </button>
+      </div>
+    );
+  };
+
   return (
     <section className="sd-edit-timeline">
       <header>
@@ -501,9 +680,15 @@ export function EditorTimeline(props: Props) {
             {stamp(props.playhead)} / {stamp(props.duration)}
           </span>
         </div>
-        <span className="sd-timeline-help">
-          Kéo playhead/clip/subtitle · snap tự động · pinch để zoom
-        </span>
+        <div className="sd-timeline-tools" role="toolbar" aria-label="Công cụ timeline">
+          <button className={tool === 'select' ? 'active' : ''} onClick={() => setTool('select')} title="Chọn / di chuyển (V)"><MousePointer2 /></button>
+          <button className={tool === 'razor' ? 'active' : ''} onClick={() => setTool('razor')} title="Dao cắt (B)"><Scissors /></button>
+          <button className={snapping ? 'active' : ''} onClick={() => setSnapping((value) => !value)} title="Bật/tắt nam châm"><Magnet /></button>
+          <span />
+          <button disabled={!selected} onClick={() => splitSelected()} title="Tách tại playhead (S)"><Scissors /></button>
+          <button disabled={!selected} onClick={duplicateSelected} title="Nhân đôi (⌘/Ctrl+D)"><Copy /></button>
+          <button disabled={!selected} onClick={deleteSelected} title="Xóa (Delete)"><Trash2 /></button>
+        </div>
         <div className="sd-timeline-history">
           <button disabled={!undoStack.length} onClick={undo} title="Hoàn tác">
             <Undo2 />
@@ -547,6 +732,9 @@ export function EditorTimeline(props: Props) {
             title="Zoom in"
           >
             <Plus />
+          </button>
+          <button onClick={() => setZoom(clamp(scroller.current ? scroller.current.clientWidth / Math.max(900, props.duration * 22) : 1, MIN_ZOOM, MAX_ZOOM))} title="Vừa toàn bộ timeline">
+            <Focus />
           </button>
         </div>
       </header>
@@ -657,10 +845,11 @@ export function EditorTimeline(props: Props) {
       <div
         className="sd-timeline-scroll"
         ref={scroller}
+        onWheel={wheelTimeline}
         onPointerDown={scrub}
         onTouchEnd={touchSeek}
       >
-        <div className="sd-timeline-canvas" style={{ width }}>
+        <div className={`sd-timeline-canvas tool-${tool}`} style={{ width, '--track-scale': trackHeight } as React.CSSProperties}>
           <div className="sd-time-ruler">
             {ticks.map((t) => (
               <i key={t} style={{ left: t * px }}>
@@ -670,7 +859,7 @@ export function EditorTimeline(props: Props) {
           </div>
 
           <div
-            className={`sd-track sd-audio-track ${expandedTrack === 'audio' ? 'expanded' : ''}`}
+            className={`sd-track sd-audio-track ${expandedTrack === 'audio' ? 'expanded' : ''} ${tracks.audio.hidden ? 'track-hidden' : ''} ${tracks.audio.locked ? 'track-locked' : ''}`}
           >
             <button
               className="sd-track-label"
@@ -681,6 +870,7 @@ export function EditorTimeline(props: Props) {
             >
               <Waves /> Audio <ChevronDown />
             </button>
+            {trackActions('audio')}
             <div className="sd-waveform-clip" style={{ left: 0, width }}>
               <div
                 className="sd-waveform-bars"
@@ -705,7 +895,7 @@ export function EditorTimeline(props: Props) {
           </div>
 
           <div
-            className={`sd-track sd-video-track ${expandedTrack === 'visual' ? 'expanded' : ''}`}
+            className={`sd-track sd-video-track ${expandedTrack === 'visual' ? 'expanded' : ''} ${tracks.visual.hidden ? 'track-hidden' : ''} ${tracks.visual.locked ? 'track-locked' : ''}`}
           >
             <button
               className="sd-track-label"
@@ -716,12 +906,7 @@ export function EditorTimeline(props: Props) {
             >
               <Video /> Visual <ChevronDown />
             </button>
-            {!props.clips.length && (
-              <div className="sd-base-clip" style={{ left: 0, width }}>
-                <span style={{ backgroundImage: `url(${props.picture})` }} />
-                <b>{props.visualLabel || 'Ảnh bìa / scene hiện tại'}</b>
-              </div>
-            )}
+            {trackActions('visual')}
             {props.clips.map((clip, index) => (
               <div
                 key={clip.id}
@@ -732,7 +917,12 @@ export function EditorTimeline(props: Props) {
                 }}
                 onPointerDown={(e) => {
                   setSelected(clip.id);
-                  drag(e, 'clip', index, 'move');
+                  if (tool === 'razor') {
+                    e.stopPropagation();
+                    const at = snap(timeAt(e.clientX));
+                    props.onSeek(at);
+                    splitSelected(clip.id, at);
+                  } else if (!tracks.visual.locked) drag(e, 'clip', index, 'move');
                 }}
               >
                 <button
@@ -748,7 +938,7 @@ export function EditorTimeline(props: Props) {
                 >
                   {clip.type === 'video' && <Video />}
                 </span>
-                <b>{clip.name}</b>
+                <b>{clip.isDefault ? `Ảnh bìa · ${clip.name}` : clip.name}</b>
                 <button
                   className="sd-edge right"
                   onPointerDown={(e) => drag(e, 'clip', index, 'end')}
@@ -768,7 +958,7 @@ export function EditorTimeline(props: Props) {
           </div>
 
           <div
-            className={`sd-track sd-subtitle-track ${expandedTrack === 'subtitle' ? 'expanded' : ''}`}
+            className={`sd-track sd-subtitle-track ${expandedTrack === 'subtitle' ? 'expanded' : ''} ${tracks.subtitle.hidden ? 'track-hidden' : ''} ${tracks.subtitle.locked ? 'track-locked' : ''}`}
           >
             <button
               className="sd-track-label"
@@ -781,6 +971,7 @@ export function EditorTimeline(props: Props) {
               <span className="sd-track-count">{props.subtitles.length}</span>
               <ChevronDown />
             </button>
+            {trackActions('subtitle')}
             {!props.subtitles.length && expandedTrack === 'subtitle' && (
               <div className="sd-sub-empty">
                 Chưa có cue subtitle được căn thời gian
@@ -797,7 +988,12 @@ export function EditorTimeline(props: Props) {
                 title={`${stamp(line.start)} → ${stamp(line.end)}\n${line.text}`}
                 onPointerDown={(e) => {
                   setSelected(`sub-${index}`);
-                  drag(e, 'subtitle', index, 'move');
+                  if (tool === 'razor') {
+                    e.stopPropagation();
+                    const at = snap(timeAt(e.clientX));
+                    props.onSeek(at);
+                    splitSelected(`sub-${index}`, at);
+                  } else if (!tracks.subtitle.locked) drag(e, 'subtitle', index, 'move');
                 }}
               >
                 <button
@@ -814,7 +1010,7 @@ export function EditorTimeline(props: Props) {
           </div>
 
           <div
-            className={`sd-track sd-effects-track ${expandedTrack === 'effects' ? 'expanded' : ''}`}
+            className={`sd-track sd-effects-track ${expandedTrack === 'effects' ? 'expanded' : ''} ${tracks.effects.hidden ? 'track-hidden' : ''} ${tracks.effects.locked ? 'track-locked' : ''}`}
           >
             <button
               className="sd-track-label"
@@ -825,6 +1021,7 @@ export function EditorTimeline(props: Props) {
             >
               <Sparkles /> Effects <ChevronDown />
             </button>
+            {trackActions('effects')}
             {(props.effectLabels?.length
               ? props.effectLabels
               : ['Không có effect']

@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 
 const root = process.cwd();
 const clientRoot = join(root, 'dist/client');
-const backendPort = 3002;
+const backendPort = 8788;
 const publicPort = 3000;
 const mime = {
   '.css': 'text/css; charset=utf-8',

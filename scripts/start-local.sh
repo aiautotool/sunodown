@@ -8,7 +8,7 @@ cd "$project_dir"
 echo "Building the latest local source..."
 npm run build
 
-for port in 3000 3002; do
+for port in 3000 8788; do
   port_pids="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || true)"
   if [[ -n "$port_pids" ]]; then
     echo "Stopping the previous local process on port $port..."

@@ -40,6 +40,11 @@ export type SavedProject = {
   trimEnd: number;
   karaokeTimeline: KaraokeLine[];
   media: Array<Omit<MediaClip, 'url'> & { blob: Blob }>;
+  audioAsset?: {
+    blob: Blob;
+    duration: number;
+    title: string;
+  };
 };
 
 const DB = 'sunodown-projects-v2';
