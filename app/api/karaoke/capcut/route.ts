@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  alignRoughWordsToLyrics,
-  normalizeKaraokeTimeline,
-  visibleLyricLines,
-  type KaraokeLine,
-  type RoughWord,
-} from '@/app/lib/karaoke';
+  alignKnownLyricsToSegments,
+  type KaraokeSegment,
+} from '@/app/lib/karaoke-known-lyrics-align';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 
 export const runtime = 'edge';
@@ -539,268 +536,42 @@ async function runCapCutStt(
   throw new Error('CapCut STT quá thời gian xử lý.');
 }
 
-function roughWordsFromPayload(payload: any): RoughWord[] {
+function capCutSegments(payload: any): KaraokeSegment[] {
   const utterances = Array.isArray(payload?.utterances) ? payload.utterances : [];
-  const words: RoughWord[] = [];
-  for (const utterance of utterances) {
-    const rawWords = Array.isArray(utterance?.words) ? utterance.words : [];
-    for (const word of rawWords) {
-      const text = String(word?.text ?? '').trim();
-      const start = Number(word?.start_time) / 1000;
-      const end = Number(word?.end_time) / 1000;
-      if (
-        text &&
-        Number.isFinite(start) &&
-        Number.isFinite(end) &&
-        end >= start
-      ) {
-        words.push({ text, start, end: Math.max(start + 0.01, end) });
-      }
-    }
-  }
-  if (words.length) return words;
+  return utterances
+    .map((utterance: any) => {
+      const text = String(utterance?.text ?? '').trim();
+      const start = Number(utterance?.start_time) / 1000;
+      const end = Number(utterance?.end_time) / 1000;
+      const rawWords = Array.isArray(utterance?.words) ? utterance.words : [];
+      const words = rawWords
+        .map((word: any) => {
+          const wordText = String(word?.text ?? '').trim();
+          const wordStart = Number(word?.start_time) / 1000;
+          const wordEnd = Number(word?.end_time) / 1000;
+          return {
+            text: wordText,
+            start: wordStart,
+            end: Math.max(wordStart + 0.01, wordEnd),
+          };
+        })
+        .filter(
+          (word: { text: string; start: number; end: number }) =>
+            word.text &&
+            Number.isFinite(word.start) &&
+            Number.isFinite(word.end) &&
+            word.end >= word.start,
+        );
 
-  for (const utterance of utterances) {
-    const text = String(utterance?.text ?? '').trim();
-    const start = Number(utterance?.start_time) / 1000;
-    const end = Number(utterance?.end_time) / 1000;
-    if (!text || !Number.isFinite(start) || !Number.isFinite(end) || end < start)
-      continue;
-    const tokens = text.split(/\s+/).filter(Boolean);
-    const span = Math.max(0.05, end - start);
-    tokens.forEach((token, index) => {
-      const tokenStart = start + (span * index) / tokens.length;
-      const tokenEnd = start + (span * (index + 1)) / tokens.length;
-      words.push({ text: token, start: tokenStart, end: tokenEnd });
-    });
-  }
-  return words;
-}
-
-
-function normalizedWords(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/đ/g, 'd')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
-function tokenOverlap(a: string, b: string) {
-  const left = normalizedWords(a);
-  const right = normalizedWords(b);
-  if (!left.length || !right.length) {
-    return { score: 0, matched: 0, leftCount: left.length, rightCount: right.length };
-  }
-  const counts = new Map<string, number>();
-  for (const token of right) counts.set(token, (counts.get(token) || 0) + 1);
-  let matched = 0;
-  for (const token of left) {
-    const count = counts.get(token) || 0;
-    if (!count) continue;
-    matched++;
-    counts.set(token, count - 1);
-  }
-  const precision = matched / right.length;
-  const recall = matched / left.length;
-  return {
-    score:
-      precision + recall
-        ? (2 * precision * recall) / (precision + recall)
-        : 0,
-    matched,
-    leftCount: left.length,
-    rightCount: right.length,
-  };
-}
-
-type CapCutUtterance = {
-  text: string;
-  start: number;
-  end: number;
-};
-
-function capCutUtterances(payload: any): CapCutUtterance[] {
-  const items = Array.isArray(payload?.utterances) ? payload.utterances : [];
-  return items
-    .map((item: any) => ({
-      text: String(item?.text ?? '').trim(),
-      start: Number(item?.start_time) / 1000,
-      end: Number(item?.end_time) / 1000,
-    }))
+      return { text, start, end, words };
+    })
     .filter(
-      (item: CapCutUtterance) =>
-        item.text &&
-        Number.isFinite(item.start) &&
-        Number.isFinite(item.end) &&
-        item.end > item.start,
+      (segment: KaraokeSegment) =>
+        segment.text &&
+        Number.isFinite(segment.start) &&
+        Number.isFinite(segment.end) &&
+        segment.end > segment.start,
     );
-}
-
-function retimeLine(text: string, start: number, end: number) {
-  const words = text.split(/\s+/).filter(Boolean);
-  const span = Math.max(0.04 * Math.max(1, words.length), end - start);
-  return words.map((word, index) => ({
-    text: word,
-    start: start + (span * index) / words.length,
-    end: Math.min(end, start + (span * (index + 1)) / words.length),
-  }));
-}
-
-function applyCapCutLineAnchors(
-  lyrics: string,
-  payload: any,
-  timeline: KaraokeLine[],
-  duration: number,
-) {
-  const lines = visibleLyricLines(lyrics);
-  const utterances = capCutUtterances(payload);
-  if (!lines.length || !utterances.length || timeline.length !== lines.length) {
-    return { timeline, coverage: 0 };
-  }
-
-  const anchors: Array<{ start: number; end: number; score: number } | null> =
-    Array.from({ length: lines.length }, () => null);
-  let cursor = 0;
-
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-    let best:
-      | {
-          start: number;
-          end: number;
-          score: number;
-          matched: number;
-          leftCount: number;
-          nextCursor: number;
-          ranked: number;
-        }
-      | null = null;
-
-    // Search forward through CapCut's utterances instead of only the first few.
-    // Instrumental intros can produce junk/hallucinated utterances; keeping the
-    // window pinned at the beginning caused real vocals later in the song to be
-    // missed and the lyric lines to be estimated across the intro.
-    for (let startIndex = cursor; startIndex < utterances.length; startIndex++) {
-      for (
-        let span = 1;
-        span <= 3 && startIndex + span <= utterances.length;
-        span++
-      ) {
-        const slice = utterances.slice(startIndex, startIndex + span);
-        const text = slice.map((item) => item.text).join(' ');
-        const overlap = tokenOverlap(lines[lineIndex], text);
-        const distancePenalty = Math.min(0.12, (startIndex - cursor) * 0.0025);
-        const ranked = overlap.score - distancePenalty;
-        const bestRanked = best?.ranked ?? Number.NEGATIVE_INFINITY;
-
-        if (!best || ranked > bestRanked) {
-          best = {
-            start: slice[0].start,
-            end: slice.at(-1)!.end,
-            score: overlap.score,
-            matched: overlap.matched,
-            leftCount: overlap.leftCount,
-            nextCursor: startIndex + span,
-            ranked,
-          };
-        }
-
-        // An early strong match is safer than a later perfect duplicate chorus.
-        if (
-          overlap.score >= 0.82 &&
-          (overlap.leftCount <= 2 || overlap.matched >= 2)
-        ) {
-          best = {
-            start: slice[0].start,
-            end: slice.at(-1)!.end,
-            score: overlap.score,
-            matched: overlap.matched,
-            leftCount: overlap.leftCount,
-            nextCursor: startIndex + span,
-            ranked,
-          };
-          startIndex = utterances.length;
-          break;
-        }
-      }
-    }
-
-    const minimumScore = best && best.leftCount <= 2 ? 0.68 : 0.5;
-    const enoughWords =
-      !!best && (best.leftCount <= 2 ? best.matched >= 1 : best.matched >= 2);
-
-    // Never trust a weak/common-word match as a vocal anchor.
-    if (best && enoughWords && best.score >= minimumScore) {
-      anchors[lineIndex] = {
-        start: best.start,
-        end: best.end,
-        score: best.score,
-      };
-      cursor = best.nextCursor;
-    }
-  }
-
-  const anchoredCount = anchors.filter(Boolean).length;
-  const coverage = anchoredCount / Math.max(1, lines.length);
-  if (coverage < 0.28) return { timeline, coverage };
-
-  const firstAnchoredLine = anchors.findIndex(Boolean);
-  let lastAnchoredLine = -1;
-  for (let index = anchors.length - 1; index >= 0; index--) {
-    if (anchors[index]) {
-      lastAnchoredLine = index;
-      break;
-    }
-  }
-
-  const anchoredTimeline = timeline.map((line, index) => {
-    const anchor = anchors[index];
-    if (!anchor) return line;
-
-    const start = Math.max(0, anchor.start - 0.035);
-    const end = Math.min(
-      duration,
-      Math.max(start + 0.08, anchor.end + 0.08),
-    );
-    const plausibleWords = line.words.filter(
-      (word) => word.start >= start - 0.6 && word.end <= end + 0.6,
-    ).length;
-    const keepWordAnchors =
-      line.words.length > 0 && plausibleWords / line.words.length >= 0.6;
-
-    return {
-      ...line,
-      start,
-      end,
-      words: keepWordAnchors
-        ? line.words.map((word) => ({
-            ...word,
-            start: Math.max(start, Math.min(end, word.start)),
-            end: Math.max(
-              Math.max(start, Math.min(end, word.start)) + 0.01,
-              Math.min(end, word.end),
-            ),
-          }))
-        : retimeLine(line.text, start, end),
-    };
-  });
-
-  // Accuracy beats completeness: do not invent timings before the first
-  // verified vocal line or after the final verified line. This prevents intro
-  // music from showing several lyric lines before the singer actually starts.
-  const gatedTimeline =
-    firstAnchoredLine >= 0 && lastAnchoredLine >= firstAnchoredLine
-      ? anchoredTimeline.slice(firstAnchoredLine, lastAnchoredLine + 1)
-      : anchoredTimeline;
-
-  return {
-    timeline: normalizeKaraokeTimeline(gatedTimeline, duration),
-    coverage,
-  };
 }
 
 export async function POST(request: NextRequest) {
@@ -828,28 +599,27 @@ export async function POST(request: NextRequest) {
         ? upload.durationMs
         : Math.max(1000, Math.round((requestedDuration || 10) * 1000));
     const payload = await runCapCutStt(upload.vid, upload.md5, durationMs, language);
-    const roughWords = roughWordsFromPayload(payload);
-    if (!roughWords.length) throw new Error('CapCut không trả về word timestamp.');
+    const segments = capCutSegments(payload);
+    if (!segments.length)
+      throw new Error('CapCut không trả về segment giọng hát.');
 
-    const duration = Number.isFinite(requestedDuration) && requestedDuration > 0
-      ? requestedDuration
-      : durationMs / 1000;
-    const roughTimeline = alignRoughWordsToLyrics(cleaned, roughWords, duration);
-    if (!roughTimeline.length)
-      throw new Error('Không căn được lyrics với timestamp CapCut.');
-
-    const anchored = applyCapCutLineAnchors(
-      cleaned,
-      payload,
-      roughTimeline,
-      duration,
-    );
+    const duration =
+      Number.isFinite(requestedDuration) && requestedDuration > 0
+        ? requestedDuration
+        : durationMs / 1000;
+    const aligned = alignKnownLyricsToSegments(cleaned, segments, duration);
+    if (!aligned.timeline.length) {
+      throw new Error('Không tìm thấy vocal anchor đủ tin cậy cho lyrics.');
+    }
 
     return NextResponse.json({
-      engine: 'capcut',
-      timeline: anchored.timeline,
-      words: roughWords.length,
-      lineAnchorCoverage: anchored.coverage,
+      engine: 'known-lyrics-capcut',
+      timeline: aligned.timeline,
+      words: segments.reduce((sum, segment) => sum + segment.words.length, 0),
+      matchedLines: aligned.matched,
+      totalLines: aligned.total,
+      lineAnchorCoverage: aligned.coverage,
+      firstVocalAt: aligned.firstVocalAt,
     });
   } catch (error) {
     console.error('[capcut-karaoke]', error);
