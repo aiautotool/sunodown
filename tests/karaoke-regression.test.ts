@@ -6,6 +6,7 @@ import {
 } from '../components/v4/lyrics-clean.ts';
 import {
   alignRoughWordsToLyrics,
+  karaokeOverlayState,
   normalizeKaraokeTimeline,
 } from '../app/lib/karaoke.ts';
 import { alignKnownLyricsToSegments } from '../app/lib/karaoke-known-lyrics-align.ts';
@@ -251,4 +252,24 @@ void test('known-lyrics aligner leaves unmatched lyrics as honest gaps instead o
   assert.equal(aligned.timeline.length, 1);
   assert.equal(aligned.timeline[0].text, 'Câu thật sự được hát');
   assert.ok(aligned.timeline[0].start > 19.5);
+});
+
+
+void test('preview never shows the next lyric before its start time', () => {
+  const line = {
+    text: 'Câu hát thật',
+    start: 25,
+    end: 29,
+    words: [
+      { text: 'Câu', start: 25, end: 25.4 },
+      { text: 'hát', start: 25.5, end: 26.1 },
+      { text: 'thật', start: 26.2, end: 27 },
+    ],
+  };
+  const before = karaokeOverlayState([line], 22);
+  assert.equal(before.line, null);
+  assert.equal(before.next, null);
+
+  const active = karaokeOverlayState([line], 25.2);
+  assert.equal(active.line?.text, 'Câu hát thật');
 });
