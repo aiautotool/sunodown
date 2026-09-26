@@ -940,6 +940,16 @@ export default function CreatorStudio() {
       track('song_resolve_failed', { reason: 'invalid_url' });
       return null;
     }
+
+    // Invalidate every subtitle/alignment job from the previous song immediately.
+    // Without this, an older async CapCut/Whisper result can arrive after the
+    // next song metadata is already visible and overwrite it with stale subtitles.
+    const syncRun = ++karaokeSyncRun.current;
+    setKaraokeTimeline([]);
+    setKaraokeSyncStatus('idle');
+    setKaraokeSyncMessage('');
+    setAudioBinary(null);
+
     setBusy(true);
     setError('');
     track('song_resolve_started');
@@ -951,6 +961,7 @@ export default function CreatorStudio() {
         }),
         data = await r.json();
       if (!r.ok) throw Error(data.error || 'Không thể tải bài hát này.');
+      if (karaokeSyncRun.current !== syncRun) return null;
       // Hydrate the complete song first: title/cover/lyrics/caption metadata must survive UI component migrations.
       const hydrated: Song = {
         ...data,
@@ -973,8 +984,10 @@ export default function CreatorStudio() {
           source = await audioResponse.blob();
           mediaCache.current.set(hydrated.audio, source);
         }
+        if (karaokeSyncRun.current !== syncRun) return null;
         setAudioBinary(source);
       } catch (mediaError) {
+        if (karaokeSyncRun.current !== syncRun) return null;
         setError(mediaError instanceof Error ? mediaError.message : 'Không tải được binary audio.');
       }
       setPlaybackStart(0);
@@ -987,7 +1000,6 @@ export default function CreatorStudio() {
       setKaraokeTimeline(estimatedTimeline);
       setKaraokeSyncStatus(hydrated.lyrics ? 'syncing' : 'idle');
       setKaraokeSyncMessage(hydrated.lyrics ? 'Đang chuẩn bị căn subtitle theo giọng hát…' : '');
-      const syncRun = ++karaokeSyncRun.current;
       if (source && hydrated.lyrics) {
         void (async () => {
           const duration = hydrated.duration || 30;
@@ -1076,6 +1088,7 @@ export default function CreatorStudio() {
       });
       return hydrated;
     } catch (e) {
+      if (karaokeSyncRun.current !== syncRun) return null;
       const message = e instanceof Error ? e.message : 'Không thể tải bài hát này.';
       setError(message);
       track('song_resolve_failed', {
@@ -1084,7 +1097,7 @@ export default function CreatorStudio() {
       });
       return null;
     } finally {
-      setBusy(false);
+      if (karaokeSyncRun.current === syncRun) setBusy(false);
     }
   }
   function change(value: string) {
