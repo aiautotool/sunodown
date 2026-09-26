@@ -11,10 +11,12 @@ import {
 
 void test('removes bracketed and unambiguous bare chords from every karaoke input', () => {
   const input =
-    '[Verse 1]\n[Am] Anh (Em) còn {G} yêu F#m7 em Cmaj7/G nhiều\nG  Em  C  D/F#';
+    '[Verse 1]\n[Am] Anh (Em) còn {G} yêu F#m7 em Cmaj7/G nhiều [F#7sus4] [Bmadd9]\nG  Em  C  D/F#';
   assert.deepEqual(lyricLinesForKaraoke(input), ['Anh còn yêu em nhiều']);
   assert.equal(cleanLyricsForVideo(input).includes('F#m7'), false);
   assert.equal(cleanLyricsForVideo(input).includes('Cmaj7/G'), false);
+  assert.equal(cleanLyricsForVideo(input).includes('F#7sus4'), false);
+  assert.equal(cleanLyricsForVideo(input).includes('Bmadd9'), false);
 });
 
 void test('never recognizes section labels as sung lyrics', () => {
