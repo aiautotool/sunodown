@@ -1406,19 +1406,14 @@ export default function CreatorStudio() {
         `${safeName(song.title)}-lyrics.txt`,
       );
     else {
+      if (!karaokeTimeline.length) {
+        setError('Subtitle chưa có timestamp. Hãy chờ đồng bộ hoàn tất trước khi tải SRT.');
+        return;
+      }
       saveBlob(
-        new Blob(
-          [
-            exportSrt(
-              karaokeTimeline.length
-                ? karaokeTimeline
-                : buildEstimatedKaraokeTimeline(clean, song.duration || 1),
-            ),
-          ],
-          {
-            type: 'application/x-subrip;charset=utf-8',
-          },
-        ),
+        new Blob([exportSrt(karaokeTimeline)], {
+          type: 'application/x-subrip;charset=utf-8',
+        }),
         `${safeName(song.title)}-lyrics.srt`,
       );
     }
