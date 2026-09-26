@@ -140,7 +140,11 @@ function buildCandidate(
   };
 }
 
-function trustedCandidate(lyric: string, candidate: Candidate) {
+function trustedCandidate(
+  lyric: string,
+  candidate: Candidate,
+  firstAnchor: boolean,
+) {
   const stats = similarity(
     lyric,
     candidate.words.length
@@ -148,17 +152,28 @@ function trustedCandidate(lyric: string, candidate: Candidate) {
       : '',
   );
   const expected = tokenList(lyric).length;
-  const minimumScore = expected <= 2 ? 0.72 : expected <= 4 ? 0.58 : 0.52;
+  const minimumScore = firstAnchor
+    ? 0.72
+    : expected <= 2
+      ? 0.72
+      : expected <= 4
+        ? 0.6
+        : 0.55;
+  const recall =
+    expected > 0 ? stats.matchedTokens / expected : 0;
+  const minimumRecall =
+    expected <= 2 ? 0.5 : expected <= 6 ? 0.67 : 0.5;
   const enoughTokens =
-    expected <= 2
-      ? stats.matchedTokens >= 1
-      : stats.matchedTokens >= Math.min(2, expected);
+    stats.matchedTokens >= (expected <= 2 ? 1 : 2) &&
+    recall >= minimumRecall;
+  const strongSegmentText = candidate.score >= 0.84;
 
-  // Segment text can be useful when word timing is sparse, but a common single
-  // word is never enough to open the vocal gate for a full lyric line.
+  // The very first vocal anchor is the most important one: a false match here
+  // shifts the entire song into the instrumental intro. Require either a very
+  // strong segment-text match or convincing word recall.
   return (
     candidate.score >= minimumScore &&
-    (enoughTokens || (candidate.words.length === 0 && candidate.score >= 0.68))
+    (strongSegmentText || enoughTokens)
   );
 }
 
@@ -246,10 +261,17 @@ export function alignKnownLyricsToSegments(
 
     for (let segmentIndex = cursor; segmentIndex < searchEnd; segmentIndex++) {
       for (let span = 1; span <= 2 && segmentIndex + span <= usable.length; span++) {
+        const endIndex = segmentIndex + span - 1;
+        if (
+          span > 1 &&
+          usable[endIndex].start - usable[endIndex - 1].end > 1.5
+        ) {
+          break;
+        }
         const candidate = buildCandidate(
           usable,
           segmentIndex,
-          segmentIndex + span - 1,
+          endIndex,
           lyric,
         );
 
@@ -267,7 +289,7 @@ export function alignKnownLyricsToSegments(
 
         if (
           candidate.score >= 0.86 &&
-          trustedCandidate(lyric, candidate)
+          trustedCandidate(lyric, candidate, !firstAnchorFound)
         ) {
           best = candidate;
           segmentIndex = searchEnd;
@@ -276,7 +298,7 @@ export function alignKnownLyricsToSegments(
       }
     }
 
-    if (!best || !trustedCandidate(lyric, best)) {
+    if (!best || !trustedCandidate(lyric, best, !firstAnchorFound)) {
       // Honest gap. Do not advance the ASR cursor and, critically, do not
       // invent a time before the first vocal.
       continue;
