@@ -602,10 +602,29 @@ export function alignRoughWordsToLyrics(
     } else if (i > 0 && (j === 0 || step === 1)) i--;
     else j--;
   }
+  // Do not let a single weak/common word become a timeline anchor. Sung ASR
+  // hallucinates short words in intros surprisingly often. Trust a match when
+  // it is part of a consecutive run, or when it is an exceptionally strong,
+  // unique lexical anchor.
+  const trustedMatches = matches.map((asrIndex, lyricIndex) => {
+    if (asrIndex == null) return null;
+    const previous = lyricIndex > 0 ? matches[lyricIndex - 1] : null;
+    const next = lyricIndex + 1 < matches.length ? matches[lyricIndex + 1] : null;
+    const consecutive =
+      (previous != null && previous === asrIndex - 1) ||
+      (next != null && next === asrIndex + 1);
+    const token = lyricTokens[lyricIndex].text;
+    const key = normalizeToken(token);
+    const strongUnique =
+      tokenSimilarity(token, asr[asrIndex].text) >= 0.88 &&
+      (frequencies.get(key) || 0) === 1;
+    return consecutive || strongUnique ? asrIndex : null;
+  });
+
   const lineAnchors = lines.map((text, lineIndex) => {
     const indexes = lineTokenIndexes[lineIndex];
     const matched = indexes
-      .map((index) => matches[index])
+      .map((index) => trustedMatches[index])
       .filter((value): value is number => value != null);
     if (!matched.length) return null;
     return { start: asr[matched[0]].start, end: asr[matched.at(-1)!].end };
@@ -638,7 +657,7 @@ export function alignRoughWordsToLyrics(
     const words = retimeWords(text, start, end);
     const anchoredIndexes: number[] = [];
     for (let wordIndex = 0; wordIndex < indexes.length; wordIndex++) {
-      const asrIndex = matches[indexes[wordIndex]];
+      const asrIndex = trustedMatches[indexes[wordIndex]];
       if (asrIndex == null) continue;
       const recognized = asr[asrIndex];
       words[wordIndex] = {
@@ -669,9 +688,9 @@ export function alignRoughWordsToLyrics(
       const low = left >= 0 ? words[left].end : start;
       const high = right < words.length ? words[right].start : end;
       const leftAsr =
-        left >= 0 ? matches[indexes[left]] : null;
+        left >= 0 ? trustedMatches[indexes[left]] : null;
       const rightAsr =
-        right < words.length ? matches[indexes[right]] : null;
+        right < words.length ? trustedMatches[indexes[right]] : null;
 
       const bridge =
         leftAsr != null &&
