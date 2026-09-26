@@ -42,7 +42,7 @@ export function cleanLyricsForVideo(input: string | null | undefined) {
             // Lowercase words such as Vietnamese "em" are lyrics, not chord
             // symbols. Inline bare chord cleanup only targets notation that is
             // visibly chord-like (normally starts with an uppercase note).
-            if (bare === bare.toLowerCase()) return true;
+            if (bare === bare.toLowerCase() || bare === 'Em') return true;
             return !COMPLEX_BARE_CHORD.test(bare);
           })
           .join('')
