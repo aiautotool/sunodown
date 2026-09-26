@@ -1,7 +1,8 @@
 const ROOT = '[A-G](?:#|b)?';
-const QUALITY =
-  '(?:(?:maj|min|dim|aug|sus|add|m)?(?:2|4|5|6|7|9|11|13)?(?:maj7|m7|m9|m11|m13)?(?:[#b](?:5|9|11|13))*)?';
-const CHORD = new RegExp(`^${ROOT}${QUALITY}(?:\\/${ROOT})?$`, 'i');
+const MODIFIER =
+  '(?:(?:maj|min|dim|aug|sus|add|m)|(?:2|4|5|6|7|9|11|13)|(?:[#b](?:5|9|11|13)))*';
+const CHORD = new RegExp(`^${ROOT}${MODIFIER}(?:\\/${ROOT})?const ROOT = '[A-G](?:#|b)?';
+, 'i');
 
 function isChordToken(value: string) {
   const token = value.trim().replace(/[.,;:!?]+$/, '');
@@ -18,7 +19,7 @@ function stripBracketChord(match: string, inner: string) {
 const SECTION_LABEL =
   /^\s*[[({]?\s*(?:verse|chorus|bridge|intro|outro|pre[ -]?chorus|post[ -]?chorus|hook|instrumental|break|interlude|refrain|solo)(?:\s+\d+)?\s*[\])}]?:?\s*$/i;
 const COMPLEX_BARE_CHORD =
-  /^[A-G](?:#|b)?(?:(?:maj|min|dim|aug|sus|add|m)(?:2|4|5|6|7|9|11|13)?|(?:2|4|5|6|7|9|11|13))(?:[#b](?:5|9|11|13))?(?:\/[A-G](?:#|b)?)?$/;
+  /^[A-G](?:#|b)?(?:(?:maj|min|dim|aug|sus|add|m)|(?:2|4|5|6|7|9|11|13)|(?:[#b](?:5|9|11|13)))+(?:\/[A-G](?:#|b)?)?$/i;
 
 export function isLyricSectionLabel(value: string) {
   return SECTION_LABEL.test(value.trim());
