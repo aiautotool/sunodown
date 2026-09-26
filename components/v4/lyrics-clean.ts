@@ -36,12 +36,15 @@ export function cleanLyricsForVideo(input: string | null | undefined) {
           .replace(/\(([^()\n]{1,16})\)/g, (m, x) => (isChordToken(x) ? '' : m))
           .replace(/\{([^{}\n]{1,16})\}/g, (m, x) => (isChordToken(x) ? '' : m))
           .split(/(\s+)/)
-          .filter(
-            (token) =>
-              /^\s+$/.test(token) ||
-              token.replace(/[.,;:!?]+$/, '') === 'Em' ||
-              !COMPLEX_BARE_CHORD.test(token.replace(/[.,;:!?]+$/, '')),
-          )
+          .filter((token) => {
+            if (/^\s+$/.test(token)) return true;
+            const bare = token.replace(/[.,;:!?]+$/, '');
+            // Lowercase words such as Vietnamese "em" are lyrics, not chord
+            // symbols. Inline bare chord cleanup only targets notation that is
+            // visibly chord-like (normally starts with an uppercase note).
+            if (bare === bare.toLowerCase()) return true;
+            return !COMPLEX_BARE_CHORD.test(bare);
+          })
           .join('')
           // Do not remove unwrapped single tokens such as "Em": in Vietnamese lyrics
           // those can be real words. Bare chords are removed only when the whole
