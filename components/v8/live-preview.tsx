@@ -649,7 +649,10 @@ export function LivePreview(props: Props) {
         p.template,
         p.wave,
         p.motion,
-        hasExactLyrics ? 'off' : p.lyrics,
+        // Creator Studio subtitles must have one source of truth. Never fall
+        // back to the legacy estimated lyric renderer when the synced timeline
+        // is empty, otherwise preview text can disagree with the Subtitle track.
+        'off',
         customBackground,
         p.layout,
         p.overlayTextStyles,
