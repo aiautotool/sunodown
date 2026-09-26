@@ -616,6 +616,7 @@ export function alignRoughWordsToLyrics(
     const token = lyricTokens[lyricIndex].text;
     const key = normalizeToken(token);
     const strongUnique =
+      key.length >= 4 &&
       tokenSimilarity(token, asr[asrIndex].text) >= 0.88 &&
       (frequencies.get(key) || 0) === 1;
     return consecutive || strongUnique ? asrIndex : null;
@@ -747,13 +748,19 @@ export function alignRoughWordsToLyrics(
       const available = Math.max(0.04 * count, high - low);
       let cursor = low;
       missing.forEach((index, k) => {
-        const remaining = high - cursor;
         const proportional = available * (weights[k] / totalWeight);
         const minimumTail = 0.02 * (missing.length - k - 1);
-        const wordStart = cursor;
-        const wordEnd = Math.min(
+        const wordStart = Math.min(high, cursor);
+        const latestEnd = Math.max(
+          wordStart + 0.01,
           high - minimumTail,
-          Math.max(wordStart + 0.02, wordStart + proportional),
+        );
+        const wordEnd = Math.min(
+          high,
+          Math.max(
+            wordStart + 0.01,
+            Math.min(latestEnd, wordStart + proportional),
+          ),
         );
         words[index] = { ...words[index], start: wordStart, end: wordEnd };
         cursor = wordEnd;
