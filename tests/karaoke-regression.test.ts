@@ -9,7 +9,10 @@ import {
   karaokeOverlayState,
   normalizeKaraokeTimeline,
 } from '../app/lib/karaoke.ts';
-import { alignKnownLyricsToSegments } from '../app/lib/karaoke-known-lyrics-align.ts';
+import {
+  alignKnownLyricsGlobally,
+  alignKnownLyricsToSegments,
+} from '../app/lib/karaoke-known-lyrics-align.ts';
 
 void test('removes bracketed and unambiguous bare chords from every karaoke input', () => {
   const input =
@@ -272,4 +275,68 @@ void test('preview never shows the next lyric before its start time', () => {
 
   const active = karaokeOverlayState([line], 25.2);
   assert.equal(active.line?.text, 'Câu hát thật');
+});
+
+
+void test('global aligner recovers useful subtitle cues when strict local matching is too sparse', () => {
+  const lyrics =
+    'Có những năm ta từng vội vã cứ nghĩ đời còn dài\n' +
+    'Có những người đi qua rồi mới hiểu ai thương mình thôi\n' +
+    'Có những đêm ôm bao được mất sáng ra chẳng giữ được gì';
+
+  const aligned = alignKnownLyricsGlobally(
+    lyrics,
+    [
+      {
+        text: 'la la instrumental',
+        start: 2,
+        end: 7,
+        words: [],
+      },
+      {
+        text: 'co nhung nam ta tung voi va cu nghi doi con dai',
+        start: 23.8,
+        end: 29.1,
+        words: [
+          { text: 'co', start: 23.8, end: 24.0 },
+          { text: 'nhung', start: 24.0, end: 24.3 },
+          { text: 'nam', start: 24.3, end: 24.6 },
+          { text: 'ta', start: 24.6, end: 24.8 },
+          { text: 'tung', start: 24.8, end: 25.1 },
+          { text: 'voi', start: 25.1, end: 25.4 },
+          { text: 'va', start: 25.4, end: 25.7 },
+        ],
+      },
+      {
+        text: 'co nhung nguoi di qua roi moi hieu ai thuong minh',
+        start: 29.6,
+        end: 35.0,
+        words: [
+          { text: 'co', start: 29.6, end: 29.8 },
+          { text: 'nhung', start: 29.8, end: 30.1 },
+          { text: 'nguoi', start: 30.1, end: 30.4 },
+          { text: 'di', start: 30.4, end: 30.6 },
+          { text: 'qua', start: 30.6, end: 30.9 },
+          { text: 'roi', start: 30.9, end: 31.2 },
+        ],
+      },
+      {
+        text: 'co nhung dem om bao duoc mat sang ra chang giu duoc gi',
+        start: 36.0,
+        end: 41.5,
+        words: [
+          { text: 'co', start: 36.0, end: 36.2 },
+          { text: 'nhung', start: 36.2, end: 36.5 },
+          { text: 'dem', start: 36.5, end: 36.8 },
+          { text: 'om', start: 36.8, end: 37.0 },
+          { text: 'bao', start: 37.0, end: 37.3 },
+        ],
+      },
+    ],
+    180,
+  );
+
+  assert.ok(aligned.timeline.length >= 2);
+  assert.ok((aligned.firstVocalAt ?? 0) > 23);
+  assert.ok(aligned.timeline.every((line) => line.start > 23));
 });
