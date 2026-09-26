@@ -590,10 +590,12 @@ function normalizedWords(value: string) {
     .filter(Boolean);
 }
 
-function tokenOverlapScore(a: string, b: string) {
+function tokenOverlap(a: string, b: string) {
   const left = normalizedWords(a);
   const right = normalizedWords(b);
-  if (!left.length || !right.length) return 0;
+  if (!left.length || !right.length) {
+    return { score: 0, matched: 0, leftCount: left.length, rightCount: right.length };
+  }
   const counts = new Map<string, number>();
   for (const token of right) counts.set(token, (counts.get(token) || 0) + 1);
   let matched = 0;
@@ -605,9 +607,15 @@ function tokenOverlapScore(a: string, b: string) {
   }
   const precision = matched / right.length;
   const recall = matched / left.length;
-  return precision + recall
-    ? (2 * precision * recall) / (precision + recall)
-    : 0;
+  return {
+    score:
+      precision + recall
+        ? (2 * precision * recall) / (precision + recall)
+        : 0,
+    matched,
+    leftCount: left.length,
+    rightCount: right.length,
+  };
 }
 
 type CapCutUtterance = {
@@ -661,30 +669,72 @@ function applyCapCutLineAnchors(
 
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
     let best:
-      | { start: number; end: number; score: number; nextCursor: number }
+      | {
+          start: number;
+          end: number;
+          score: number;
+          matched: number;
+          leftCount: number;
+          nextCursor: number;
+        }
       | null = null;
-    const searchEnd = Math.min(utterances.length, cursor + 7);
 
-    for (let startIndex = cursor; startIndex < searchEnd; startIndex++) {
-      for (let span = 1; span <= 3 && startIndex + span <= utterances.length; span++) {
+    // Search forward through CapCut's utterances instead of only the first few.
+    // Instrumental intros can produce junk/hallucinated utterances; keeping the
+    // window pinned at the beginning caused real vocals later in the song to be
+    // missed and the lyric lines to be estimated across the intro.
+    for (let startIndex = cursor; startIndex < utterances.length; startIndex++) {
+      for (
+        let span = 1;
+        span <= 3 && startIndex + span <= utterances.length;
+        span++
+      ) {
         const slice = utterances.slice(startIndex, startIndex + span);
         const text = slice.map((item) => item.text).join(' ');
-        const score = tokenOverlapScore(lines[lineIndex], text);
-        if (!best || score > best.score) {
+        const overlap = tokenOverlap(lines[lineIndex], text);
+        const distancePenalty = Math.min(0.12, (startIndex - cursor) * 0.0025);
+        const ranked = overlap.score - distancePenalty;
+        const bestRanked = best
+          ? best.score -
+            Math.min(0.12, (best.nextCursor - span - cursor) * 0.0025)
+          : Number.NEGATIVE_INFINITY;
+
+        if (!best || ranked > bestRanked) {
           best = {
             start: slice[0].start,
             end: slice.at(-1)!.end,
-            score,
+            score: overlap.score,
+            matched: overlap.matched,
+            leftCount: overlap.leftCount,
             nextCursor: startIndex + span,
           };
+        }
+
+        // An early strong match is safer than a later perfect duplicate chorus.
+        if (
+          overlap.score >= 0.82 &&
+          (overlap.leftCount <= 2 || overlap.matched >= 2)
+        ) {
+          best = {
+            start: slice[0].start,
+            end: slice.at(-1)!.end,
+            score: overlap.score,
+            matched: overlap.matched,
+            leftCount: overlap.leftCount,
+            nextCursor: startIndex + span,
+          };
+          startIndex = utterances.length;
+          break;
         }
       }
     }
 
-    // CapCut sentence timing is stronger than inferred whole-song alignment,
-    // but only trust it when the recognized sentence still resembles the
-    // authoritative Suno lyric line.
-    if (best && best.score >= 0.34) {
+    const minimumScore = best && best.leftCount <= 2 ? 0.68 : 0.5;
+    const enoughWords =
+      !!best && (best.leftCount <= 2 ? best.matched >= 1 : best.matched >= 2);
+
+    // Never trust a weak/common-word match as a vocal anchor.
+    if (best && enoughWords && best.score >= minimumScore) {
       anchors[lineIndex] = {
         start: best.start,
         end: best.end,
@@ -697,6 +747,15 @@ function applyCapCutLineAnchors(
   const anchoredCount = anchors.filter(Boolean).length;
   const coverage = anchoredCount / Math.max(1, lines.length);
   if (coverage < 0.28) return { timeline, coverage };
+
+  const firstAnchoredLine = anchors.findIndex(Boolean);
+  let lastAnchoredLine = -1;
+  for (let index = anchors.length - 1; index >= 0; index--) {
+    if (anchors[index]) {
+      lastAnchoredLine = index;
+      break;
+    }
+  }
 
   const anchoredTimeline = timeline.map((line, index) => {
     const anchor = anchors[index];
@@ -730,8 +789,16 @@ function applyCapCutLineAnchors(
     };
   });
 
+  // Accuracy beats completeness: do not invent timings before the first
+  // verified vocal line or after the final verified line. This prevents intro
+  // music from showing several lyric lines before the singer actually starts.
+  const gatedTimeline =
+    firstAnchoredLine >= 0 && lastAnchoredLine >= firstAnchoredLine
+      ? anchoredTimeline.slice(firstAnchoredLine, lastAnchoredLine + 1)
+      : anchoredTimeline;
+
   return {
-    timeline: normalizeKaraokeTimeline(anchoredTimeline, duration),
+    timeline: normalizeKaraokeTimeline(gatedTimeline, duration),
     coverage,
   };
 }
