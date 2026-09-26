@@ -662,3 +662,8 @@ linear-gradient(180deg,#090d14,#070a0f);overflow:hidden}
 .sd-init-steps span.done{border-color:#2f5948;background:#0d1b16;color:#75c9a2}
 @keyframes sdInitSpin{to{transform:rotate(360deg)}}@keyframes sdInitDot{to{transform:rotate(360deg)}}@keyframes sdInitPulse{50%{transform:scale(1.06);filter:brightness(1.13)}}@keyframes sdInitShine{55%,100%{transform:translateX(100%)}}
 @media(max-width:800px){.sd-init-screen{min-height:calc(100dvh - 54px);padding:18px}.sd-init-orbit{width:112px;height:112px}.sd-init-orbit>i{inset:5px auto auto 51px;transform-origin:5px 51px}.sd-init-stage{gap:10px}.sd-init-stage>p{font-size:10px}.sd-init-steps span{padding:7px 3px;font-size:7px}}
+
+
+.sd-track-count{display:inline-grid;min-width:18px;height:16px;place-items:center;margin-left:2px;padding:0 5px;border-radius:999px;background:#352366;color:#c4b5fd;font-size:8px;font-weight:800;font-variant-numeric:tabular-nums}
+.sd-sub-empty{position:sticky;left:104px;top:35px;display:inline-flex;align-items:center;height:32px;margin-top:9px;padding:0 10px;border:1px dashed #30394a;border-radius:7px;background:#0b1017;color:#657185;font-size:8px;white-space:nowrap}
+@media(max-width:800px){.sd-sub-empty{top:38px;left:112px}}
