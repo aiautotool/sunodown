@@ -8,6 +8,7 @@ import {
   alignRoughWordsToLyrics,
   normalizeKaraokeTimeline,
 } from '../app/lib/karaoke.ts';
+import { alignKnownLyricsToSegments } from '../app/lib/karaoke-known-lyrics-align.ts';
 
 void test('removes bracketed and unambiguous bare chords from every karaoke input', () => {
   const input =
@@ -159,4 +160,95 @@ void test('does not accumulate drift near the end of a multi-minute song', () =>
   const timeline = alignRoughWordsToLyrics(lyrics, words, 210);
   assert.equal(timeline.length, 20);
   assert.ok(Math.abs(timeline.at(-1)!.start - 195) < 0.2);
+});
+
+
+void test('known-lyrics aligner swallows hallucinated intro segments and starts on real vocal', () => {
+  const aligned = alignKnownLyricsToSegments(
+    'Có những năm ta từng vội vã, cứ nghĩ đời còn dài\nCó những người đi qua rồi, mới hiểu ai thương mình thôi',
+    [
+      {
+        text: 'âm nhạc mở đầu',
+        start: 2,
+        end: 5,
+        words: [
+          { text: 'âm', start: 2, end: 2.3 },
+          { text: 'nhạc', start: 2.4, end: 2.8 },
+        ],
+      },
+      {
+        text: 'yeah oh',
+        start: 10,
+        end: 13,
+        words: [
+          { text: 'yeah', start: 10, end: 10.5 },
+          { text: 'oh', start: 11, end: 11.6 },
+        ],
+      },
+      {
+        text: 'Có những năm ta từng vội vã cứ nghĩ đời còn dài',
+        start: 24,
+        end: 29,
+        words: [
+          { text: 'Có', start: 24, end: 24.2 },
+          { text: 'những', start: 24.2, end: 24.5 },
+          { text: 'năm', start: 24.5, end: 24.8 },
+          { text: 'ta', start: 24.8, end: 25.0 },
+          { text: 'từng', start: 25.0, end: 25.3 },
+          { text: 'vội', start: 25.3, end: 25.5 },
+          { text: 'vã', start: 25.5, end: 25.8 },
+        ],
+      },
+      {
+        text: 'Có những người đi qua rồi mới hiểu ai thương mình thôi',
+        start: 30,
+        end: 35,
+        words: [
+          { text: 'Có', start: 30, end: 30.2 },
+          { text: 'những', start: 30.2, end: 30.5 },
+          { text: 'người', start: 30.5, end: 30.8 },
+          { text: 'đi', start: 30.8, end: 31.0 },
+          { text: 'qua', start: 31.0, end: 31.3 },
+          { text: 'rồi', start: 31.3, end: 31.6 },
+        ],
+      },
+    ],
+    180,
+  );
+
+  assert.equal(aligned.timeline.length, 2);
+  assert.ok(aligned.firstVocalAt !== null);
+  assert.ok(aligned.firstVocalAt! > 23.5);
+  assert.ok(aligned.timeline.every((line) => line.start > 23.5));
+});
+
+void test('known-lyrics aligner leaves unmatched lyrics as honest gaps instead of inventing intro timing', () => {
+  const aligned = alignKnownLyricsToSegments(
+    'Câu không hề được hát\nCâu thật sự được hát',
+    [
+      {
+        text: 'nhạc dạo không lời',
+        start: 1,
+        end: 12,
+        words: [],
+      },
+      {
+        text: 'Câu thật sự được hát',
+        start: 20,
+        end: 23,
+        words: [
+          { text: 'Câu', start: 20, end: 20.2 },
+          { text: 'thật', start: 20.2, end: 20.5 },
+          { text: 'sự', start: 20.5, end: 20.7 },
+          { text: 'được', start: 20.7, end: 21.0 },
+          { text: 'hát', start: 21.0, end: 21.4 },
+        ],
+      },
+    ],
+    60,
+  );
+
+  assert.equal(aligned.timeline.length, 1);
+  assert.equal(aligned.timeline[0].text, 'Câu thật sự được hát');
+  assert.ok(aligned.timeline[0].start > 19.5);
 });
