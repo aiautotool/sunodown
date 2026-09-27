@@ -235,15 +235,24 @@ export async function POST(request: NextRequest) {
 
     const env = await getEnv();
 
-    // Keep dedicated faster-whisper compatible as an optional future upgrade.
-    // If it is unavailable, Cloudflare Workers AI is the production backend.
-    const external = await proxyExternal(env, audio, lyrics, language);
-    if (external) return external;
-
+    // The production path is Workers AI on short chunks. The dedicated
+    // external service remains only as a last-resort compatibility fallback.
     if (!env.AI) {
+      const external = await proxyExternal(env, audio, lyrics, language);
+      if (external) return external;
       return NextResponse.json(
-        { error: 'Workers AI binding chưa được cấu hình.' },
+        { error: 'Dịch vụ subtitle chưa sẵn sàng.' },
         { status: 503 },
+      );
+    }
+
+    if (
+      Number.isFinite(requestedDuration) &&
+      requestedDuration > 26.5
+    ) {
+      return NextResponse.json(
+        { error: 'Đoạn audio vượt giới hạn xử lý.' },
+        { status: 413 },
       );
     }
 
@@ -269,7 +278,7 @@ export async function POST(request: NextRequest) {
     const roughWords = extractWords(result);
     if (!roughWords.length) {
       return NextResponse.json(
-        { error: 'Cloudflare Whisper không trả về word timestamp.' },
+        { error: 'Không nhận diện được timestamp trong đoạn audio.' },
         { status: 422 },
       );
     }
@@ -284,7 +293,7 @@ export async function POST(request: NextRequest) {
       const lines = alignRoughWordsToLyrics(lyrics, roughWords, duration, { strictAnchors: true });
       if (!lines.length) {
         return NextResponse.json(
-          { error: 'Không căn được lyrics vào word timestamp.' },
+          { error: 'Không căn được lời vào đoạn audio.' },
           { status: 422 },
         );
       }
@@ -315,8 +324,8 @@ export async function POST(request: NextRequest) {
       {
         error:
           error instanceof Error
-            ? `Cloudflare Whisper lỗi: ${error.message}`
-            : 'Cloudflare Whisper không xử lý được audio.',
+            ? `Không xử lý được audio: ${error.message}`
+            : 'Không xử lý được audio.',
       },
       { status: 502 },
     );
