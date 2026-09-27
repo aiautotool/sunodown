@@ -988,68 +988,114 @@ export default function CreatorStudio() {
     setKaraokeSyncStatus('syncing');
     setKaraokeSyncMessage('Đang chuẩn bị subtitle…');
 
-    try {
-      const result = await runKaraokePipeline({
-        audio,
-        lyrics: target.lyrics,
-        duration,
-        language: 'vi',
-        onProgress: ({ stage }) => {
-          if (karaokeSyncRun.current !== syncRun) return;
-          const publicMessage =
-            stage === 'prepare'
-              ? 'Đang chuẩn bị subtitle…'
-              : stage === 'align'
-                ? 'Đang đồng bộ lời với bài hát…'
-                : stage === 'done'
-                  ? 'Subtitle đã sẵn sàng.'
-                  : 'Đang hoàn thiện subtitle…';
-          setKaraokeSyncMessage(publicMessage);
-        },
-      });
+    const delays = [0, 1400, 3600];
+    let lastError: unknown = null;
 
+    for (let attempt = 0; attempt < delays.length; attempt++) {
       if (karaokeSyncRun.current !== syncRun) return;
-      if (!result.timeline.length) {
-        throw new Error('Không tìm thấy lời có timestamp.');
+
+      if (delays[attempt] > 0) {
+        setKaraokeSyncMessage('Đang thử lại subtitle…');
+        await new Promise<void>((resolveDelay) =>
+          window.setTimeout(resolveDelay, delays[attempt]),
+        );
+        if (karaokeSyncRun.current !== syncRun) return;
       }
 
-      const publicResultMessage =
-        result.status === 'synced'
-          ? `Đã đồng bộ ${result.quality.alignedLines} câu subtitle.`
-          : 'Subtitle đã được tạo. Nên kiểm tra lại một vài đoạn trước khi xuất.';
+      try {
+        const result = await runKaraokePipeline({
+          audio,
+          lyrics: target.lyrics,
+          duration,
+          language: 'vi',
+          onProgress: ({ stage }) => {
+            if (karaokeSyncRun.current !== syncRun) return;
+            const publicMessage =
+              stage === 'prepare'
+                ? 'Đang chuẩn bị subtitle…'
+                : stage === 'done'
+                  ? 'Subtitle đã sẵn sàng.'
+                  : 'Đang xử lý subtitle…';
+            setKaraokeSyncMessage(publicMessage);
+          },
+        });
 
+        if (karaokeSyncRun.current !== syncRun) return;
+        if (!result.timeline.length) {
+          throw new Error('Không tìm thấy lời có timestamp.');
+        }
 
-      setKaraokeTimeline(result.timeline);
-      setKaraokeSyncStatus(result.status);
-      setKaraokeSyncMessage(publicResultMessage);
-      setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
-      setSubtitleNotice(publicResultMessage);
+        const publicResultMessage =
+          result.status === 'synced'
+            ? 'Subtitle đã sẵn sàng.'
+            : 'Subtitle đã được tạo. Nên kiểm tra lại trước khi xuất.';
 
-      track(
-        result.status === 'synced'
-          ? 'karaoke_auto_sync_succeeded'
-          : 'karaoke_auto_sync_fallback',
-        {
-          engine: result.engine,
-          confidence: result.quality.confidence,
-          lines: result.timeline.length,
-          issues: result.quality.issues.length,
-          attempts: result.attempts.length,
-        },
-      );
-    } catch (syncError) {
-      if (karaokeSyncRun.current !== syncRun) return;
-      console.warn('[karaoke-background-sync]', syncError);
-      setKaraokeTimeline([]);
-      setKaraokeSyncStatus('idle');
-      setKaraokeSyncMessage('Chưa thể tạo subtitle tự động. Vui lòng thử lại.');
-      track('karaoke_auto_sync_failed', {
-        reason:
-          syncError instanceof Error
-            ? syncError.message.slice(0, 120)
-            : 'unknown',
-      });
+        setKaraokeTimeline(result.timeline);
+        setKaraokeSyncStatus(result.status);
+        setKaraokeSyncMessage(publicResultMessage);
+        setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
+        setSubtitleNotice(publicResultMessage);
+
+        track(
+          result.status === 'synced'
+            ? 'karaoke_auto_sync_succeeded'
+            : 'karaoke_auto_sync_fallback',
+          {
+            engine: result.engine,
+            confidence: result.quality.confidence,
+            lines: result.timeline.length,
+            issues: result.quality.issues.length,
+            attempts: result.attempts.length,
+            job_attempt: attempt + 1,
+          },
+        );
+        return;
+      } catch (syncError) {
+        lastError = syncError;
+        if (karaokeSyncRun.current !== syncRun) return;
+        console.warn('[karaoke-background-sync]', {
+          attempt: attempt + 1,
+          error: syncError,
+        });
+
+        track('karaoke_auto_sync_attempt_failed', {
+          attempt: attempt + 1,
+          reason:
+            syncError instanceof Error
+              ? syncError.message.slice(0, 120)
+              : 'unknown',
+        });
+      }
     }
+
+    if (karaokeSyncRun.current !== syncRun) return;
+    setKaraokeTimeline([]);
+    setKaraokeSyncStatus('fallback');
+    setKaraokeSyncMessage('Chưa tạo được subtitle.');
+    track('karaoke_auto_sync_failed', {
+      attempts: delays.length,
+      reason:
+        lastError instanceof Error
+          ? lastError.message.slice(0, 120)
+          : 'unknown',
+    });
+  }
+
+  function retrySubtitleSync() {
+    if (!song || !audioBinary) return;
+    const syncRun = ++karaokeSyncRun.current;
+    setKaraokeTimeline([]);
+    setKaraokeSyncStatus('syncing');
+    setKaraokeSyncMessage('Đang thử lại subtitle…');
+    void generateSubtitlesInBackground(
+      song,
+      audioBinary,
+      song.duration || trimEnd || 30,
+      syncRun,
+    );
+    track('karaoke_manual_retry_started', {
+      has_lyrics: Boolean(song.lyrics),
+    });
   }
 
   async function resolve(
@@ -2220,9 +2266,23 @@ export default function CreatorStudio() {
                       ? 'Đang xử lý subtitle…'
                       : karaokeSyncStatus === 'synced'
                         ? 'Subtitle đã sẵn sàng'
-                        : 'Subtitle cần kiểm tra lại'}
+                        : karaokeTimeline.length
+                          ? 'Subtitle cần kiểm tra lại'
+                          : 'Chưa tạo được subtitle'}
                   </b>
                 </span>
+                {karaokeSyncStatus === 'fallback' &&
+                  !karaokeTimeline.length &&
+                  song &&
+                  audioBinary && (
+                    <button
+                      type="button"
+                      onClick={retrySubtitleSync}
+                      aria-label="Thử lại subtitle"
+                    >
+                      Thử lại
+                    </button>
+                  )}
               </output>
             )}
             {quickMode && (
