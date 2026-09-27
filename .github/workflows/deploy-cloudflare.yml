@@ -62,6 +62,21 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           AI_RENDER_TOKEN: ${{ secrets.AI_RENDER_TOKEN }}
+      - name: Configure karaoke backend
+        run: |
+          if [ -n "$KARAOKE_ALIGN_URL" ]; then
+            printf '%s' "$KARAOKE_ALIGN_URL" | npx wrangler secret put KARAOKE_ALIGN_URL --config wrangler.v6.generated.json
+            if [ -n "$KARAOKE_ALIGN_TOKEN" ]; then
+              printf '%s' "$KARAOKE_ALIGN_TOKEN" | npx wrangler secret put KARAOKE_ALIGN_TOKEN --config wrangler.v6.generated.json
+            fi
+          else
+            echo "::warning::KARAOKE_ALIGN_URL is not configured; mobile Whisper will fall back to CapCut."
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          KARAOKE_ALIGN_URL: ${{ secrets.KARAOKE_ALIGN_URL }}
+          KARAOKE_ALIGN_TOKEN: ${{ secrets.KARAOKE_ALIGN_TOKEN }}
+
       - name: Configure Web Push
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v12' || github.ref == 'refs/heads/v17' || github.ref == 'refs/heads/v20.1'
         run: |
