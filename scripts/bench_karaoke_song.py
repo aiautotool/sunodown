@@ -114,22 +114,23 @@ def download_audio(song: dict[str, Any], target: Path) -> bytes:
     return r.content
 
 
-def call_prod_backend(audio_path: Path, lyrics: str, duration: float) -> dict[str, Any]:
+def call_prod_backend(audio_path: Path, lyrics: str, duration: float) -> tuple[int, dict[str, Any]]:
     with audio_path.open("rb") as fh:
+        payload = {"duration": str(duration), "language": LANGUAGE}
+        if lyrics:
+            payload["lyrics"] = lyrics
         r = requests.post(
             f"{BASE_URL}/api/karaoke/align",
             files={"audio": ("song.mp3", fh, "audio/mpeg")},
-            data={"lyrics": lyrics, "duration": str(duration), "language": LANGUAGE},
+            data=payload,
             timeout=240,
         )
-    body = {}
+    body: dict[str, Any] = {}
     try:
         body = r.json()
     except Exception:
         body = {"raw": r.text[:1000]}
-    if not r.ok:
-        raise RuntimeError(f"production backend HTTP {r.status_code}: {body}")
-    return body
+    return r.status_code, body
 
 
 def transcribe_local(audio_path: Path) -> list[dict[str, Any]]:
@@ -346,24 +347,43 @@ def markdown(summary: dict[str, Any], rows: list[dict[str, Any]]) -> str:
     out = [
         "# Karaoke benchmark",
         "",
-        f"- Song: {summary['title']} ({summary['song_id']})",
-        f"- Backend engine: {summary['backend_engine']}",
-        f"- Compared lines: {summary['compared_lines']}",
-        f"- Median start delta: {summary['median_start_delta']}s (negative = production is early)",
-        f"- P90 absolute start delta: {summary['p90_abs_start_delta']}s",
-        f"- Median line shift: {summary['median_line_shift']}",
-        f"- Early lines beyond threshold: {summary['early_lines']}",
-        "",
-        "| # | Backend | Reference | Δ start | nearest ref line | shift | text |",
-        "|---:|---:|---:|---:|---:|---:|---|",
+        f"- Song: {summary.get('title')} ({summary.get('song_id')})",
+        f"- Backend engine: {summary.get('backend_engine')}",
     ]
-    for row in rows[:80]:
-        text = row["text"].replace("|", "\\|")[:80]
-        out.append(
-            f"| {row['line']} | {row['backend_start']:.3f} | {row['reference_start']:.3f} | {row['start_delta']:+.3f} | {row['nearest_reference_line']} | {row['line_shift']} | {text} |"
-        )
+    if "backend_align_http" in summary:
+        out += [
+            f"- Production align HTTP: {summary.get('backend_align_http')}",
+            f"- Production align error: {summary.get('backend_align_error')}",
+            f"- Workers AI raw words: {summary.get('backend_raw_words')}",
+            f"- Workers AI anchored lines: {summary.get('workers_anchored_lines')}",
+            f"- faster-whisper anchored lines: {summary.get('local_anchored_lines')}",
+            f"- Median WorkersAI - faster-whisper start: {summary.get('median_workers_minus_local')}s",
+            "",
+            "| # | Workers AI | faster-whisper | Δ | WA anchors | local anchors | text |",
+            "|---:|---:|---:|---:|---:|---:|---|",
+        ]
+        for row in rows[:100]:
+            text = row["text"].replace("|", "\\|")[:80]
+            out.append(
+                f"| {row['line']} | {row.get('workers_start')} | {row.get('local_start')} | {row.get('workers_minus_local')} | {row.get('workers_anchors')} | {row.get('local_anchors')} | {text} |"
+            )
+    else:
+        out += [
+            f"- Compared lines: {summary.get('compared_lines')}",
+            f"- Median start delta: {summary.get('median_start_delta')}s (negative = production is early)",
+            f"- P90 absolute start delta: {summary.get('p90_abs_start_delta')}s",
+            f"- Median line shift: {summary.get('median_line_shift')}",
+            f"- Early lines beyond threshold: {summary.get('early_lines')}",
+            "",
+            "| # | Backend | Reference | Δ start | nearest ref line | shift | text |",
+            "|---:|---:|---:|---:|---:|---:|---|",
+        ]
+        for row in rows[:80]:
+            text = row["text"].replace("|", "\\|")[:80]
+            out.append(
+                f"| {row['line']} | {row['backend_start']:.3f} | {row['reference_start']:.3f} | {row['start_delta']:+.3f} | {row['nearest_reference_line']} | {row['line_shift']} | {text} |"
+            )
     return "\n".join(out) + "\n"
-
 
 def main() -> int:
     song = resolve_song()
@@ -376,12 +396,87 @@ def main() -> int:
         audio_path = Path(tmp) / "song.mp3"
         audio_bytes = download_audio(song, audio_path)
         print(f"[bench] resolved {song.get('title')} id={song.get('id')} duration={duration}s audio={len(audio_bytes)/1024/1024:.2f}MB")
-        backend = call_prod_backend(audio_path, lyrics, duration)
-        print(f"[bench] production backend engine={(backend.get('meta') or {}).get('engine')} lines={len(backend.get('lines') or [])}")
-        asr = transcribe_local(audio_path)
-        print(f"[bench] independent faster-whisper words={len(asr)} model={MODEL_NAME}")
-        refs = align_reference(lyric_lines(lyrics), asr)
-        summary, rows = analyze(song, backend, refs)
+        raw_status, raw_backend = call_prod_backend(audio_path, "", duration)
+        print(
+            f"[bench] production raw transcription HTTP={raw_status} "
+            f"engine={(raw_backend.get('meta') or {}).get('engine')} "
+            f"words={len(raw_backend.get('words') or [])}"
+        )
+        if raw_status != 200:
+            raise RuntimeError(f"production raw transcription HTTP {raw_status}: {raw_backend}")
+
+        align_status, backend = call_prod_backend(audio_path, lyrics, duration)
+        print(
+            f"[bench] production lyric alignment HTTP={align_status} "
+            f"engine={(backend.get('meta') or {}).get('engine')} "
+            f"lines={len(backend.get('lines') or [])}"
+        )
+
+        production_words = [
+            {
+                "text": str(word.get("text") or word.get("word") or "").strip(),
+                "start": float(word.get("start") or 0),
+                "end": float(word.get("end") or 0),
+                "probability": float(word.get("probability") or word.get("confidence") or 0),
+            }
+            for word in (raw_backend.get("words") or [])
+            if str(word.get("text") or word.get("word") or "").strip()
+        ]
+
+        local_asr = transcribe_local(audio_path)
+        print(f"[bench] independent faster-whisper words={len(local_asr)} model={MODEL_NAME}")
+
+        original_lines = lyric_lines(lyrics)
+        workers_refs = align_reference(original_lines, production_words)
+        local_refs = align_reference(original_lines, local_asr)
+
+        workers_anchored = sum(1 for ref in workers_refs if ref)
+        local_anchored = sum(1 for ref in local_refs if ref)
+        print(f"[bench] anchored lyric lines workers-ai={workers_anchored} faster-whisper={local_anchored}")
+        print("[bench] workers-ai first words:", " | ".join(word["text"] for word in production_words[:40]))
+        print("[bench] local first words:", " | ".join(word["text"] for word in local_asr[:40]))
+
+        diagnostic_rows = []
+        for idx, text in enumerate(original_lines):
+            wr = workers_refs[idx] if idx < len(workers_refs) else None
+            lr = local_refs[idx] if idx < len(local_refs) else None
+            if wr or lr:
+                diagnostic_rows.append({
+                    "line": idx + 1,
+                    "text": text,
+                    "workers_start": round(wr["start"], 3) if wr else None,
+                    "local_start": round(lr["start"], 3) if lr else None,
+                    "workers_minus_local": round(wr["start"] - lr["start"], 3) if wr and lr else None,
+                    "workers_anchors": wr["anchors"] if wr else 0,
+                    "local_anchors": lr["anchors"] if lr else 0,
+                })
+
+        if align_status == 200 and backend.get("lines"):
+            summary, rows = analyze(song, backend, local_refs)
+        else:
+            deltas = [
+                row["workers_minus_local"]
+                for row in diagnostic_rows
+                if row["workers_minus_local"] is not None
+            ]
+            summary = {
+                "song_url": SONG_URL,
+                "title": song.get("title"),
+                "song_id": song.get("id"),
+                "duration": song.get("duration"),
+                "resolved_by": song.get("_resolved_by"),
+                "backend_engine": (raw_backend.get("meta") or {}).get("engine"),
+                "backend_align_http": align_status,
+                "backend_align_error": backend.get("error") or backend.get("detail"),
+                "backend_raw_words": len(production_words),
+                "workers_anchored_lines": workers_anchored,
+                "local_anchored_lines": local_anchored,
+                "compared_lines": len(deltas),
+                "median_workers_minus_local": round(statistics.median(deltas), 3) if deltas else None,
+                "mean_workers_minus_local": round(statistics.mean(deltas), 3) if deltas else None,
+                "threshold_seconds": MAX_EARLY_SECONDS,
+            }
+            rows = diagnostic_rows
 
     Path("bench-result.json").write_text(
         json.dumps({"summary": summary, "rows": rows}, ensure_ascii=False, indent=2),
@@ -397,12 +492,19 @@ def main() -> int:
     if not rows:
         print("BENCH_FAIL: no comparable lyric lines", file=sys.stderr)
         return 2
-    median_delta = summary["median_start_delta"]
+    if summary.get("backend_align_http") != 200:
+        print(
+            f"BENCH_FAIL: production backend cannot align this real song "
+            f"(HTTP {summary.get('backend_align_http')})",
+            file=sys.stderr,
+        )
+        return 5
+    median_delta = summary.get("median_start_delta")
     if median_delta is not None and median_delta < -MAX_EARLY_SECONDS:
         print(f"BENCH_FAIL: production subtitles are globally early by median {median_delta}s", file=sys.stderr)
         return 3
-    if any(abs(int(row["line_shift"])) >= 1 for row in rows if row["line_shift"] is not None):
-        shifted = [row for row in rows if row["line_shift"] not in (None, 0)]
+    if any(abs(int(row["line_shift"])) >= 1 for row in rows if row.get("line_shift") is not None):
+        shifted = [row for row in rows if row.get("line_shift") not in (None, 0)]
         if len(shifted) >= max(2, math.ceil(len(rows) * 0.15)):
             print(f"BENCH_FAIL: {len(shifted)} lines map closer to the wrong reference phrase", file=sys.stderr)
             return 4
