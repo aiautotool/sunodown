@@ -110,6 +110,7 @@ import {
 } from '@/components/project-store';
 
 type Song = {
+  sourceToken?: string;
   title: string;
   creator?: string;
   duration?: number;
@@ -136,6 +137,8 @@ const valid = (value: string) => {
     return false;
   }
 };
+const validSourceInput = (value: string) =>
+  valid(value) || (/^[A-Za-z0-9_-]+\.\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value) && value.length <= 5000);
 const renderSong = (song: Song) => ({
   id: null,
   title: song.title,
@@ -668,11 +671,15 @@ export default function CreatorStudio() {
   const karaokeSyncRun = useRef(0);
   const initialRouteHandled = useRef(false);
 
-  const updateEditorUrl = (source: string, saved = false) => {
+  const updateEditorUrl = (source: string, saved = false, replace = false) => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams();
     params.set(saved ? 'project' : 'source', source);
-    window.history.pushState({ editor: true, source }, '', `/editor?${params}`);
+    window.history[replace ? 'replaceState' : 'pushState'](
+      { editor: true, source },
+      '',
+      `/editor?${params}`,
+    );
   };
 
   useEffect(() => {
@@ -1062,10 +1069,10 @@ export default function CreatorStudio() {
 
   async function resolve(
     value = url,
-    options: { generateSubtitles?: boolean; updateUrl?: boolean } = {},
+    options: { generateSubtitles?: boolean; updateUrl?: boolean; replaceUrl?: boolean } = {},
   ): Promise<Song | null> {
     const startedAt = performance.now();
-    if (!valid(value)) {
+    if (!validSourceInput(value)) {
       setError('Hãy dán liên kết Suno hợp lệ.');
       track('song_resolve_failed', { reason: 'invalid_url' });
       return null;
@@ -1109,6 +1116,8 @@ export default function CreatorStudio() {
         style: typeof data.style === 'string' ? data.style : '',
         tags: typeof data.tags === 'string' ? data.tags : '',
       };
+      const privateSource = hydrated.sourceToken || value;
+      setUrl(privateSource);
 
       setInitProgress(24);
       setInitTitle('Đang tải âm thanh');
@@ -1158,7 +1167,7 @@ export default function CreatorStudio() {
       setInitTitle('Sẵn sàng');
       setInitDetail('Mọi dữ liệu đã được khởi tạo.');
       setSong(hydrated);
-      if (options.updateUrl !== false) updateEditorUrl(value);
+      if (options.updateUrl !== false) updateEditorUrl(privateSource, false, options.replaceUrl);
       if (options.generateSubtitles !== false) {
         void generateSubtitlesInBackground(hydrated, source, duration, syncRun);
       }
@@ -1506,9 +1515,9 @@ export default function CreatorStudio() {
     const source = params.get('source');
     if (projectId) {
       void openProject({ url: projectId, title: 'Dự án đã lưu' });
-    } else if (source && valid(source)) {
+    } else if (source && validSourceInput(source)) {
       setUrl(source);
-      void resolve(source, { updateUrl: false });
+      void resolve(source, { replaceUrl: true });
     }
   }, []);
   useEffect(() => {

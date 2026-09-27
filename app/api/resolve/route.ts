@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createMediaToken } from '../../lib/media-token';
+import { createMediaToken, verifyMediaToken } from '../../lib/media-token';
 
 function validSunoUrl(value: unknown): value is string {
   if (typeof value !== 'string' || value.length > 500) return false;
@@ -39,8 +39,10 @@ function mediaSource(mediaUrls:Array<Record<string,unknown>>,format:'mp3'|'m4a')
 export async function POST(request:NextRequest){
  try{
   const {input}=await request.json();
-  if(!validSunoUrl(input))return NextResponse.json({error:'Vui lòng nhập một liên kết Suno hợp lệ.'},{status:400});
-  const clipId=await resolveClipId(input);
+  const suppliedSourceToken=typeof input==='string'&&!validSunoUrl(input)?input:null;
+  const source=validSunoUrl(input)?input:await verifyMediaToken(suppliedSourceToken,'source');
+  if(!source||!validSunoUrl(source))return NextResponse.json({error:'Nguồn bài hát không hợp lệ hoặc đã hết hạn.'},{status:400});
+  const clipId=await resolveClipId(source);
   if(!clipId)return NextResponse.json({error:'Không tìm thấy mã bài hát trong link Suno.'},{status:502});
   const clipResponse=await fetch(`https://studio-api-prod.suno.com/api/clip/${clipId}`,{headers:{accept:'application/json','user-agent':'Mozilla/5.0'},cache:'no-store'});
   if(!clipResponse.ok)return NextResponse.json({error:`Không lấy được metadata bài hát từ Suno (HTTP ${clipResponse.status}).`},{status:502});
@@ -52,12 +54,12 @@ export async function POST(request:NextRequest){
   if(typeof audioSource!=='string'||audioSource.includes('/api/forbidden'))return NextResponse.json({error:'Suno chưa cung cấp nguồn âm thanh cho bài này.'},{status:502});
   const videoSource=typeof clip.video_url==='string'&&clip.video_url.startsWith('https://')?clip.video_url:null;
   const picture=typeof clip.image_large_url==='string'?clip.image_large_url:typeof clip.image_url==='string'?clip.image_url:null;
-  const [audioToken,videoToken,pictureToken]=await Promise.all([createMediaToken(audioSource,'audio'),videoSource?createMediaToken(videoSource,'audio'):null,picture?createMediaToken(picture,'image'):null]);
+  const [audioToken,videoToken,pictureToken,sourceToken]=await Promise.all([createMediaToken(audioSource,'audio'),videoSource?createMediaToken(videoSource,'audio'):null,picture?createMediaToken(picture,'image'):null,suppliedSourceToken??createMediaToken(source,'source',31536000)]);
   const audio=`/api/audio?token=${encodeURIComponent(audioToken)}`;
   const lyrics=firstString(metadata?.prompt,metadata?.lyrics,clip.lyrics,clip.prompt);
   const description=firstString(clip.description,metadata?.description);
   return NextResponse.json({
-   id:clipId,title:firstString(clip.title)||'Suno audio',picture:pictureToken?`/api/image?token=${encodeURIComponent(pictureToken)}`:null,
+   id:clipId,sourceToken,title:firstString(clip.title)||'Suno audio',picture:pictureToken?`/api/image?token=${encodeURIComponent(pictureToken)}`:null,
    audio,sourceAudio:audio,video:videoToken?`/api/audio?token=${encodeURIComponent(videoToken)}`:null,
    description:description||null,lyrics:lyrics||null,
    style:firstString(metadata?.tags,clip.display_tags)||null,tags:firstString(metadata?.tags,clip.display_tags)||null,
