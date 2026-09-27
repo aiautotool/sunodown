@@ -1,0 +1,20 @@
+services:
+  karaoke-align:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    container_name: sunodown-karaoke-align
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8011:8000"
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-medium}
+      WHISPER_DEVICE: cpu
+      WHISPER_COMPUTE_TYPE: int8
+      DISABLE_DEMUCS: ${DISABLE_DEMUCS:-1}
+      KARAOKE_ALIGN_TOKEN: ${KARAOKE_ALIGN_TOKEN}
+    volumes:
+      - whisper-cache:/root/.cache/huggingface
+
+volumes:
+  whisper-cache:
