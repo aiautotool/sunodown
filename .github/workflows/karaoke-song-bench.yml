@@ -22,16 +22,40 @@ jobs:
         with:
           python-version: '3.11'
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
       - name: Install benchmark dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests faster-whisper==1.2.0
 
+      - name: Start isolated Workers AI benchmark
+        run: |
+          npx wrangler dev --config scripts/karaoke-ai-bench.wrangler.jsonc --ip 127.0.0.1 --port 8791 > /tmp/karaoke-ai-bench.log 2>&1 &
+          echo $! > /tmp/karaoke-ai-bench.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8791/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/karaoke-ai-bench.log
+          exit 1
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
       - name: Benchmark real Suno song against production backend
         env:
           SONG_URL: https://suno.com/s/tszo0jGdVUua4rT4
           BASE_URL: https://sunoapp.aiautotool.com
-          BENCH_WHISPER_MODEL: small
+          BENCH_WHISPER_MODEL: medium
+          BENCH_AI_URL: http://127.0.0.1:8791
           BENCH_LANGUAGE: vi
           MAX_EARLY_SECONDS: '0.45'
         run: python scripts/bench_karaoke_song.py
