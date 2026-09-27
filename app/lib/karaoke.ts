@@ -11,6 +11,9 @@ export type KaraokeLine = {
   end: number;
   words: KaraokeWord[];
   timingSource?: 'anchored' | 'interpolated' | 'estimated';
+  lyricIndex?: number;
+  anchorCount?: number;
+  anchorDensity?: number;
 };
 
 export function visibleLyricLines(lyrics: string) {
@@ -628,13 +631,74 @@ export function alignRoughWordsToLyrics(
     return consecutive || strongUnique ? asrIndex : null;
   });
 
+  const medianNumber = (values: number[]) => {
+    if (!values.length) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2
+      ? sorted[middle]
+      : (sorted[middle - 1] + sorted[middle]) / 2;
+  };
+
   const lineAnchors = lines.map((text, lineIndex) => {
     const indexes = lineTokenIndexes[lineIndex];
-    const matched = indexes
-      .map((index) => trustedMatches[index])
-      .filter((value): value is number => value != null);
-    if (!matched.length) return null;
-    return { start: asr[matched[0]].start, end: asr[matched.at(-1)!].end };
+    const pairs = indexes
+      .map((globalIndex, wordIndex) => {
+        const asrIndex = trustedMatches[globalIndex];
+        return asrIndex == null ? null : { wordIndex, asrIndex };
+      })
+      .filter(
+        (value): value is { wordIndex: number; asrIndex: number } =>
+          value != null,
+      );
+    if (!pairs.length) return null;
+
+    const lyricWords = text.split(/\s+/).filter(Boolean);
+    const weights = lyricWords.map(wordWeight);
+    const cumulative: number[] = [];
+    let running = 0;
+    for (const weight of weights) {
+      cumulative.push(running);
+      running += weight;
+    }
+    const totalWeight = Math.max(1, running);
+    const xs = pairs.map(
+      ({ wordIndex }) => (cumulative[wordIndex] || 0) / totalWeight,
+    );
+    const ys = pairs.map(({ asrIndex }) => asr[asrIndex].start);
+    const slopes: number[] = [];
+    for (let left = 0; left < xs.length; left++) {
+      for (let right = left + 1; right < xs.length; right++) {
+        const dx = xs[right] - xs[left];
+        const dt = ys[right] - ys[left];
+        if (dx <= 0.04 || dt <= 0.05) continue;
+        const slope = dt / dx;
+        if (slope >= 0.4 && slope <= 18) slopes.push(slope);
+      }
+    }
+
+    const first = pairs[0];
+    const last = pairs.at(-1)!;
+    const firstStart = asr[first.asrIndex].start;
+    const fallbackSlope = Math.max(
+      0.5,
+      asr[last.asrIndex].end - firstStart,
+    );
+    const slope = slopes.length ? medianNumber(slopes) : fallbackSlope;
+    const intercepts = xs.map((x, index) => ys[index] - slope * x);
+    const inferredStart = medianNumber(intercepts);
+    const start = Math.max(
+      0,
+      firstStart - 1.2,
+      Math.min(firstStart, inferredStart),
+    );
+
+    return {
+      start,
+      end: asr[last.asrIndex].end,
+      anchorCount: pairs.length,
+      anchorDensity: pairs.length / Math.max(1, indexes.length),
+    };
   });
   if (!lineAnchors.some(Boolean))
     return options.strictAnchors
@@ -649,7 +713,9 @@ export function alignRoughWordsToLyrics(
 
     let start: number, end: number;
     if (anchor) {
-      start = Math.max(0, anchor.start - 0.06);
+      // Bench-tested on a real Suno song: do not add a negative presentation
+      // lead here. The robust anchor already estimates the sung phrase onset.
+      start = Math.max(0, anchor.start);
       // Preserve the ASR end of a sustained word, but do not consume an
       // instrumental pause by extending to the next recognized token.
       end = Math.min(duration, Math.max(start + 0.12, anchor.end + 0.12));
@@ -783,6 +849,9 @@ export function alignRoughWordsToLyrics(
       end,
       words,
       timingSource: anchor ? 'anchored' : 'interpolated',
+      lyricIndex: lineIndex,
+      anchorCount: anchor?.anchorCount ?? 0,
+      anchorDensity: anchor?.anchorDensity ?? 0,
     } satisfies KaraokeLine];
   });
   return normalizeKaraokeTimeline(built, duration);
