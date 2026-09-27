@@ -223,18 +223,17 @@ def main() -> int:
         download_audio(song, audio_path)
 
         turbo_payload = call_ai(audio_path, "turbo")
-        classic_payload = call_ai(audio_path, "classic")
         turbo = words_from_result(turbo_payload)
-        classic = words_from_result(classic_payload)
+        print("[bench] turbo raw result:", json.dumps(turbo_payload.get("result", {}), ensure_ascii=False)[:1800])
         local = local_words(audio_path)
+        classic = []
 
     turbo_refs = align(lines, turbo)
     classic_refs = align(lines, classic)
     local_refs = align(lines, local)
 
-    print("[bench] turbo words", len(turbo), "classic words", len(classic), "local words", len(local))
+    print("[bench] turbo words", len(turbo), "local words", len(local))
     print("[bench] turbo first:", " | ".join(x["text"] for x in turbo[:35]))
-    print("[bench] classic first:", " | ".join(x["text"] for x in classic[:35]))
     print("[bench] local first:", " | ".join(x["text"] for x in local[:35]))
 
     rows = []
