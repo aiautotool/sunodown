@@ -1,7 +1,4 @@
-import {
-  buildEstimatedKaraokeTimeline,
-  type KaraokeLine,
-} from './karaoke';
+import { type KaraokeLine } from './karaoke';
 import { buildBackendKaraokeTimeline } from './karaoke-backend-sync';
 import { buildCapCutKaraokeTimeline } from './karaoke-capcut-sync';
 import { isMobileKaraokeDevice } from './karaoke-device';
@@ -26,8 +23,7 @@ export type KaraokeEngineId =
   | 'backend-whisper-transcription'
   | 'capcut'
   | 'local-whisper'
-  | 'local-whisper-transcription'
-  | 'estimated';
+  | 'local-whisper-transcription';
 
 export type KaraokePipelineStage =
   | 'prepare'
@@ -334,7 +330,7 @@ export async function runKaraokePipeline({
     }
   }
 
-  if (bestTimed && bestTimed.quality.confidence >= 35) {
+  if (bestTimed && bestTimed.quality.confidence >= 50) {
     onProgress?.({
       stage: 'fallback',
       engine: bestTimed.engine,
@@ -349,36 +345,6 @@ export async function runKaraokePipeline({
     };
   }
 
-  if (hasLyrics) {
-    onProgress?.({
-      stage: 'fallback',
-      engine: 'estimated',
-      message: 'Không đủ confidence; đang tạo timing dự phòng để chỉnh tay…',
-    });
-    const timeline = buildEstimatedKaraokeTimeline(lyrics!, duration);
-    const quality = validateKaraokeTimeline(timeline, duration, {
-      lyrics,
-      source: 'estimated',
-    });
-    attempts.push({
-      engine: 'estimated',
-      ok: Boolean(timeline.length),
-      confidence: quality.confidence,
-    });
-    if (timeline.length) {
-      return {
-        timeline: quality.timeline,
-        status: 'fallback',
-        engine: 'estimated',
-        quality,
-        attempts,
-      };
-    }
-  }
 
-  throw new Error(
-    mobile
-      ? 'Whisper backend không tạo được subtitle đáng tin cậy.'
-      : 'Không tìm thấy subtitle có timestamp đáng tin cậy.',
-  );
+  throw new Error('Không tìm thấy subtitle có timestamp đủ tin cậy.');
 }
