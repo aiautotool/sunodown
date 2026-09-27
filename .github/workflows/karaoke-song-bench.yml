@@ -65,6 +65,7 @@ jobs:
           BENCH_WHISPER_MODEL: medium
           BENCH_LANGUAGE: vi
           CHUNK_SIZES: '24'
+          CHUNK_OVERLAPS: '4'
         run: python scripts/bench_chunked_turbo.py
 
       - name: Upload benchmark report
