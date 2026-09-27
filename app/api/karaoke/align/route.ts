@@ -249,28 +249,22 @@ export async function POST(request: NextRequest) {
 
     const base64 = Buffer.from(await audio.arrayBuffer()).toString('base64');
 
-    // The classic Cloudflare Whisper endpoint exposes word-level start/end.
-    // Original Suno lyrics remain the source of truth; Whisper is used mainly
-    // for acoustic timing and is followed by our monotonic lyric alignment.
-    let result: AiWhisperResult;
-    try {
-      result = (await env.AI.run('@cf/openai/whisper', {
-        audio: base64,
-      })) as AiWhisperResult;
-    } catch (primaryError) {
-      // Large-v3-turbo is a stronger lexical fallback. Some deployments return
-      // segment-level timing only; extractWords() handles both forms.
-      result = (await env.AI.run('@cf/openai/whisper-large-v3-turbo', {
-        audio: base64,
-        task: 'transcribe',
-        language,
-        vad_filter: true,
-        beam_size: 5,
-        condition_on_previous_text: false,
-        hallucination_silence_threshold: 1,
-      })) as AiWhisperResult;
-      console.warn('[workers-ai-whisper-fallback]', primaryError);
-    }
+    // Bench result for sung Vietnamese:
+    // - classic Whisper hallucinated unrelated "subscribe" speech;
+    // - Turbo with speech VAD discarded almost the entire song;
+    // - Turbo on short, pre-cut chunks with VAD disabled tracked vocals well.
+    // The client therefore sends <=24s chunks and owns cross-chunk consensus.
+    const result = (await env.AI.run('@cf/openai/whisper-large-v3-turbo', {
+      audio: base64,
+      task: 'transcribe',
+      language,
+      vad_filter: false,
+      beam_size: 5,
+      condition_on_previous_text: false,
+      no_speech_threshold: 0.55,
+      compression_ratio_threshold: 2.2,
+      log_prob_threshold: -1,
+    })) as AiWhisperResult;
 
     const roughWords = extractWords(result);
     if (!roughWords.length) {
@@ -298,7 +292,7 @@ export async function POST(request: NextRequest) {
         lines,
         words: roughWords,
         meta: {
-          engine: 'cloudflare-workers-ai-whisper',
+          engine: 'cloudflare-workers-ai-whisper-turbo-chunk',
           language,
           lyrics_words: lyrics.split(/\s+/).filter(Boolean).length,
           asr_words: roughWords.length,
@@ -310,7 +304,7 @@ export async function POST(request: NextRequest) {
       lines: wordsToLines(roughWords, duration),
       words: roughWords,
       meta: {
-        engine: 'cloudflare-workers-ai-whisper',
+        engine: 'cloudflare-workers-ai-whisper-turbo-chunk',
         language,
         asr_words: roughWords.length,
       },
