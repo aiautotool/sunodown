@@ -220,7 +220,12 @@ export function activeKaraokeLine(lines: KaraokeLine[], time: number) {
 export function karaokeOverlayState(lines: KaraokeLine[], time: number) {
   const state = activeKaraokeLine(lines, time);
   return state.line
-    ? state
+    ? {
+        ...state,
+        // Preview/render must never expose an upcoming phrase. The next cue is
+        // editor context only, not part of the karaoke presentation.
+        next: null as KaraokeLine | null,
+      }
     : {
         line: null as KaraokeLine | null,
         next: null as KaraokeLine | null,
