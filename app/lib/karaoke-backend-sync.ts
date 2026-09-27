@@ -232,6 +232,12 @@ function cleanWord(word: BackendWord): RoughWord | null {
   };
 }
 
+const CHUNK_RETRY_DELAYS_MS = [0, 700, 1800];
+const RETRYABLE_HTTP = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
 async function transcribeChunk(
   pcm16k: Float32Array,
   plan: KaraokeChunkPlan,
@@ -248,36 +254,74 @@ async function transcribeChunk(
 
   const wav = encodeMonoPcm16Wav(slice);
   const actualDuration = slice.length / SAMPLE_RATE;
-  const form = new FormData();
-  form.set(
-    'audio',
-    new File([wav], `karaoke-${index}.wav`, { type: 'audio/wav' }),
-  );
-  form.set('duration', String(actualDuration));
-  form.set('language', language);
+  let lastError: unknown = null;
 
-  const response = await fetch('/api/karaoke/align', {
-    method: 'POST',
-    body: form,
-  });
-  const data = (await response.json().catch(() => ({}))) as BackendResponse;
-  if (!response.ok) {
-    throw new Error(data.error || data.detail || 'Không xử lý được đoạn audio.');
+  for (let attempt = 0; attempt < CHUNK_RETRY_DELAYS_MS.length; attempt++) {
+    if (CHUNK_RETRY_DELAYS_MS[attempt] > 0) {
+      await sleep(CHUNK_RETRY_DELAYS_MS[attempt]);
+    }
+
+    const form = new FormData();
+    form.set(
+      'audio',
+      new File([wav], `karaoke-${index}.wav`, { type: 'audio/wav' }),
+    );
+    form.set('duration', String(actualDuration));
+    form.set('language', language);
+
+    try {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 75_000);
+      let response: Response;
+      try {
+        response = await fetch('/api/karaoke/align', {
+          method: 'POST',
+          body: form,
+          signal: controller.signal,
+        });
+      } finally {
+        window.clearTimeout(timeout);
+      }
+
+      const data = (await response.json().catch(() => ({}))) as BackendResponse;
+
+      // A silent/instrumental chunk is a valid result, not a job failure.
+      // The staggered neighboring chunk can still carry the surrounding vocal.
+      if (response.status === 422) return [];
+
+      if (!response.ok) {
+        const error = new Error(
+          data.error || data.detail || 'Không xử lý được đoạn audio.',
+        );
+        lastError = error;
+        if (RETRYABLE_HTTP.has(response.status) && attempt < CHUNK_RETRY_DELAYS_MS.length - 1) {
+          continue;
+        }
+        throw error;
+      }
+
+      return (data.words || [])
+        .map(cleanWord)
+        .filter((word): word is RoughWord => Boolean(word))
+        .map((word) => ({
+          ...word,
+          start: word.start + plan.start,
+          end: word.end + plan.start,
+          edge: Math.max(
+            0,
+            Math.min(word.start, Math.max(0, actualDuration - word.end)),
+          ),
+          chunkStart: plan.start,
+        }));
+    } catch (error) {
+      lastError = error;
+      if (attempt < CHUNK_RETRY_DELAYS_MS.length - 1) continue;
+    }
   }
 
-  return (data.words || [])
-    .map(cleanWord)
-    .filter((word): word is RoughWord => Boolean(word))
-    .map((word) => ({
-      ...word,
-      start: word.start + plan.start,
-      end: word.end + plan.start,
-      edge: Math.max(
-        0,
-        Math.min(word.start, Math.max(0, actualDuration - word.end)),
-      ),
-      chunkStart: plan.start,
-    }));
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Không xử lý được đoạn audio.');
 }
 
 async function mapWithConcurrency<T, R>(
@@ -363,14 +407,29 @@ export async function buildBackendKaraokeTimeline({
   if (!plan.length) throw new Error('Audio không có dữ liệu để đồng bộ.');
 
   onStage?.('Đang đồng bộ phụ đề…');
+  let failedChunks = 0;
   const streams = await mapWithConcurrency(
     plan,
     MAX_PARALLEL_CHUNKS,
-    (chunk, index) => transcribeChunk(pcm16k, chunk, index, language),
+    async (chunk, index) => {
+      try {
+        return await transcribeChunk(pcm16k, chunk, index, language);
+      } catch (error) {
+        failedChunks++;
+        console.warn('[karaoke-chunk-retry-exhausted]', {
+          index,
+          start: chunk.start,
+          reason: error instanceof Error ? error.message : 'unknown',
+        });
+        return [] as ChunkCandidate[];
+      }
+    },
   );
+
   const roughWords = mergeKaraokeChunkWords(streams);
-  if (!roughWords.length) {
-    throw new Error('Không nhận diện được mốc thời gian trong audio.');
+  const failureRatio = failedChunks / Math.max(1, plan.length);
+  if (!roughWords.length || failureRatio > 0.4) {
+    throw new Error('Dịch vụ subtitle tạm thời chưa ổn định.');
   }
 
   if (lyrics?.trim()) {
