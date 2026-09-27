@@ -1,0 +1,49 @@
+name: Karaoke Production Bench
+
+on:
+  push:
+    branches: [v20.1-karaoke-bench]
+    paths:
+      - 'scripts/bench_production_chunked.py'
+      - '.github/workflows/karaoke-production-bench.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install requests faster-whisper==1.2.0
+
+      - name: Verify production karaoke on target Suno song
+        env:
+          SONG_URL: https://suno.com/s/tszo0jGdVUua4rT4
+          BASE_URL: https://sunoapp.aiautotool.com
+          BENCH_WHISPER_MODEL: medium
+          BENCH_LANGUAGE: vi
+          CHUNK_SIZES: '24'
+          CHUNK_OVERLAPS: '0,4'
+        run: python scripts/bench_production_chunked.py
+
+      - name: Upload production benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: karaoke-production-bench-tszo0jGdVUua4rT4
+          path: bench-production-chunked.json
+          if-no-files-found: warn
+          retention-days: 7
