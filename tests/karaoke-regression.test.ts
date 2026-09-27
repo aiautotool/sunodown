@@ -531,3 +531,101 @@ void test('mobile karaoke routing detects iPhone Android and iPadOS but not desk
     false,
   );
 });
+
+
+void test('strict timed alignment never invents leading lyric lines before the first real anchor', () => {
+  const timeline = alignRoughWordsToLyrics(
+    'alpha beta\ngamma delta\nomega sigma',
+    [
+      { text: 'omega', start: 10.0, end: 10.35 },
+      { text: 'sigma', start: 10.4, end: 10.8 },
+    ],
+    30,
+    { strictAnchors: true },
+  );
+
+  assert.equal(timeline.length, 1);
+  assert.equal(timeline[0].text, 'omega sigma');
+  assert.equal(timeline[0].timingSource, 'anchored');
+  assert.ok(timeline[0].start >= 9.9);
+});
+
+void test('strict timed alignment returns empty instead of a fake estimated timeline when ASR has no trusted anchor', () => {
+  const timeline = alignRoughWordsToLyrics(
+    'anh yêu em nhiều',
+    [{ text: 'la', start: 0.4, end: 0.7 }],
+    30,
+    { strictAnchors: true },
+  );
+
+  assert.deepEqual(timeline, []);
+});
+
+void test('karaoke overlay never exposes the next lyric while the current lyric is singing', () => {
+  const lines = normalizeKaraokeTimeline(
+    [
+      {
+        text: 'câu một',
+        start: 5,
+        end: 7,
+        words: [
+          { text: 'câu', start: 5, end: 5.6 },
+          { text: 'một', start: 5.7, end: 7 },
+        ],
+      },
+      {
+        text: 'câu hai',
+        start: 7.35,
+        end: 9,
+        words: [
+          { text: 'câu', start: 7.35, end: 7.8 },
+          { text: 'hai', start: 7.9, end: 9 },
+        ],
+      },
+      {
+        text: 'câu ba',
+        start: 9.4,
+        end: 11,
+        words: [
+          { text: 'câu', start: 9.4, end: 10 },
+          { text: 'ba', start: 10.1, end: 11 },
+        ],
+      },
+    ],
+    20,
+  );
+
+  const state = karaokeOverlayState(lines, 6.9);
+  assert.equal(state.line?.text, 'câu một');
+  assert.equal(state.next, null);
+});
+
+void test('short sung tail keeps the current lyric visible until just before the next vocal onset', () => {
+  const lines = normalizeKaraokeTimeline(
+    [
+      {
+        text: 'ngân câu một',
+        start: 1,
+        end: 3,
+        words: [
+          { text: 'ngân', start: 1, end: 1.5 },
+          { text: 'câu', start: 1.6, end: 2.1 },
+          { text: 'một', start: 2.2, end: 3 },
+        ],
+      },
+      {
+        text: 'câu tiếp',
+        start: 3.55,
+        end: 5,
+        words: [
+          { text: 'câu', start: 3.55, end: 4 },
+          { text: 'tiếp', start: 4.1, end: 5 },
+        ],
+      },
+    ],
+    10,
+  );
+
+  assert.equal(karaokeOverlayState(lines, 3.3).line?.text, 'ngân câu một');
+  assert.equal(karaokeOverlayState(lines, 3.56).line?.text, 'câu tiếp');
+});
