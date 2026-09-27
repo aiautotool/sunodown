@@ -2,24 +2,28 @@ import {
   buildEstimatedKaraokeTimeline,
   type KaraokeLine,
 } from './karaoke';
+import { buildBackendKaraokeTimeline } from './karaoke-backend-sync';
 import { buildCapCutKaraokeTimeline } from './karaoke-capcut-sync';
+import { isMobileKaraokeDevice } from './karaoke-device';
 import {
   buildLocalKaraokeTimeline,
   transcribeLocalKaraokeTimeline,
   type KaraokeSyncStage,
 } from './karaoke-local-sync';
 import {
-  karaokeQualitySummary,
-  validateKaraokeTimeline,
-  type KaraokeValidationReport,
-} from './karaoke-validation';
-import {
   extractAudioRhythmOnsets,
   refineKaraokeTimelineToRhythm,
   type RhythmOnset,
 } from './karaoke-rhythm';
+import {
+  karaokeQualitySummary,
+  validateKaraokeTimeline,
+  type KaraokeValidationReport,
+} from './karaoke-validation';
 
 export type KaraokeEngineId =
+  | 'backend-whisper'
+  | 'backend-whisper-transcription'
   | 'capcut'
   | 'local-whisper'
   | 'local-whisper-transcription'
@@ -91,6 +95,7 @@ export async function runKaraokePipeline({
 }: KaraokePipelineOptions): Promise<KaraokePipelineResult> {
   const attempts: KaraokePipelineResult['attempts'] = [];
   const hasLyrics = Boolean(lyrics?.trim());
+  const mobile = isMobileKaraokeDevice();
   let bestTimed: Candidate | null = null;
   let rhythmOnsetsPromise: Promise<RhythmOnset[]> | null = null;
 
@@ -108,28 +113,22 @@ export async function runKaraokePipeline({
     return refineKaraokeTimelineToRhythm(timeline, onsets, duration);
   };
 
-  onProgress?.({
-    stage: 'prepare',
-    message: 'Đang chuẩn bị audio và karaoke pipeline…',
-  });
-
-  if (hasLyrics) {
+  const evaluate = async (
+    engine: KaraokeEngineId,
+    run: () => Promise<KaraokeLine[]>,
+    label: string,
+  ): Promise<Candidate | null> => {
     try {
       onProgress?.({
         stage: 'recognize',
-        engine: 'capcut',
-        message: 'Đang tìm timestamp theo giọng hát…',
+        engine,
+        message: label,
       });
-      const rawTimeline = await buildCapCutKaraokeTimeline({
-        audio,
-        lyrics: lyrics!,
-        duration,
-        language: language === 'vi' ? 'vi-VN' : language,
-      });
-      const timeline = await refineToSungRhythm(rawTimeline, 'capcut');
+      const rawTimeline = await run();
+      const timeline = await refineToSungRhythm(rawTimeline, engine);
       onProgress?.({
         stage: 'validate',
-        engine: 'capcut',
+        engine,
         message: 'Đang kiểm tra độ tin cậy timestamp…',
       });
       const quality = validateKaraokeTimeline(timeline, duration, {
@@ -137,155 +136,204 @@ export async function runKaraokePipeline({
         source: 'timed',
       });
       attempts.push({
-        engine: 'capcut',
+        engine,
         ok: true,
         confidence: quality.confidence,
       });
-      bestTimed = betterCandidate(bestTimed, {
-        engine: 'capcut',
-        timeline: quality.timeline,
-        quality,
-      });
-      if (quality.confidence >= minimumConfidence) {
-        onProgress?.({
-          stage: 'done',
-          engine: 'capcut',
-          message: karaokeQualitySummary(quality),
-        });
-        return {
-          timeline: quality.timeline,
-          status: 'synced',
-          engine: 'capcut',
-          quality,
-          attempts,
-        };
-      }
+      return { engine, timeline: quality.timeline, quality };
     } catch (error) {
       attempts.push({
-        engine: 'capcut',
+        engine,
         ok: false,
-        error: error instanceof Error ? error.message : 'CapCut engine failed',
+        error: error instanceof Error ? error.message : `${engine} failed`,
       });
+      return null;
     }
+  };
 
-    try {
-      onProgress?.({
-        stage: 'fallback',
-        engine: 'local-whisper',
-        message: 'Đang chuyển sang Whisper trên thiết bị…',
-      });
-      const rawTimeline = await buildLocalKaraokeTimeline({
-        audio,
-        lyrics: lyrics!,
-        duration,
-        language,
-        onStage: (stage, message) =>
-          onProgress?.({
-            stage: stageFromLocal(stage),
+  const finishIfAccepted = (candidate: Candidate | null) => {
+    if (!candidate) return null;
+    bestTimed = betterCandidate(bestTimed, candidate);
+    if (candidate.quality.confidence < minimumConfidence) return null;
+
+    onProgress?.({
+      stage: 'done',
+      engine: candidate.engine,
+      message: karaokeQualitySummary(candidate.quality),
+    });
+    return {
+      timeline: candidate.timeline,
+      status: 'synced' as const,
+      engine: candidate.engine,
+      quality: candidate.quality,
+      attempts,
+    };
+  };
+
+  onProgress?.({
+    stage: 'prepare',
+    message: mobile
+      ? 'Thiết bị mobile · ưu tiên Whisper backend…'
+      : 'Thiết bị desktop · ưu tiên Whisper trong trình duyệt…',
+  });
+
+  if (hasLyrics) {
+    const knownLyricsEngines: Array<{
+      engine: KaraokeEngineId;
+      label: string;
+      run: () => Promise<KaraokeLine[]>;
+    }> = mobile
+      ? [
+          {
+            engine: 'backend-whisper',
+            label: 'Mobile · đang dùng Whisper backend + vocal alignment…',
+            run: () =>
+              buildBackendKaraokeTimeline({
+                audio,
+                lyrics,
+                duration,
+                language,
+                onStage: (message) =>
+                  onProgress?.({
+                    stage: 'recognize',
+                    engine: 'backend-whisper',
+                    message,
+                  }),
+              }),
+          },
+          {
+            engine: 'capcut',
+            label: 'Whisper backend chưa đủ tốt · đang thử CapCut timestamp…',
+            run: () =>
+              buildCapCutKaraokeTimeline({
+                audio,
+                lyrics: lyrics!,
+                duration,
+                language: language === 'vi' ? 'vi-VN' : language,
+              }),
+          },
+        ]
+      : [
+          {
             engine: 'local-whisper',
-            message,
-          }),
-      });
-      const timeline = await refineToSungRhythm(rawTimeline, 'local-whisper');
-      onProgress?.({
-        stage: 'validate',
-        engine: 'local-whisper',
-        message: 'Đang kiểm tra timing Whisper…',
-      });
-      const quality = validateKaraokeTimeline(timeline, duration, {
-        lyrics,
-        source: 'timed',
-      });
-      attempts.push({
-        engine: 'local-whisper',
-        ok: true,
-        confidence: quality.confidence,
-      });
-      bestTimed = betterCandidate(bestTimed, {
-        engine: 'local-whisper',
-        timeline: quality.timeline,
-        quality,
-      });
-      if (quality.confidence >= minimumConfidence) {
-        onProgress?.({
-          stage: 'done',
-          engine: 'local-whisper',
-          message: karaokeQualitySummary(quality),
-        });
-        return {
-          timeline: quality.timeline,
-          status: 'synced',
-          engine: 'local-whisper',
-          quality,
-          attempts,
-        };
-      }
-    } catch (error) {
-      attempts.push({
-        engine: 'local-whisper',
-        ok: false,
-        error:
-          error instanceof Error ? error.message : 'Local Whisper engine failed',
-      });
+            label: 'Desktop · đang nhận diện bằng Whisper trên trình duyệt…',
+            run: () =>
+              buildLocalKaraokeTimeline({
+                audio,
+                lyrics: lyrics!,
+                duration,
+                language,
+                onStage: (stage, message) =>
+                  onProgress?.({
+                    stage: stageFromLocal(stage),
+                    engine: 'local-whisper',
+                    message,
+                  }),
+              }),
+          },
+          {
+            engine: 'capcut',
+            label: 'Local Whisper chưa đủ tốt · đang thử CapCut timestamp…',
+            run: () =>
+              buildCapCutKaraokeTimeline({
+                audio,
+                lyrics: lyrics!,
+                duration,
+                language: language === 'vi' ? 'vi-VN' : language,
+              }),
+          },
+          {
+            engine: 'backend-whisper',
+            label: 'Đang dùng Whisper backend làm fallback cuối…',
+            run: () =>
+              buildBackendKaraokeTimeline({
+                audio,
+                lyrics,
+                duration,
+                language,
+                onStage: (message) =>
+                  onProgress?.({
+                    stage: 'fallback',
+                    engine: 'backend-whisper',
+                    message,
+                  }),
+              }),
+          },
+        ];
+
+    for (const item of knownLyricsEngines) {
+      const accepted = finishIfAccepted(
+        await evaluate(item.engine, item.run, item.label),
+      );
+      if (accepted) return accepted;
     }
   } else {
-    try {
-      onProgress?.({
-        stage: 'recognize',
-        engine: 'local-whisper-transcription',
-        message: 'Đang tự động nhận diện lời từ audio…',
-      });
-      const rawTimeline = await transcribeLocalKaraokeTimeline({
-        audio,
-        duration,
-        language,
-        onStage: (stage, message) =>
-          onProgress?.({
-            stage: stageFromLocal(stage),
+    const transcriptionEngines: Array<{
+      engine: KaraokeEngineId;
+      label: string;
+      run: () => Promise<KaraokeLine[]>;
+    }> = mobile
+      ? [
+          {
+            engine: 'backend-whisper-transcription',
+            label: 'Mobile · đang tạo subtitle bằng Whisper backend…',
+            run: () =>
+              buildBackendKaraokeTimeline({
+                audio,
+                duration,
+                language,
+                onStage: (message) =>
+                  onProgress?.({
+                    stage: 'recognize',
+                    engine: 'backend-whisper-transcription',
+                    message,
+                  }),
+              }),
+          },
+        ]
+      : [
+          {
             engine: 'local-whisper-transcription',
-            message,
-          }),
-      });
-      const timeline = await refineToSungRhythm(
-        rawTimeline,
-        'local-whisper-transcription',
+            label: 'Desktop · đang tạo subtitle bằng Whisper trong trình duyệt…',
+            run: () =>
+              transcribeLocalKaraokeTimeline({
+                audio,
+                duration,
+                language,
+                onStage: (stage, message) =>
+                  onProgress?.({
+                    stage: stageFromLocal(stage),
+                    engine: 'local-whisper-transcription',
+                    message,
+                  }),
+              }),
+          },
+          {
+            engine: 'backend-whisper-transcription',
+            label: 'Local Whisper lỗi · đang chuyển sang Whisper backend…',
+            run: () =>
+              buildBackendKaraokeTimeline({
+                audio,
+                duration,
+                language,
+                onStage: (message) =>
+                  onProgress?.({
+                    stage: 'fallback',
+                    engine: 'backend-whisper-transcription',
+                    message,
+                  }),
+              }),
+          },
+        ];
+
+    for (const item of transcriptionEngines) {
+      const accepted = finishIfAccepted(
+        await evaluate(item.engine, item.run, item.label),
       );
-      const quality = validateKaraokeTimeline(timeline, duration, {
-        source: 'timed',
-      });
-      attempts.push({
-        engine: 'local-whisper-transcription',
-        ok: true,
-        confidence: quality.confidence,
-      });
-      onProgress?.({
-        stage: 'done',
-        engine: 'local-whisper-transcription',
-        message: karaokeQualitySummary(quality),
-      });
-      return {
-        timeline: quality.timeline,
-        status: quality.confidence >= minimumConfidence ? 'synced' : 'fallback',
-        engine: 'local-whisper-transcription',
-        quality,
-        attempts,
-      };
-    } catch (error) {
-      attempts.push({
-        engine: 'local-whisper-transcription',
-        ok: false,
-        error:
-          error instanceof Error ? error.message : 'Local transcription failed',
-      });
-      throw new Error(
-        attempts.at(-1)?.error || 'Không thể tự động tạo subtitle từ audio.',
-      );
+      if (accepted) return accepted;
     }
   }
 
-  // Prefer a real timed result even when its confidence is below the acceptance
-  // threshold. Estimated timing is only a last resort and is explicitly marked
-  // as fallback, never as a successful sync.
   if (bestTimed && bestTimed.quality.confidence >= 35) {
     onProgress?.({
       stage: 'fallback',
@@ -328,5 +376,9 @@ export async function runKaraokePipeline({
     }
   }
 
-  throw new Error('Không tìm thấy subtitle có timestamp đáng tin cậy.');
+  throw new Error(
+    mobile
+      ? 'Whisper backend không tạo được subtitle đáng tin cậy.'
+      : 'Không tìm thấy subtitle có timestamp đáng tin cậy.',
+  );
 }
