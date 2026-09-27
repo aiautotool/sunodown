@@ -1,4 +1,5 @@
 name: Karaoke Production Bench
+# Final production verification after V20.1 deploy
 
 on:
   push:
