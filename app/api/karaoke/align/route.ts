@@ -287,7 +287,7 @@ export async function POST(request: NextRequest) {
         : Math.max(0.1, detectedDuration);
 
     if (lyrics) {
-      const lines = alignRoughWordsToLyrics(lyrics, roughWords, duration);
+      const lines = alignRoughWordsToLyrics(lyrics, roughWords, duration, { strictAnchors: true });
       if (!lines.length) {
         return NextResponse.json(
           { error: 'Không căn được lyrics vào word timestamp.' },
