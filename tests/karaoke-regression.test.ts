@@ -16,6 +16,10 @@ import {
 import { validateKaraokeTimeline } from '../app/lib/karaoke-validation.ts';
 import { refineKaraokeTimelineToRhythm } from '../app/lib/karaoke-rhythm.ts';
 import { isMobileKaraokeDeviceFromHints } from '../app/lib/karaoke-device.ts';
+import {
+  buildKaraokeChunkPlan,
+  mergeKaraokeChunkWords,
+} from '../app/lib/karaoke-backend-sync.ts';
 
 void test('removes bracketed and unambiguous bare chords from every karaoke input', () => {
   const input =
@@ -628,4 +632,69 @@ void test('short sung tail keeps the current lyric visible until just before the
 
   assert.equal(karaokeOverlayState(lines, 3.3).line?.text, 'ngân câu một');
   assert.equal(karaokeOverlayState(lines, 3.56).line?.text, 'câu tiếp');
+});
+
+
+void test('mobile backend chunk plan uses staggered 24s windows without full-song requests', () => {
+  const plan = buildKaraokeChunkPlan(178.72);
+  assert.ok(plan.length > 8);
+  assert.equal(plan[0].start, 0);
+  assert.ok(plan.some((chunk) => Math.abs(chunk.start - 20) < 0.001));
+  assert.ok(plan.some((chunk) => Math.abs(chunk.start - 24) < 0.001));
+  assert.ok(plan.every((chunk) => chunk.duration <= 24.001));
+  assert.equal(new Set(plan.map((chunk) => chunk.start)).size, plan.length);
+  const last = plan.at(-1)!;
+  assert.ok(last.start + last.duration >= 178.7);
+});
+
+void test('staggered word consensus keeps the timestamp farther from a chunk edge', () => {
+  const merged = mergeKaraokeChunkWords([
+    [
+      {
+        text: 'mình',
+        start: 48.02,
+        end: 48.38,
+        edge: 0.02,
+        chunkStart: 48,
+      },
+    ],
+    [
+      {
+        text: 'mình',
+        start: 48.57,
+        end: 48.9,
+        edge: 8.57,
+        chunkStart: 40,
+      },
+    ],
+  ]);
+
+  assert.equal(merged.length, 1);
+  assert.ok(Math.abs(merged[0].start - 48.57) < 0.001);
+});
+
+void test('staggered word consensus averages equally reliable duplicate timestamps', () => {
+  const merged = mergeKaraokeChunkWords([
+    [
+      {
+        text: 'thương',
+        start: 56.5,
+        end: 56.9,
+        edge: 7.5,
+        chunkStart: 49,
+      },
+    ],
+    [
+      {
+        text: 'thương',
+        start: 56.7,
+        end: 57.1,
+        edge: 7.55,
+        chunkStart: 49.15,
+      },
+    ],
+  ]);
+
+  assert.equal(merged.length, 1);
+  assert.ok(Math.abs(merged[0].start - 56.6) < 0.001);
 });
