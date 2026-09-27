@@ -2216,6 +2216,19 @@ export default function CreatorStudio() {
                 resultUrl={resultUrl || undefined}
               />
             </div>
+            {karaokeSyncStatus === 'syncing' && (
+              <output
+                className="sd-subtitle-job"
+                aria-live="polite"
+                aria-label="Đang tìm subtitle"
+              >
+                <i aria-hidden="true" />
+                <span>
+                  <b>Đang tìm subtitle…</b>
+                  <small>Bạn vẫn có thể chỉnh sửa trong khi chạy nền.</small>
+                </span>
+              </output>
+            )}
             {quickMode && (
               <section className="sd-quick-create" aria-label="Quick Create">
                 <div className="sd-quick-create-head">
