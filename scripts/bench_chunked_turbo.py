@@ -246,6 +246,7 @@ def main():
     print(f"[bench] title={song.get('title')} duration={duration} cleaned_lines={len(lines)}")
     for i,line in enumerate(lines[:5],1):print("[lyric]",i,line)
     all_results={}
+    refs_by_variant={}
     with tempfile.TemporaryDirectory(prefix="chunked-turbo-") as td:
         tmp=Path(td);audio=tmp/"song.mp3";download(song,audio)
         local=local_words(audio);local_refs=align(lines,local)
@@ -258,10 +259,43 @@ def main():
                 summary.update({"chunk_size":size,"overlap":overlap,"words":len(turbo),"chunks":len(diag)})
                 key=f"{size}-o{overlap}"
                 all_results[key]={"summary":summary,"rows":rows,"chunks":diag}
+                refs_by_variant[key]=refs
                 print("[chunk-summary]",json.dumps(summary,ensure_ascii=False))
                 for d in diag:print("[chunk]",json.dumps(d,ensure_ascii=False))
                 for r in rows:
                     if r["delta"] is not None:print("[line]",json.dumps(r,ensure_ascii=False))
+    base=refs_by_variant.get("24.0-o0.0")
+    staggered=refs_by_variant.get("24.0-o4.0")
+    if base and staggered:
+        consensus=[]
+        for idx in range(len(lines)):
+            a=base[idx] if idx<len(base) else None
+            b=staggered[idx] if idx<len(staggered) else None
+            if a and b:
+                # Two independent chunk placements heard the same lyric. Average
+                # their starts only when they broadly agree; otherwise prefer
+                # the denser anchor set and let the disagreement lower coverage.
+                distance=abs(a["start"]-b["start"])
+                if distance<=1.1:
+                    merged={**a}
+                    merged["start"]=(a["start"]+b["start"])/2
+                    merged["end"]=(a["end"]+b["end"])/2
+                    merged["anchors"]=max(a["anchors"],b["anchors"])
+                    merged["density"]=max(a.get("density",0),b.get("density",0))
+                    consensus.append(merged)
+                else:
+                    score_a=a["anchors"]*a.get("density",0)
+                    score_b=b["anchors"]*b.get("density",0)
+                    consensus.append(a if score_a>=score_b else b)
+            else:
+                consensus.append(b or a)
+        summary,rows=evaluate(lines,consensus,local_refs)
+        summary.update({"chunk_size":24.0,"overlap":"ensemble-0+4","words":None,"chunks":None})
+        all_results["ensemble-0+4"]={"summary":summary,"rows":rows,"chunks":[]}
+        print("[ensemble-summary]",json.dumps(summary,ensure_ascii=False))
+        for row in rows:
+            if row["delta"] is not None:print("[ensemble-line]",json.dumps(row,ensure_ascii=False))
+
     ranked=sorted((v["summary"] for v in all_results.values()),key=lambda s:(s["median_abs_delta"] if s["median_abs_delta"] is not None else 999,-s["compared"]))
     best=ranked[0] if ranked else {}
     result={"song":{"title":song.get("title"),"id":song.get("id"),"duration":duration},"best":best,"variants":all_results}
