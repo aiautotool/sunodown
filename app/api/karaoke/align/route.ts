@@ -17,8 +17,8 @@ export async function POST(request: NextRequest) {
     const lyrics = incoming.get('lyrics');
     const language = incoming.get('language');
 
-    if (!(audio instanceof File) || typeof lyrics !== 'string' || !lyrics.trim()) {
-      return NextResponse.json({ error: 'Thiếu audio hoặc lyrics.' }, { status: 400 });
+    if (!(audio instanceof File)) {
+      return NextResponse.json({ error: 'Thiếu audio.' }, { status: 400 });
     }
 
     if (audio.size > 80 * 1024 * 1024) {
@@ -27,14 +27,21 @@ export async function POST(request: NextRequest) {
 
     const form = new FormData();
     form.set('audio', audio, audio.name || 'song.audio');
-    form.set('lyrics', lyrics);
+    const hasLyrics = typeof lyrics === 'string' && Boolean(lyrics.trim());
+    if (hasLyrics) form.set('lyrics', lyrics);
     form.set('language', typeof language === 'string' && language ? language : 'vi');
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 180_000);
     try {
-      const response = await fetch(new URL('/align', alignUrl).toString(), {
+      const targetPath = hasLyrics ? '/align' : '/transcribe';
+      const headers: Record<string, string> = {};
+      if (process.env.KARAOKE_ALIGN_TOKEN) {
+        headers.authorization = `Bearer ${process.env.KARAOKE_ALIGN_TOKEN}`;
+      }
+      const response = await fetch(new URL(targetPath, alignUrl).toString(), {
         method: 'POST',
+        headers,
         body: form,
         signal: controller.signal,
       });
