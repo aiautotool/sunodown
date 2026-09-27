@@ -988,7 +988,7 @@ export default function CreatorStudio() {
     setKaraokeSyncStatus('syncing');
     setKaraokeSyncMessage('Đang chuẩn bị subtitle…');
 
-    const delays = [0, 1400, 3600];
+    const delays = [0, 2200];
     let lastError: unknown = null;
 
     for (let attempt = 0; attempt < delays.length; attempt++) {
