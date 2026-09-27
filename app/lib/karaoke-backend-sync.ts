@@ -3,7 +3,7 @@ import {
   normalizeKaraokeTimeline,
   type KaraokeLine,
   type RoughWord,
-} from './karaoke';
+} from './karaoke.ts';
 
 type BackendWord = {
   text?: string;
