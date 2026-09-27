@@ -133,31 +133,71 @@ def call_prod_backend(audio_path: Path, lyrics: str, duration: float) -> tuple[i
     return r.status_code, body
 
 
-def transcribe_local(audio_path: Path) -> list[dict[str, Any]]:
+def transcribe_local(
+    audio_path: Path,
+    lyrics: str = "",
+    guided: bool = False,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     model = WhisperModel(MODEL_NAME, device="cpu", compute_type="int8")
+
+    hotwords = None
+    initial_prompt = None
+    if guided and lyrics:
+        cleaned_lines = lyric_lines(lyrics)
+        prompt_text = " ".join(cleaned_lines)
+        # Whisper's prompt is context, not ground truth. Keep enough lyrics to
+        # bias Vietnamese song vocabulary without forcing a full fake transcript.
+        initial_prompt = prompt_text[:1800]
+        unique = []
+        seen = set()
+        for token in prompt_text.split():
+            key = norm(token)
+            if len(key) < 3 or key in seen:
+                continue
+            seen.add(key)
+            unique.append(token)
+        hotwords = " ".join(unique[:160])
+
     segments, _ = model.transcribe(
         str(audio_path),
         language=LANGUAGE,
         word_timestamps=True,
         vad_filter=True,
+        vad_parameters={"threshold": 0.30, "min_silence_duration_ms": 350},
         condition_on_previous_text=False,
         beam_size=5,
+        initial_prompt=initial_prompt,
+        hotwords=hotwords,
+        hallucination_silence_threshold=1.0,
     )
+
     words: list[dict[str, Any]] = []
+    segment_rows: list[dict[str, Any]] = []
     for segment in segments:
+        segment_words = []
         for word in segment.words or []:
             text = word.word.strip()
             if not text:
                 continue
-            words.append(
+            item = {
+                "text": text,
+                "start": float(word.start),
+                "end": float(word.end),
+                "probability": float(word.probability or 0),
+            }
+            words.append(item)
+            segment_words.append(item)
+        text = str(segment.text or "").strip()
+        if text:
+            segment_rows.append(
                 {
                     "text": text,
-                    "start": float(word.start),
-                    "end": float(word.end),
-                    "probability": float(word.probability or 0),
+                    "start": float(segment.start),
+                    "end": float(segment.end),
+                    "words": segment_words,
                 }
             )
-    return words
+    return words, segment_rows
 
 
 def similarity(a: str, b: str) -> float:
@@ -357,6 +397,9 @@ def markdown(summary: dict[str, Any], rows: list[dict[str, Any]]) -> str:
             f"- Workers AI raw words: {summary.get('backend_raw_words')}",
             f"- Workers AI anchored lines: {summary.get('workers_anchored_lines')}",
             f"- faster-whisper anchored lines: {summary.get('local_anchored_lines')}",
+            f"- Turbo raw anchors: {summary.get('turbo_raw_anchored_lines')}",
+            f"- Turbo guided anchors: {summary.get('turbo_guided_anchored_lines')}",
+            f"- Selected local mode: {summary.get('selected_local_mode')}",
             f"- Median WorkersAI - faster-whisper start: {summary.get('median_workers_minus_local')}s",
             "",
             "| # | Workers AI | faster-whisper | Δ | WA anchors | local anchors | text |",
@@ -423,18 +466,32 @@ def main() -> int:
             if str(word.get("text") or word.get("word") or "").strip()
         ]
 
-        local_asr = transcribe_local(audio_path)
-        print(f"[bench] independent faster-whisper words={len(local_asr)} model={MODEL_NAME}")
+        raw_asr, raw_segments = transcribe_local(audio_path, lyrics, guided=False)
+        guided_asr, guided_segments = transcribe_local(audio_path, lyrics, guided=True)
+        print(
+            f"[bench] independent faster-whisper model={MODEL_NAME} "
+            f"raw_words={len(raw_asr)} guided_words={len(guided_asr)}"
+        )
 
         original_lines = lyric_lines(lyrics)
         workers_refs = align_reference(original_lines, production_words)
-        local_refs = align_reference(original_lines, local_asr)
+        raw_refs = align_reference(original_lines, raw_asr)
+        guided_refs = align_reference(original_lines, guided_asr)
 
         workers_anchored = sum(1 for ref in workers_refs if ref)
-        local_anchored = sum(1 for ref in local_refs if ref)
-        print(f"[bench] anchored lyric lines workers-ai={workers_anchored} faster-whisper={local_anchored}")
+        raw_anchored = sum(1 for ref in raw_refs if ref)
+        guided_anchored = sum(1 for ref in guided_refs if ref)
+        local_refs = guided_refs if guided_anchored >= raw_anchored else raw_refs
+        local_asr = guided_asr if guided_anchored >= raw_anchored else raw_asr
+        local_mode = "guided" if guided_anchored >= raw_anchored else "raw"
+
+        print(
+            f"[bench] anchored lyric lines workers-ai={workers_anchored} "
+            f"turbo-raw={raw_anchored} turbo-guided={guided_anchored} "
+            f"selected={local_mode}"
+        )
         print("[bench] workers-ai first words:", " | ".join(word["text"] for word in production_words[:40]))
-        print("[bench] local first words:", " | ".join(word["text"] for word in local_asr[:40]))
+        print("[bench] selected first words:", " | ".join(word["text"] for word in local_asr[:60]))
 
         diagnostic_rows = []
         for idx, text in enumerate(original_lines):
@@ -470,7 +527,10 @@ def main() -> int:
                 "backend_align_error": backend.get("error") or backend.get("detail"),
                 "backend_raw_words": len(production_words),
                 "workers_anchored_lines": workers_anchored,
-                "local_anchored_lines": local_anchored,
+                "turbo_raw_anchored_lines": raw_anchored,
+                "turbo_guided_anchored_lines": guided_anchored,
+                "selected_local_mode": local_mode,
+                "local_anchored_lines": max(raw_anchored, guided_anchored),
                 "compared_lines": len(deltas),
                 "median_workers_minus_local": round(statistics.median(deltas), 3) if deltas else None,
                 "mean_workers_minus_local": round(statistics.mean(deltas), 3) if deltas else None,
