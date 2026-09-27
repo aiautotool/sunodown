@@ -64,7 +64,7 @@ jobs:
           BENCH_AI_URL: http://127.0.0.1:8791
           BENCH_WHISPER_MODEL: medium
           BENCH_LANGUAGE: vi
-          CHUNK_SIZES: '24,32,45'
+          CHUNK_SIZES: '24'
         run: python scripts/bench_chunked_turbo.py
 
       - name: Upload benchmark report
