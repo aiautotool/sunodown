@@ -33,13 +33,12 @@ export default {
       Object.assign(input, {
         task: 'transcribe',
         language: 'vi',
-        vad_filter: true,
+        vad_filter: false,
         beam_size: 5,
         condition_on_previous_text: false,
         no_speech_threshold: 0.55,
         compression_ratio_threshold: 2.2,
         log_prob_threshold: -1,
-        hallucination_silence_threshold: 1,
       });
     }
 
