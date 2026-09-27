@@ -15,6 +15,7 @@ import {
 } from '../app/lib/karaoke-known-lyrics-align.ts';
 import { validateKaraokeTimeline } from '../app/lib/karaoke-validation.ts';
 import { refineKaraokeTimelineToRhythm } from '../app/lib/karaoke-rhythm.ts';
+import { isMobileKaraokeDeviceFromHints } from '../app/lib/karaoke-device.ts';
 
 void test('removes bracketed and unambiguous bare chords from every karaoke input', () => {
   const input =
@@ -497,4 +498,36 @@ void test('a lone short common word cannot anchor karaoke into an intro hallucin
 
   assert.ok(timeline.length > 0);
   assert.ok(timeline[0].start >= 1.7);
+});
+
+
+void test('mobile karaoke routing detects iPhone Android and iPadOS but not desktop', () => {
+  assert.equal(
+    isMobileKaraokeDeviceFromHints({
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) Mobile',
+    }),
+    true,
+  );
+  assert.equal(
+    isMobileKaraokeDeviceFromHints({
+      userAgent: 'Mozilla/5.0 (Linux; Android 16; Pixel 9) Mobile Safari/537.36',
+    }),
+    true,
+  );
+  assert.equal(
+    isMobileKaraokeDeviceFromHints({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)',
+      platform: 'MacIntel',
+      maxTouchPoints: 5,
+    }),
+    true,
+  );
+  assert.equal(
+    isMobileKaraokeDeviceFromHints({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0)',
+      platform: 'MacIntel',
+      maxTouchPoints: 0,
+    }),
+    false,
+  );
 });
