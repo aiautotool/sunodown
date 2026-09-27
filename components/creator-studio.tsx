@@ -2217,14 +2217,11 @@ export default function CreatorStudio() {
                 <span>
                   <b>
                     {karaokeSyncStatus === 'syncing'
-                      ? karaokeTimeline.length
-                        ? `Đã có ${karaokeTimeline.length} câu tạm · đang căn chính xác…`
-                        : 'Đang tự động tìm subtitle…'
+                      ? 'Đang xử lý subtitle…'
                       : karaokeSyncStatus === 'synced'
-                        ? `Đã tải ${karaokeTimeline.length} câu subtitle`
+                        ? 'Subtitle đã sẵn sàng'
                         : 'Subtitle cần kiểm tra lại'}
                   </b>
-                  <small>{karaokeSyncMessage}</small>
                 </span>
               </output>
             )}
