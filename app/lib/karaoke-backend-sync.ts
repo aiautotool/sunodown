@@ -4,6 +4,7 @@ import {
   type KaraokeLine,
   type RoughWord,
 } from './karaoke.ts';
+import { isMobileKaraokeDevice } from './karaoke-device.ts';
 
 type BackendWord = {
   text?: string;
@@ -48,6 +49,11 @@ const CHUNK_SECONDS = 24;
 const STAGGER_STEP_SECONDS = 20;
 const BASE_STEP_SECONDS = 24;
 const MAX_PARALLEL_CHUNKS = 3;
+const MOBILE_PARALLEL_CHUNKS = 2;
+
+export function backendKaraokeConcurrency(mobile: boolean) {
+  return mobile ? MOBILE_PARALLEL_CHUNKS : MAX_PARALLEL_CHUNKS;
+}
 
 export const BACKEND_VOCAL_LEAD_SECONDS = 0.48;
 
@@ -165,13 +171,7 @@ async function decodeAndResample(audio: Blob) {
     window.AudioContext ||
     (window as typeof window & { webkitAudioContext?: typeof AudioContext })
       .webkitAudioContext;
-  const OfflineCtx =
-    window.OfflineAudioContext ||
-    (window as typeof window & {
-      webkitOfflineAudioContext?: typeof OfflineAudioContext;
-    }).webkitOfflineAudioContext;
-
-  if (!AudioCtx || !OfflineCtx) {
+  if (!AudioCtx) {
     throw new Error('Thiết bị không hỗ trợ xử lý audio cần thiết.');
   }
 
@@ -180,17 +180,46 @@ async function decodeAndResample(audio: Blob) {
     const decoded = await context.decodeAudioData(
       (await audio.arrayBuffer()).slice(0),
     );
-    const length = Math.max(1, Math.ceil(decoded.duration * SAMPLE_RATE));
-    const offline = new OfflineCtx(1, length, SAMPLE_RATE);
-    const source = offline.createBufferSource();
-    source.buffer = decoded;
-    source.connect(offline.destination);
-    source.start(0);
-    const rendered = await offline.startRendering();
-    return new Float32Array(rendered.getChannelData(0));
+    const channels = Array.from(
+      { length: decoded.numberOfChannels },
+      (_, channel) => decoded.getChannelData(channel),
+    );
+    return resampleAudioChannels(channels, decoded.sampleRate);
   } finally {
     await context.close().catch(() => {});
   }
+}
+
+export function resampleAudioChannels(
+  channels: Float32Array[],
+  sourceRate: number,
+  targetRate = SAMPLE_RATE,
+) {
+  const sourceLength = channels[0]?.length || 0;
+  if (!sourceLength || !Number.isFinite(sourceRate) || sourceRate <= 0) {
+    return new Float32Array();
+  }
+  const outputLength = Math.max(
+    1,
+    Math.ceil((sourceLength / sourceRate) * targetRate),
+  );
+  const output = new Float32Array(outputLength);
+  const ratio = sourceRate / targetRate;
+
+  // Manual linear resampling avoids allocating a second full-song
+  // OfflineAudioContext, which is unreliable under iOS Safari memory limits.
+  for (let index = 0; index < outputLength; index++) {
+    const sourcePosition = Math.min(sourceLength - 1, index * ratio);
+    const left = Math.floor(sourcePosition);
+    const right = Math.min(sourceLength - 1, left + 1);
+    const mix = sourcePosition - left;
+    let sample = 0;
+    for (const channel of channels) {
+      sample += channel[left] + (channel[right] - channel[left]) * mix;
+    }
+    output[index] = sample / channels.length;
+  }
+  return output;
 }
 
 function encodeMonoPcm16Wav(samples: Float32Array, sampleRate = SAMPLE_RATE) {
@@ -421,6 +450,10 @@ export async function buildBackendKaraokeTimeline({
   const actualDuration = pcm16k.length / SAMPLE_RATE;
   const safeDuration =
     Number.isFinite(duration) && duration > 0 ? duration : actualDuration;
+  const mobile = isMobileKaraokeDevice();
+  // Mobile uses the same staggered plan as desktop for timestamp parity. Its
+  // resource protection comes from manual resampling and lower concurrency,
+  // not from dropping recognition windows.
   const plan = buildKaraokeChunkPlan(actualDuration);
   if (!plan.length) throw new Error('Audio không có dữ liệu để đồng bộ.');
 
@@ -428,17 +461,12 @@ export async function buildBackendKaraokeTimeline({
   let failedChunks = 0;
   const streams = await mapWithConcurrency(
     plan,
-    MAX_PARALLEL_CHUNKS,
+    backendKaraokeConcurrency(mobile),
     async (chunk, index) => {
       try {
         return await transcribeChunk(pcm16k, chunk, index, language);
-      } catch (error) {
+      } catch {
         failedChunks++;
-        console.warn('[karaoke-chunk-retry-exhausted]', {
-          index,
-          start: chunk.start,
-          reason: error instanceof Error ? error.message : 'unknown',
-        });
         return [] as ChunkCandidate[];
       }
     },

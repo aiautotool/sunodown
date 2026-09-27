@@ -18,9 +18,11 @@ import { refineKaraokeTimelineToRhythm } from '../app/lib/karaoke-rhythm.ts';
 import { isMobileKaraokeDeviceFromHints } from '../app/lib/karaoke-device.ts';
 import {
   BACKEND_VOCAL_LEAD_SECONDS,
+  backendKaraokeConcurrency,
   buildKaraokeChunkPlan,
   compensateBackendVocalLatency,
   mergeKaraokeChunkWords,
+  resampleAudioChannels,
 } from '../app/lib/karaoke-backend-sync.ts';
 
 void test('removes bracketed and unambiguous bare chords from every karaoke input', () => {
@@ -699,6 +701,18 @@ void test('staggered word consensus averages equally reliable duplicate timestam
 
   assert.equal(merged.length, 1);
   assert.ok(Math.abs(merged[0].start - 56.6) < 0.001);
+});
+
+void test('mobile-safe resampler mixes stereo without OfflineAudioContext', () => {
+  const left = new Float32Array([0, 1, 0, -1]);
+  const right = new Float32Array([0, -1, 0, 1]);
+  const output = resampleAudioChannels([left, right], 4, 2);
+
+  assert.equal(output.length, 2);
+  assert.deepEqual([...output], [0, 0]);
+  assert.equal(resampleAudioChannels([], 48_000).length, 0);
+  assert.equal(backendKaraokeConcurrency(true), 2);
+  assert.equal(backendKaraokeConcurrency(false), 3);
 });
 
 void test('backend timing compensates the measured sung-vocal recognition lag', () => {
