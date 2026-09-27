@@ -6,6 +6,7 @@ on:
     paths:
       - 'scripts/bench_karaoke_song.py'
       - 'scripts/bench_workers_ai_models.py'
+      - 'scripts/bench_capcut_vs_local.py'
       - 'scripts/karaoke-ai-bench-worker.ts'
       - 'scripts/karaoke-ai-bench.wrangler.jsonc'
       - '.github/workflows/karaoke-song-bench.yml'
@@ -38,30 +39,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests faster-whisper==1.2.0
 
-      - name: Start isolated Workers AI benchmark
-        run: |
-          npx wrangler dev --config scripts/karaoke-ai-bench.wrangler.jsonc --ip 127.0.0.1 --port 8791 > /tmp/karaoke-ai-bench.log 2>&1 &
-          echo $! > /tmp/karaoke-ai-bench.pid
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8791/health >/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          cat /tmp/karaoke-ai-bench.log
-          exit 1
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Benchmark real Suno song against production backend
+      - name: Benchmark CapCut timing on the target Suno song
         env:
           SONG_URL: https://suno.com/s/tszo0jGdVUua4rT4
           BASE_URL: https://sunoapp.aiautotool.com
           BENCH_WHISPER_MODEL: medium
-          BENCH_AI_URL: http://127.0.0.1:8791
           BENCH_LANGUAGE: vi
-          MAX_EARLY_SECONDS: '0.45'
-        run: python scripts/bench_workers_ai_models.py
+        run: python scripts/bench_capcut_vs_local.py
 
       - name: Upload benchmark report
         if: always()
@@ -69,6 +53,6 @@ jobs:
         with:
           name: karaoke-bench-tszo0jGdVUua4rT4
           path: |
-            bench-ai-models.json
+            bench-capcut.json
           if-no-files-found: warn
           retention-days: 7
