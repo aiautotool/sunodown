@@ -135,6 +135,36 @@ def transcribe_chunked(audio:Path,duration:float,chunk_size:float,overlap:float,
     merged.sort(key=lambda w:w["start"])
     return merged,diagnostics
 
+def merge_staggered_word_streams(streams:list[list[dict[str,Any]]]):
+    candidates=[]
+    for stream_id,stream in enumerate(streams):
+        for word in stream:
+            candidates.append({**word,"stream":stream_id})
+    candidates.sort(key=lambda w:(w["start"],w["end"]))
+    merged=[]
+    for word in candidates:
+        key=norm(word["text"])
+        duplicate=-1
+        for i in range(max(0,len(merged)-16),len(merged)):
+            prev=merged[i]
+            if norm(prev["text"])==key and abs(prev["start"]-word["start"])<=0.75:
+                duplicate=i
+                break
+        if duplicate<0:
+            merged.append(word)
+            continue
+        prev=merged[duplicate]
+        prev_edge=float(prev.get("edge",0))
+        word_edge=float(word.get("edge",0))
+        if word_edge>prev_edge+0.15:
+            merged[duplicate]=word
+        elif abs(word_edge-prev_edge)<=0.15:
+            prev["start"]=(float(prev["start"])+float(word["start"]))/2
+            prev["end"]=(float(prev["end"])+float(word["end"]))/2
+            prev["edge"]=max(prev_edge,word_edge)
+    merged.sort(key=lambda w:w["start"])
+    return merged
+
 def local_words(audio:Path):
     model=WhisperModel(MODEL,device="cpu",compute_type="int8")
     segs,_=model.transcribe(str(audio),language=LANG,word_timestamps=True,vad_filter=False,condition_on_previous_text=False,beam_size=5)
@@ -258,7 +288,7 @@ def main():
                 refs=align(lines,turbo);summary,rows=evaluate(lines,refs,local_refs)
                 summary.update({"chunk_size":size,"overlap":overlap,"words":len(turbo),"chunks":len(diag)})
                 key=f"{size}-o{overlap}"
-                all_results[key]={"summary":summary,"rows":rows,"chunks":diag}
+                all_results[key]={"summary":summary,"rows":rows,"chunks":diag,"_words":turbo}
                 refs_by_variant[key]=refs
                 print("[chunk-summary]",json.dumps(summary,ensure_ascii=False))
                 for d in diag:print("[chunk]",json.dumps(d,ensure_ascii=False))
@@ -266,6 +296,29 @@ def main():
                     if r["delta"] is not None:print("[line]",json.dumps(r,ensure_ascii=False))
     base=refs_by_variant.get("24.0-o0.0")
     staggered=refs_by_variant.get("24.0-o4.0")
+
+    base_words=(all_results.get("24.0-o0.0") or {}).get("_words")
+    staggered_words=(all_results.get("24.0-o4.0") or {}).get("_words")
+    if base_words and staggered_words:
+        combined_words=merge_staggered_word_streams([base_words,staggered_words])
+        combined_refs=align(lines,combined_words)
+        summary,rows=evaluate(lines,combined_refs,local_refs)
+        summary.update({
+            "chunk_size":24.0,
+            "overlap":"word-consensus-0+4",
+            "words":len(combined_words),
+            "chunks":None,
+        })
+        all_results["word-consensus-0+4"]={
+            "summary":summary,
+            "rows":rows,
+            "chunks":[],
+        }
+        refs_by_variant["word-consensus-0+4"]=combined_refs
+        print("[word-consensus-summary]",json.dumps(summary,ensure_ascii=False))
+        for row in rows:
+            if row["delta"] is not None:
+                print("[word-consensus-line]",json.dumps(row,ensure_ascii=False))
     if base and staggered:
         consensus=[]
         for idx in range(len(lines)):
@@ -298,7 +351,11 @@ def main():
 
     ranked=sorted((v["summary"] for v in all_results.values()),key=lambda s:(s["median_abs_delta"] if s["median_abs_delta"] is not None else 999,-s["compared"]))
     best=ranked[0] if ranked else {}
-    result={"song":{"title":song.get("title"),"id":song.get("id"),"duration":duration},"best":best,"variants":all_results}
+    serializable_results={
+        key:{name:value for name,value in payload.items() if name!="_words"}
+        for key,payload in all_results.items()
+    }
+    result={"song":{"title":song.get("title"),"id":song.get("id"),"duration":duration},"best":best,"variants":serializable_results}
     Path("bench-chunked-turbo.json").write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding="utf-8")
     print("[best]",json.dumps(best,ensure_ascii=False,indent=2))
     if not best or best.get("compared",0)<5:return 2
