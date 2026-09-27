@@ -49,26 +49,6 @@ jobs:
         run: npx wrangler deploy --config services/vibes-renderer/wrangler.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      - name: Deploy karaoke Whisper backend
-        id: karaoke_backend
-        if: github.ref == 'refs/heads/v20.1'
-        run: npx wrangler deploy --config services/karaoke-align/wrangler.jsonc
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Configure karaoke backend auth
-        if: github.ref == 'refs/heads/v20.1' && steps.karaoke_backend.outcome == 'success'
-        run: |
-          if [ -z "$AI_RENDER_TOKEN" ]; then
-            echo "::error::AI_RENDER_TOKEN is required to derive the karaoke backend token."
-            exit 1
-          fi
-          KARAOKE_TOKEN="$(printf 'sunodown-karaoke-v20.1:%s' "$AI_RENDER_TOKEN" | sha256sum | awk '{print $1}')"
-          printf '%s' "$KARAOKE_TOKEN" | npx wrangler secret put KARAOKE_ALIGN_TOKEN --config services/karaoke-align/wrangler.jsonc
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          AI_RENDER_TOKEN: ${{ secrets.AI_RENDER_TOKEN }}
-
       - name: Provision background-render resources
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v6' || github.ref == 'refs/heads/v7' || github.ref == 'refs/heads/v8' || github.ref == 'refs/heads/v9' || github.ref == 'refs/heads/v10' || github.ref == 'refs/heads/v11' || github.ref == 'refs/heads/v12' || github.ref == 'refs/heads/v17' || github.ref == 'refs/heads/v20.1'
         run: node scripts/provision-v6-cloudflare.mjs
@@ -85,24 +65,17 @@ jobs:
       - name: Configure karaoke backend
         run: |
           if [ "$GITHUB_REF" = "refs/heads/v20.1" ]; then
-            if [ -z "$AI_RENDER_TOKEN" ]; then
-              echo "::error::AI_RENDER_TOKEN is required to derive the karaoke backend token."
-              exit 1
-            fi
-            KARAOKE_TOKEN="$(printf 'sunodown-karaoke-v20.1:%s' "$AI_RENDER_TOKEN" | sha256sum | awk '{print $1}')"
-            printf '%s' 'https://sunodown-karaoke-align.long-wind-7153.workers.dev' | npx wrangler secret put KARAOKE_ALIGN_URL --config wrangler.v6.generated.json
-            printf '%s' "$KARAOKE_TOKEN" | npx wrangler secret put KARAOKE_ALIGN_TOKEN --config wrangler.v6.generated.json
+            echo "V20.1 uses the Cloudflare Workers AI binding for Whisper."
           elif [ -n "$KARAOKE_ALIGN_URL" ]; then
             printf '%s' "$KARAOKE_ALIGN_URL" | npx wrangler secret put KARAOKE_ALIGN_URL --config wrangler.v6.generated.json
             if [ -n "$KARAOKE_ALIGN_TOKEN" ]; then
               printf '%s' "$KARAOKE_ALIGN_TOKEN" | npx wrangler secret put KARAOKE_ALIGN_TOKEN --config wrangler.v6.generated.json
             fi
           else
-            echo "::warning::KARAOKE_ALIGN_URL is not configured; mobile Whisper will fall back to CapCut."
+            echo "::warning::KARAOKE_ALIGN_URL is not configured; karaoke uses built-in fallbacks."
           fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          AI_RENDER_TOKEN: ${{ secrets.AI_RENDER_TOKEN }}
           KARAOKE_ALIGN_URL: ${{ secrets.KARAOKE_ALIGN_URL }}
           KARAOKE_ALIGN_TOKEN: ${{ secrets.KARAOKE_ALIGN_TOKEN }}
 
