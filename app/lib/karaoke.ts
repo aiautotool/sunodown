@@ -10,6 +10,7 @@ export type KaraokeLine = {
   start: number;
   end: number;
   words: KaraokeWord[];
+  timingSource?: 'anchored' | 'interpolated' | 'estimated';
 };
 
 export function visibleLyricLines(lyrics: string) {
@@ -197,9 +198,15 @@ export function activeKaraokeLine(lines: KaraokeLine[], time: number) {
       next: null as KaraokeLine | null,
       index: -1,
     };
-  const index = lines.findIndex(
-    (line) => time >= line.start && time < line.end,
-  );
+  const index = lines.findIndex((line, lineIndex) => {
+    const next = lines[lineIndex + 1];
+    const gapToNext = next ? next.start - line.end : Number.POSITIVE_INFINITY;
+    const effectiveEnd =
+      next && gapToNext > 0 && gapToNext <= 0.9
+        ? Math.max(line.end, next.start - 0.02)
+        : line.end;
+    return time >= line.start && time < effectiveEnd;
+  });
   if (index >= 0)
     return { line: lines[index], next: lines[index + 1] ?? null, index };
   const upcoming = lines.findIndex((line) => time < line.start);
@@ -441,16 +448,17 @@ export function drawKaraokeOverlay(
   height: number,
   style: KaraokeDrawStyle = {},
 ) {
-  const { line, next } = karaokeOverlayState(lines, time);
-  // Never pre-roll the upcoming lyric. During intro/instrumental gaps there is
-  // no active cue, so the preview must stay completely subtitle-free. The
-  // upcoming line is only shown as secondary context while a current line is
-  // actually active.
+  const { line } = karaokeOverlayState(lines, time);
   if (!line) return;
+
+  // Render exactly one phrase: the one currently being sung. Showing the next
+  // phrase as secondary context makes karaoke look one line ahead, especially
+  // while the singer is sustaining the tail of the current line.
   const panelWidth = Math.min(width - 96, 1120),
-    panelHeight = 154,
+    panelHeight = 104,
     panelX = (width - panelWidth) / 2,
     panelY = height - panelHeight - 42;
+
   ctx.save();
   roundedRect(ctx, panelX, panelY, panelWidth, panelHeight, style.radius ?? 28);
   const bg = style.background || '#080812',
@@ -459,27 +467,16 @@ export function drawKaraokeOverlay(
   ctx.globalAlpha = a;
   ctx.fill();
   ctx.globalAlpha = 1;
-  if (line)
-    drawWordLine(
-      ctx,
-      line,
-      time,
-      width / 2,
-      panelY + 66,
-      panelWidth - 64,
-      style,
-    );
-  if (next) {
-    const font = KARAOKE_FONTS[style.font || 'system'];
-    ctx.font = `600 26px ${font}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = 'rgba(255,255,255,.42)';
-    const nextText =
-      next.text.length > 86 ? `${next.text.slice(0, 83)}…` : next.text;
-    ctx.fillText(nextText, width / 2, panelY + 119, panelWidth - 64);
-    ctx.textAlign = 'start';
-  }
+
+  drawWordLine(
+    ctx,
+    line,
+    time,
+    width / 2,
+    panelY + 66,
+    panelWidth - 64,
+    style,
+  );
   ctx.restore();
 }
 
@@ -515,6 +512,7 @@ export function alignRoughWordsToLyrics(
   lyrics: string,
   roughWords: RoughWord[],
   duration: number,
+  options: { strictAnchors?: boolean } = {},
 ): KaraokeLine[] {
   const lines = visibleLyricLines(lyrics),
     lyricTokens: Array<{ text: string; line: number }> = [],
@@ -540,7 +538,10 @@ export function alignRoughWordsToLyrics(
     .map((word) => ({ ...word, text: word.text.trim() }))
     .filter((word) => word.text);
   if (!lyricTokens.length) return [];
-  if (!asr.length) return buildEstimatedKaraokeTimeline(lyrics, duration);
+  if (!asr.length)
+    return options.strictAnchors
+      ? []
+      : buildEstimatedKaraokeTimeline(lyrics, duration);
   const frequencies = new Map<string, number>();
   for (const token of lyricTokens) {
     const key = normalizeToken(token.text);
@@ -631,11 +632,16 @@ export function alignRoughWordsToLyrics(
     return { start: asr[matched[0]].start, end: asr[matched.at(-1)!].end };
   });
   if (!lineAnchors.some(Boolean))
-    return buildEstimatedKaraokeTimeline(lyrics, duration);
+    return options.strictAnchors
+      ? []
+      : buildEstimatedKaraokeTimeline(lyrics, duration);
 
-  const built = lines.map((text, lineIndex) => {
+  const built = lines.flatMap((text, lineIndex) => {
     const indexes = lineTokenIndexes[lineIndex],
       anchor = lineAnchors[lineIndex];
+
+    if (options.strictAnchors && !anchor) return [];
+
     let start: number, end: number;
     if (anchor) {
       start = Math.max(0, anchor.start - 0.06);
@@ -766,7 +772,13 @@ export function alignRoughWordsToLyrics(
         cursor = wordEnd;
       });
     }
-    return { text, start, end, words };
+    return [{
+      text,
+      start,
+      end,
+      words,
+      timingSource: anchor ? 'anchored' : 'interpolated',
+    } satisfies KaraokeLine];
   });
   return normalizeKaraokeTimeline(built, duration);
 }
