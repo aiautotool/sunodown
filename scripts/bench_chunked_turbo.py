@@ -21,7 +21,8 @@ BASE_URL=os.getenv("BASE_URL","https://sunoapp.aiautotool.com").rstrip("/")
 BENCH_AI_URL=os.getenv("BENCH_AI_URL","http://127.0.0.1:8791").rstrip("/")
 MODEL=os.getenv("BENCH_WHISPER_MODEL","medium")
 LANG=os.getenv("BENCH_LANGUAGE","vi")
-CHUNK_SIZES=[float(x) for x in os.getenv("CHUNK_SIZES","24,32,45").split(",")]
+CHUNK_SIZES=[float(x) for x in os.getenv("CHUNK_SIZES","24").split(",")]
+CHUNK_OVERLAPS=[float(x) for x in os.getenv("CHUNK_OVERLAPS","0,4,6").split(",")]
 
 NONWORD=re.compile(r"[^\wÀ-ỹĐđ]+",re.UNICODE)
 SECTION_LABEL=re.compile(r"^\s*(?:\[?\s*(?:verse|chorus|bridge|intro|outro|pre[- ]?chorus|instrumental|hook)(?:\s+\d+)?\s*\]?|\((?:verse|chorus|bridge|intro|outro|pre[- ]?chorus|instrumental|hook)(?:\s+\d+)?\))\s*$",re.I)
@@ -77,12 +78,13 @@ def words_from_result(payload:dict[str,Any],offset:float):
                 out.append({"text":t,"start":float(s)+offset,"end":float(e)+offset})
     return out
 
-def transcribe_chunked(audio:Path,duration:float,chunk_size:float,tmp:Path):
-    words=[]; diagnostics=[]
+def transcribe_chunked(audio:Path,duration:float,chunk_size:float,overlap:float,tmp:Path):
+    candidates=[];diagnostics=[]
+    step=max(4.0,chunk_size-overlap)
     start=0.0;index=0
     while start<duration-.05:
         length=min(chunk_size,duration-start)
-        chunk=tmp/f"chunk-{int(chunk_size)}-{index}.wav"
+        chunk=tmp/f"chunk-{int(chunk_size)}-o{int(overlap)}-{index}.wav"
         subprocess.run([
             "ffmpeg","-hide_banner","-loglevel","error","-y",
             "-ss",f"{start:.3f}","-t",f"{length:.3f}","-i",str(audio),
@@ -91,6 +93,11 @@ def transcribe_chunked(audio:Path,duration:float,chunk_size:float,tmp:Path):
         payload=call_turbo(chunk)
         result=payload.get("result") or {}
         chunk_words=words_from_result(payload,start)
+        for word in chunk_words:
+            local_start=word["start"]-start
+            local_end=word["end"]-start
+            edge=min(max(0.0,local_start),max(0.0,length-local_end))
+            candidates.append({**word,"edge":edge,"chunk":index})
         diagnostics.append({
             "index":index,"start":round(start,3),"duration":round(length,3),
             "words":len(chunk_words),
@@ -98,9 +105,35 @@ def transcribe_chunked(audio:Path,duration:float,chunk_size:float,tmp:Path):
             "language":(result.get("transcription_info") or {}).get("language"),
             "duration_after_vad":(result.get("transcription_info") or {}).get("duration_after_vad"),
         })
-        words.extend(chunk_words)
-        start+=chunk_size;index+=1
-    return words,diagnostics
+        if start+length>=duration-.05:break
+        start+=step;index+=1
+
+    # Overlap produces duplicate acoustic words. Collapse near-identical
+    # candidates and keep the timestamp from the chunk where the word sits
+    # farthest from an edge; edge timestamps are the least trustworthy.
+    candidates.sort(key=lambda w:(w["start"],w["end"]))
+    merged=[]
+    for word in candidates:
+        key=norm(word["text"])
+        duplicate=-1
+        for i in range(max(0,len(merged)-12),len(merged)):
+            prev=merged[i]
+            if norm(prev["text"])==key and abs(prev["start"]-word["start"])<=0.75:
+                duplicate=i
+                break
+        if duplicate>=0:
+            prev=merged[duplicate]
+            if word["edge"]>prev.get("edge",0)+0.15:
+                merged[duplicate]=word
+            elif abs(word["edge"]-prev.get("edge",0))<=0.15:
+                # Similar reliability: median-ish average reduces model jitter.
+                prev["start"]=(prev["start"]+word["start"])/2
+                prev["end"]=(prev["end"]+word["end"])/2
+                prev["edge"]=max(prev.get("edge",0),word["edge"])
+        else:
+            merged.append(word)
+    merged.sort(key=lambda w:w["start"])
+    return merged,diagnostics
 
 def local_words(audio:Path):
     model=WhisperModel(MODEL,device="cpu",compute_type="int8")
@@ -218,14 +251,17 @@ def main():
         local=local_words(audio);local_refs=align(lines,local)
         print(f"[local] words={len(local)} anchored={sum(1 for x in local_refs if x)}")
         for size in CHUNK_SIZES:
-            turbo,diag=transcribe_chunked(audio,duration,size,tmp)
-            refs=align(lines,turbo);summary,rows=evaluate(lines,refs,local_refs)
-            summary.update({"chunk_size":size,"words":len(turbo),"chunks":len(diag)})
-            all_results[str(size)]={"summary":summary,"rows":rows,"chunks":diag}
-            print("[chunk-summary]",json.dumps(summary,ensure_ascii=False))
-            for d in diag:print("[chunk]",json.dumps(d,ensure_ascii=False))
-            for r in rows:
-                if r["delta"] is not None:print("[line]",json.dumps(r,ensure_ascii=False))
+            for overlap in CHUNK_OVERLAPS:
+                if overlap>=size-4:continue
+                turbo,diag=transcribe_chunked(audio,duration,size,overlap,tmp)
+                refs=align(lines,turbo);summary,rows=evaluate(lines,refs,local_refs)
+                summary.update({"chunk_size":size,"overlap":overlap,"words":len(turbo),"chunks":len(diag)})
+                key=f"{size}-o{overlap}"
+                all_results[key]={"summary":summary,"rows":rows,"chunks":diag}
+                print("[chunk-summary]",json.dumps(summary,ensure_ascii=False))
+                for d in diag:print("[chunk]",json.dumps(d,ensure_ascii=False))
+                for r in rows:
+                    if r["delta"] is not None:print("[line]",json.dumps(r,ensure_ascii=False))
     ranked=sorted((v["summary"] for v in all_results.values()),key=lambda s:(s["median_abs_delta"] if s["median_abs_delta"] is not None else 999,-s["compared"]))
     best=ranked[0] if ranked else {}
     result={"song":{"title":song.get("title"),"id":song.get("id"),"duration":duration},"best":best,"variants":all_results}
