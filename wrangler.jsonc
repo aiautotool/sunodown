@@ -3,11 +3,29 @@
   "name": "suno-aiautotool",
   "main": "worker-v6.ts",
   "compatibility_date": "2026-05-15",
-  "compatibility_flags": ["nodejs_compat"],
-  "assets": {"directory":"dist/client","binding":"ASSETS","not_found_handling":"single-page-application","run_worker_first":true},
-  "routes":[
-    {"pattern":"sunoapp.aiautotool.com","custom_domain":true},
-    {"pattern":"suno.aiautotool.com","custom_domain":true}
+  "compatibility_flags": [
+    "nodejs_compat"
   ],
-  "observability":{"enabled":true}
+  "assets": {
+    "directory": "dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "routes": [
+    {
+      "pattern": "sunoapp.aiautotool.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "suno.aiautotool.com",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "ai": {
+    "binding": "AI"
+  }
 }
