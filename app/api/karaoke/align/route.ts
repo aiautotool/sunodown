@@ -322,10 +322,7 @@ export async function POST(request: NextRequest) {
     console.error('[karaoke-workers-ai]', error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? `Không xử lý được audio: ${error.message}`
-            : 'Không xử lý được audio.',
+        error: 'Không xử lý được audio.',
       },
       { status: 502 },
     );

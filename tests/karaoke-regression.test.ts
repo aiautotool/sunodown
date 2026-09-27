@@ -17,7 +17,9 @@ import { validateKaraokeTimeline } from '../app/lib/karaoke-validation.ts';
 import { refineKaraokeTimelineToRhythm } from '../app/lib/karaoke-rhythm.ts';
 import { isMobileKaraokeDeviceFromHints } from '../app/lib/karaoke-device.ts';
 import {
+  BACKEND_VOCAL_LEAD_SECONDS,
   buildKaraokeChunkPlan,
+  compensateBackendVocalLatency,
   mergeKaraokeChunkWords,
 } from '../app/lib/karaoke-backend-sync.ts';
 
@@ -697,4 +699,24 @@ void test('staggered word consensus averages equally reliable duplicate timestam
 
   assert.equal(merged.length, 1);
   assert.ok(Math.abs(merged[0].start - 56.6) < 0.001);
+});
+
+void test('backend timing compensates the measured sung-vocal recognition lag', () => {
+  const [line] = compensateBackendVocalLatency(
+    [{
+      text: 'Có những năm ta từng vội vã',
+      start: 17.02,
+      end: 20.2,
+      words: [
+        { text: 'Có', start: 17.02, end: 17.44 },
+        { text: 'những', start: 17.78, end: 18.02 },
+      ],
+    }],
+    178.72,
+  );
+
+  assert.equal(BACKEND_VOCAL_LEAD_SECONDS, 0.48);
+  assert.ok(Math.abs(line.start - 16.54) < 0.001);
+  assert.ok(Math.abs(line.words[0].start - 16.54) < 0.001);
+  assert.ok(Math.abs(line.words[1].start - 17.3) < 0.001);
 });

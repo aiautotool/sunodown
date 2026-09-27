@@ -1,5 +1,8 @@
 import { type KaraokeLine } from './karaoke';
-import { buildBackendKaraokeTimeline } from './karaoke-backend-sync';
+import {
+  buildBackendKaraokeTimeline,
+  compensateBackendVocalLatency,
+} from './karaoke-backend-sync';
 import { buildCapCutKaraokeTimeline } from './karaoke-capcut-sync';
 import { isMobileKaraokeDevice } from './karaoke-device';
 import {
@@ -121,7 +124,10 @@ export async function runKaraokePipeline({
         message: label,
       });
       const rawTimeline = await run();
-      const timeline = await refineToSungRhythm(rawTimeline, engine);
+      const refinedTimeline = await refineToSungRhythm(rawTimeline, engine);
+      const timeline = engine.startsWith('backend-whisper')
+        ? compensateBackendVocalLatency(refinedTimeline, duration)
+        : refinedTimeline;
       onProgress?.({
         stage: 'validate',
         engine,
@@ -174,29 +180,30 @@ export async function runKaraokePipeline({
   });
 
   if (hasLyrics) {
+    const backendEngine = {
+      engine: 'backend-whisper' as const,
+      label: 'Đang đồng bộ subtitle…',
+      run: () =>
+        buildBackendKaraokeTimeline({
+          audio,
+          lyrics,
+          duration,
+          language,
+          onStage: (message) =>
+            onProgress?.({
+              stage: 'recognize',
+              engine: 'backend-whisper',
+              message,
+            }),
+        }),
+    };
     const knownLyricsEngines: Array<{
       engine: KaraokeEngineId;
       label: string;
       run: () => Promise<KaraokeLine[]>;
     }> = mobile
       ? [
-          {
-            engine: 'backend-whisper',
-            label: 'Mobile · đang dùng Whisper backend + vocal alignment…',
-            run: () =>
-              buildBackendKaraokeTimeline({
-                audio,
-                lyrics,
-                duration,
-                language,
-                onStage: (message) =>
-                  onProgress?.({
-                    stage: 'recognize',
-                    engine: 'backend-whisper',
-                    message,
-                  }),
-              }),
-          },
+          backendEngine,
           {
             engine: 'capcut',
             label: 'Whisper backend chưa đủ tốt · đang thử CapCut timestamp…',
@@ -210,6 +217,7 @@ export async function runKaraokePipeline({
           },
         ]
       : [
+          backendEngine,
           {
             engine: 'local-whisper',
             label: 'Desktop · đang nhận diện bằng Whisper trên trình duyệt…',
@@ -236,23 +244,6 @@ export async function runKaraokePipeline({
                 lyrics: lyrics!,
                 duration,
                 language: language === 'vi' ? 'vi-VN' : language,
-              }),
-          },
-          {
-            engine: 'backend-whisper',
-            label: 'Đang dùng Whisper backend làm fallback cuối…',
-            run: () =>
-              buildBackendKaraokeTimeline({
-                audio,
-                lyrics,
-                duration,
-                language,
-                onStage: (message) =>
-                  onProgress?.({
-                    stage: 'fallback',
-                    engine: 'backend-whisper',
-                    message,
-                  }),
               }),
           },
         ];

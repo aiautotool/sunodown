@@ -49,6 +49,24 @@ const STAGGER_STEP_SECONDS = 20;
 const BASE_STEP_SECONDS = 24;
 const MAX_PARALLEL_CHUNKS = 3;
 
+export const BACKEND_VOCAL_LEAD_SECONDS = 0.48;
+
+export function compensateBackendVocalLatency(
+  timeline: KaraokeLine[],
+  duration: number,
+): KaraokeLine[] {
+  return timeline.map((line) => ({
+    ...line,
+    start: Math.max(0, line.start - BACKEND_VOCAL_LEAD_SECONDS),
+    end: Math.min(duration, Math.max(0.02, line.end - BACKEND_VOCAL_LEAD_SECONDS)),
+    words: line.words.map((word) => ({
+      ...word,
+      start: Math.max(0, word.start - BACKEND_VOCAL_LEAD_SECONDS),
+      end: Math.min(duration, Math.max(0.01, word.end - BACKEND_VOCAL_LEAD_SECONDS)),
+    })),
+  }));
+}
+
 function normalizeWordKey(value: string) {
   return value
     .normalize('NFD')

@@ -62,8 +62,6 @@ type Props = {
   audioUrl?: string;
   visualLabel?: string;
   effectLabels?: string[];
-  subtitleSyncStatus?: 'idle' | 'syncing' | 'synced' | 'fallback';
-  subtitleSyncMessage?: string;
   onTrackStateChange?: (state: TimelineTrackState) => void;
   trackState?: TimelineTrackState;
 };
@@ -743,32 +741,6 @@ export function EditorTimeline(props: Props) {
           </button>
         </div>
       </header>
-
-      {(props.subtitleSyncStatus === 'syncing' ||
-        props.subtitleSyncStatus === 'synced') && (
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            padding: '8px 10px',
-            margin: '0 0 8px',
-            borderRadius: 10,
-            border: '1px solid rgba(148,163,184,.12)',
-            background:
-              props.subtitleSyncStatus === 'synced'
-                ? 'rgba(34,197,94,.07)'
-                : 'rgba(6,182,212,.07)',
-          }}
-        >
-          <b style={{ fontSize: 11 }}>
-            {props.subtitleSyncStatus === 'syncing'
-              ? 'Đang xử lý subtitle'
-              : 'Subtitle đã sẵn sàng'}
-          </b>
-        </div>
-      )}
 
       {selectedSubtitleIndex >= 0 && props.subtitles[selectedSubtitleIndex] && (
         <div

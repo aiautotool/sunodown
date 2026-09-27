@@ -989,8 +989,6 @@ export default function CreatorStudio() {
     setKaraokeSyncMessage('Đang chuẩn bị subtitle…');
 
     const delays = [0, 2200];
-    let lastError: unknown = null;
-
     for (let attempt = 0; attempt < delays.length; attempt++) {
       if (karaokeSyncRun.current !== syncRun) return;
 
@@ -1041,29 +1039,14 @@ export default function CreatorStudio() {
             ? 'karaoke_auto_sync_succeeded'
             : 'karaoke_auto_sync_fallback',
           {
-            engine: result.engine,
-            confidence: result.quality.confidence,
             lines: result.timeline.length,
-            issues: result.quality.issues.length,
-            attempts: result.attempts.length,
-            job_attempt: attempt + 1,
           },
         );
         return;
-      } catch (syncError) {
-        lastError = syncError;
+      } catch {
         if (karaokeSyncRun.current !== syncRun) return;
-        console.warn('[karaoke-background-sync]', {
-          attempt: attempt + 1,
-          error: syncError,
-        });
-
         track('karaoke_auto_sync_attempt_failed', {
           attempt: attempt + 1,
-          reason:
-            syncError instanceof Error
-              ? syncError.message.slice(0, 120)
-              : 'unknown',
         });
       }
     }
@@ -1074,27 +1057,6 @@ export default function CreatorStudio() {
     setKaraokeSyncMessage('Chưa tạo được subtitle.');
     track('karaoke_auto_sync_failed', {
       attempts: delays.length,
-      reason:
-        lastError instanceof Error
-          ? lastError.message.slice(0, 120)
-          : 'unknown',
-    });
-  }
-
-  function retrySubtitleSync() {
-    if (!song || !audioBinary) return;
-    const syncRun = ++karaokeSyncRun.current;
-    setKaraokeTimeline([]);
-    setKaraokeSyncStatus('syncing');
-    setKaraokeSyncMessage('Đang thử lại subtitle…');
-    void generateSubtitlesInBackground(
-      song,
-      audioBinary,
-      song.duration || trimEnd || 30,
-      syncRun,
-    );
-    track('karaoke_manual_retry_started', {
-      has_lyrics: Boolean(song.lyrics),
     });
   }
 
@@ -2254,37 +2216,6 @@ export default function CreatorStudio() {
                 resultUrl={resultUrl || undefined}
               />
             </div>
-            {karaokeSyncStatus !== 'idle' && (
-              <output
-                className={`sd-subtitle-job ${karaokeSyncStatus}`}
-                aria-live="polite"
-              >
-                <i aria-hidden="true" />
-                <span>
-                  <b>
-                    {karaokeSyncStatus === 'syncing'
-                      ? 'Đang xử lý subtitle…'
-                      : karaokeSyncStatus === 'synced'
-                        ? 'Subtitle đã sẵn sàng'
-                        : karaokeTimeline.length
-                          ? 'Subtitle cần kiểm tra lại'
-                          : 'Chưa tạo được subtitle'}
-                  </b>
-                </span>
-                {karaokeSyncStatus === 'fallback' &&
-                  !karaokeTimeline.length &&
-                  song &&
-                  audioBinary && (
-                    <button
-                      type="button"
-                      onClick={retrySubtitleSync}
-                      aria-label="Thử lại subtitle"
-                    >
-                      Thử lại
-                    </button>
-                  )}
-              </output>
-            )}
             {quickMode && (
               <section className="sd-quick-create" aria-label="Quick Create">
                 <div className="sd-quick-create-head">
@@ -2469,8 +2400,6 @@ export default function CreatorStudio() {
               audioUrl={song.audio}
               visualLabel={`${template} · ${background.mode}`}
               effectLabels={effects.length ? effects : ['Không có effect']}
-              subtitleSyncStatus={karaokeSyncStatus}
-              subtitleSyncMessage={karaokeSyncMessage}
             />
           </section>
           <aside className="sd-inspector">
