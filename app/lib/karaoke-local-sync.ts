@@ -205,7 +205,7 @@ export async function buildLocalKaraokeTimeline({
   if (!roughWords.length) throw new Error('Không nhận diện được từ có timestamp.');
 
   onStage?.('align', 'Đang căn timestamp vào lyrics gốc…');
-  const timeline = alignRoughWordsToLyrics(cleaned, roughWords, duration);
+  const timeline = alignRoughWordsToLyrics(cleaned, roughWords, duration, { strictAnchors: true });
   if (!timeline.length) throw new Error('Không căn được lời bài hát với audio.');
 
   onStage?.('done', 'Subtitle đã được căn theo giọng hát.');
