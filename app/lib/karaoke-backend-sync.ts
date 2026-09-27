@@ -32,6 +32,11 @@ type BackendSyncOptions = {
   duration: number;
   language?: string;
   onStage?: (message: string) => void;
+  onPartialTimeline?: (
+    timeline: KaraokeLine[],
+    completedChunks: number,
+    totalChunks: number,
+  ) => void;
 };
 
 export type KaraokeChunkPlan = {
@@ -49,7 +54,7 @@ const CHUNK_SECONDS = 24;
 const STAGGER_STEP_SECONDS = 20;
 const BASE_STEP_SECONDS = 24;
 const MAX_PARALLEL_CHUNKS = 3;
-const MOBILE_PARALLEL_CHUNKS = 2;
+const MOBILE_PARALLEL_CHUNKS = 1;
 
 export function backendKaraokeConcurrency(mobile: boolean) {
   return mobile ? MOBILE_PARALLEL_CHUNKS : MAX_PARALLEL_CHUNKS;
@@ -166,7 +171,7 @@ export function mergeKaraokeChunkWords(
     .map(({ text, start, end }) => ({ text, start, end }));
 }
 
-async function decodeAndResample(audio: Blob) {
+async function decodeAudio(audio: Blob) {
   const AudioCtx =
     window.AudioContext ||
     (window as typeof window & { webkitAudioContext?: typeof AudioContext })
@@ -184,10 +189,33 @@ async function decodeAndResample(audio: Blob) {
       { length: decoded.numberOfChannels },
       (_, channel) => decoded.getChannelData(channel),
     );
-    return resampleAudioChannels(channels, decoded.sampleRate);
+    return {
+      channels,
+      sampleRate: decoded.sampleRate,
+      duration: decoded.duration,
+    };
   } finally {
     await context.close().catch(() => {});
   }
+}
+
+export function resampleAudioSegment(
+  channels: Float32Array[],
+  sourceRate: number,
+  start: number,
+  duration: number,
+  targetRate = SAMPLE_RATE,
+) {
+  const from = Math.max(0, Math.floor(start * sourceRate));
+  const to = Math.max(
+    from,
+    Math.min(channels[0]?.length || 0, Math.ceil((start + duration) * sourceRate)),
+  );
+  return resampleAudioChannels(
+    channels.map((channel) => channel.subarray(from, to)),
+    sourceRate,
+    targetRate,
+  );
 }
 
 export function resampleAudioChannels(
@@ -286,21 +314,15 @@ const sleep = (ms: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 async function transcribeChunk(
-  pcm16k: Float32Array,
+  samples: Float32Array,
   plan: KaraokeChunkPlan,
   index: number,
   language: string,
 ): Promise<ChunkCandidate[]> {
-  const startSample = Math.max(0, Math.floor(plan.start * SAMPLE_RATE));
-  const endSample = Math.min(
-    pcm16k.length,
-    Math.ceil((plan.start + plan.duration) * SAMPLE_RATE),
-  );
-  const slice = pcm16k.subarray(startSample, endSample);
-  if (!slice.length) return [];
+  if (!samples.length) return [];
 
-  const wav = encodeMonoPcm16Wav(slice);
-  const actualDuration = slice.length / SAMPLE_RATE;
+  const wav = encodeMonoPcm16Wav(samples);
+  const actualDuration = samples.length / SAMPLE_RATE;
   let lastError: unknown = null;
 
   for (let attempt = 0; attempt < CHUNK_RETRY_DELAYS_MS.length; attempt++) {
@@ -440,14 +462,15 @@ export async function buildBackendKaraokeTimeline({
   duration,
   language = 'vi',
   onStage,
+  onPartialTimeline,
 }: BackendSyncOptions): Promise<KaraokeLine[]> {
   if (typeof window === 'undefined') {
     throw new Error('Backend subtitle sync cần chạy từ trình duyệt.');
   }
 
   onStage?.('Đang chuẩn bị dữ liệu phụ đề…');
-  const pcm16k = await decodeAndResample(audio);
-  const actualDuration = pcm16k.length / SAMPLE_RATE;
+  const decoded = await decodeAudio(audio);
+  const actualDuration = decoded.duration;
   const safeDuration =
     Number.isFinite(duration) && duration > 0 ? duration : actualDuration;
   const mobile = isMobileKaraokeDevice();
@@ -459,16 +482,52 @@ export async function buildBackendKaraokeTimeline({
 
   onStage?.('Đang đồng bộ phụ đề…');
   let failedChunks = 0;
-  const streams = await mapWithConcurrency(
+  let completedChunks = 0;
+  const streams: ChunkCandidate[][] = new Array(plan.length).fill(null).map(() => []);
+  const fullPcm16k = mobile
+    ? null
+    : resampleAudioChannels(decoded.channels, decoded.sampleRate);
+  await mapWithConcurrency(
     plan,
     backendKaraokeConcurrency(mobile),
     async (chunk, index) => {
       try {
-        return await transcribeChunk(pcm16k, chunk, index, language);
+        // Mobile only materializes one short PCM window at a time. Once the
+        // request finishes, its samples/WAV become collectible before the
+        // next window starts, keeping peak memory bounded.
+        const samples = fullPcm16k
+          ? fullPcm16k.subarray(
+              Math.max(0, Math.floor(chunk.start * SAMPLE_RATE)),
+              Math.min(
+                fullPcm16k.length,
+                Math.ceil((chunk.start + chunk.duration) * SAMPLE_RATE),
+              ),
+            )
+          : resampleAudioSegment(
+              decoded.channels,
+              decoded.sampleRate,
+              chunk.start,
+              chunk.duration,
+            );
+        streams[index] = await transcribeChunk(samples, chunk, index, language);
       } catch {
         failedChunks++;
-        return [] as ChunkCandidate[];
+        streams[index] = [];
+      } finally {
+        completedChunks++;
+        if (mobile && onPartialTimeline) {
+          const partialWords = mergeKaraokeChunkWords(streams);
+          const partialTimeline = lyrics?.trim()
+            ? alignRoughWordsToLyrics(lyrics, partialWords, safeDuration, {
+                strictAnchors: true,
+              })
+            : wordsToLines(partialWords, safeDuration);
+          if (partialTimeline.length) {
+            onPartialTimeline(partialTimeline, completedChunks, plan.length);
+          }
+        }
       }
+      return streams[index];
     },
   );
 

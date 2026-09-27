@@ -62,6 +62,7 @@ type KaraokePipelineOptions = {
   language?: string;
   minimumConfidence?: number;
   onProgress?: (progress: KaraokePipelineProgress) => void;
+  onPartialTimeline?: (timeline: KaraokeLine[]) => void;
 };
 
 type Candidate = {
@@ -91,6 +92,7 @@ export async function runKaraokePipeline({
   language = 'vi',
   minimumConfidence = 60,
   onProgress,
+  onPartialTimeline,
 }: KaraokePipelineOptions): Promise<KaraokePipelineResult> {
   const attempts: KaraokePipelineResult['attempts'] = [];
   const hasLyrics = Boolean(lyrics?.trim());
@@ -195,6 +197,10 @@ export async function runKaraokePipeline({
               engine: 'backend-whisper',
               message,
             }),
+          onPartialTimeline: (timeline) =>
+            onPartialTimeline?.(
+              compensateBackendVocalLatency(timeline, duration),
+            ),
         }),
     };
     const knownLyricsEngines: Array<{
@@ -275,6 +281,10 @@ export async function runKaraokePipeline({
                     engine: 'backend-whisper-transcription',
                     message,
                   }),
+                onPartialTimeline: (timeline) =>
+                  onPartialTimeline?.(
+                    compensateBackendVocalLatency(timeline, duration),
+                  ),
               }),
           },
         ]
@@ -309,6 +319,10 @@ export async function runKaraokePipeline({
                     engine: 'backend-whisper-transcription',
                     message,
                   }),
+                onPartialTimeline: (timeline) =>
+                  onPartialTimeline?.(
+                    compensateBackendVocalLatency(timeline, duration),
+                  ),
               }),
           },
         ];

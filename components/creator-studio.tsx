@@ -1023,6 +1023,14 @@ export default function CreatorStudio() {
                   : 'Đang xử lý subtitle…';
             setKaraokeSyncMessage(publicMessage);
           },
+          onPartialTimeline: (partialTimeline) => {
+            if (karaokeSyncRun.current !== syncRun || !partialTimeline.length) return;
+            setKaraokeTimeline(partialTimeline);
+            setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
+            setKaraokeSyncMessage(
+              `Đã tìm thấy ${partialTimeline.length} dòng subtitle…`,
+            );
+          },
         });
 
         if (karaokeSyncRun.current !== syncRun) return;

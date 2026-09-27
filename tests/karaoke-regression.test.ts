@@ -23,6 +23,7 @@ import {
   compensateBackendVocalLatency,
   mergeKaraokeChunkWords,
   resampleAudioChannels,
+  resampleAudioSegment,
 } from '../app/lib/karaoke-backend-sync.ts';
 
 void test('removes bracketed and unambiguous bare chords from every karaoke input', () => {
@@ -711,8 +712,17 @@ void test('mobile-safe resampler mixes stereo without OfflineAudioContext', () =
   assert.equal(output.length, 2);
   assert.deepEqual([...output], [0, 0]);
   assert.equal(resampleAudioChannels([], 48_000).length, 0);
-  assert.equal(backendKaraokeConcurrency(true), 2);
+  assert.equal(backendKaraokeConcurrency(true), 1);
   assert.equal(backendKaraokeConcurrency(false), 3);
+});
+
+void test('mobile resamples only the active audio window', () => {
+  const source = new Float32Array(100).map((_, index) => index / 100);
+  const output = resampleAudioSegment([source], 10, 2, 3, 10);
+
+  assert.equal(output.length, 30);
+  assert.ok(Math.abs(output[0] - 0.2) < 0.001);
+  assert.ok(Math.abs(output.at(-1)! - 0.49) < 0.001);
 });
 
 void test('backend timing compensates the measured sung-vocal recognition lag', () => {
