@@ -128,7 +128,7 @@ export async function buildBackendKaraokeTimeline({
     .filter((word): word is RoughWord => Boolean(word));
 
   if (lyrics?.trim() && roughWords.length) {
-    const aligned = alignRoughWordsToLyrics(lyrics, roughWords, duration);
+    const aligned = alignRoughWordsToLyrics(lyrics, roughWords, duration, { strictAnchors: true });
     if (aligned.length) {
       onStage?.(
         `Whisper backend trả về ${roughWords.length} word timestamp · đang căn vào lyrics.`,
