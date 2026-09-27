@@ -34,6 +34,9 @@ jobs:
       - name: Run karaoke regression tests
         run: npm run test:karaoke
 
+      - name: Verify karaoke backend Python
+        run: python3 -m py_compile services/karaoke-align/main.py
+
       - name: Build production bundle
         run: npm run build
 
