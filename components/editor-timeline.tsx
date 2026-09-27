@@ -764,12 +764,9 @@ export function EditorTimeline(props: Props) {
         >
           <b style={{ fontSize: 11 }}>
             {props.subtitleSyncStatus === 'syncing'
-              ? 'AI đang căn subtitle'
-              : 'Subtitle đã sync'}
+              ? 'Đang xử lý subtitle'
+              : 'Subtitle đã sẵn sàng'}
           </b>
-          <span style={{ fontSize: 11, opacity: 0.62 }}>
-            {props.subtitleSyncMessage}
-          </span>
         </div>
       )}
 
