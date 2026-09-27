@@ -5,6 +5,9 @@ on:
     branches: [v20.1-karaoke-bench]
     paths:
       - 'scripts/bench_karaoke_song.py'
+      - 'scripts/bench_workers_ai_models.py'
+      - 'scripts/karaoke-ai-bench-worker.ts'
+      - 'scripts/karaoke-ai-bench.wrangler.jsonc'
       - '.github/workflows/karaoke-song-bench.yml'
   workflow_dispatch:
 
@@ -58,7 +61,7 @@ jobs:
           BENCH_AI_URL: http://127.0.0.1:8791
           BENCH_LANGUAGE: vi
           MAX_EARLY_SECONDS: '0.45'
-        run: python scripts/bench_karaoke_song.py
+        run: python scripts/bench_workers_ai_models.py
 
       - name: Upload benchmark report
         if: always()
@@ -66,7 +69,6 @@ jobs:
         with:
           name: karaoke-bench-tszo0jGdVUua4rT4
           path: |
-            bench-result.json
-            bench-report.md
+            bench-ai-models.json
           if-no-files-found: warn
           retention-days: 7
