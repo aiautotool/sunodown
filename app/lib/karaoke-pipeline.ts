@@ -62,6 +62,7 @@ type KaraokePipelineOptions = {
   language?: string;
   minimumConfidence?: number;
   onProgress?: (progress: KaraokePipelineProgress) => void;
+  onDebug?: (message: string, data?: Record<string, string | number | boolean | null>) => void;
   onPartialTimeline?: (timeline: KaraokeLine[]) => void;
 };
 
@@ -92,6 +93,7 @@ export async function runKaraokePipeline({
   language = 'vi',
   minimumConfidence = 60,
   onProgress,
+  onDebug,
   onPartialTimeline,
 }: KaraokePipelineOptions): Promise<KaraokePipelineResult> {
   const attempts: KaraokePipelineResult['attempts'] = [];
@@ -120,6 +122,7 @@ export async function runKaraokePipeline({
     label: string,
   ): Promise<Candidate | null> => {
     try {
+      onDebug?.('engine-start', { engine, label });
       onProgress?.({
         stage: 'recognize',
         engine,
@@ -144,12 +147,24 @@ export async function runKaraokePipeline({
         ok: true,
         confidence: quality.confidence,
       });
+      onDebug?.('engine-result', {
+        engine,
+        ok: true,
+        confidence: quality.confidence,
+        lines: quality.timeline.length,
+      });
       return { engine, timeline: quality.timeline, quality };
     } catch (error) {
+      const message = error instanceof Error ? error.message : `${engine} failed`;
       attempts.push({
         engine,
         ok: false,
-        error: error instanceof Error ? error.message : `${engine} failed`,
+        error: message,
+      });
+      onDebug?.('engine-result', {
+        engine,
+        ok: false,
+        error: message,
       });
       return null;
     }
@@ -165,6 +180,11 @@ export async function runKaraokePipeline({
       engine: candidate.engine,
       message: karaokeQualitySummary(candidate.quality),
     });
+    onDebug?.('pipeline-accepted', {
+      engine: candidate.engine,
+      confidence: candidate.quality.confidence,
+      lines: candidate.timeline.length,
+    });
     return {
       timeline: candidate.timeline,
       status: 'synced' as const,
@@ -174,6 +194,12 @@ export async function runKaraokePipeline({
     };
   };
 
+  onDebug?.('pipeline-start', {
+    mobile,
+    hasLyrics,
+    duration: Math.round(duration * 100) / 100,
+    minimumConfidence,
+  });
   onProgress?.({
     stage: 'prepare',
     message: mobile
@@ -197,6 +223,7 @@ export async function runKaraokePipeline({
               engine: 'backend-whisper',
               message,
             }),
+          onDebug,
           onPartialTimeline: (timeline) =>
             onPartialTimeline?.(
               compensateBackendVocalLatency(timeline, duration),
@@ -281,6 +308,7 @@ export async function runKaraokePipeline({
                     engine: 'backend-whisper-transcription',
                     message,
                   }),
+                onDebug,
                 onPartialTimeline: (timeline) =>
                   onPartialTimeline?.(
                     compensateBackendVocalLatency(timeline, duration),
@@ -319,6 +347,7 @@ export async function runKaraokePipeline({
                     engine: 'backend-whisper-transcription',
                     message,
                   }),
+                onDebug,
                 onPartialTimeline: (timeline) =>
                   onPartialTimeline?.(
                     compensateBackendVocalLatency(timeline, duration),
@@ -341,6 +370,11 @@ export async function runKaraokePipeline({
       engine: bestTimed.engine,
       message: `${karaokeQualitySummary(bestTimed.quality)} · cần kiểm tra lại`,
     });
+    onDebug?.('pipeline-fallback', {
+      engine: bestTimed.engine,
+      confidence: bestTimed.quality.confidence,
+      lines: bestTimed.timeline.length,
+    });
     return {
       timeline: bestTimed.timeline,
       status: 'fallback',
@@ -351,5 +385,9 @@ export async function runKaraokePipeline({
   }
 
 
+  onDebug?.('pipeline-failed', {
+    attempts: attempts.length,
+    successfulAttempts: attempts.filter((item) => item.ok).length,
+  });
   throw new Error('Không tìm thấy subtitle có timestamp đủ tin cậy.');
 }
