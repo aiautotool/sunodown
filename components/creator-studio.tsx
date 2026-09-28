@@ -1020,6 +1020,11 @@ export default function CreatorStudio() {
     setKaraokeSyncStatus('syncing');
     setKaraokeSyncMessage('Đang chuẩn bị subtitle…');
 
+    // Mobile backend emits useful chunk-by-chunk timelines before the whole
+    // song has finished. Keep the best one so a later network/validation
+    // failure never wipes already synchronized cues back to Subtitle 0.
+    let bestPartialTimeline: KaraokeLine[] = [];
+
     const delays = [0, 2200];
     for (let attempt = 0; attempt < delays.length; attempt++) {
       if (karaokeSyncRun.current !== syncRun) return;
@@ -1050,6 +1055,9 @@ export default function CreatorStudio() {
           },
           onPartialTimeline: (partialTimeline) => {
             if (karaokeSyncRun.current !== syncRun || !partialTimeline.length) return;
+            if (partialTimeline.length >= bestPartialTimeline.length) {
+              bestPartialTimeline = partialTimeline;
+            }
             setKaraokeTimeline(partialTimeline);
             setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
             setKaraokeSyncMessage(
@@ -1092,6 +1100,22 @@ export default function CreatorStudio() {
     }
 
     if (karaokeSyncRun.current !== syncRun) return;
+    if (bestPartialTimeline.length) {
+      setKaraokeTimeline(bestPartialTimeline);
+      setKaraokeSyncStatus('fallback');
+      setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
+      setKaraokeSyncMessage(
+        `Đã giữ ${bestPartialTimeline.length} dòng subtitle đã căn được · đang dùng bản fallback.`,
+      );
+      setSubtitleNotice(
+        `Đã giữ ${bestPartialTimeline.length} dòng subtitle đã căn được. Có thể kiểm tra lại timing trước khi xuất.`,
+      );
+      track('karaoke_auto_sync_fallback', {
+        lines: bestPartialTimeline.length,
+        reason: 'partial_timeline_preserved',
+      });
+      return;
+    }
     setKaraokeTimeline([]);
     setKaraokeSyncStatus('fallback');
     setKaraokeSyncMessage('Chưa tạo được subtitle.');
