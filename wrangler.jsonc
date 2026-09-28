@@ -20,10 +20,6 @@
     {
       "pattern": "suno.aiautotool.com",
       "custom_domain": true
-    },
-    {
-      "pattern": "picai.online",
-      "custom_domain": true
     }
   ],
   "observability": {
