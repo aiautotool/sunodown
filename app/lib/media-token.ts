@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 
-type MediaKind = 'audio' | 'image';
+type MediaKind = 'audio' | 'image' | 'source';
 type MediaClaims = { u: string; typ: MediaKind; iat: number; exp: number };
 
 function base64Url(value: Uint8Array | string) {

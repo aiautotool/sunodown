@@ -1,0 +1,36 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "sunodown-karaoke-align",
+  "main": "worker.ts",
+  "compatibility_date": "2026-09-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "containers": [
+    {
+      "class_name": "KaraokeAlignContainer",
+      "image": "./Dockerfile.cloudflare",
+      "max_instances": 1,
+      "instance_type": "standard-3",
+      "constraints": {
+        "regions": ["APAC"]
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "KARAOKE_ALIGNER",
+        "class_name": "KaraokeAlignContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["KaraokeAlignContainer"]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

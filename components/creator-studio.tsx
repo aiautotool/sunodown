@@ -1,6 +1,8 @@
 'use client';
+import {DEFAULT_EFFECT_SETTINGS,normalizeEffectSettings,type EffectSettings} from './v8/video-effects';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRenderWakeLock } from '@/hooks/use-render-wake-lock';
 import {
   Bell,
   BookOpen,
@@ -11,6 +13,8 @@ import {
   Image as ImageIcon,
   Link2,
   ListMusic,
+  LogIn,
+  LogOut,
   Menu,
   Music2,
   Play,
@@ -30,13 +34,24 @@ import {
   type VideoEffect,
 } from '@/components/v8/video-effects';
 import { LivePreview } from '@/components/v8/live-preview';
+import type { AddPexelsToTimeline } from '@/components/v8/pexels-library';
+import { PreviewTextEditor } from '@/components/v8/preview-text-editor';
+import { SuggestedBackground } from '@/components/v8/suggested-background';
+import { BackgroundPanel } from '@/components/v8/background-panel';
+import {
+  BACKGROUND_PRESETS,
+  DEFAULT_BACKGROUND_CONFIG,
+  type BackgroundConfig,
+} from '@/components/v8/background';
 import {
   WAVE_STYLES,
-  VISUAL_TEMPLATES,
   type WaveStyle,
+  type WaveAppearance,
+  DEFAULT_WAVE_APPEARANCE,
   type VisualTemplate,
   type VideoAspect,
   type LyricsMode,
+  type MotionIntensity,
 } from '@/components/v4/types';
 import {
   DEFAULT_OVERLAY_LAYOUT,
@@ -46,10 +61,52 @@ import {
   convertProcessedAudio,
   renderTikTokLikeAudio,
 } from '@/app/lib/audio-processing';
-import { buildEstimatedKaraokeTimeline, exportSrt } from '@/app/lib/karaoke';
+import { exportSrt } from '@/app/lib/karaoke';
+import { runKaraokePipeline } from '@/app/lib/karaoke-pipeline';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
+import { initAnalytics, track } from '@/app/lib/analytics';
+import { DEFAULT_PLAN, canUse } from '@/app/lib/entitlements';
 import type { KaraokeLine } from '@/app/lib/karaoke';
-import { EditorTimeline, type MediaClip } from '@/components/editor-timeline';
+import { EditorTimeline, type MediaClip, type TimelineTrackState } from '@/components/editor-timeline';
+import { PresetGallery } from '@/components/presets/preset-gallery';
+import { MasteringPanel } from '@/components/mastering-panel';
+import {
+  DEFAULT_PRODUCTION_EXPORT,
+  DEFAULT_PRODUCTION_MASTERING,
+  masteringLabel,
+  normalizeProductionPreset,
+  type ProductionExportConfig,
+  type ProductionMasteringConfig,
+} from '@/components/presets/production-preset';
+import { StudioSheet, StudioTabs } from '@/components/studio-ui';
+import { StyleStudio } from '@/components/style-studio';
+import { AccountLibraryPanel } from '@/components/account-library-panel';
+import {
+  BUILTIN_STUDIO_PRESETS,
+  PRESET_SCHEMA_VERSION,
+  clonePresetConfig,
+  normalizeStoredPresets,
+  normalizeStudioPreset,
+  type StudioPreset,
+  type StudioPresetConfig,
+} from '@/components/presets/studio-presets';
+import {
+  auditPresetLibrary,
+  visualFingerprint,
+} from '@/components/presets/preset-regression';
+import {
+  assertStudioRenderParity,
+  createStudioRenderModel,
+} from '@/components/studio-render-model';
+import {
+  auditPresetApplyTransaction,
+  auditPresetVisualCommit,
+  commitPresetVisualState,
+  createPresetApplyTransaction,
+  createPresetVisualCommit,
+  type PresetApplyMode,
+  type PresetVisualCommit,
+} from '@/components/presets/preset-apply-engine';
 import {
   clearProjectData,
   loadProjectData,
@@ -57,6 +114,7 @@ import {
 } from '@/components/project-store';
 
 type Song = {
+  sourceToken?: string;
   title: string;
   creator?: string;
   duration?: number;
@@ -66,6 +124,16 @@ type Song = {
   lyrics?: string;
   style?: string;
   tags?: string;
+};
+
+type SignedInUser = { sub: string; email: string; name: string; picture?: string };
+
+type SubtitleDebugValue = string | number | boolean | null;
+type SubtitleDebugEntry = {
+  id: number;
+  time: string;
+  message: string;
+  data?: Record<string, SubtitleDebugValue>;
 };
 
 const fmt = (n = 0) =>
@@ -81,6 +149,8 @@ const valid = (value: string) => {
     return false;
   }
 };
+const validSourceInput = (value: string) =>
+  valid(value) || (/^[A-Za-z0-9_-]+\.\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value) && value.length <= 5000);
 const renderSong = (song: Song) => ({
   id: null,
   title: song.title,
@@ -106,17 +176,61 @@ function saveBlob(blob: Blob, filename: string) {
 const safeName = (value: string) =>
   (value || 'suno').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120);
 
+const QUICK_PRESET_LIMIT = 3;
+function recommendQuickPresets(song: Song) {
+  const haystack = `${song.style || ''} ${song.tags || ''} ${song.lyrics || ''}`.toLowerCase();
+  const score = (preset: StudioPreset) => {
+    let value = preset.config.aspect === '9:16' ? 2 : 0;
+    if (song.lyrics && preset.config.lyrics !== 'off') value += 3;
+    if (/ballad|sad|emotional|piano|acoustic|love|romantic/.test(haystack)) {
+      if (['sad-lyrics','romantic-letter','acoustic-room','story-confession'].includes(preset.id)) value += 7;
+    }
+    if (/edm|electronic|dance|house|synth|techno|festival/.test(haystack)) {
+      if (['neon-pulse','festival-energy','reels-velocity'].includes(preset.id)) value += 8;
+    }
+    if (/rap|hip hop|trap|fast|energetic|pop/.test(haystack)) {
+      if (['social-hook','reels-velocity','neon-pulse'].includes(preset.id)) value += 5;
+    }
+    if (/chill|lofi|lo-fi|jazz|soul|retro/.test(haystack)) {
+      if (['minimal-clean','midnight-drive','retro-vinyl'].includes(preset.id)) value += 6;
+    }
+    if (/podcast|spoken|speech|story/.test(haystack)) {
+      if (['podcast-wave','story-confession'].includes(preset.id)) value += 8;
+    }
+    if (preset.id === 'social-hook') value += 1;
+    return value;
+  };
+  return [...BUILTIN_STUDIO_PRESETS]
+    .sort((a,b) => score(b) - score(a))
+    .slice(0, QUICK_PRESET_LIMIT);
+}
+
+const makeEffectConfig = (effects: VideoEffect[]): EffectConfig => ({
+  effects,
+  intensity: 1,
+  speed: 1,
+  opacity: 0.75,
+  wind: 0,
+});
+
 function ToolControls(p: {
+  onAddToTimeline: AddPexelsToTimeline;
   panel: string;
   setPanel: (v: string) => void;
   wave: WaveStyle;
   setWave: (v: WaveStyle) => void;
+  waveAppearance: WaveAppearance;
+  setWaveAppearance: (v: WaveAppearance) => void;
   template: VisualTemplate;
   setTemplate: (v: VisualTemplate) => void;
   aspect: VideoAspect;
   setAspect: (v: VideoAspect) => void;
   lyrics: LyricsMode;
   setLyrics: (v: LyricsMode) => void;
+  motion: MotionIntensity;
+  setMotion: (v: MotionIntensity) => void;
+  effectSettings:EffectSettings;
+  setEffectSettings:(value:EffectSettings)=>void;
   effects: VideoEffect[];
   setEffects: (v: VideoEffect[]) => void;
   layout: OverlayLayout;
@@ -125,20 +239,36 @@ function ToolControls(p: {
   setTextStyles: (v: OverlayTextStyles) => void;
   subtitleStyle: KaraokeDrawStyle;
   setSubtitleStyle: (v: KaraokeDrawStyle) => void;
+  background: BackgroundConfig;
+  setBackground: (v: BackgroundConfig) => void;
+  onError: (message: string) => void;
   trimStart: number;
   trimEnd: number;
   duration: number;
   setTrimStart: (v: number) => void;
   setTrimEnd: (v: number) => void;
+  audioUrl: string;
+  audioBinary: Blob | null;
+  songTitle: string;
+  songPicture?: string;
+  mastering: ProductionMasteringConfig;
+  setMastering: (value: ProductionMasteringConfig) => void;
+  exportConfig: ProductionExportConfig;
+  setExportConfig: (value: ProductionExportConfig) => void;
+  presetContent?: React.ReactNode;
 }) {
+  const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
   const rows = [
-    ['style', 'Style', Sparkles],
-    ['text', 'Text & resize', FileText],
-    ['wave', 'Waveform', SlidersHorizontal],
-    ['lyrics', 'Lyrics', FileText],
-    ['format', 'Format', SlidersHorizontal],
-    ['effects', 'Effects', Sparkles],
-    ['trim', 'Cut & duration', SlidersHorizontal],
+    ['audio', 'Âm thanh', Music2],
+    ['presets', 'Mẫu hoàn chỉnh', Sparkles],
+    ['style', 'Kiểu hình ảnh', Sparkles],
+    ['text', 'Văn bản', FileText],
+    ['wave', 'Sóng nhạc', SlidersHorizontal],
+    ['lyrics', 'Lời bài hát', FileText],
+    ['format', 'Định dạng', SlidersHorizontal],
+    ['background', 'Nền', ImageIcon],
+    ['effects', 'Hiệu ứng', Sparkles],
+    ['trim', 'Cắt', SlidersHorizontal],
   ] as const;
   const toggle = (id: VideoEffect) =>
     p.setEffects(
@@ -148,25 +278,21 @@ function ToolControls(p: {
     );
   return (
     <>
-      {rows.map(([id, label, Icon]) => (
-        <div className="sd-fold" key={id}>
-          <button onClick={() => p.setPanel(p.panel === id ? '' : id)}>
-            <Icon />
-            <b>{label}</b>
-            <ChevronDown />
-          </button>
-          {p.panel === id && (
-            <div className="sd-options">
-              {id === 'style' &&
-                VISUAL_TEMPLATES.map((x) => (
-                  <button
-                    className={p.template === x.id ? 'active' : ''}
-                    onClick={() => p.setTemplate(x.id)}
-                    key={x.id}
-                  >
-                    {x.label}
-                  </button>
-                ))}
+      <StudioTabs value={(p.panel || 'audio') as string} tabs={rows.map(([id,label,Icon])=>({value:id,label,icon:<Icon/>}))} onChange={id=>p.setPanel(id)} />
+      {rows.map(([id]) => p.panel === id && (
+        <div className="sd-tab-panel" key={id}>
+          <div className="sd-options">
+              {id === 'presets' && p.presetContent}
+              {id === 'style' && (
+                <StyleStudio
+                  template={p.template}
+                  setTemplate={p.setTemplate}
+                  motion={p.motion}
+                  setMotion={p.setMotion}
+                  picture={p.songPicture}
+                  onOpenPanel={p.setPanel}
+                />
+              )}
               {id === 'text' && (
                 <div className="sd-text-style">
                   <p className="sd-control-hint">
@@ -176,6 +302,7 @@ function ToolControls(p: {
                   {(['title', 'creator'] as const).map((key) => (
                     <div key={key}>
                       <b>{key === 'title' ? 'Tiêu đề' : 'Tác giả'}</b>
+                      {p.textStyles[key].text===''&&<button type="button" onClick={()=>p.setTextStyles({...p.textStyles,[key]:{...p.textStyles[key],text:undefined}})}>Hiện lại</button>}
                       <select
                         value={p.textStyles[key].font}
                         onChange={(e) =>
@@ -230,33 +357,36 @@ function ToolControls(p: {
                   Chọn kiểu sóng rồi kéo trực tiếp vùng sóng trên preview.
                 </p>
               )}
-              {id === 'wave' &&
-                WAVE_STYLES.map((x) => (
-                  <button
-                    className={p.wave === x.id ? 'active' : ''}
-                    onClick={() => p.setWave(x.id)}
-                    key={x.id}
-                  >
-                    {x.label}
-                  </button>
-                ))}
               {id === 'wave' && (
-                <label className="sd-scale">
-                  Kích thước sóng
-                  <input
-                    type="range"
-                    min="50"
-                    max="180"
-                    value={p.layout.wave.scale}
-                    onChange={(e) =>
-                      p.setLayout({
-                        ...p.layout,
-                        wave: { ...p.layout.wave, scale: +e.target.value },
-                      })
-                    }
-                  />
-                  <span>{p.layout.wave.scale}%</span>
-                </label>
+                <div className="sd-wave-studio">
+                  <div className="sd-wave-style-grid">
+                    {WAVE_STYLES.map((x) => (
+                      <button
+                        className={p.wave === x.id ? 'active' : ''}
+                        onClick={() => p.setWave(x.id)}
+                        key={x.id}
+                        title={x.label}
+                      >
+                        <i className={'sd-wave-icon wave-'+x.id} />
+                        <span>{x.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="sd-wave-look">
+                    <div className="sd-wave-colors">
+                      <label>Màu chính<input type="color" value={p.waveAppearance.color} onChange={e=>p.setWaveAppearance({...p.waveAppearance,color:e.target.value})}/></label>
+                      <label>Màu phụ<input type="color" value={p.waveAppearance.color2} onChange={e=>p.setWaveAppearance({...p.waveAppearance,color2:e.target.value})}/></label>
+                    </div>
+                    {[
+                      ['Kích thước',50,180,p.layout.wave.scale,(v:number)=>p.setLayout({...p.layout,wave:{...p.layout.wave,scale:v}}),'%'],
+                      ['Glow',0,100,p.waveAppearance.glow,(v:number)=>p.setWaveAppearance({...p.waveAppearance,glow:v}),'%'],
+                      ['Độ đậm',20,100,p.waveAppearance.opacity,(v:number)=>p.setWaveAppearance({...p.waveAppearance,opacity:v}),'%'],
+                      ['Mật độ',20,100,p.waveAppearance.density,(v:number)=>p.setWaveAppearance({...p.waveAppearance,density:v}),'%'],
+                      ['Mượt',0,100,p.waveAppearance.smoothing,(v:number)=>p.setWaveAppearance({...p.waveAppearance,smoothing:v}),'%'],
+                    ].map(([label,min,max,value,setter,suffix])=><label className="sd-wave-slider" key={String(label)}><span>{String(label)} <b>{Number(value)}{String(suffix)}</b></span><input type="range" min={Number(min)} max={Number(max)} value={Number(value)} onChange={e=>(setter as (v:number)=>void)(+e.target.value)}/></label>)}
+                    <p className="sd-control-hint">Kéo trực tiếp waveform trên preview để đặt vị trí. Preview và video xuất dùng cùng một renderer.</p>
+                  </div>
+                </div>
               )}
               {id === 'lyrics' && (
                 <p className="sd-control-hint">
@@ -340,6 +470,14 @@ function ToolControls(p: {
                     {x}
                   </button>
                 ))}
+              {id === 'background' && (
+                <BackgroundPanel
+                  onAddToTimeline={p.onAddToTimeline}
+                  value={safeBackground}
+                  onChange={p.setBackground}
+                  onError={p.onError}
+                />
+              )}
               {id === 'effects' &&
                 VIDEO_EFFECTS.map((x) => (
                   <button
@@ -350,6 +488,19 @@ function ToolControls(p: {
                     {x.icon} {x.label}
                   </button>
                 ))}
+              {id === 'effects' && <div className="w-full space-y-3 rounded-xl border border-white/10 p-3">
+                <p className="text-xs text-white/60">Điều chỉnh chung cho hiệu ứng đã bật. Góc xiên và kích thước áp dụng cho các hạt rơi như mưa, tuyết, lá, cánh hoa.</p>
+                {([
+                  ['speed','Tốc độ rơi',.2,3,.1,'×'],
+                  ['angle','Góc xiên (− trái / + phải)',-60,60,1,'°'],
+                  ['density','Mật độ hạt',.2,3,.1,'×'],
+                  ['size','Kích thước / độ dày hạt',.5,3,.1,'×'],
+                ] as const).map(([key,label,min,max,step,unit])=><label key={key} className="block text-xs text-white/70">{label} · {p.effectSettings[key]}{unit}<input aria-label={label} type="range" min={min} max={max} step={step} value={p.effectSettings[key]} onChange={e=>p.setEffectSettings({...p.effectSettings,[key]:Number(e.target.value)})} className="mt-2 block w-full accent-sky-300"/></label>)}
+                <button type="button" onClick={()=>p.setEffectSettings({...DEFAULT_EFFECT_SETTINGS})}>Đặt lại hiệu ứng</button>
+              </div>}
+              {id === 'audio' && (
+                <MasteringPanel audio={p.audioUrl} binary={p.audioBinary} title={p.songTitle} value={p.mastering} onChange={p.setMastering} />
+              )}
               {id === 'trim' && (
                 <div className="sd-trim">
                   <label>
@@ -383,8 +534,7 @@ function ToolControls(p: {
                   <p>Output: {fmt(p.trimEnd - p.trimStart)}</p>
                 </div>
               )}
-            </div>
-          )}
+          </div>
         </div>
       ))}
     </>
@@ -396,27 +546,65 @@ export default function CreatorStudio() {
     'create' | 'projects' | 'library' | 'jobs' | 'settings'
   >('create');
   const [autoPreview, setAutoPreview] = useState(true);
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const [signedInUser, setSignedInUser] = useState<SignedInUser | null>(null);
+  const [quickMode, setQuickMode] = useState(true);
   const [projects, setProjects] = useState<{ url: string; title: string }[]>(
     [],
   );
-  const [url, setUrl] = useState(''),
+  const [url, setUrl] = useState('https://suno.com/s/tszo0jGdVUua4rT4'),
     [song, setSong] = useState<Song | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [playbackStart, setPlaybackStart] = useState(0),
     [previewTime, setPreviewTime] = useState(0),
-    [panel, setPanel] = useState('style'),
+    [timelinePauseSignal, setTimelinePauseSignal] = useState(0),
+    [panel, setPanel] = useState('audio'),
     [mobileTools, setMobileTools] = useState(false),
     [savingProject, setSavingProject] = useState(false),
     [savedProject, setSavedProject] = useState(false);
+  const [initProgress, setInitProgress] = useState(0);
+  const [initTitle, setInitTitle] = useState('Đang khởi tạo bài hát');
+  const [initDetail, setInitDetail] = useState('Chuẩn bị dữ liệu mới…');
   const [wave, setWave] = useState<WaveStyle>('bars'),
+    [waveAppearance, setWaveAppearance] = useState<WaveAppearance>({...DEFAULT_WAVE_APPEARANCE}),
     [template, setTemplate] = useState<VisualTemplate>('cover-motion'),
-    [aspect, setAspect] = useState<VideoAspect>('16:9'),
+    [aspect, setAspect] = useState<VideoAspect>('9:16'),
     [lyrics, setLyrics] = useState<LyricsMode>('focus'),
+    [motion, setMotion] = useState<MotionIntensity>('medium'),
     [effects, setEffects] = useState<VideoEffect[]>([]),
     [rendering, setRendering] = useState(false),
+    [renderStage, setRenderStage] = useState<'idle' | 'validation' | 'prepare' | 'render' | 'finalize'>('idle'),
+    [lastRenderFailure, setLastRenderFailure] = useState<{
+      mode: 'cut' | '30';
+      stage: string;
+      retryable: boolean;
+      attempt: number;
+      message: string;
+    } | null>(null),
     [progress, setProgress] = useState(0),
     [downloading, setDownloading] = useState('');
+  const [renderNotice, setRenderNotice] = useState('');
+  useRenderWakeLock(rendering);
+
+  const [masteringConfig, setMasteringConfig] = useState<ProductionMasteringConfig>(structuredClone(DEFAULT_PRODUCTION_MASTERING));
+  const [exportConfig, setExportConfig] = useState<ProductionExportConfig>({...DEFAULT_PRODUCTION_EXPORT,aspect:'9:16'});
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [lastPresetId, setLastPresetId] = useState<string | null>(null);
+  const [presetModified, setPresetModified] = useState(false);
+  const [presetOverrideFields, setPresetOverrideFields] = useState<Array<keyof StudioPresetConfig>>([]);
+  const [customPresets, setCustomPresets] = useState<StudioPreset[]>([]);
+  const [favoritePresetIds, setFavoritePresetIds] = useState<string[]>([]);
+  const [presetUndo, setPresetUndo] = useState<{
+    config: StudioPresetConfig;
+    mastering: ProductionMasteringConfig;
+    exportConfig: ProductionExportConfig;
+    selectedId: string | null;
+    modified: boolean;
+    overrideFields: Array<keyof StudioPresetConfig>;
+  } | null>(null);
+  const [presetCommit, setPresetCommit] = useState<PresetVisualCommit | null>(null);
+
   const [resultBlob, setResultBlob] = useState<Blob | null>(null),
     [resultUrl, setResultUrl] = useState(''),
     [resultName, setResultName] = useState('');
@@ -425,23 +613,682 @@ export default function CreatorStudio() {
     title: { font: 'Georgia, serif', color: '#ffffff' },
     creator: { font: 'system-ui, sans-serif', color: '#d1d5db' },
   });
+  const [editingText,setEditingText]=useState<'title'|'creator'|'subtitle'|null>(null);
+  const [effectSettings,setEffectSettings]=useState<EffectSettings>({...DEFAULT_EFFECT_SETTINGS});
+  const [background, setBackground] = useState<BackgroundConfig>(
+    structuredClone(DEFAULT_BACKGROUND_CONFIG),
+  );
   const [subtitleStyle, setSubtitleStyle] = useState<KaraokeDrawStyle>({
     font: 'system',
     color: '#ffffff',
     activeColor: '#f0abfc',
   });
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeLine[]>([]);
+  const [karaokeSyncStatus, setKaraokeSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'fallback'>('idle');
+  const [karaokeSyncMessage, setKaraokeSyncMessage] = useState('');
+  const [subtitleNotice, setSubtitleNotice] = useState('');
+  const [subtitleDebugEnabled, setSubtitleDebugEnabled] = useState(false);
+  const [subtitleDebugOpen, setSubtitleDebugOpen] = useState(false);
+  const [subtitleDebugLogs, setSubtitleDebugLogs] = useState<SubtitleDebugEntry[]>([]);
+  const subtitleDebugEnabledRef = useRef(false);
+  const subtitleDebugSeq = useRef(0);
+  const [audioBinary, setAudioBinary] = useState<Blob | null>(null);
+  const mediaCache = useRef<Map<string, Blob>>(new Map());
   const [mediaClips, setMediaClips] = useState<MediaClip[]>([]);
+  const [timelineTracks, setTimelineTracks] = useState<TimelineTrackState>({
+    audio: { hidden: false, muted: false, locked: false },
+    visual: { hidden: false, muted: false, locked: false },
+    subtitle: { hidden: false, muted: false, locked: false },
+    effects: { hidden: false, muted: false, locked: false },
+  });
+  const studioModel = useMemo(
+    () =>
+      createStudioRenderModel({
+        template,
+        wave,
+        waveAppearance,
+        motion,
+        aspect,
+        lyrics,
+        effects,
+        effectSettings,
+        layout,
+        textStyles,
+        subtitleStyle,
+        background,
+      }),
+    [
+      template,
+      wave,
+      waveAppearance,
+      motion,
+      aspect,
+      lyrics,
+      effects,
+      effectSettings,
+      layout,
+      textStyles,
+      subtitleStyle,
+      background,
+    ],
+  );
+  const visualSnapshot = studioModel.visual;
+  const effectConfig = studioModel.effects;
+  const visualHash = studioModel.fingerprint;
+  const quickPresets = useMemo(
+    () => (song ? recommendQuickPresets(song) : []),
+    [song],
+  );
+
+  const homeFeaturedPresets = useMemo(() => {
+    const featuredIds = [
+      'sad-lyrics',
+      'karaoke-pop',
+      'neon-pulse',
+      'cinematic-story',
+      'romantic-letter',
+      'midnight-drive',
+    ];
+    return featuredIds
+      .map((id) => BUILTIN_STUDIO_PRESETS.find((preset) => preset.id === id))
+      .filter((preset): preset is StudioPreset => Boolean(preset));
+  }, []);
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
+  const timelineMediaClips = useMemo<MediaClip[]>(
+    () =>
+      mediaClips.length
+        ? mediaClips
+        : song?.picture
+          ? [{
+              id: 'fallback-cover',
+              type: 'image',
+              url: song.picture,
+              name: song.title || 'Ảnh bìa',
+              start: 0,
+              end: song.duration || trimEnd || 1,
+              isDefault: true,
+            }]
+          : [],
+    [mediaClips, song?.picture, song?.title, song?.duration, trimEnd],
+  );
   const timer = useRef<number | undefined>(undefined);
-  async function resolve(value = url): Promise<Song | null> {
-    if (!valid(value)) {
-      setError('Paste a valid Suno link.');
+  const editedFieldsTracked = useRef(new Set<keyof StudioPresetConfig>());
+  const previewPlayTracked = useRef(false);
+  const firstExportTracked = useRef(false);
+  const resolvedAt = useRef<number | null>(null);
+  const lastPerfTrack = useRef(0);
+  const karaokeSyncRun = useRef(0);
+  const initialRouteHandled = useRef(false);
+
+  const pushSubtitleDebug = (
+    message: string,
+    data?: Record<string, SubtitleDebugValue>,
+  ) => {
+    if (!subtitleDebugEnabledRef.current) return;
+    const entry: SubtitleDebugEntry = {
+      id: ++subtitleDebugSeq.current,
+      time: new Date().toLocaleTimeString('vi-VN', { hour12: false }),
+      message,
+      data,
+    };
+    console.info('[SUBTITLE DEBUG]', message, data || '');
+    setSubtitleDebugLogs((logs) => [...logs.slice(-199), entry]);
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const enabled =
+      new URLSearchParams(window.location.search).get('debug') === 'subtitle';
+    subtitleDebugEnabledRef.current = enabled;
+    setSubtitleDebugEnabled(enabled);
+    setSubtitleDebugOpen(enabled);
+    if (!enabled) return;
+
+    const nav = navigator as Navigator & {
+      userAgentData?: { mobile?: boolean };
+    };
+    const entry: SubtitleDebugEntry = {
+      id: ++subtitleDebugSeq.current,
+      time: new Date().toLocaleTimeString('vi-VN', { hour12: false }),
+      message: 'debug-enabled',
+      data: {
+        uaMobile: nav.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent),
+        touchPoints: nav.maxTouchPoints || 0,
+        online: navigator.onLine,
+      },
+    };
+    setSubtitleDebugLogs([entry]);
+  }, []);
+
+  const updateEditorUrl = (source: string, saved = false, replace = false) => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams();
+    params.set(saved ? 'project' : 'source', source);
+    const debugMode = new URLSearchParams(window.location.search).get('debug');
+    if (debugMode) params.set('debug', debugMode);
+    window.history[replace ? 'replaceState' : 'pushState'](
+      { editor: true, source },
+      '',
+      `/editor?${params}`,
+    );
+  };
+
+  useEffect(() => {
+    if (!subtitleNotice) return;
+    const timeout = window.setTimeout(() => setSubtitleNotice(''), 5200);
+    return () => window.clearTimeout(timeout);
+  }, [subtitleNotice]);
+
+  const currentPresetConfig = (): StudioPresetConfig =>
+    structuredClone(visualSnapshot);
+
+  const markPresetField = (field: keyof StudioPresetConfig) => {
+    if (!editedFieldsTracked.current.has(field)) {
+      editedFieldsTracked.current.add(field);
+      track('manual_edit', {
+        field,
+        preset_id: selectedPresetId,
+        template,
+        aspect,
+      });
+    }
+    setPresetCommit(null);
+    if (!selectedPresetId) return;
+    setPresetModified(true);
+    setPresetOverrideFields((fields) => fields.includes(field) ? fields : [...fields, field]);
+  };
+
+  const applyPreset = (
+    preset: StudioPreset,
+    mode: PresetApplyMode = 'replace-all',
+  ) => {
+    const current = currentPresetConfig();
+    setPresetUndo({
+      config: current,
+      mastering: structuredClone(masteringConfig),
+      exportConfig: structuredClone(exportConfig),
+      selectedId: selectedPresetId,
+      modified: presetModified,
+      overrideFields: [...presetOverrideFields],
+    });
+
+    const transaction = createPresetApplyTransaction(current, preset, mode);
+    const audit = auditPresetApplyTransaction(transaction);
+    if (!audit.ok) {
+      setError(`Preset apply blocked: ${audit.issues.join(', ')}`);
+      return;
+    }
+
+    setMasteringConfig(structuredClone(transaction.production.mastering));
+    setExportConfig(structuredClone(transaction.production.export));
+    window.dispatchEvent(new CustomEvent('suno-master-preview',{detail:{profile:transaction.production.mastering.profile}}));
+    window.dispatchEvent(new CustomEvent('suno-spatial-change',{detail:transaction.production.mastering.spatial || DEFAULT_PRODUCTION_MASTERING.spatial}));
+
+    const commit = commitPresetVisualState(transaction.next, {
+      setTemplate,
+      setWave,
+      setWaveAppearance: (value) =>
+        setWaveAppearance({ ...DEFAULT_WAVE_APPEARANCE, ...value }),
+      setMotion,
+      setAspect,
+      setLyrics,
+      setEffects,
+      setEffectSettings,
+      setLayout,
+      setTextStyles,
+      setSubtitleStyle,
+      setBackground,
+    }, presetCommit?.revision || 0);
+
+    setPresetCommit(commit);
+    setSelectedPresetId(preset.id);
+    setPresetModified(transaction.modified);
+    setPresetOverrideFields(
+      mode === 'preserve-custom' ? [...presetOverrideFields] : [],
+    );
+    localStorage.setItem('sunodown-v16-last-preset', preset.id);
+    setLastPresetId(preset.id);
+    track('production_recipe_applied', {
+      preset_id:preset.id,
+      mastering_profile:transaction.production.mastering.profile,
+      export_quality:transaction.production.export.quality,
+      export_duration_mode:transaction.production.export.durationMode,
+      production_fingerprint:transaction.productionFingerprint,
+    });
+    track('preset_applied', {
+      preset_id: preset.id,
+      mode,
+      template: commit.snapshot.template,
+      wave: commit.snapshot.wave,
+      aspect: commit.snapshot.aspect,
+      lyrics: commit.snapshot.lyrics,
+      visual_fingerprint: commit.fingerprint,
+      production_fingerprint: transaction.productionFingerprint,
+      mastering_profile: transaction.production.mastering.profile,
+      export_quality: transaction.production.export.quality,
+      export_duration_mode: transaction.production.export.durationMode,
+      revision: commit.revision,
+    });
+    setResultBlob(null);
+    if (resultUrl) {
+      URL.revokeObjectURL(resultUrl);
+      setResultUrl('');
+    }
+    setError('');
+  };
+
+  const openHomeFeaturedPreset = async (preset: StudioPreset) => {
+    if (!validSourceInput(url)) {
+      setError('Hãy dán liên kết Suno vào ô Phân tích trước khi chọn mẫu.');
+      document.querySelector<HTMLInputElement>('.sd-home-linkbox input')?.focus();
+      return;
+    }
+
+    setError('');
+    applyPreset(preset, 'replace-all');
+    track('suggested_preset_selected', {
+      preset_id: preset.id,
+      category: preset.category,
+      source: 'home_featured',
+    });
+
+    const resolved = await resolve(url, { replaceUrl: true });
+    if (!resolved) return;
+    setQuickMode(true);
+  };
+
+  const restorePresetSnapshot = () => {
+    if (!presetUndo) return;
+    const commit = commitPresetVisualState(presetUndo.config, {
+      setTemplate,
+      setWave,
+      setWaveAppearance: (value) =>
+        setWaveAppearance({ ...DEFAULT_WAVE_APPEARANCE, ...value }),
+      setMotion,
+      setAspect,
+      setLyrics,
+      setEffects,
+      setEffectSettings,
+      setLayout,
+      setTextStyles,
+      setSubtitleStyle,
+      setBackground,
+    }, presetCommit?.revision || 0);
+    setPresetCommit(commit);
+    setMasteringConfig(structuredClone(presetUndo.mastering));
+    setExportConfig(structuredClone(presetUndo.exportConfig));
+    window.dispatchEvent(new CustomEvent('suno-master-preview',{detail:{profile:presetUndo.mastering.profile}}));
+    window.dispatchEvent(new CustomEvent('suno-spatial-change',{detail:presetUndo.mastering.spatial || DEFAULT_PRODUCTION_MASTERING.spatial}));
+    setSelectedPresetId(presetUndo.selectedId);
+    setPresetModified(presetUndo.modified);
+    setPresetOverrideFields([...presetUndo.overrideFields]);
+    setPresetUndo(null);
+    setResultBlob(null);
+    if (resultUrl) {
+      URL.revokeObjectURL(resultUrl);
+      setResultUrl('');
+    }
+  };
+
+  const persistCustomPresets = (items: StudioPreset[]) => {
+    setCustomPresets(items);
+    localStorage.setItem('sunodown-v16-custom-presets', JSON.stringify(items));
+  };
+
+  const capturePresetThumbnail = () => {
+    const source = document.querySelector(
+      '.sd-live-preview canvas',
+    ) as HTMLCanvasElement | null;
+    if (!source || !source.width || !source.height) return undefined;
+    try {
+      const width = 240;
+      const height = Math.max(120, Math.round((source.height / source.width) * width));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) return undefined;
+      context.drawImage(source, 0, 0, width, height);
+      return canvas.toDataURL('image/webp', 0.68);
+    } catch {
+      return undefined;
+    }
+  };
+
+  const saveCurrentAsPreset = (name: string) => {
+    const preset: StudioPreset = {
+      schemaVersion: PRESET_SCHEMA_VERSION,
+      id: `user-${Date.now()}`,
+      name,
+      description: 'Preset cá nhân lưu từ cấu hình hiện tại của Creator Studio.',
+      category:
+        [...BUILTIN_STUDIO_PRESETS, ...customPresets].find(
+          (item) => item.id === selectedPresetId,
+        )?.category || 'Social',
+      badge: 'My preset',
+      accent: subtitleStyle.activeColor || '#8b5cf6',
+      secondary: textStyles.title.color || '#ffffff',
+      thumbnail: capturePresetThumbnail(),
+      builtin: false,
+      config: currentPresetConfig(),
+      mastering: structuredClone(masteringConfig),
+      export: { ...exportConfig, aspect },
+    };
+    persistCustomPresets([preset, ...customPresets]);
+    setSelectedPresetId(preset.id);
+    setPresetModified(false);
+    setPresetOverrideFields([]);
+    setPresetCommit(createPresetVisualCommit(preset.config, presetCommit?.revision || 0));
+  };
+
+  const duplicatePreset = (source: StudioPreset) => {
+    const copy: StudioPreset = {
+      ...source,
+      schemaVersion: PRESET_SCHEMA_VERSION,
+      id: `user-${Date.now()}`,
+      name: `${source.name} Copy`,
+      description: `Bản sao tùy chỉnh từ ${source.name}.`,
+      badge: 'My preset',
+      thumbnail: source.thumbnail || capturePresetThumbnail(),
+      builtin: false,
+      config: clonePresetConfig(source.config),
+      mastering: source.mastering ? structuredClone(source.mastering) : structuredClone(DEFAULT_PRODUCTION_MASTERING),
+      export: source.export ? structuredClone(source.export) : { ...DEFAULT_PRODUCTION_EXPORT, aspect: source.config.aspect },
+    };
+    persistCustomPresets([copy, ...customPresets]);
+    applyPreset(copy);
+  };
+
+  const renameCustomPreset = (preset: StudioPreset, name: string) => {
+    const next = customPresets.map((item) =>
+      item.id === preset.id ? { ...item, name } : item,
+    );
+    persistCustomPresets(next);
+  };
+
+  const updateCurrentPreset = (preset: StudioPreset) => {
+    if (preset.builtin) return;
+    const nextPreset: StudioPreset = {
+      ...preset,
+      schemaVersion: PRESET_SCHEMA_VERSION,
+      accent: subtitleStyle.activeColor || preset.accent,
+      secondary: textStyles.title.color || preset.secondary,
+      thumbnail: capturePresetThumbnail() || preset.thumbnail,
+      config: currentPresetConfig(),
+      mastering: structuredClone(masteringConfig),
+      export: { ...exportConfig, aspect },
+    };
+    const next = customPresets.map((item) =>
+      item.id === preset.id ? nextPreset : item,
+    );
+    persistCustomPresets(next);
+    setSelectedPresetId(preset.id);
+    setPresetModified(false);
+    setPresetOverrideFields([]);
+    setPresetCommit(createPresetVisualCommit(nextPreset.config, presetCommit?.revision || 0));
+  };
+
+  const resetSelectedPreset = (preset: StudioPreset) => {
+    applyPreset(preset, 'replace-all');
+  };
+
+  const exportPreset = (preset: StudioPreset) => {
+    const payload: StudioPreset = {
+      ...preset,
+      schemaVersion: PRESET_SCHEMA_VERSION,
+      config: clonePresetConfig(preset.config),
+      ...normalizeProductionPreset({mastering:preset.mastering,export:preset.export},preset.config.aspect),
+    };
+    const filename = `${safeName(preset.name)}.sunodown-preset.json`;
+    saveBlob(
+      new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json;charset=utf-8',
+      }),
+      filename,
+    );
+  };
+
+  const importPreset = async (file: File) => {
+    try {
+      const parsed = JSON.parse(await file.text());
+      const normalized = normalizeStudioPreset(parsed);
+      if (!normalized) throw new Error('Preset file is invalid.');
+      const imported: StudioPreset = {
+        ...normalized,
+        schemaVersion: PRESET_SCHEMA_VERSION,
+        id: `user-${Date.now()}`,
+        name: normalized.name.endsWith(' Imported')
+          ? normalized.name
+          : `${normalized.name} Imported`,
+        badge: 'Imported',
+        builtin: false,
+      };
+      persistCustomPresets([imported, ...customPresets]);
+      applyPreset(imported, 'replace-all');
+      setError('');
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'Không thể import preset này.',
+      );
+    }
+  };
+
+  const deleteCustomPreset = (preset: StudioPreset) => {
+    persistCustomPresets(customPresets.filter((item) => item.id !== preset.id));
+    if (selectedPresetId === preset.id) {
+      setSelectedPresetId(null);
+      setPresetModified(false);
+      setPresetOverrideFields([]);
+      setPresetCommit(null);
+    }
+    if (favoritePresetIds.includes(preset.id)) {
+      const nextFavorites = favoritePresetIds.filter((id) => id !== preset.id);
+      setFavoritePresetIds(nextFavorites);
+      localStorage.setItem(
+        'sunodown-v16-favorite-presets',
+        JSON.stringify(nextFavorites),
+      );
+    }
+  };
+
+  const toggleFavoritePreset = (id: string) => {
+    const next = favoritePresetIds.includes(id)
+      ? favoritePresetIds.filter((item) => item !== id)
+      : [...favoritePresetIds, id];
+    setFavoritePresetIds(next);
+    localStorage.setItem('sunodown-v16-favorite-presets', JSON.stringify(next));
+  };
+
+  async function generateSubtitlesInBackground(
+    target: Song,
+    audio: Blob,
+    duration: number,
+    syncRun: number,
+  ) {
+    setKaraokeSyncStatus('syncing');
+    setKaraokeSyncMessage('Đang chuẩn bị subtitle…');
+    pushSubtitleDebug('subtitle-run-start', {
+      run: syncRun,
+      audioBytes: audio.size,
+      duration: Math.round(duration * 100) / 100,
+      hasLyrics: Boolean(target.lyrics?.trim()),
+      lyricChars: target.lyrics?.length || 0,
+    });
+
+    // Mobile backend emits useful chunk-by-chunk timelines before the whole
+    // song has finished. Keep the best one so a later network/validation
+    // failure never wipes already synchronized cues back to Subtitle 0.
+    let bestPartialTimeline: KaraokeLine[] = [];
+
+    const delays = [0, 2200];
+    for (let attempt = 0; attempt < delays.length; attempt++) {
+      if (karaokeSyncRun.current !== syncRun) return;
+      pushSubtitleDebug('attempt-start', {
+        attempt: attempt + 1,
+        totalAttempts: delays.length,
+      });
+
+      if (delays[attempt] > 0) {
+        setKaraokeSyncMessage('Đang thử lại subtitle…');
+        await new Promise<void>((resolveDelay) =>
+          window.setTimeout(resolveDelay, delays[attempt]),
+        );
+        if (karaokeSyncRun.current !== syncRun) return;
+      }
+
+      try {
+        const result = await runKaraokePipeline({
+          audio,
+          lyrics: target.lyrics,
+          duration,
+          language: 'vi',
+          onProgress: ({ stage, engine, message }) => {
+            if (karaokeSyncRun.current !== syncRun) return;
+            pushSubtitleDebug('pipeline-progress', {
+              stage,
+              engine: engine || 'none',
+              message,
+            });
+            const publicMessage =
+              stage === 'prepare'
+                ? 'Đang chuẩn bị subtitle…'
+                : stage === 'done'
+                  ? 'Subtitle đã sẵn sàng.'
+                  : 'Đang xử lý subtitle…';
+            setKaraokeSyncMessage(publicMessage);
+          },
+          onDebug: (message, data) => {
+            if (karaokeSyncRun.current !== syncRun) return;
+            pushSubtitleDebug(message, data);
+          },
+          onPartialTimeline: (partialTimeline) => {
+            if (karaokeSyncRun.current !== syncRun || !partialTimeline.length) return;
+            if (partialTimeline.length >= bestPartialTimeline.length) {
+              bestPartialTimeline = partialTimeline;
+            }
+            pushSubtitleDebug('partial-timeline', {
+              lines: partialTimeline.length,
+              firstStart: Math.round((partialTimeline[0]?.start || 0) * 100) / 100,
+              lastEnd: Math.round((partialTimeline.at(-1)?.end || 0) * 100) / 100,
+            });
+            setKaraokeTimeline(partialTimeline);
+            setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
+            setKaraokeSyncMessage(
+              `Đã tìm thấy ${partialTimeline.length} dòng subtitle…`,
+            );
+          },
+        });
+
+        if (karaokeSyncRun.current !== syncRun) return;
+        if (!result.timeline.length) {
+          throw new Error('Không tìm thấy lời có timestamp.');
+        }
+
+        const publicResultMessage =
+          result.status === 'synced'
+            ? 'Subtitle đã sẵn sàng.'
+            : 'Subtitle đã được tạo. Nên kiểm tra lại trước khi xuất.';
+
+        pushSubtitleDebug('subtitle-run-result', {
+          status: result.status,
+          engine: result.engine,
+          confidence: result.quality.confidence,
+          lines: result.timeline.length,
+          attempts: result.attempts.length,
+        });
+        setKaraokeTimeline(result.timeline);
+        setKaraokeSyncStatus(result.status);
+        setKaraokeSyncMessage(publicResultMessage);
+        setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
+        setSubtitleNotice(publicResultMessage);
+
+        track(
+          result.status === 'synced'
+            ? 'karaoke_auto_sync_succeeded'
+            : 'karaoke_auto_sync_fallback',
+          {
+            lines: result.timeline.length,
+          },
+        );
+        return;
+      } catch (error) {
+        if (karaokeSyncRun.current !== syncRun) return;
+        const debugError =
+          error instanceof Error ? error.message : 'Unknown subtitle error';
+        pushSubtitleDebug('attempt-failed', {
+          attempt: attempt + 1,
+          error: debugError,
+          bestPartialLines: bestPartialTimeline.length,
+        });
+        track('karaoke_auto_sync_attempt_failed', {
+          attempt: attempt + 1,
+        });
+      }
+    }
+
+    if (karaokeSyncRun.current !== syncRun) return;
+    if (bestPartialTimeline.length) {
+      pushSubtitleDebug('partial-preserved', {
+        lines: bestPartialTimeline.length,
+      });
+      setKaraokeTimeline(bestPartialTimeline);
+      setKaraokeSyncStatus('fallback');
+      setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
+      setKaraokeSyncMessage(
+        `Đã giữ ${bestPartialTimeline.length} dòng subtitle đã căn được · đang dùng bản fallback.`,
+      );
+      setSubtitleNotice(
+        `Đã giữ ${bestPartialTimeline.length} dòng subtitle đã căn được. Có thể kiểm tra lại timing trước khi xuất.`,
+      );
+      track('karaoke_auto_sync_fallback', {
+        lines: bestPartialTimeline.length,
+        reason: 'partial_timeline_preserved',
+      });
+      return;
+    }
+    pushSubtitleDebug('subtitle-run-failed', {
+      attempts: delays.length,
+      partialLines: bestPartialTimeline.length,
+    });
+    setKaraokeTimeline([]);
+    setKaraokeSyncStatus('fallback');
+    setKaraokeSyncMessage('Chưa tạo được subtitle.');
+    track('karaoke_auto_sync_failed', {
+      attempts: delays.length,
+    });
+  }
+
+  async function resolve(
+    value = url,
+    options: { generateSubtitles?: boolean; updateUrl?: boolean; replaceUrl?: boolean } = {},
+  ): Promise<Song | null> {
+    const startedAt = performance.now();
+    pushSubtitleDebug('resolve-start', {
+      sourceChars: value.length,
+    });
+    if (!validSourceInput(value)) {
+      setError('Hãy dán liên kết Suno hợp lệ.');
+      track('song_resolve_failed', { reason: 'invalid_url' });
       return null;
     }
+
+    // Prepare only the media needed by the editor. Subtitle discovery starts
+    // after the editor is visible and never blocks navigation into Studio.
+    const syncRun = ++karaokeSyncRun.current;
+    setSong(null);
+    setKaraokeTimeline([]);
+    setKaraokeSyncStatus('idle');
+    setKaraokeSyncMessage('');
+    setAudioBinary(null);
+    setMediaClips([]);
     setBusy(true);
     setError('');
+    setInitProgress(5);
+    setInitTitle('Đang mở bài hát mới');
+    setInitDetail('Đọc thông tin bài hát từ Suno…');
+    track('song_resolve_started');
+
     try {
       const r = await fetch('/api/resolve', {
           method: 'POST',
@@ -449,81 +1296,298 @@ export default function CreatorStudio() {
           body: JSON.stringify({ input: value }),
         }),
         data = await r.json();
-      if (!r.ok) throw Error(data.error || 'Unable to load this song.');
-      setSong(data);
+      if (!r.ok) throw Error(data.error || 'Không thể tải bài hát này.');
+      if (karaokeSyncRun.current !== syncRun) return null;
+
+      const hydrated: Song = {
+        ...data,
+        title: data.title || 'Suno song',
+        creator: data.creator || 'Suno',
+        picture: data.picture || '',
+        lyrics:
+          typeof data.lyrics === 'string'
+            ? cleanLyricsForVideo(data.lyrics)
+            : '',
+        style: typeof data.style === 'string' ? data.style : '',
+        tags: typeof data.tags === 'string' ? data.tags : '',
+      };
+      pushSubtitleDebug('resolve-metadata', {
+        duration: Math.round((hydrated.duration || 0) * 100) / 100,
+        hasLyrics: Boolean(hydrated.lyrics),
+        lyricChars: hydrated.lyrics?.length || 0,
+        hasPicture: Boolean(hydrated.picture),
+      });
+      const privateSource = hydrated.sourceToken || value;
+      setUrl(privateSource);
+
+      setInitProgress(24);
+      setInitTitle('Đang tải âm thanh');
+      setInitDetail('Chuẩn bị audio và dữ liệu preview…');
+
+      let source = mediaCache.current.get(hydrated.audio) || null;
+      if (!source) {
+        const audioResponse = await fetch(hydrated.audio, { cache: 'no-store' });
+        if (!audioResponse.ok) throw new Error('Không tải được binary audio.');
+        source = await audioResponse.blob();
+        mediaCache.current.set(hydrated.audio, source);
+      }
+      if (karaokeSyncRun.current !== syncRun) return null;
+      pushSubtitleDebug('audio-loaded', {
+        audioBytes: source.size,
+        audioType: source.type || 'unknown',
+      });
+
+      const duration = hydrated.duration || 30;
+      setInitProgress(82);
+      setInitTitle('Đang dựng Studio');
+      setInitDetail('Ghép audio và preview…');
+      if (karaokeSyncRun.current !== syncRun) return null;
+
       setPlaybackStart(0);
       setPreviewTime(0);
       setTrimStart(0);
-      setTrimEnd(data.duration || 30);
-      setKaraokeTimeline(
-        data.lyrics
-          ? buildEstimatedKaraokeTimeline(data.lyrics, data.duration || 30)
-          : [],
-      );
-      setMediaClips([]);
-      return data as Song;
+      setTrimEnd(duration);
+      setAudioBinary(source);
+      setKaraokeTimeline([]);
+      setKaraokeSyncStatus('syncing');
+      setKaraokeSyncMessage('Subtitle sẽ được tìm trong nền…');
+      setMediaClips(hydrated.picture ? [{
+        id: crypto.randomUUID(),
+        type: 'image',
+        url: /^https:\/\//i.test(hydrated.picture)
+          ? `/api/image?source=${encodeURIComponent(hydrated.picture)}`
+          : hydrated.picture,
+        name: hydrated.title || 'Cover',
+        start: 0,
+        end: duration,
+        isDefault: true,
+      }] : []);
+      setQuickMode(true);
+      editedFieldsTracked.current.clear();
+      previewPlayTracked.current = false;
+      firstExportTracked.current = false;
+      resolvedAt.current = performance.now();
+      setLastRenderFailure(null);
+      setInitProgress(100);
+      setInitTitle('Sẵn sàng');
+      setInitDetail('Mọi dữ liệu đã được khởi tạo.');
+      setSong(hydrated);
+      if (options.updateUrl !== false) updateEditorUrl(privateSource, false, options.replaceUrl);
+      if (options.generateSubtitles !== false) {
+        void generateSubtitlesInBackground(hydrated, source, duration, syncRun);
+      }
+
+      track('quick_create_started', {
+        has_lyrics: Boolean(hydrated.lyrics),
+        style_hint: (hydrated.style || hydrated.tags || 'unknown').slice(0, 80),
+      });
+      track('song_resolve_succeeded', {
+        duration_ms: Math.round(performance.now() - startedAt),
+        has_lyrics: Boolean(hydrated.lyrics),
+        song_duration_s: Math.round(hydrated.duration || 0),
+        subtitle_status: 'background_started',
+      });
+      return hydrated;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unable to load this song.');
+      if (karaokeSyncRun.current !== syncRun) return null;
+      const message = e instanceof Error ? e.message : 'Không thể tải bài hát này.';
+      setSong(null);
+      setKaraokeTimeline([]);
+      setAudioBinary(null);
+      setError(message);
+      track('song_resolve_failed', {
+        duration_ms: Math.round(performance.now() - startedAt),
+        reason: message.slice(0, 120),
+      });
       return null;
     } finally {
-      setBusy(false);
+      if (karaokeSyncRun.current === syncRun) setBusy(false);
     }
   }
+
   function change(value: string) {
     setUrl(value);
     setError('');
     if (timer.current) clearTimeout(timer.current);
-    if (valid(value.trim()))
-      timer.current = window.setTimeout(() => void resolve(value.trim()), 350);
   }
   async function paste() {
     const value = await navigator.clipboard.readText();
     change(value);
   }
-  async function renderVideo(mode: 'cut' | '30' = 'cut') {
+  const assertVisualParity = () => {
+    const parity = assertStudioRenderParity(visualSnapshot, studioModel.visual);
+    if (presetCommit && !presetModified) {
+      const presetAudit = auditPresetVisualCommit(
+        presetCommit,
+        visualSnapshot,
+        studioModel.visual,
+      );
+      if (!presetAudit.ok) {
+        throw new Error(
+          `Preset regression failed [r${presetAudit.revision}]: ${presetAudit.issues.join(', ')}`,
+        );
+      }
+    }
+    return parity;
+  };
+
+  const classifyRenderFailure = (message: string, stage: string) => {
+    const lower = message.toLowerCase();
+    const nonRetryable =
+      stage === 'validation' ||
+      lower.includes('preset regression') ||
+      lower.includes('visual sync failed') ||
+      lower.includes('invalid') ||
+      lower.includes('unsupported');
+    return { retryable: !nonRetryable };
+  };
+
+  const triggerQuickRender = (mode: 'cut' | '30') => {
+    setError('');
+    window.requestAnimationFrame(() => {
+      document.querySelector('.sd-quick-create')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+    void renderVideo(mode);
+  };
+
+  async function renderVideo(mode: 'cut' | '30' = 'cut', attempt = 1) {
     if (!song || rendering) return;
+    const renderStartedAt = performance.now();
+    let stage: 'validation' | 'prepare' | 'render' | 'finalize' = 'validation';
     setRendering(true);
+    setRenderStage(stage);
     setProgress(0);
     setError('');
+    setRenderNotice('');
+    setLastRenderFailure(null);
+    track(attempt > 1 ? 'render_retry' : 'render_started', {
+      mode,
+      attempt,
+      template,
+      preset_id: selectedPresetId,
+      aspect,
+      plan: DEFAULT_PLAN,
+    });
+    const stageTrack = (next: typeof stage) => {
+      stage = next;
+      setRenderStage(next);
+      track('render_stage', {
+        mode,
+        attempt,
+        stage: next,
+        elapsed_ms: Math.round(performance.now() - renderStartedAt),
+        preset_id: selectedPresetId,
+      });
+    };
     try {
-      const config: EffectConfig = {
-        effects,
-        intensity: 1,
-        speed: 1,
-        opacity: 0.75,
-        wind: 0,
-      };
-      const startSeconds = trimStart,
-        available = Math.max(1, (trimEnd || song.duration || 30) - trimStart),
-        previewSeconds = mode === '30' ? Math.min(30, available) : available;
+      track('render_stage', {
+        mode,
+        attempt,
+        stage,
+        elapsed_ms: 0,
+        preset_id: selectedPresetId,
+      });
+      const parity = assertVisualParity();
+      console.info('[SunoDown visual QA]', {
+        fingerprint: parity.fingerprint,
+        selectedPresetId,
+        modified: presetModified,
+      });
+
+      stageTrack('prepare');
+      const config = studioModel.effects;
+      const startSeconds = trimStart;
+      const available = Math.max(
+        1,
+        (trimEnd || song.duration || 30) - trimStart,
+      );
+      const previewSeconds =
+        mode === '30' ? Math.min(30, available) : available;
+      const visual = studioModel.visual;
+
+      stageTrack('render');
       const blob = await generateVisualizerVideoArt(
         renderSong(song),
-        aspect,
-        wave,
-        template,
+        visual.aspect,
+        visual.wave,
+        visual.template,
         {
-          motion: 'medium',
-          lyrics,
-          layout,
+          motion: visual.motion,
+          lyrics: visual.lyrics,
+          waveAppearance: visual.waveAppearance,
+          layout: visual.layout,
           startSeconds,
           previewSeconds,
           onProgress: setProgress,
           effects: config,
           karaokeTimeline,
           mediaClips,
-          overlayTextStyles: textStyles,
-          subtitleStyle,
+          overlayTextStyles: visual.textStyles,
+          subtitleStyle: visual.subtitleStyle,
+          background: visual.background,
+          quality: exportConfig.quality,
+          productionMastering: masteringConfig,
+          onAudioFallback: (reason) => {
+            setRenderNotice('iPhone không giải mã được mastering của nguồn này nên video sẽ dùng audio gốc để đảm bảo xuất thành công.');
+            track('render_audio_fallback', {
+              reason,
+              preset_id: selectedPresetId,
+              mastering_profile: masteringConfig.profile,
+            });
+          },
         },
       );
+
+      stageTrack('finalize');
       if (resultUrl) URL.revokeObjectURL(resultUrl);
       const name = `${safeName(song.title)}${mode === '30' ? '-30s' : ''}.mp4`;
       setResultBlob(blob);
       setResultUrl(URL.createObjectURL(blob));
       setResultName(name);
+      setProgress(100);
+      const totalMs = Math.round(performance.now() - renderStartedAt);
+      const timeToFirstExport =
+        !firstExportTracked.current && resolvedAt.current
+          ? Math.round(performance.now() - resolvedAt.current)
+          : undefined;
+      firstExportTracked.current = true;
+      track('render_succeeded', {
+        mode,
+        attempt,
+        duration_ms: totalMs,
+        time_to_first_export_ms: timeToFirstExport,
+        output_seconds: Math.round(previewSeconds),
+        template,
+        preset_id: selectedPresetId,
+        visual_fingerprint: parity.fingerprint,
+        mastering_profile: masteringConfig.profile,
+        export_quality: exportConfig.quality,
+         export_duration_mode: mode === '30' ? '30s' : exportConfig.durationMode,
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Không thể tạo video.');
+      const message = e instanceof Error ? e.message : 'Không thể tạo video.';
+      const classification = classifyRenderFailure(message, stage);
+      setError(message);
+      setLastRenderFailure({
+        mode,
+        stage,
+        retryable: classification.retryable,
+        attempt,
+        message,
+      });
+      track('render_failed', {
+        mode,
+        attempt,
+        duration_ms: Math.round(performance.now() - renderStartedAt),
+        failure_stage: stage,
+        retryable: classification.retryable,
+        template,
+        preset_id: selectedPresetId,
+        reason: message.slice(0, 120),
+      });
     } finally {
       setRendering(false);
+      setRenderStage('idle');
     }
   }
   async function saveVideo() {
@@ -538,19 +1602,20 @@ export default function CreatorStudio() {
     ) {
       try {
         await navigator.share({ files: [file], title: resultName });
+        track('video_saved', { method: 'share' });
         return;
       } catch {}
     }
     saveBlob(resultBlob, resultName || 'suno-video.mp4');
+    track('video_saved', { method: 'download' });
   }
   async function downloadAudio(format: 'm4a' | 'mp3' | 'wav') {
     if (!song || downloading) return;
     setDownloading(format);
     setError('');
     try {
-      const response = await fetch(song.audio, { cache: 'no-store' });
-      if (!response.ok) throw Error('Không tải được audio.');
-      const source = await response.blob();
+      let source = audioBinary || mediaCache.current.get(song.audio);
+      if (!source) { const response = await fetch(song.audio, { cache: 'no-store' }); if (!response.ok) throw Error('Không tải được audio.'); source = await response.blob(); mediaCache.current.set(song.audio, source); setAudioBinary(source); }
       if (format === 'm4a') saveBlob(source, `${safeName(song.title)}.m4a`);
       else {
         const processed = await renderTikTokLikeAudio(source),
@@ -572,19 +1637,14 @@ export default function CreatorStudio() {
         `${safeName(song.title)}-lyrics.txt`,
       );
     else {
+      if (!karaokeTimeline.length) {
+        setError('Subtitle chưa có timestamp. Hãy chờ đồng bộ hoàn tất trước khi tải SRT.');
+        return;
+      }
       saveBlob(
-        new Blob(
-          [
-            exportSrt(
-              karaokeTimeline.length
-                ? karaokeTimeline
-                : buildEstimatedKaraokeTimeline(clean, song.duration || 1),
-            ),
-          ],
-          {
-            type: 'application/x-subrip;charset=utf-8',
-          },
-        ),
+        new Blob([exportSrt(karaokeTimeline)], {
+          type: 'application/x-subrip;charset=utf-8',
+        }),
         `${safeName(song.title)}-lyrics.srt`,
       );
     }
@@ -615,9 +1675,66 @@ export default function CreatorStudio() {
     );
   }, [effects]);
   useEffect(() => {
+    const cleanupAnalytics = initAnalytics();
+    return cleanupAnalytics;
+  }, []);
+  useEffect(() => {
+    void fetch('/api/auth/me', { cache: 'no-store' })
+      .then((response) => response.json() as Promise<{ user?: SignedInUser | null }>)
+      .then((data) => setSignedInUser(data.user || null))
+      .catch(() => setSignedInUser(null));
+  }, []);
+
+  useEffect(() => {
     try {
       setProjects(JSON.parse(localStorage.getItem('sundown-projects') || '[]'));
+      const storedPresets = normalizeStoredPresets(
+        JSON.parse(localStorage.getItem('sunodown-v16-custom-presets') || '[]'),
+      );
+      setCustomPresets(storedPresets);
+      localStorage.setItem(
+        'sunodown-v16-custom-presets',
+        JSON.stringify(storedPresets),
+      );
+      setFavoritePresetIds(
+        JSON.parse(localStorage.getItem('sunodown-v16-favorite-presets') || '[]'),
+      );
+      setLastPresetId(localStorage.getItem('sunodown-v16-last-preset'));
+      const allPresets = [
+        ...BUILTIN_STUDIO_PRESETS,
+        ...storedPresets,
+      ];
+      const presetIssues = auditPresetLibrary(allPresets);
+      if (presetIssues.length) {
+        setError(
+          `Preset QA failed: ${presetIssues.slice(0, 4).join(', ')}`,
+        );
+      }
     } catch {}
+  }, []);
+  useEffect(() => {
+    if (initialRouteHandled.current || window.location.pathname !== '/editor') return;
+    initialRouteHandled.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const projectId = params.get('project');
+    const source = params.get('source');
+    if (projectId) {
+      void openProject({ url: projectId, title: 'Dự án đã lưu' });
+    } else if (source && validSourceInput(source)) {
+      setUrl(source);
+      void resolve(source, { replaceUrl: true });
+    }
+  }, []);
+  useEffect(() => {
+    const onPopState = () => {
+      if (window.location.pathname !== '/editor') {
+        karaokeSyncRun.current += 1;
+        setSong(null);
+        setView('create');
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
   async function saveProject() {
     if (!song || !url) return;
@@ -630,22 +1747,56 @@ export default function CreatorStudio() {
           blob: await (await fetch(clipUrl)).blob(),
         })),
       );
+      const backgroundAsset =
+        background.mode === 'image' && background.imageUrl
+          ? {
+              kind: 'image' as const,
+              blob: await (await fetch(background.imageUrl)).blob(),
+              fingerprint: background.imageFingerprint,
+            }
+          : background.mode === 'video' && background.videoUrl
+            ? {
+                kind: 'video' as const,
+                blob: await (await fetch(background.videoUrl)).blob(),
+                fingerprint: background.videoFingerprint,
+              }
+            : undefined;
       await saveProjectData({
+        schemaVersion: 3,
         url,
         title: song.title,
         updatedAt: Date.now(),
         wave,
+        waveAppearance,
         template,
         aspect,
         lyrics,
+        motion,
+        quickMode,
+        activePanel: panel,
+        selectedPresetId,
+        presetModified,
+        presetOverrideFields,
         effects,
+        effectSettings,
         layout,
         textStyles,
         subtitleStyle,
+        background,
+        backgroundAsset,
         trimStart,
         trimEnd,
+        mastering: masteringConfig,
+        exportConfig,
+        timelineTracks,
+        karaokeSyncStatus,
+        karaokeSyncMessage,
         karaokeTimeline,
         media,
+        audioAsset:
+          url.startsWith('local-audio:') && audioBinary
+            ? { blob: audioBinary, duration: song.duration || trimEnd, title: song.title }
+            : undefined,
       });
       const next = [
         { url, title: song.title },
@@ -654,6 +1805,12 @@ export default function CreatorStudio() {
       setProjects(next);
       localStorage.setItem('sundown-projects', JSON.stringify(next));
       setSavedProject(true);
+      updateEditorUrl(url, true);
+      track('project_saved', {
+        preset_id: selectedPresetId,
+        template,
+        aspect,
+      });
       window.setTimeout(() => setSavedProject(false), 1800);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Không lưu được dự án.');
@@ -663,70 +1820,412 @@ export default function CreatorStudio() {
   }
   async function openProject(item: { url: string; title: string }) {
     setView('create');
+    track('project_resumed');
     setUrl(item.url);
-    if (!(await resolve(item.url))) return;
     const project = await loadProjectData(item.url);
     if (!project) return;
+    let restoredSong: Song;
+    let restoredAudio: Blob | null = null;
+    if (project.audioAsset) {
+      const audio = URL.createObjectURL(project.audioAsset.blob);
+      const coverAsset = project.media.find((clip) => clip.isDefault)?.blob;
+      const picture = coverAsset ? URL.createObjectURL(coverAsset) : undefined;
+      setAudioBinary(project.audioAsset.blob);
+      restoredSong = {
+        title: project.audioAsset.title,
+        creator: 'Local audio',
+        duration: project.audioAsset.duration,
+        audio,
+        picture,
+      };
+      restoredAudio = project.audioAsset.blob;
+      setSong(restoredSong);
+      setPlaybackStart(0);
+      setPreviewTime(0);
+    } else {
+      const resolved = await resolve(item.url, { generateSubtitles: false, updateUrl: false });
+      if (!resolved) return;
+      restoredSong = resolved;
+      restoredAudio = mediaCache.current.get(resolved.audio) || null;
+    }
     setWave(project.wave);
+    setWaveAppearance({ ...DEFAULT_WAVE_APPEARANCE, ...project.waveAppearance });
     setTemplate(project.template);
     setAspect(project.aspect);
     setLyrics(project.lyrics);
+    setMotion(project.motion || 'medium');
+    setQuickMode(project.quickMode ?? false);
+    setPanel(project.activePanel || 'audio');
+    setSelectedPresetId(project.selectedPresetId || null);
+    setPresetModified(Boolean(project.presetModified));
+    setPresetOverrideFields(project.presetOverrideFields || []);
     setEffects(project.effects);
+    setEffectSettings(normalizeEffectSettings(project.effectSettings));
     setLayout(project.layout);
     if (project.textStyles) setTextStyles(project.textStyles);
     if (project.subtitleStyle) setSubtitleStyle(project.subtitleStyle);
+    if (project.background) {
+      const restoredBackground = structuredClone(project.background);
+      if (project.backgroundAsset) {
+        const assetUrl = URL.createObjectURL(project.backgroundAsset.blob);
+        if (project.backgroundAsset.kind === 'image') {
+          restoredBackground.mode = 'image';
+          restoredBackground.imageUrl = assetUrl;
+          restoredBackground.videoUrl = undefined;
+          restoredBackground.imageFingerprint =
+            project.backgroundAsset.fingerprint;
+        } else {
+          restoredBackground.mode = 'video';
+          restoredBackground.videoUrl = assetUrl;
+          restoredBackground.imageUrl = undefined;
+          restoredBackground.videoFingerprint =
+            project.backgroundAsset.fingerprint;
+        }
+      }
+      setBackground(restoredBackground);
+    } else setBackground(structuredClone(DEFAULT_BACKGROUND_CONFIG));
     setTrimStart(project.trimStart);
     setTrimEnd(project.trimEnd);
+    setMasteringConfig(structuredClone(project.mastering || DEFAULT_PRODUCTION_MASTERING));
+    setExportConfig({
+      ...DEFAULT_PRODUCTION_EXPORT,
+      aspect: project.aspect,
+      ...project.exportConfig,
+    });
+    setTimelineTracks(project.timelineTracks || {
+      audio: { hidden: false, muted: false, locked: false },
+      visual: { hidden: false, muted: false, locked: false },
+      subtitle: { hidden: false, muted: false, locked: false },
+      effects: { hidden: false, muted: false, locked: false },
+    });
     setKaraokeTimeline(project.karaokeTimeline);
+    setKaraokeSyncStatus(
+      project.karaokeTimeline.length
+        ? (project.karaokeSyncStatus === 'fallback' ? 'fallback' : 'synced')
+        : (project.karaokeSyncStatus || 'idle'),
+    );
+    setKaraokeSyncMessage(
+      project.karaokeSyncMessage ||
+        (project.karaokeTimeline.length ? 'Subtitle đã được khôi phục từ dự án.' : ''),
+    );
     setMediaClips(
       project.media.map(({ blob, ...clip }) => ({
         ...clip,
         url: URL.createObjectURL(blob),
       })),
     );
+    setSavedProject(true);
+    updateEditorUrl(item.url, true);
+    if (
+      !project.karaokeTimeline.length &&
+      project.karaokeSyncStatus === 'syncing' &&
+      restoredAudio
+    ) {
+      void generateSubtitlesInBackground(
+        restoredSong,
+        restoredAudio,
+        restoredSong.duration || project.trimEnd || 30,
+        karaokeSyncRun.current,
+      );
+    }
   }
+
+  const readAudioDuration = (source: string) =>
+    new Promise<number>((resolveDuration, reject) => {
+      const player = document.createElement('audio');
+      player.preload = 'metadata';
+      player.onloadedmetadata = () =>
+        Number.isFinite(player.duration) && player.duration > 0
+          ? resolveDuration(player.duration)
+          : reject(new Error('Không đọc được thời lượng audio.'));
+      player.onerror = () => reject(new Error('File audio không hợp lệ hoặc không được trình duyệt hỗ trợ.'));
+      player.src = source;
+    });
+
+  const createAudioCover = (title: string) =>
+    new Promise<Blob>((resolveCover, reject) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1200;
+      canvas.height = 1200;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Không thể tạo ảnh bìa.'));
+      const gradient = ctx.createLinearGradient(0, 0, 1200, 1200);
+      gradient.addColorStop(0, '#17112d');
+      gradient.addColorStop(0.52, '#5234b8');
+      gradient.addColorStop(1, '#111827');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 1200, 1200);
+      ctx.fillStyle = 'rgba(255,255,255,.12)';
+      ctx.beginPath(); ctx.arc(920, 220, 280, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 210px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('♫', 600, 570);
+      ctx.font = '700 58px system-ui';
+      const label = title.length > 28 ? `${title.slice(0, 27)}…` : title;
+      ctx.fillText(label, 600, 760);
+      ctx.fillStyle = 'rgba(255,255,255,.62)';
+      ctx.font = '600 25px system-ui';
+      ctx.fillText('SUNODOWN · LOCAL AUDIO', 600, 825);
+      canvas.toBlob((blob) => blob ? resolveCover(blob) : reject(new Error('Không thể tạo ảnh bìa.')), 'image/png');
+    });
+
+  async function openAudioFile(file?: File) {
+    if (!file) return;
+    if (!file.type.startsWith('audio/') && !/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(file.name)) {
+      setError('Hãy chọn file audio MP3, WAV, M4A, AAC, OGG hoặc FLAC.');
+      return;
+    }
+    const syncRun = ++karaokeSyncRun.current;
+    setBusy(true);
+    setError('');
+    setInitProgress(12);
+    setInitTitle('Đang mở file audio');
+    setInitDetail('Đọc metadata và thời lượng…');
+    try {
+      const audio = URL.createObjectURL(file);
+      const duration = await readAudioDuration(audio);
+      const title = file.name.replace(/\.[^.]+$/, '') || 'Local audio';
+      setInitProgress(55);
+      setInitDetail('Tạo cover và timeline mặc định…');
+      const coverBlob = await createAudioCover(title);
+      const picture = URL.createObjectURL(coverBlob);
+      const projectUrl = `local-audio:${Date.now()}:${encodeURIComponent(file.name)}`;
+      setUrl(projectUrl);
+      setAudioBinary(file);
+      setKaraokeTimeline([]);
+      setKaraokeSyncStatus('idle');
+      setKaraokeSyncMessage('');
+      setTrimStart(0);
+      setTrimEnd(duration);
+      setPlaybackStart(0);
+      setPreviewTime(0);
+      setLyrics('off');
+      setMediaClips([{ id: crypto.randomUUID(), type: 'image', url: picture, name: title, start: 0, end: duration, isDefault: true }]);
+      setSong({ title, creator: 'Local audio', duration, audio, picture });
+      updateEditorUrl(projectUrl);
+      setQuickMode(true);
+      setInitProgress(100);
+      void generateSubtitlesInBackground(
+        { title, creator: 'Local audio', duration, audio, picture },
+        file,
+        duration,
+        syncRun,
+      );
+      track('quick_create_started', { has_lyrics: false, style_hint: 'local_audio' });
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Không thể mở file audio.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  const invalidateRenderedResult = () => {
+    setResultBlob(null);
+    if (resultUrl) {
+      URL.revokeObjectURL(resultUrl);
+      setResultUrl('');
+    }
+    setResultName('');
+  };
+
+  const changeVisual = (change: () => void) => {
+    invalidateRenderedResult();
+    change();
+  };
+
+  const addPexelsToTimeline: AddPexelsToTimeline = async (file,kind,duration) => {
+    if(rendering)return;
+    const endOfSong=Math.max(.1,song?.duration||trimEnd||30);
+    const start=Math.max(0,Math.min(previewTime,endOfSong-.1));
+    const length=kind==='video'&&typeof duration==='number'&&Number.isFinite(duration)&&duration>0?duration:5;
+    const clip:MediaClip={id:crypto.randomUUID(),type:kind==='video'?'video':'image',url:URL.createObjectURL(file),name:file.name,start,end:Math.min(endOfSong,start+length)};
+    invalidateRenderedResult();
+    setMediaClips(clips=>[...clips,clip]);
+    setTimelineTracks(tracks=>({...tracks,visual:{...tracks.visual,hidden:false}}));
+    setAutoPreview(false);
+    setTimelinePauseSignal(value=>value+1);
+    setPlaybackStart(start);
+    setPreviewTime(start);
+    setQuickMode(false);
+  };
+
+  const toolControlsProps: Parameters<typeof ToolControls>[0] = {
+    onAddToTimeline: addPexelsToTimeline,
+    panel,
+    setPanel,
+    wave,
+    setWave: (value) => { markPresetField('wave'); changeVisual(() => setWave(value)); },
+    waveAppearance,
+    setWaveAppearance: (value) => { markPresetField('waveAppearance'); changeVisual(() => setWaveAppearance(value)); },
+    template,
+    setTemplate: (value) => { markPresetField('template'); changeVisual(() => setTemplate(value)); },
+    aspect,
+    setAspect: (value) => { markPresetField('aspect'); changeVisual(() => setAspect(value)); },
+    lyrics,
+    setLyrics: (value) => { markPresetField('lyrics'); changeVisual(() => setLyrics(value)); },
+    motion,
+    setMotion: (value) => { markPresetField('motion'); changeVisual(() => setMotion(value)); },
+    effectSettings,
+    setEffectSettings:(value)=>{markPresetField('effectSettings');changeVisual(()=>setEffectSettings(value));},
+    effects,
+    setEffects: (value) => { markPresetField('effects'); changeVisual(() => setEffects(value)); },
+    layout,
+    setLayout: (value) => { markPresetField('layout'); changeVisual(() => setLayout(value)); },
+    textStyles,
+    setTextStyles: (value) => { markPresetField('textStyles'); changeVisual(() => setTextStyles(value)); },
+    subtitleStyle,
+    setSubtitleStyle: (value) => { markPresetField('subtitleStyle'); changeVisual(() => setSubtitleStyle(value)); },
+    background,
+    setBackground: (value) => { markPresetField('background'); changeVisual(() => setBackground(value)); },
+    onError: setError,
+    trimStart,
+    trimEnd,
+    duration: song?.duration || 0,
+    audioUrl: song?.audio || '',
+    audioBinary,
+    songTitle: song?.title || 'suno',
+    songPicture: song?.picture || undefined,
+    mastering: masteringConfig,
+    setMastering: (value) => {
+      setMasteringConfig(value);
+      invalidateRenderedResult();
+    },
+    exportConfig,
+    setExportConfig: (value) => {
+      setExportConfig(value);
+      invalidateRenderedResult();
+    },
+    setTrimStart: (value) => {
+      invalidateRenderedResult();
+      setTrimStart(value);
+    },
+    setTrimEnd: (value) => {
+      invalidateRenderedResult();
+      setTrimEnd(value);
+    },
+  };
+
+  const navigationItems = [
+    [Plus, 'Create', 'create'],
+    [Folder, 'Projects', 'projects'],
+    [BookOpen, 'Library', 'library'],
+    [ListMusic, 'Jobs', 'jobs'],
+    [Settings, 'Settings', 'settings'],
+  ] as const;
+  const navigationMenu = (
+    <nav className="sd-profile-menu" aria-label="Điều hướng chính">
+      <div className="sd-profile-menu-head">
+        <span className="sd-avatar">{signedInUser?.picture ? <img src={signedInUser.picture} alt="" /> : (signedInUser?.name?.[0] || 'S').toUpperCase()}</span>
+        <span><b>{signedInUser?.name || 'SunoDown'}</b><small>{signedInUser?.email || 'Creator Studio'}</small></span>
+      </div>
+      {navigationItems.map(([Icon, label, id]) => (
+        <button key={id} className={view === id ? 'active' : ''} onClick={() => { setView(id); setNavigationOpen(false); }}>
+          <Icon /><span>{label}</span>
+        </button>
+      ))}
+      <div className="sd-profile-auth">
+        {signedInUser ? (
+          <button onClick={() => { void fetch('/api/auth/logout', { method: 'POST' }).then(() => { setSignedInUser(null); setNavigationOpen(false); }); }}><LogOut /><span>Đăng xuất</span></button>
+        ) : (
+          <a href="/api/auth/google"><LogIn /><span>Đăng nhập với Google</span></a>
+        )}
+      </div>
+    </nav>
+  );
+
   return (
     <div className="sd-app">
+
       <header className="sd-header">
-        <div className="sd-brand">
+        <a className="sd-brand" href="/" aria-label="Về trang chủ SunoDown">
           <span>
             <Music2 />
           </span>
           <b>SunoDown</b>
-        </div>
+        </a>
         {song ? (
           <div className="sd-loaded">
             <i>✓</i> Suno song loaded
           </div>
         ) : (
-          <div />
+          <nav className="sd-home-head-nav" aria-label="Điều hướng Home">
+            <button className={view === 'create' ? 'active' : ''} onClick={() => setView('create')}>Trang chủ</button>
+            <button className={view === 'projects' ? 'active' : ''} onClick={() => setView('projects')}>Dự án</button>
+            <button className={view === 'library' ? 'active' : ''} onClick={() => setView('library')}>Thư viện</button>
+            <button className={view === 'jobs' ? 'active' : ''} onClick={() => setView('jobs')}>Jobs</button>
+          </nav>
         )}
         <div className="sd-head-actions">
           <Bell />
-          <span className="sd-avatar">S</span>
-          <ChevronDown />
+          <button className="sd-profile-trigger" aria-label="Mở menu tài khoản" aria-expanded={navigationOpen} onClick={() => setNavigationOpen((open) => !open)}>
+            <span className="sd-avatar">{signedInUser?.picture ? <img src={signedInUser.picture} alt="" /> : (signedInUser?.name?.[0] || 'S').toUpperCase()}</span><ChevronDown />
+          </button>
+          {navigationOpen && navigationMenu}
         </div>
       </header>
-      <aside className="sd-sidebar">
-        <nav>
-          {[
-            [Plus, 'Create', 'create'],
-            [Folder, 'Projects', 'projects'],
-            [BookOpen, 'Library', 'library'],
-            [ListMusic, 'Jobs', 'jobs'],
-            [Settings, 'Settings', 'settings'],
-          ].map(([Icon, label, id]) => (
-            <button
-              key={String(id)}
-              onClick={() => setView(id as typeof view)}
-              className={view === id ? 'active' : ''}
-            >
-              {<Icon />}
-              <span>{String(label)}</span>
-            </button>
-          ))}
-        </nav>
-      </aside>
+      {subtitleNotice && (
+        <output className="sd-subtitle-notice" aria-live="polite">
+          <span><Sparkles /></span>
+          <div>
+            <b>Đã tìm thấy subtitle</b>
+            <small>{subtitleNotice}</small>
+          </div>
+          <button type="button" aria-label="Đóng thông báo" onClick={() => setSubtitleNotice('')}>×</button>
+        </output>
+      )}
+      {navigationOpen && <button className="sd-nav-backdrop" aria-label="Đóng menu" onClick={() => setNavigationOpen(false)} />}
+
+      {subtitleDebugEnabled && (
+        <>
+          <button
+            type="button"
+            className="sd-sub-debug-toggle"
+            onClick={() => setSubtitleDebugOpen((open) => !open)}
+          >
+            SUB {karaokeTimeline.length} · {karaokeSyncStatus}
+          </button>
+          {subtitleDebugOpen && (
+            <aside className="sd-sub-debug-panel" aria-label="Subtitle Debug Console">
+              <header>
+                <div>
+                  <b>Subtitle Debug</b>
+                  <small>{karaokeSyncStatus} · {karaokeTimeline.length} cues</small>
+                </div>
+                <button type="button" onClick={() => setSubtitleDebugOpen(false)}>×</button>
+              </header>
+              <div className="sd-sub-debug-summary">
+                <span><b>Status</b><i>{karaokeSyncStatus}</i></span>
+                <span><b>Cues</b><i>{karaokeTimeline.length}</i></span>
+                <span><b>Message</b><i>{karaokeSyncMessage || '—'}</i></span>
+              </div>
+              <div className="sd-sub-debug-log">
+                {subtitleDebugLogs.length ? subtitleDebugLogs.map((entry) => (
+                  <div key={entry.id}>
+                    <time>{entry.time}</time>
+                    <b>{entry.message}</b>
+                    {entry.data && <code>{JSON.stringify(entry.data)}</code>}
+                  </div>
+                )) : <p>Chưa có log.</p>}
+              </div>
+              <footer>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = subtitleDebugLogs
+                      .map((entry) => `[${entry.time}] ${entry.message} ${entry.data ? JSON.stringify(entry.data) : ''}`)
+                      .join('\n');
+                    void navigator.clipboard?.writeText(text);
+                  }}
+                >
+                  Copy log
+                </button>
+                <button type="button" onClick={() => setSubtitleDebugLogs([])}>Clear</button>
+              </footer>
+            </aside>
+          )}
+        </>
+      )}
+
       {view !== 'create' && (
         <section className="sd-section-panel">
           <div className="sd-section-head">
@@ -756,17 +2255,13 @@ export default function CreatorStudio() {
             </div>
           )}
           {view === 'library' && (
-            <div className="sd-section-grid">
-              {song ? (
-                <button onClick={() => setView('create')}>
-                  <img src={song.picture} />
-                  <b>{song.title}</b>
-                  <span>{song.creator || 'Suno'}</span>
-                </button>
-              ) : (
-                <p>Paste a Suno link to add a song to your library.</p>
-              )}
-            </div>
+            <AccountLibraryPanel
+              onOpenSong={(songUrl) => {
+                setView('create');
+                setUrl(songUrl);
+                void resolve(songUrl);
+              }}
+            />
           )}
           {view === 'jobs' && (
             <div className="sd-job-card">
@@ -795,6 +2290,12 @@ export default function CreatorStudio() {
                   onChange={(e) => setAutoPreview(e.target.checked)}
                 />
               </label>
+              <div className="sd-plan-foundation">
+                <b>Plan foundation</b>
+                <span>
+                  {DEFAULT_PLAN.toUpperCase()} · Advanced mastering {canUse(DEFAULT_PLAN, 'advanced_mastering') ? 'enabled' : 'locked'} · Pro entitlements ready
+                </span>
+              </div>
               <button
                 onClick={() => {
                   localStorage.removeItem('sundown-projects');
@@ -808,63 +2309,238 @@ export default function CreatorStudio() {
           )}
         </section>
       )}
-      {!song ? (
-        <main className="sd-empty">
-          <div className="sd-mobile-brand">
-            <div className="sd-brand">
+      {busy ? (
+        <main className="sd-init-screen" aria-live="polite">
+          <div className="sd-init-stage">
+            <div className="sd-init-orbit" aria-hidden="true">
+              <span />
+              <i />
+              <Music2 />
+            </div>
+            <small>CREATOR STUDIO</small>
+            <h1>{initTitle}</h1>
+            <p>{initDetail}</p>
+            <div className="sd-init-progress">
+              <div style={{ width: `${initProgress}%` }} />
+            </div>
+            <div className="sd-init-progress-meta">
+              <b>{Math.round(initProgress)}%</b>
               <span>
-                <Music2 />
+                {initProgress < 25
+                  ? 'Metadata'
+                  : initProgress < 82
+                    ? 'Audio'
+                    : 'Studio'}
               </span>
-              <b>SunoDown</b>
             </div>
-            <Menu />
+            <div className="sd-init-steps">
+              <span className={initProgress >= 24 ? 'done' : 'active'}>01 · Bài hát</span>
+              <span className={initProgress >= 82 ? 'done' : initProgress >= 24 ? 'active' : ''}>02 · Audio</span>
+              <span className={initProgress >= 100 ? 'done' : initProgress >= 82 ? 'active' : ''}>03 · Studio</span>
+            </div>
           </div>
-          <div className="sd-empty-content">
-            <p>CREATOR STUDIO</p>
-            <h1>
-              Turn your Suno song
-              <br />
-              <em>into content</em>
-            </h1>
-            <div className="sd-input">
-              <Link2 />
+        </main>
+      ) : !song ? (
+        <main className="sd-empty sd-home-v23">
+          <div className="sd-home-ambient" aria-hidden="true">
+            <i className="orb-a" />
+            <i className="orb-b" />
+            <i className="orb-c" />
+          </div>
+
+          <aside className="sd-home-side" aria-label="Điều hướng nhanh">
+            <button className="primary" onClick={() => setView('create')}><Plus /><span>Tạo mới</span><i>›</i></button>
+            <button onClick={() => setView('create')}><Link2 /><span>Từ link Suno</span></button>
+            <label className="sd-home-side-upload">
+              <Upload /><span>Tải audio lên</span>
               <input
-                value={url}
-                onChange={(e) => change(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && void resolve()}
-                placeholder="Paste a Suno link"
+                type="file"
+                accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+                onChange={(event) => {
+                  void openAudioFile(event.target.files?.[0]);
+                  event.currentTarget.value = '';
+                }}
               />
-              <button onClick={paste}>Paste</button>
-            </div>
-            <button
-              className="sd-analyze"
-              disabled={busy}
-              onClick={() => resolve()}
-            >
-              {busy ? 'Analyzing…' : 'Analyze'}
+            </label>
+            <button onClick={() => setView('library')}><BookOpen /><span>Thư viện bài hát</span></button>
+            <button onClick={() => document.querySelector('.sd-home-featured')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}><Sparkles /><span>Preset & Style</span></button>
+            <button onClick={() => setView('projects')}><Folder /><span>Dự án</span></button>
+            <button onClick={() => setView('jobs')}><ListMusic /><span>Lịch sử render</span></button>
+
+            <button className="sd-home-side-pro" onClick={() => setView('settings')}>
+              <span>♛</span>
+              <b>Nâng cấp Pro</b>
+              <small>Không giới hạn, chất lượng cao hơn</small>
+              <i>›</i>
             </button>
-            {error && <div className="sd-error">{error}</div>}
-            <span className="sd-choose">Choose what to create</span>
-            <div className="sd-intents">
-              <button className="active">
-                <Play />
-                <span>Social Video</span>
-              </button>
-              <button>
-                <Music2 />
-                <span>Audio</span>
-              </button>
-              <button>
-                <FileText />
-                <span>Lyrics</span>
-              </button>
-            </div>
+          </aside>
+
+          <div className="sd-mobile-brand">
+            <a className="sd-brand" href="/" aria-label="Về trang chủ SunoDown">
+              <span><Music2 /></span>
+              <b>SunoDown</b>
+            </a>
+            <button className="sd-mobile-menu-trigger" aria-label="Mở menu" onClick={() => setNavigationOpen((open) => !open)}><Menu /></button>
+            {navigationOpen && navigationMenu}
           </div>
-          <div className="sd-landscape" />
-          <small>MUSIC LIVES FURTHER</small>
+
+          <section className="sd-home-shell">
+            <div className="sd-home-hero">
+              <div className="sd-home-copy">
+                <span className="sd-home-kicker"><Sparkles /> CREATOR STUDIO</span>
+                <h1>
+                  Turn your Suno song
+                  <br />
+                  <em>into stunning content</em>
+                </h1>
+                <p>
+                  Biến nhạc Suno thành video lyric, karaoke và social video chuyên nghiệp
+                  chỉ trong vài phút.
+                </p>
+
+                <div className="sd-home-analyze-row">
+                  <div className="sd-home-linkbox">
+                    <Link2 />
+                    <input
+                      value={url}
+                      onChange={(e) => change(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && void resolve()}
+                      placeholder="https://suno.com/s/..."
+                    />
+                    <button type="button" onClick={paste}>Dán</button>
+                  </div>
+                  <button className="sd-home-analyze" disabled={busy} onClick={() => resolve()}>
+                    <Sparkles />
+                    <span>{busy ? 'Đang phân tích…' : 'Phân tích'}</span>
+                    <i>›</i>
+                  </button>
+                </div>
+
+                <div className="sd-home-or"><span>HOẶC</span></div>
+
+                <div className="sd-home-source-grid">
+                  <label
+                    className="sd-home-source-card"
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      void openAudioFile(event.dataTransfer.files[0]);
+                    }}
+                  >
+                    <span className="icon"><Upload /></span>
+                    <span className="copy">
+                      <b>Tải file audio lên</b>
+                      <small>MP3, WAV, M4A, AAC, OGG, FLAC</small>
+                    </span>
+                    <i>›</i>
+                    <input
+                      type="file"
+                      accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+                      onChange={(event) => {
+                        void openAudioFile(event.target.files?.[0]);
+                        event.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+
+                  <button className="sd-home-source-card" onClick={() => setView('library')}>
+                    <span className="icon"><Music2 /></span>
+                    <span className="copy">
+                      <b>Thư viện bài hát</b>
+                      <small>Quản lý bài đã lưu và quét theo tài khoản Suno</small>
+                    </span>
+                    <i>›</i>
+                  </button>
+                </div>
+
+                {error && <div className="sd-error">{error}</div>}
+
+                {projects[0] && (
+                  <button className="sd-home-continue" onClick={() => void openProject(projects[0])}>
+                    <Folder />
+                    <span><small>TIẾP TỤC DỰ ÁN</small><b>{projects[0].title}</b></span>
+                    <i>›</i>
+                  </button>
+                )}
+              </div>
+
+              <div className="sd-home-showcase" aria-label="Ví dụ video SunoDown">
+                <div className="sd-home-showcase-glow" aria-hidden="true" />
+
+                <div className="sd-home-tool-stack" aria-hidden="true">
+                  <span><FileText /><b>Lyrics</b></span>
+                  <span><Music2 /><b>Waveform</b></span>
+                  <span><ImageIcon /><b>Background</b></span>
+                  <span><Sparkles /><b>Preset</b></span>
+                </div>
+
+                <div className="sd-home-phone">
+                  <div className="sd-home-phone-screen">
+                    <img src="/home-cinematic-v23.svg" alt="" />
+                    <span className="ratio">9:16</span>
+                    <div className="lyrics">Có những ngày<br/>chỉ muốn đi thật xa...</div>
+                    <div className="wave" aria-hidden="true" />
+                    <div className="time"><span>00:42</span><span>03:18</span></div>
+                    <div className="controls"><span>‹</span><b><Play /></b><span>›</span></div>
+                  </div>
+                </div>
+
+                <div className="sd-home-control-card" aria-hidden="true">
+                  <div className="thumb"><img src="/home-cinematic-v23.svg" alt="" /></div>
+                  <b>Cinematic</b>
+                  <label><span>Blur</span><i><u style={{width:'32%'}} /></i><small>30%</small></label>
+                  <label><span>Zoom</span><i><u style={{width:'68%'}} /></i><small>100%</small></label>
+                  <label><span>Glow</span><i><u style={{width:'50%'}} /></i><small>50%</small></label>
+                </div>
+              </div>
+            </div>
+
+            <div className="sd-home-benefits">
+              <span><i>⚡</i><b>Nhanh chóng</b><small>Tạo video trong vài phút</small></span>
+              <span><i>HD</i><b>Chất lượng cao</b><small>Preset và export sắc nét</small></span>
+              <span><i>✦</i><b>Nhiều phong cách</b><small>Lyrics, cinematic, visualizer</small></span>
+              <span><i>9:16</i><b>Tối ưu social</b><small>TikTok, Reels, Shorts</small></span>
+              <span><i>☁</i><b>Không cần cài đặt</b><small>Dùng ngay trên trình duyệt</small></span>
+            </div>
+
+            <section className="sd-home-featured">
+              <header>
+                <div><span>🔥</span><b>Mẫu video nổi bật</b></div>
+                <button onClick={() => setView('create')}>Xem tất cả <i>›</i></button>
+              </header>
+              <div className="sd-home-template-row">
+                {homeFeaturedPresets.map((preset, index) => (
+                  <button
+                    key={preset.id}
+                    className={`sd-home-template preset-${preset.id} ${index === 0 ? 'active' : ''}`}
+                    onClick={() => void openHomeFeaturedPreset(preset)}
+                    title={preset.description}
+                  >
+                    <span
+                      className={`thumb scene-${preset.config.template}`}
+                      style={{
+                        backgroundImage: preset.thumbnail
+                          ? `url(${preset.thumbnail})`
+                          : 'url(/home-cinematic-v23.svg)',
+                      }}
+                    >
+                      <em>{preset.badge || preset.category}</em>
+                    </span>
+                    <b>{preset.name}</b>
+                    <i><Play /></i>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <footer className="sd-home-footer">
+              MUSIC LIVES FURTHER · {process.env.NEXT_PUBLIC_BUILD_VERSION}
+              {process.env.NEXT_PUBLIC_BUILD_IDENTITY && ` · ${process.env.NEXT_PUBLIC_BUILD_IDENTITY}`}
+            </footer>
+          </section>
         </main>
       ) : (
-        <main className="sd-studio">
+        <main className={`sd-studio ${rendering ? 'sd-render-locked' : ''} ${quickMode ? 'sd-quick-mode' : ''}`}>
           <section className="sd-canvas-column">
             <div className="sd-mobile-title">
               <button onClick={() => setSong(null)}>‹</button>
@@ -873,30 +2549,232 @@ export default function CreatorStudio() {
                 <b>{song.title}</b>
                 <span>{fmt(song.duration)} · Suno song</span>
               </div>
-              <Menu />
+              <button className="sd-mobile-menu-trigger" aria-label="Mở menu" onClick={() => setNavigationOpen((open) => !open)}><Menu /></button>
+              {navigationOpen && navigationMenu}
             </div>
             <div className="sd-stage sd-live-preview">
               <LivePreview
                 song={renderSong(song)}
-                aspect={aspect}
-                template={template}
-                wave={wave}
-                motion="medium"
-                lyrics={lyrics}
-                layout={layout}
-                onLayoutChange={setLayout}
-                start={playbackStart}
+                aspect={studioModel.visual.aspect}
+                template={studioModel.visual.template}
+                wave={studioModel.visual.wave}
+                waveAppearance={studioModel.visual.waveAppearance}
+                motion={studioModel.visual.motion}
+                lyrics={studioModel.visual.lyrics}
+                layout={studioModel.visual.layout}
+                textEditor={editingText&&song&&<PreviewTextEditor target={editingText} title={song.title} creator={song.creator||''} time={previewTime} styles={textStyles} subtitle={subtitleStyle} layout={layout} lines={karaokeTimeline} onStyles={toolControlsProps.setTextStyles} onSubtitle={toolControlsProps.setSubtitleStyle} onLayout={toolControlsProps.setLayout} onLines={lines=>{invalidateRenderedResult();setKaraokeTimeline(lines);}} onDelete={()=>{if(editingText==='subtitle')toolControlsProps.setLyrics('off');else toolControlsProps.setTextStyles({...textStyles,[editingText]:{...textStyles[editingText],text:''}});setEditingText(null);}} onClose={()=>setEditingText(null)}/>}
+                onEditText={rendering?undefined:(key)=>{setAutoPreview(false);setTimelinePauseSignal(value=>value+1);setEditingText(key);}}
+                onLayoutChange={rendering ? undefined : (value) => { markPresetField('layout'); changeVisual(() => setLayout(value)); }}
+                start={trimStart}
+                end={trimEnd || song.duration || undefined}
+                seekTo={playbackStart}
+                pauseSignal={timelinePauseSignal}
                 exporting={rendering}
                 autoPlay={autoPreview}
                 fullPlayback
                 onTimeChange={setPreviewTime}
+                onPreviewPlay={() => {
+                  if (previewPlayTracked.current) return;
+                  previewPlayTracked.current = true;
+                  track('preview_played', {
+                    template,
+                    preset_id: selectedPresetId,
+                    aspect,
+                    time_to_first_preview_ms: resolvedAt.current
+                      ? Math.round(performance.now() - resolvedAt.current)
+                      : undefined,
+                  });
+                }}
+                onPerformance={(sample) => {
+                  const now = Date.now();
+                  if (now - lastPerfTrack.current < 15000) return;
+                  lastPerfTrack.current = now;
+                  track('preview_performance', {
+                    ...sample,
+                    template,
+                    aspect,
+                  });
+                }}
                 karaokeTimeline={karaokeTimeline}
                 mediaClips={mediaClips}
-                overlayTextStyles={textStyles}
-                subtitleStyle={subtitleStyle}
+                timelineTracks={timelineTracks}
+                overlayTextStyles={studioModel.visual.textStyles}
+                subtitleStyle={studioModel.visual.subtitleStyle}
+                effects={effectConfig}
+                background={studioModel.visual.background}
+                audioBinary={audioBinary}
                 resultUrl={resultUrl || undefined}
               />
             </div>
+            {karaokeSyncStatus === 'syncing' && (
+              <output
+                className="sd-subtitle-job"
+                aria-live="polite"
+                aria-label="Đang tìm subtitle"
+              >
+                <i aria-hidden="true" />
+                <span>
+                  <b>Đang tìm subtitle…</b>
+                  <small>Bạn vẫn có thể chỉnh sửa trong khi chạy nền.</small>
+                </span>
+              </output>
+            )}
+            <SuggestedBackground
+              key={song.audio}
+              onAddToTimeline={addPexelsToTimeline}
+              songKey={song.audio}
+              text={`${song.title} ${song.style || ''} ${song.tags || ''}`}
+              aspect={aspect}
+              background={background}
+              disabled={rendering}
+              onChange={toolControlsProps.setBackground}
+              onBrowse={() => { setQuickMode(false); setPanel('background'); setMobileTools(true); }}
+            />
+            {quickMode && (
+              <section className="sd-quick-create" aria-label="Quick Create">
+                <div className="sd-quick-create-head">
+                  <div>
+                    <small>QUICK CREATE · V23</small>
+                    <b>Chọn một mẫu, xem preview rồi xuất</b>
+                    <span>Đã gợi ý theo style, lyrics và định dạng phù hợp với bài này.</span>
+                  </div>
+                  <button
+                    className="sd-quick-customize"
+                    disabled={rendering}
+                    onClick={() => {
+                      setQuickMode(false);
+                      track('customize_opened', {
+                        preset_id: selectedPresetId,
+                        template,
+                        aspect,
+                      });
+                    }}
+                  >
+                    <SlidersHorizontal /> Customize
+                  </button>
+                </div>
+                <div className="sd-quick-presets">
+                  {quickPresets.map((preset, index) => (
+                    <button
+                      key={preset.id}
+                      className={selectedPresetId === preset.id ? 'active' : ''}
+                      disabled={rendering}
+                      onClick={() => {
+                        applyPreset(preset, 'replace-all');
+                        track('suggested_preset_selected', {
+                          preset_id: preset.id,
+                          rank: index + 1,
+                          category: preset.category,
+                        });
+                      }}
+                    >
+                      <span
+                        className={`scene-thumb scene-${preset.config.template}`}
+                        style={{
+                          backgroundImage: song.picture
+                            ? `linear-gradient(#080b1299,#080b1299),url("${song.picture}")`
+                            : undefined,
+                        }}
+                      />
+                      <span>
+                        <small>{index === 0 ? 'ĐỀ XUẤT' : preset.badge || preset.category}</small>
+                        <b>{preset.name}</b>
+                        <em>{preset.config.aspect} · {preset.config.lyrics === 'off' ? 'Visualizer' : 'Lyrics'} · {masteringLabel(normalizeProductionPreset({mastering:preset.mastering,export:preset.export},preset.config.aspect).mastering.profile)}</em>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div className="sd-quick-actions">
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={rendering}
+                    onClick={() => triggerQuickRender('cut')}
+                  >
+                    <Upload />
+                    {rendering
+                      ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
+                      : 'Create video'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={rendering}
+                    onClick={() => triggerQuickRender('30')}
+                  >
+                    <Play /> Tạo bản 30s
+                  </button>
+                </div>
+                {renderNotice && !error && (
+                  <div className="sd-quick-render-status" role="status" aria-live="polite">
+                    <b>Đang dùng audio gốc</b>
+                    <span>{renderNotice}</span>
+                  </div>
+                )}
+                {(rendering || error || lastRenderFailure) && (
+                  <div className={`sd-quick-render-status ${error ? 'error' : ''}`} role="status" aria-live="polite">
+                    {rendering ? (
+                      <>
+                        <b>{renderStage === 'validation' ? 'Đang kiểm tra video…' : renderStage === 'prepare' ? 'Đang chuẩn bị media…' : renderStage === 'finalize' ? 'Đang hoàn tất video…' : 'Đang tạo video…'}</b>
+                        <span>{Math.round(progress)}% · Không đóng trang trong khi đang xử lý.</span>
+                      </>
+                    ) : (
+                      <>
+                        <b>Không thể tạo video</b>
+                        <span>{error || lastRenderFailure?.message || 'Render thất bại. Hãy thử lại.'}</span>
+                        {lastRenderFailure?.retryable && (
+                          <button type="button" onClick={() => triggerQuickRender(lastRenderFailure.mode)}>
+                            Thử lại
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
+            {lastPresetId && (
+              <button
+                className="sd-last-preset"
+                disabled={rendering}
+                onClick={() => {
+                  const preset = [...BUILTIN_STUDIO_PRESETS, ...customPresets].find(
+                    (item) => item.id === lastPresetId,
+                  );
+                  if (preset) applyPreset(preset, 'replace-all');
+                }}
+              >
+                <Sparkles />
+                <span>
+                  <b>Dùng lại mẫu gần nhất</b>
+                  <small>
+                    {[...BUILTIN_STUDIO_PRESETS, ...customPresets].find(
+                      (item) => item.id === lastPresetId,
+                    )?.name || 'Mẫu đã dùng trước đó'}
+                  </small>
+                </span>
+              </button>
+            )}
+            {!quickMode && <div className="sd-first-run-flow" aria-label="Quy trình tạo video nhanh">
+              <button
+                className="primary"
+                disabled={rendering}
+                onClick={() => {
+                  setPanel('presets');
+                  setMobileTools(true);
+                }}
+              >
+                <b>1 · Chọn mẫu</b>
+                Mẫu hoàn chỉnh
+              </button>
+              <span>
+                <b>2 · Xem preview</b>
+                Chạm Play để kiểm tra
+              </span>
+              <button disabled={rendering} onClick={() => renderVideo('cut')}>
+                <b>3 · Xuất video</b>
+                {rendering ? `${Math.round(progress)}%` : 'Tạo video'}
+              </button>
+            </div>}
             {resultUrl && (
               <div className="sd-result-actions">
                 <div>
@@ -914,14 +2792,28 @@ export default function CreatorStudio() {
               duration={song.duration || 1}
               picture={song.picture}
               playhead={previewTime}
+              onEditStart={() => {
+                setAutoPreview(false);
+                setTimelinePauseSignal((value) => value + 1);
+              }}
               onSeek={(time) => {
                 setPlaybackStart(time);
                 setPreviewTime(time);
               }}
+              onEditEnd={() => setTimelinePauseSignal((value) => value + 1)}
               subtitles={karaokeTimeline}
-              onSubtitlesChange={setKaraokeTimeline}
-              clips={mediaClips}
+              onSubtitlesChange={(lines) => {
+                markPresetField('lyrics');
+                setKaraokeTimeline(lines);
+              }}
+              clips={timelineMediaClips}
               onClipsChange={setMediaClips}
+              onTrackStateChange={setTimelineTracks}
+              trackState={timelineTracks}
+              audioBinary={audioBinary}
+              audioUrl={song.audio}
+              visualLabel={`${template} · ${background.mode}`}
+              effectLabels={effects.length ? effects : ['Không có effect']}
             />
           </section>
           <aside className="sd-inspector">
@@ -946,44 +2838,29 @@ export default function CreatorStudio() {
                   : 'Lưu dự án'}
             </button>
             <hr />
-            <h3>Recommended</h3>
-            <div className="sd-presets">
-              {VISUAL_TEMPLATES.slice(0, 4).map((x, i) => (
-                <button
-                  onClick={() => setTemplate(x.id)}
-                  className={template === x.id ? 'active' : ''}
-                  key={x.id}
-                >
-                  <span style={{ backgroundImage: `url(${song.picture})` }} />
-                  <small>{x.label}</small>
-                </button>
-              ))}
+            <ToolControls {...toolControlsProps} presetContent={<PresetGallery
+              presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
+              selectedId={selectedPresetId}
+              picture={song.picture}
+              favoriteIds={favoritePresetIds}
+              canUndo={Boolean(presetUndo)}
+              modified={presetModified}
+              onApply={applyPreset}
+              onToggleFavorite={toggleFavoritePreset}
+              onDuplicate={duplicatePreset}
+              onRename={renameCustomPreset}
+              onDelete={deleteCustomPreset}
+              onSaveCurrent={saveCurrentAsPreset}
+              onUpdateCurrent={updateCurrentPreset}
+              onResetSelected={resetSelectedPreset}
+              onExportPreset={exportPreset}
+              onImportPreset={importPreset}
+              onUndo={restorePresetSnapshot}
+            />} />
+            <div className="sd-visual-sync" title="Preview/render visual fingerprint">
+              <span>Visual sync</span>
+              <b>{visualHash}</b>
             </div>
-            <ToolControls
-              panel={panel}
-              setPanel={setPanel}
-              wave={wave}
-              setWave={setWave}
-              template={template}
-              setTemplate={setTemplate}
-              aspect={aspect}
-              setAspect={setAspect}
-              lyrics={lyrics}
-              setLyrics={setLyrics}
-              effects={effects}
-              setEffects={setEffects}
-              layout={layout}
-              setLayout={setLayout}
-              textStyles={textStyles}
-              setTextStyles={setTextStyles}
-              subtitleStyle={subtitleStyle}
-              setSubtitleStyle={setSubtitleStyle}
-              trimStart={trimStart}
-              trimEnd={trimEnd}
-              duration={song.duration || 0}
-              setTrimStart={setTrimStart}
-              setTrimEnd={setTrimEnd}
-            />
             <div className="sd-actions">
               <button
                 className="sd-export"
@@ -992,12 +2869,35 @@ export default function CreatorStudio() {
               >
                 <Upload />{' '}
                 {rendering
-                  ? `Rendering ${Math.round(progress)}%`
+                  ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
                   : `Export ${fmt(Math.max(0, trimEnd - trimStart))} video`}
               </button>
               {rendering && (
                 <div className="sd-progress">
                   <i style={{ width: `${progress}%` }} />
+                </div>
+              )}
+              {lastRenderFailure && (
+                <div className="sd-render-retry" role="status">
+                  <span>
+                    Lỗi ở bước <b>{lastRenderFailure.stage}</b>
+                    {lastRenderFailure.retryable
+                      ? ' · có thể thử lại'
+                      : ' · cần chỉnh cấu hình trước khi render lại'}
+                  </span>
+                  {lastRenderFailure.retryable && (
+                    <button
+                      disabled={rendering}
+                      onClick={() =>
+                        renderVideo(
+                          lastRenderFailure.mode,
+                          lastRenderFailure.attempt + 1,
+                        )
+                      }
+                    >
+                      Thử lại render
+                    </button>
+                  )}
                 </div>
               )}
               <div className="sd-downloads">
@@ -1050,80 +2950,73 @@ export default function CreatorStudio() {
             </div>
           </aside>
           <div className="sd-mobile-export">
-            <button disabled={rendering} onClick={() => renderVideo('cut')}>
+            <button type="button" disabled={rendering} onClick={() => triggerQuickRender('cut')}>
               <Upload />
               {rendering
-                ? `Rendering ${Math.round(progress)}%`
+                ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
                 : 'Create & export video'}
             </button>
             <nav>
               <button
+                disabled={rendering}
+                onClick={() => {
+                  setPanel('presets');
+                  setMobileTools(true);
+                }}
+              >
+                <Sparkles />
+                Mẫu
+              </button>
+              <button
+                disabled={rendering}
                 onClick={() => {
                   setPanel('style');
                   setMobileTools(true);
                 }}
               >
-                <Sparkles />
-                Style
+                <SlidersHorizontal />
+                Tùy chỉnh
               </button>
               <button
+                disabled={rendering}
                 onClick={() => {
                   setPanel('lyrics');
                   setMobileTools(true);
                 }}
               >
                 <FileText />
-                Lyrics
+                Lời
               </button>
-              <button
-                onClick={() => {
-                  setPanel('wave');
-                  setMobileTools(true);
-                }}
-              >
-                <Music2 />
-                Wave
-              </button>
-              <button onClick={() => renderVideo('30')}>
+              <button type="button" disabled={rendering} onClick={() => triggerQuickRender('cut')}>
                 <Upload />
-                Export
+                Xuất
               </button>
             </nav>
           </div>
         </main>
       )}
       {song && mobileTools && (
-        <div className="sd-tool-sheet">
-          <div className="sd-sheet-head">
-            <b>Video controls</b>
-            <button onClick={() => setMobileTools(false)}>×</button>
-          </div>
-          <ToolControls
-            panel={panel}
-            setPanel={setPanel}
-            wave={wave}
-            setWave={setWave}
-            template={template}
-            setTemplate={setTemplate}
-            aspect={aspect}
-            setAspect={setAspect}
-            lyrics={lyrics}
-            setLyrics={setLyrics}
-            effects={effects}
-            setEffects={setEffects}
-            layout={layout}
-            setLayout={setLayout}
-            textStyles={textStyles}
-            setTextStyles={setTextStyles}
-            subtitleStyle={subtitleStyle}
-            setSubtitleStyle={setSubtitleStyle}
-            trimStart={trimStart}
-            trimEnd={trimEnd}
-            duration={song.duration || 0}
-            setTrimStart={setTrimStart}
-            setTrimEnd={setTrimEnd}
-          />
-        </div>
+        <StudioSheet title="Điều khiển video" onClose={() => setMobileTools(false)} className="sd-tool-sheet">
+          <ToolControls {...toolControlsProps} presetContent={<PresetGallery
+              presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
+              selectedId={selectedPresetId}
+              picture={song.picture}
+              favoriteIds={favoritePresetIds}
+              canUndo={Boolean(presetUndo)}
+              modified={presetModified}
+              onApply={applyPreset}
+              onToggleFavorite={toggleFavoritePreset}
+              onDuplicate={duplicatePreset}
+              onRename={renameCustomPreset}
+              onDelete={deleteCustomPreset}
+              onSaveCurrent={saveCurrentAsPreset}
+              onUpdateCurrent={updateCurrentPreset}
+              onResetSelected={resetSelectedPreset}
+              onExportPreset={exportPreset}
+              onImportPreset={importPreset}
+              onUndo={restorePresetSnapshot}
+            />} />
+        </StudioSheet>
       )}
     </div>
   );

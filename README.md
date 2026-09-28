@@ -71,4 +71,19 @@ Lưu ý: đây là **TikTok-like processing**, không phải thuật toán nội
 
 ## GitHub Actions build
 
+Footer Home hiển thị `MUSIC LIVES FURTHER · v22 · <nhánh>.<commit>`.
+Vite tự lấy nhánh và 7 ký tự commit từ GitHub Actions, Cloudflare Pages hoặc Git local mỗi lần build.
+Không lấy nhánh mới nhất của repository vì nhãn cần phản ánh đúng source đang build.
+Có thể đặt `BUILD_VERSION=v23 npm run build` để đổi version phát hành; mặc định là `v22`.
+Nếu môi trường không có Git/metadata CI, footer chỉ hiển thị version phát hành.
+
 Mỗi lần push lên `main`, workflow `.github/workflows/build-deploy.yml` sẽ chạy `npm ci` và `npm run build`, lưu artifact `sunodown-dist`. Nếu repository có `CLOUDFLARE_API_TOKEN` và `CLOUDFLARE_ACCOUNT_ID`, job deploy sẽ đưa bản build lên Cloudflare bằng Wrangler.
+
+## Deploy v22 to picai.online
+
+Worker: `sunodown-picai`. Build with `npm run build`, then deploy with
+`npx wrangler deploy --config wrangler.picai.json`.
+The route `picai.online/*` uses the existing proxied Cloudflare DNS record.
+Keep that record proxied. Worker secrets are configured separately and are not
+stored in Git. Google sign-in requires the OAuth client to allow
+`https://picai.online/api/auth/google/callback` as a redirect URI.

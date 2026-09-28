@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hmac
 import json
+import math
+import threading
 import os
 import re
 import shutil
@@ -11,7 +14,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from faster_whisper import WhisperModel
 
 app = FastAPI(title="Suno Karaoke Aligner", version="1.0.0")
@@ -19,7 +22,12 @@ app = FastAPI(title="Suno Karaoke Aligner", version="1.0.0")
 MODEL_NAME = os.getenv("WHISPER_MODEL", "large-v3")
 DEVICE = os.getenv("WHISPER_DEVICE", "cuda")
 COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
-model = WhisperModel(MODEL_NAME, device=DEVICE, compute_type=COMPUTE_TYPE)
+SERVICE_TOKEN = os.getenv("KARAOKE_ALIGN_TOKEN", "").strip()
+model = WhisperModel(
+    MODEL_NAME, device=DEVICE, compute_type=COMPUTE_TYPE,
+    cpu_threads=int(os.getenv("WHISPER_CPU_THREADS", "2")), num_workers=1,
+)
+inference_lock = threading.Lock()
 
 SECTION = re.compile(r"^\s*\[[^\]]+\]\s*$")
 PUNCT = re.compile(r"[^\wÀ-ỹĐđ]+", re.UNICODE)
@@ -210,6 +218,63 @@ def interpolate_timings(
     return clean
 
 
+def require_authorization(request: Request) -> None:
+    if not SERVICE_TOKEN:
+        return
+    supplied = request.headers.get("authorization", "")
+    expected = f"Bearer {SERVICE_TOKEN}"
+    if not hmac.compare_digest(supplied, expected):
+        raise HTTPException(status_code=401, detail="Unauthorized.")
+
+
+def words_to_lines(words: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    lines: list[dict[str, Any]] = []
+    current: list[dict[str, Any]] = []
+
+    def flush() -> None:
+        nonlocal current
+        if not current:
+            return
+        text = " ".join(str(word["text"]).strip() for word in current).strip()
+        if text:
+            lines.append(
+                {
+                    "text": text,
+                    "start": float(current[0]["start"]),
+                    "end": float(current[-1]["end"]),
+                    "confidence": sum(float(word.get("confidence", 0.5)) for word in current)
+                    / max(1, len(current)),
+                    "words": [
+                        {
+                            "text": word["text"],
+                            "start": float(word["start"]),
+                            "end": float(word["end"]),
+                            "confidence": float(word.get("confidence", 0.5)),
+                        }
+                        for word in current
+                    ],
+                }
+            )
+        current = []
+
+    for word in words:
+        previous = current[-1] if current else None
+        pause = float(word["start"]) - float(previous["end"]) if previous else 0.0
+        char_count = sum(len(str(item["text"])) + 1 for item in current)
+        if current and (
+            pause > 0.85
+            or len(current) >= 10
+            or char_count + len(str(word["text"])) > 58
+        ):
+            flush()
+        current.append(word)
+        if re.search(r"[.!?…]$", str(word["text"])) and len(current) >= 3:
+            flush()
+
+    flush()
+    return lines
+
+
 def build_lines(
     lines: list[str],
     line_indexes: list[list[int]],
@@ -234,15 +299,62 @@ def build_lines(
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "model": MODEL_NAME, "device": DEVICE}
+    return {
+        "ok": True,
+        "model": MODEL_NAME,
+        "device": DEVICE,
+        "auth": bool(SERVICE_TOKEN),
+    }
+
+
+@app.post("/transcribe")
+def transcribe(
+    request: Request,
+    audio: UploadFile = File(...),
+    language: str = Form("vi"),
+) -> dict[str, Any]:
+    require_authorization(request)
+    suffix = Path(audio.filename or "song.mp3").suffix or ".mp3"
+    with tempfile.TemporaryDirectory(prefix="suno-transcribe-") as tmp:
+        workdir = Path(tmp)
+        source = workdir / f"source{suffix}"
+        with source.open("wb") as target:
+            shutil.copyfileobj(audio.file, target)
+
+        vocals = separate_vocals(source, workdir)
+        asr_words = transcribe_words(vocals, language)
+        if not asr_words:
+            raise HTTPException(status_code=422, detail="Không phát hiện được giọng hát.")
+
+        return {
+            "lines": words_to_lines(asr_words),
+            "words": [
+                {
+                    "text": word["text"],
+                    "start": word["start"],
+                    "end": word["end"],
+                    "confidence": word["confidence"],
+                }
+                for word in asr_words
+            ],
+            "meta": {
+                "language": language,
+                "asr_words": len(asr_words),
+                "separated_vocals": vocals != source,
+                "model": MODEL_NAME,
+                "device": DEVICE,
+            },
+        }
 
 
 @app.post("/align")
-async def align(
+def align(
+    request: Request,
     audio: UploadFile = File(...),
     lyrics: str = Form(...),
     language: str = Form("vi"),
 ) -> dict[str, Any]:
+    require_authorization(request)
     lines = lyric_lines(lyrics)
     if not lines:
         raise HTTPException(status_code=400, detail="Lyrics trống.")
@@ -277,3 +389,31 @@ async def align(
                 "separated_vocals": vocals != source,
             },
         }
+
+
+@app.post("/api/karaoke/align")
+def karaoke_align(
+    request: Request,
+    audio: UploadFile = File(...),
+    duration: float | None = Form(None),
+    language: str = Form("vi"),
+    lyrics: str = Form(""),
+) -> dict[str, Any]:
+    """Multipart endpoint compatible with the web editor's curl request."""
+    require_authorization(request)
+    if duration is not None and (not math.isfinite(duration) or duration <= 0):
+        raise HTTPException(status_code=400, detail="Duration phải lớn hơn 0.")
+    if audio.size is not None and audio.size > 28 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio tối đa 28 MB.")
+    if audio.size == 0:
+        raise HTTPException(status_code=400, detail="Audio trống.")
+    if not inference_lock.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="Server đang nhận diện, thử lại sau.")
+    try:
+        if lyrics.strip():
+            return align(request, audio, lyrics, language)
+        return transcribe(request, audio, language)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Audio hoặc ngôn ngữ không hợp lệ.") from exc
+    finally:
+        inference_lock.release()

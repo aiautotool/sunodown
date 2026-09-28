@@ -1,5 +1,7 @@
 export type Song = { id:string|null; title:string; picture:string|null; audio:string; sourceAudio:string; video:string|null; description:string|null; lyrics:string|null; style:string|null; tags:string|null; duration:number|null; creator:string|null };
 export type VideoAspect = '16:9'|'9:16'|'1:1'|'4:5'|'4:3';
+export type WaveAppearance = { color:string; color2:string; glow:number; opacity:number; density:number; smoothing:number };
+export const DEFAULT_WAVE_APPEARANCE:WaveAppearance={color:'#8b5cf6',color2:'#22d3ee',glow:55,opacity:92,density:72,smoothing:55};
 export type WaveStyle = 'bars'|'mirror'|'line'|'dots'|'pulse'|'thin-bars'|'blocks'|'needles'|'mountain'|'ribbon'|'spark'|'center-line'|'equalizer'|'circle'|'circle-bars'|'orbit-dots'|'radial-spectrum'|'neon-ring'|'arc-burst'|'spiral'|'radial-wave'|'pinwheel'|'mandala'|'spectrum-rings'|'wave-bars'|'stacked-spectrum';
 export type VisualTemplate = 'cover-motion'|'vinyl'|'glass-card'|'lyrics-focus'|'editorial'|'spotlight'|'gold-record';
 export type MotionIntensity = 'low'|'medium'|'high';
@@ -66,7 +68,7 @@ export const VIDEO_PRESETS:{id:VideoPresetId;label:string;hint:string;category:'
   {"id": "spotlight-portrait", "label": "Sân khấu dọc", "hint": "Bìa nổi, khung nghiêng và hào quang", "category": "Album", "template": "spotlight", "wave": "mirror", "motion": "medium", "lyrics": "off", "aspect": "9:16", "badge": "Cao cấp"},
   {"id": "spotlight-square", "label": "Sân khấu vuông", "hint": "Bìa nổi, khung nghiêng và hào quang", "category": "Album", "template": "spotlight", "wave": "pulse", "motion": "high", "lyrics": "off", "aspect": "1:1", "badge": "Cao cấp"},
   {"id": "gold-portrait", "label": "Đĩa vàng dọc", "hint": "Đĩa vàng xoay trên nền than trầm", "category": "Album", "template": "gold-record", "wave": "line", "motion": "low", "lyrics": "off", "aspect": "9:16", "badge": "Cao cấp"},
-  {"id": "gold-wide", "label": "Đĩa vàng toàn cảnh", "hint": "Đĩa vàng xoay trên nền than trầm", "category": "Album", "template": "gold-record", "wave": "dots", "motion": "low", "lyrics": "off", "aspect": "16:9", "badge": "Cao cấp"},,
+  {"id": "gold-wide", "label": "Đĩa vàng toàn cảnh", "hint": "Đĩa vàng xoay trên nền than trầm", "category": "Album", "template": "gold-record", "wave": "dots", "motion": "low", "lyrics": "off", "aspect": "16:9", "badge": "Cao cấp"},
   {id:'aurora-flow',label:'Aurora Flow',hint:'Dải cực quang mềm, radial wave và chuyển động điện ảnh',category:'Visualizer',template:'glass-card',wave:'radial-wave',motion:'medium',lyrics:'off',aspect:'16:9',badge:'Cymatic'},
   {id:'deep-space',label:'Deep Space',hint:'Không gian sâu, vòng phổ và chuyển động chậm',category:'Visualizer',template:'spotlight',wave:'spectrum-rings',motion:'low',lyrics:'off',aspect:'16:9',badge:'PulseForge'},
   {id:'sacred-geometry',label:'Sacred Geometry',hint:'Hình học đối xứng phản ứng theo nhạc',category:'Visualizer',template:'glass-card',wave:'mandala',motion:'medium',lyrics:'off',aspect:'1:1',badge:'PulseForge'},
