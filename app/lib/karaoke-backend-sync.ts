@@ -32,6 +32,7 @@ type BackendSyncOptions = {
   duration: number;
   language?: string;
   onStage?: (message: string) => void;
+  onDebug?: (message: string, data?: Record<string, string | number | boolean | null>) => void;
   onPartialTimeline?: (
     timeline: KaraokeLine[],
     completedChunks: number,
@@ -462,6 +463,7 @@ export async function buildBackendKaraokeTimeline({
   duration,
   language = 'vi',
   onStage,
+  onDebug,
   onPartialTimeline,
 }: BackendSyncOptions): Promise<KaraokeLine[]> {
   if (typeof window === 'undefined') {
@@ -480,6 +482,13 @@ export async function buildBackendKaraokeTimeline({
   const plan = buildKaraokeChunkPlan(actualDuration);
   if (!plan.length) throw new Error('Audio không có dữ liệu để đồng bộ.');
 
+  onDebug?.('backend-plan', {
+    mobile,
+    totalChunks: plan.length,
+    audioDuration: Math.round(actualDuration * 100) / 100,
+    requestedDuration: Math.round(safeDuration * 100) / 100,
+    concurrency: backendKaraokeConcurrency(mobile),
+  });
   onStage?.('Đang đồng bộ phụ đề…');
   let failedChunks = 0;
   let completedChunks = 0;
@@ -492,6 +501,12 @@ export async function buildBackendKaraokeTimeline({
     backendKaraokeConcurrency(mobile),
     async (chunk, index) => {
       try {
+        onDebug?.('chunk-start', {
+          chunk: index + 1,
+          totalChunks: plan.length,
+          start: Math.round(chunk.start * 100) / 100,
+          duration: Math.round(chunk.duration * 100) / 100,
+        });
         // Mobile only materializes one short PCM window at a time. Once the
         // request finishes, its samples/WAV become collectible before the
         // next window starts, keeping peak memory bounded.
@@ -510,9 +525,19 @@ export async function buildBackendKaraokeTimeline({
               chunk.duration,
             );
         streams[index] = await transcribeChunk(samples, chunk, index, language);
-      } catch {
+        onDebug?.('chunk-ok', {
+          chunk: index + 1,
+          totalChunks: plan.length,
+          words: streams[index].length,
+        });
+      } catch (error) {
         failedChunks++;
         streams[index] = [];
+        onDebug?.('chunk-fail', {
+          chunk: index + 1,
+          totalChunks: plan.length,
+          error: error instanceof Error ? error.message : 'unknown',
+        });
       } finally {
         completedChunks++;
         if (mobile && onPartialTimeline) {
@@ -522,6 +547,13 @@ export async function buildBackendKaraokeTimeline({
                 strictAnchors: true,
               })
             : wordsToLines(partialWords, safeDuration);
+          onDebug?.('chunk-progress', {
+            completedChunks,
+            totalChunks: plan.length,
+            failedChunks,
+            mergedWords: partialWords.length,
+            partialLines: partialTimeline.length,
+          });
           if (partialTimeline.length) {
             onPartialTimeline(partialTimeline, completedChunks, plan.length);
           }
@@ -533,6 +565,12 @@ export async function buildBackendKaraokeTimeline({
 
   const roughWords = mergeKaraokeChunkWords(streams);
   const failureRatio = failedChunks / Math.max(1, plan.length);
+  onDebug?.('backend-summary', {
+    totalChunks: plan.length,
+    failedChunks,
+    mergedWords: roughWords.length,
+    failurePercent: Math.round(failureRatio * 100),
+  });
 
   // Do not discard usable mobile timing just because several network chunks
   // failed. The pipeline validator already decides whether the aligned
