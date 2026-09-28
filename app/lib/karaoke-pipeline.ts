@@ -7,7 +7,9 @@ import { buildCapCutKaraokeTimeline } from './karaoke-capcut-sync';
 import { isMobileKaraokeDevice } from './karaoke-device';
 import {
   buildLocalKaraokeTimeline,
+  buildMobileLocalKaraokeTimeline,
   transcribeLocalKaraokeTimeline,
+  transcribeMobileLocalKaraokeTimeline,
   type KaraokeSyncStage,
 } from './karaoke-local-sync';
 import {
@@ -26,7 +28,9 @@ export type KaraokeEngineId =
   | 'backend-whisper-transcription'
   | 'capcut'
   | 'local-whisper'
-  | 'local-whisper-transcription';
+  | 'local-whisper-mobile'
+  | 'local-whisper-transcription'
+  | 'local-whisper-mobile-transcription';
 
 export type KaraokePipelineStage =
   | 'prepare'
@@ -129,7 +133,12 @@ export async function runKaraokePipeline({
         message: label,
       });
       const rawTimeline = await run();
-      const refinedTimeline = await refineToSungRhythm(rawTimeline, engine);
+      // Mobile local Whisper already works on short chunks. Avoid decoding the
+      // whole song a second time for onset refinement on iOS/Safari.
+      const refinedTimeline =
+        mobile && engine.startsWith('local-whisper-mobile')
+          ? rawTimeline
+          : await refineToSungRhythm(rawTimeline, engine);
       const timeline = engine.startsWith('backend-whisper')
         ? compensateBackendVocalLatency(refinedTimeline, duration)
         : refinedTimeline;
@@ -203,7 +212,7 @@ export async function runKaraokePipeline({
   onProgress?.({
     stage: 'prepare',
     message: mobile
-      ? 'Thiết bị mobile · chia audio thành đoạn ngắn để chạy Whisper backend…'
+      ? 'Thiết bị mobile · ưu tiên Whisper Tiny chạy trực tiếp trong trình duyệt…'
       : 'Thiết bị desktop · ưu tiên Whisper trong trình duyệt…',
   });
 
@@ -237,8 +246,27 @@ export async function runKaraokePipeline({
     }> = mobile
       ? [
           {
+            engine: 'local-whisper-mobile',
+            label: 'Mobile · đang chạy Whisper Tiny trực tiếp trên trình duyệt…',
+            run: () =>
+              buildMobileLocalKaraokeTimeline({
+                audio,
+                lyrics: lyrics!,
+                duration,
+                language,
+                onStage: (stage, message) =>
+                  onProgress?.({
+                    stage: stageFromLocal(stage),
+                    engine: 'local-whisper-mobile',
+                    message,
+                  }),
+                onPartialTimeline,
+                onDebug,
+              }),
+          },
+          {
             ...backendEngine,
-            label: 'Mobile · đang chia audio thành đoạn ngắn và đồng bộ bằng Whisper backend…',
+            label: 'Whisper local mobile chưa đủ tốt · fallback sang backend chunking…',
           },
         ]
       : [
@@ -287,8 +315,26 @@ export async function runKaraokePipeline({
     }> = mobile
       ? [
           {
+            engine: 'local-whisper-mobile-transcription',
+            label: 'Mobile · đang tạo subtitle bằng Whisper Tiny trong trình duyệt…',
+            run: () =>
+              transcribeMobileLocalKaraokeTimeline({
+                audio,
+                duration,
+                language,
+                onStage: (stage, message) =>
+                  onProgress?.({
+                    stage: stageFromLocal(stage),
+                    engine: 'local-whisper-mobile-transcription',
+                    message,
+                  }),
+                onPartialTimeline,
+                onDebug,
+              }),
+          },
+          {
             engine: 'backend-whisper-transcription',
-            label: 'Mobile · đang chia audio thành đoạn ngắn để tạo subtitle…',
+            label: 'Whisper local mobile lỗi · fallback sang backend chunking…',
             run: () =>
               buildBackendKaraokeTimeline({
                 audio,
