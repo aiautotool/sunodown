@@ -209,6 +209,8 @@ export async function POST(request: NextRequest) {
     const lyricsValue = incoming.get('lyrics');
     const languageValue = incoming.get('language');
     const durationValue = incoming.get('duration');
+    const fullSongValue = incoming.get('full');
+    const fullSong = fullSongValue === '1' || fullSongValue === 'true';
 
     if (!(audio instanceof File)) {
       return NextResponse.json({ error: 'Thiếu audio.' }, { status: 400 });
@@ -247,6 +249,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (
+      !fullSong &&
       Number.isFinite(requestedDuration) &&
       requestedDuration > 26.5
     ) {
@@ -301,7 +304,9 @@ export async function POST(request: NextRequest) {
         lines,
         words: roughWords,
         meta: {
-          engine: 'cloudflare-workers-ai-whisper-turbo-chunk',
+          engine: fullSong
+            ? 'cloudflare-workers-ai-whisper-turbo-full'
+            : 'cloudflare-workers-ai-whisper-turbo-chunk',
           language,
           lyrics_words: lyrics.split(/\s+/).filter(Boolean).length,
           asr_words: roughWords.length,
