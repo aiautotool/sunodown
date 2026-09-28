@@ -6,7 +6,9 @@ export default {
     if ((request.method === 'GET' || request.method === 'HEAD') &&
         (url.pathname.startsWith('/_next/') || url.pathname.startsWith('/assets-next/') ||
          /\.(?:png|jpg|jpeg|webp|svg|ico|woff2|css|js|webmanifest)$/.test(url.pathname))) {
-      return env.ASSETS.fetch(request);
+      // Bypass stale asset misses cached before this domain used the asset binding.
+      url.searchParams.set('__picai_assets', 'v22-1');
+      return env.ASSETS.fetch(new Request(url, request));
     }
     return app.fetch(request, env, ctx);
   },
