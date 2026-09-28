@@ -36,3 +36,8 @@ jobs:
             echo "--- $ns www AAAA ---"
             nslookup -type=AAAA www.picai.online "$ns"
           done
+          echo "=== HTTPS ==="
+          for url in https://picai.online https://www.picai.online; do
+            echo "--- $url ---"
+            curl -sS -I --max-time 20 "$url" | sed -n '1,12p'
+          done
