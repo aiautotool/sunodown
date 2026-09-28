@@ -43,25 +43,16 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Route www.picai.online through Worker
-        run: |
-          node - <<'NODE'
-          const fs = require('fs');
-          const path = 'wrangler.v6.generated.json';
-          const cfg = JSON.parse(fs.readFileSync(path, 'utf8'));
-          cfg.routes ||= [];
-          cfg.routes = cfg.routes.filter((route) => {
-            const pattern = typeof route === 'string' ? route : route?.pattern;
-            return pattern !== 'picai.online' &&
-                   pattern !== 'picai.online/*' &&
-                   pattern !== 'www.picai.online' &&
-                   pattern !== 'www.picai.online/*';
-          });
-          cfg.routes.push('www.picai.online/*');
-          fs.writeFileSync(path, JSON.stringify(cfg, null, 2));
-          NODE
-
-      - name: Deploy Worker route
+      - name: Upload current Worker
         run: npx wrangler deploy --config wrangler.v6.generated.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Attach www.picai.online to Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 2de679b502c90e736abad750fd0415f7
+        run: |
+          response="$(curl -sS -X PUT             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains"             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             -H "Content-Type: application/json"             --data '{"hostname":"www.picai.online","service":"suno-aiautotool"}')"
+          echo "$response" | jq '{success, errors, result: (.result | if . then {hostname, service, zone_name, id} else null end)}'
+          echo "$response" | jq -e '.success == true' >/dev/null
