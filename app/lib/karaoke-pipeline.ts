@@ -236,10 +236,9 @@ export async function runKaraokePipeline({
       run: () => Promise<KaraokeLine[]>;
     }> = mobile
       ? [
-          backendEngine,
           {
             engine: 'capcut',
-            label: 'Whisper backend chưa đủ tốt · đang thử CapCut timestamp…',
+            label: 'Mobile · đang căn subtitle trên server để giảm tải cho thiết bị…',
             run: () =>
               buildCapCutKaraokeTimeline({
                 audio,
@@ -247,6 +246,10 @@ export async function runKaraokePipeline({
                 duration,
                 language: language === 'vi' ? 'vi-VN' : language,
               }),
+          },
+          {
+            ...backendEngine,
+            label: 'CapCut chưa đủ tốt · đang fallback sang Whisper backend…',
           },
         ]
       : [
