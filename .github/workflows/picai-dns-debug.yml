@@ -41,3 +41,10 @@ jobs:
             echo "--- $url ---"
             curl -sS -I --max-time 20 "$url" | sed -n '1,12p'
           done
+          echo "=== CNAME TARGET TEST ==="
+          echo "--- direct production target ---"
+          curl -sS -I --max-time 20 https://sunoapp.aiautotool.com | sed -n '1,12p'
+          echo "--- target with picai Host header ---"
+          curl -sS -I --max-time 20 https://sunoapp.aiautotool.com -H 'Host: picai.online' | sed -n '1,12p'
+          echo "--- target with www.picai Host header ---"
+          curl -sS -I --max-time 20 https://sunoapp.aiautotool.com -H 'Host: www.picai.online' | sed -n '1,12p'
