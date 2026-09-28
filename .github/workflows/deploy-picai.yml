@@ -1,14 +1,6 @@
 name: Deploy picai.online domains
 
 on:
-  push:
-    branches: [v20.1]
-    paths:
-      - '.github/workflows/deploy-picai.yml'
-      - 'wrangler.jsonc'
-      - 'worker-v6.ts'
-      - 'app/**'
-      - 'components/**'
   workflow_dispatch:
 
 permissions:
