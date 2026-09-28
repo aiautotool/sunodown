@@ -60,7 +60,7 @@ export function StartupScreen() {
           <span><Music2 /></span>
           <i /><i /><i /><i /><i />
         </div>
-        <p className="sd-startup-kicker">CREATOR ENGINE · V18</p>
+        <p className="sd-startup-kicker">CREATOR ENGINE · V23</p>
         <h1>Suno<span>Down</span></h1>
         <p className="sd-startup-copy">Biến âm nhạc thành nội dung.</p>
         <div className="sd-startup-loader" aria-hidden="true">
