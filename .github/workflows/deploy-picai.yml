@@ -60,6 +60,27 @@ jobs:
             echo "$response" | jq -e '.success == true' >/dev/null
           done
 
+      - name: Restore public DNS for Worker domains
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: e655c86fa8ded678787759daa263ac8e
+        run: |
+          set -euo pipefail
+          for host in picai.online www.picai.online; do
+            existing="$(curl -sS "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?type=A&name=$host"               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               -H "Content-Type: application/json")"
+            echo "$existing" | jq '{success, errors, count: (.result | length)}'
+            echo "$existing" | jq -e '.success == true' >/dev/null
+            record_id="$(echo "$existing" | jq -r '.result[0].id // empty')"
+            payload="{\"type\":\"A\",\"name\":\"$host\",\"content\":\"192.0.2.1\",\"ttl\":1,\"proxied\":true,\"comment\":\"Worker custom domain DNS anchor\"}"
+            if [ -n "$record_id" ]; then
+              response="$(curl -sS -X PUT "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$record_id"                 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"                 -H "Content-Type: application/json"                 --data "$payload")"
+            else
+              response="$(curl -sS -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records"                 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"                 -H "Content-Type: application/json"                 --data "$payload")"
+            fi
+            echo "$response" | jq '{success, errors, result: (.result | if . then {id,type,name,content,proxied} else null end)}'
+            echo "$response" | jq -e '.success == true' >/dev/null
+          done
+
       - name: Verify Worker domains and public DNS
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
