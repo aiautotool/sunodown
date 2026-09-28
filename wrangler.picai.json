@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sunodown-picai",
   "account_id": "2de679b502c90e736abad750fd0415f7",
-  "main": "dist/server/index.js",
+  "main": "dist/server/worker-picai.js",
   "compatibility_date": "2026-05-15",
   "compatibility_flags": [
     "nodejs_compat"
@@ -34,5 +34,8 @@
   },
   "observability": {
     "enabled": true
+  },
+  "build": {
+    "command": "cp worker-picai.js dist/server/worker-picai.js"
   }
 }
