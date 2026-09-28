@@ -128,6 +128,14 @@ type Song = {
 
 type SignedInUser = { sub: string; email: string; name: string; picture?: string };
 
+type SubtitleDebugValue = string | number | boolean | null;
+type SubtitleDebugEntry = {
+  id: number;
+  time: string;
+  message: string;
+  data?: Record<string, SubtitleDebugValue>;
+};
+
 const fmt = (n = 0) =>
   `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
 const valid = (value: string) => {
@@ -619,6 +627,11 @@ export default function CreatorStudio() {
   const [karaokeSyncStatus, setKaraokeSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'fallback'>('idle');
   const [karaokeSyncMessage, setKaraokeSyncMessage] = useState('');
   const [subtitleNotice, setSubtitleNotice] = useState('');
+  const [subtitleDebugEnabled, setSubtitleDebugEnabled] = useState(false);
+  const [subtitleDebugOpen, setSubtitleDebugOpen] = useState(false);
+  const [subtitleDebugLogs, setSubtitleDebugLogs] = useState<SubtitleDebugEntry[]>([]);
+  const subtitleDebugEnabledRef = useRef(false);
+  const subtitleDebugSeq = useRef(0);
   const [audioBinary, setAudioBinary] = useState<Blob | null>(null);
   const mediaCache = useRef<Map<string, Blob>>(new Map());
   const [mediaClips, setMediaClips] = useState<MediaClip[]>([]);
@@ -708,10 +721,52 @@ export default function CreatorStudio() {
   const karaokeSyncRun = useRef(0);
   const initialRouteHandled = useRef(false);
 
+  const pushSubtitleDebug = (
+    message: string,
+    data?: Record<string, SubtitleDebugValue>,
+  ) => {
+    if (!subtitleDebugEnabledRef.current) return;
+    const entry: SubtitleDebugEntry = {
+      id: ++subtitleDebugSeq.current,
+      time: new Date().toLocaleTimeString('vi-VN', { hour12: false }),
+      message,
+      data,
+    };
+    console.info('[SUBTITLE DEBUG]', message, data || '');
+    setSubtitleDebugLogs((logs) => [...logs.slice(-199), entry]);
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const enabled =
+      new URLSearchParams(window.location.search).get('debug') === 'subtitle';
+    subtitleDebugEnabledRef.current = enabled;
+    setSubtitleDebugEnabled(enabled);
+    setSubtitleDebugOpen(enabled);
+    if (!enabled) return;
+
+    const nav = navigator as Navigator & {
+      userAgentData?: { mobile?: boolean };
+    };
+    const entry: SubtitleDebugEntry = {
+      id: ++subtitleDebugSeq.current,
+      time: new Date().toLocaleTimeString('vi-VN', { hour12: false }),
+      message: 'debug-enabled',
+      data: {
+        uaMobile: nav.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent),
+        touchPoints: nav.maxTouchPoints || 0,
+        online: navigator.onLine,
+      },
+    };
+    setSubtitleDebugLogs([entry]);
+  }, []);
+
   const updateEditorUrl = (source: string, saved = false, replace = false) => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams();
     params.set(saved ? 'project' : 'source', source);
+    const debugMode = new URLSearchParams(window.location.search).get('debug');
+    if (debugMode) params.set('debug', debugMode);
     window.history[replace ? 'replaceState' : 'pushState'](
       { editor: true, source },
       '',
@@ -1053,6 +1108,13 @@ export default function CreatorStudio() {
   ) {
     setKaraokeSyncStatus('syncing');
     setKaraokeSyncMessage('Đang chuẩn bị subtitle…');
+    pushSubtitleDebug('subtitle-run-start', {
+      run: syncRun,
+      audioBytes: audio.size,
+      duration: Math.round(duration * 100) / 100,
+      hasLyrics: Boolean(target.lyrics?.trim()),
+      lyricChars: target.lyrics?.length || 0,
+    });
 
     // Mobile backend emits useful chunk-by-chunk timelines before the whole
     // song has finished. Keep the best one so a later network/validation
@@ -1062,6 +1124,10 @@ export default function CreatorStudio() {
     const delays = [0, 2200];
     for (let attempt = 0; attempt < delays.length; attempt++) {
       if (karaokeSyncRun.current !== syncRun) return;
+      pushSubtitleDebug('attempt-start', {
+        attempt: attempt + 1,
+        totalAttempts: delays.length,
+      });
 
       if (delays[attempt] > 0) {
         setKaraokeSyncMessage('Đang thử lại subtitle…');
@@ -1077,8 +1143,13 @@ export default function CreatorStudio() {
           lyrics: target.lyrics,
           duration,
           language: 'vi',
-          onProgress: ({ stage }) => {
+          onProgress: ({ stage, engine, message }) => {
             if (karaokeSyncRun.current !== syncRun) return;
+            pushSubtitleDebug('pipeline-progress', {
+              stage,
+              engine: engine || 'none',
+              message,
+            });
             const publicMessage =
               stage === 'prepare'
                 ? 'Đang chuẩn bị subtitle…'
@@ -1087,11 +1158,20 @@ export default function CreatorStudio() {
                   : 'Đang xử lý subtitle…';
             setKaraokeSyncMessage(publicMessage);
           },
+          onDebug: (message, data) => {
+            if (karaokeSyncRun.current !== syncRun) return;
+            pushSubtitleDebug(message, data);
+          },
           onPartialTimeline: (partialTimeline) => {
             if (karaokeSyncRun.current !== syncRun || !partialTimeline.length) return;
             if (partialTimeline.length >= bestPartialTimeline.length) {
               bestPartialTimeline = partialTimeline;
             }
+            pushSubtitleDebug('partial-timeline', {
+              lines: partialTimeline.length,
+              firstStart: Math.round((partialTimeline[0]?.start || 0) * 100) / 100,
+              lastEnd: Math.round((partialTimeline.at(-1)?.end || 0) * 100) / 100,
+            });
             setKaraokeTimeline(partialTimeline);
             setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
             setKaraokeSyncMessage(
@@ -1110,6 +1190,13 @@ export default function CreatorStudio() {
             ? 'Subtitle đã sẵn sàng.'
             : 'Subtitle đã được tạo. Nên kiểm tra lại trước khi xuất.';
 
+        pushSubtitleDebug('subtitle-run-result', {
+          status: result.status,
+          engine: result.engine,
+          confidence: result.quality.confidence,
+          lines: result.timeline.length,
+          attempts: result.attempts.length,
+        });
         setKaraokeTimeline(result.timeline);
         setKaraokeSyncStatus(result.status);
         setKaraokeSyncMessage(publicResultMessage);
@@ -1125,8 +1212,15 @@ export default function CreatorStudio() {
           },
         );
         return;
-      } catch {
+      } catch (error) {
         if (karaokeSyncRun.current !== syncRun) return;
+        const debugError =
+          error instanceof Error ? error.message : 'Unknown subtitle error';
+        pushSubtitleDebug('attempt-failed', {
+          attempt: attempt + 1,
+          error: debugError,
+          bestPartialLines: bestPartialTimeline.length,
+        });
         track('karaoke_auto_sync_attempt_failed', {
           attempt: attempt + 1,
         });
@@ -1135,6 +1229,9 @@ export default function CreatorStudio() {
 
     if (karaokeSyncRun.current !== syncRun) return;
     if (bestPartialTimeline.length) {
+      pushSubtitleDebug('partial-preserved', {
+        lines: bestPartialTimeline.length,
+      });
       setKaraokeTimeline(bestPartialTimeline);
       setKaraokeSyncStatus('fallback');
       setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
@@ -1150,6 +1247,10 @@ export default function CreatorStudio() {
       });
       return;
     }
+    pushSubtitleDebug('subtitle-run-failed', {
+      attempts: delays.length,
+      partialLines: bestPartialTimeline.length,
+    });
     setKaraokeTimeline([]);
     setKaraokeSyncStatus('fallback');
     setKaraokeSyncMessage('Chưa tạo được subtitle.');
@@ -1163,6 +1264,9 @@ export default function CreatorStudio() {
     options: { generateSubtitles?: boolean; updateUrl?: boolean; replaceUrl?: boolean } = {},
   ): Promise<Song | null> {
     const startedAt = performance.now();
+    pushSubtitleDebug('resolve-start', {
+      sourceChars: value.length,
+    });
     if (!validSourceInput(value)) {
       setError('Hãy dán liên kết Suno hợp lệ.');
       track('song_resolve_failed', { reason: 'invalid_url' });
@@ -1207,6 +1311,12 @@ export default function CreatorStudio() {
         style: typeof data.style === 'string' ? data.style : '',
         tags: typeof data.tags === 'string' ? data.tags : '',
       };
+      pushSubtitleDebug('resolve-metadata', {
+        duration: Math.round((hydrated.duration || 0) * 100) / 100,
+        hasLyrics: Boolean(hydrated.lyrics),
+        lyricChars: hydrated.lyrics?.length || 0,
+        hasPicture: Boolean(hydrated.picture),
+      });
       const privateSource = hydrated.sourceToken || value;
       setUrl(privateSource);
 
@@ -1222,6 +1332,10 @@ export default function CreatorStudio() {
         mediaCache.current.set(hydrated.audio, source);
       }
       if (karaokeSyncRun.current !== syncRun) return null;
+      pushSubtitleDebug('audio-loaded', {
+        audioBytes: source.size,
+        audioType: source.type || 'unknown',
+      });
 
       const duration = hydrated.duration || 30;
       setInitProgress(82);
@@ -2060,6 +2174,58 @@ export default function CreatorStudio() {
         </output>
       )}
       {navigationOpen && <button className="sd-nav-backdrop" aria-label="Đóng menu" onClick={() => setNavigationOpen(false)} />}
+
+      {subtitleDebugEnabled && (
+        <>
+          <button
+            type="button"
+            className="sd-sub-debug-toggle"
+            onClick={() => setSubtitleDebugOpen((open) => !open)}
+          >
+            SUB {karaokeTimeline.length} · {karaokeSyncStatus}
+          </button>
+          {subtitleDebugOpen && (
+            <aside className="sd-sub-debug-panel" aria-label="Subtitle Debug Console">
+              <header>
+                <div>
+                  <b>Subtitle Debug</b>
+                  <small>{karaokeSyncStatus} · {karaokeTimeline.length} cues</small>
+                </div>
+                <button type="button" onClick={() => setSubtitleDebugOpen(false)}>×</button>
+              </header>
+              <div className="sd-sub-debug-summary">
+                <span><b>Status</b><i>{karaokeSyncStatus}</i></span>
+                <span><b>Cues</b><i>{karaokeTimeline.length}</i></span>
+                <span><b>Message</b><i>{karaokeSyncMessage || '—'}</i></span>
+              </div>
+              <div className="sd-sub-debug-log">
+                {subtitleDebugLogs.length ? subtitleDebugLogs.map((entry) => (
+                  <div key={entry.id}>
+                    <time>{entry.time}</time>
+                    <b>{entry.message}</b>
+                    {entry.data && <code>{JSON.stringify(entry.data)}</code>}
+                  </div>
+                )) : <p>Chưa có log.</p>}
+              </div>
+              <footer>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = subtitleDebugLogs
+                      .map((entry) => `[${entry.time}] ${entry.message} ${entry.data ? JSON.stringify(entry.data) : ''}`)
+                      .join('\n');
+                    void navigator.clipboard?.writeText(text);
+                  }}
+                >
+                  Copy log
+                </button>
+                <button type="button" onClick={() => setSubtitleDebugLogs([])}>Clear</button>
+              </footer>
+            </aside>
+          )}
+        </>
+      )}
+
       {view !== 'create' && (
         <section className="sd-section-panel">
           <div className="sd-section-head">
