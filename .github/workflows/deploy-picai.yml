@@ -1,5 +1,4 @@
 name: Deploy www.picai.online
-# trigger www domain deployment
 
 on:
   push:
@@ -44,24 +43,25 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Add www.picai.online Custom Domain
+      - name: Route www.picai.online through Worker
         run: |
           node - <<'NODE'
           const fs = require('fs');
           const path = 'wrangler.v6.generated.json';
           const cfg = JSON.parse(fs.readFileSync(path, 'utf8'));
           cfg.routes ||= [];
-          cfg.routes = cfg.routes.filter((route) => route.pattern !== 'picai.online');
-          if (!cfg.routes.some((route) => route.pattern === 'www.picai.online')) {
-            cfg.routes.push({
-              pattern: 'www.picai.online',
-              custom_domain: true
-            });
-          }
+          cfg.routes = cfg.routes.filter((route) => {
+            const pattern = typeof route === 'string' ? route : route?.pattern;
+            return pattern !== 'picai.online' &&
+                   pattern !== 'picai.online/*' &&
+                   pattern !== 'www.picai.online' &&
+                   pattern !== 'www.picai.online/*';
+          });
+          cfg.routes.push({ pattern: 'www.picai.online/*' });
           fs.writeFileSync(path, JSON.stringify(cfg, null, 2));
           NODE
 
-      - name: Deploy Worker to www.picai.online
+      - name: Deploy Worker route
         run: npx wrangler deploy --config wrangler.v6.generated.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
