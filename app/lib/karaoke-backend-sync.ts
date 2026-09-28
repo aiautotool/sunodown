@@ -54,6 +54,9 @@ const SAMPLE_RATE = 16_000;
 const CHUNK_SECONDS = 24;
 const STAGGER_STEP_SECONDS = 20;
 const BASE_STEP_SECONDS = 24;
+const MOBILE_CHUNK_SECONDS = 18;
+const MOBILE_STAGGER_STEP_SECONDS = 15;
+const MOBILE_BASE_STEP_SECONDS = 18;
 const MAX_PARALLEL_CHUNKS = 3;
 const MOBILE_PARALLEL_CHUNKS = 1;
 
@@ -91,6 +94,8 @@ function normalizeWordKey(value: string) {
 export function buildKaraokeChunkPlan(
   duration: number,
   chunkSeconds = CHUNK_SECONDS,
+  baseStepSeconds = BASE_STEP_SECONDS,
+  staggerStepSeconds = STAGGER_STEP_SECONDS,
 ): KaraokeChunkPlan[] {
   if (!Number.isFinite(duration) || duration <= 0) return [];
   const starts = new Map<number, KaraokeChunkPlan>();
@@ -112,8 +117,8 @@ export function buildKaraokeChunkPlan(
   // - 24s base grid maximized lyric coverage;
   // - 24s chunks staggered every 20s reduced edge-timestamp bias.
   // The client sends both grids and keeps the more reliable word timestamp.
-  addGrid(BASE_STEP_SECONDS);
-  addGrid(STAGGER_STEP_SECONDS);
+  addGrid(baseStepSeconds);
+  addGrid(staggerStepSeconds);
 
   return [...starts.values()].sort((a, b) => a.start - b.start);
 }
@@ -562,7 +567,14 @@ export async function buildBackendKaraokeTimeline({
   // Mobile uses the same staggered plan as desktop for timestamp parity. Its
   // resource protection comes from manual resampling and lower concurrency,
   // not from dropping recognition windows.
-  const plan = buildKaraokeChunkPlan(actualDuration);
+  const plan = mobile
+    ? buildKaraokeChunkPlan(
+        actualDuration,
+        MOBILE_CHUNK_SECONDS,
+        MOBILE_BASE_STEP_SECONDS,
+        MOBILE_STAGGER_STEP_SECONDS,
+      )
+    : buildKaraokeChunkPlan(actualDuration);
   if (!plan.length) throw new Error('Audio không có dữ liệu để đồng bộ.');
 
   onDebug?.('backend-plan', {
@@ -570,6 +582,9 @@ export async function buildBackendKaraokeTimeline({
     totalChunks: plan.length,
     audioDuration: Math.round(actualDuration * 100) / 100,
     requestedDuration: Math.round(safeDuration * 100) / 100,
+    chunkSeconds: mobile ? MOBILE_CHUNK_SECONDS : CHUNK_SECONDS,
+    baseStepSeconds: mobile ? MOBILE_BASE_STEP_SECONDS : BASE_STEP_SECONDS,
+    staggerStepSeconds: mobile ? MOBILE_STAGGER_STEP_SECONDS : STAGGER_STEP_SECONDS,
     concurrency: backendKaraokeConcurrency(mobile),
   });
   onStage?.('Đang đồng bộ phụ đề…');
