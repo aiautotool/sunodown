@@ -1976,7 +1976,12 @@ export default function CreatorStudio() {
             <i>✓</i> Suno song loaded
           </div>
         ) : (
-          <div />
+          <nav className="sd-home-head-nav" aria-label="Điều hướng Home">
+            <button className={view === 'create' ? 'active' : ''} onClick={() => setView('create')}>Trang chủ</button>
+            <button className={view === 'projects' ? 'active' : ''} onClick={() => setView('projects')}>Dự án</button>
+            <button className={view === 'library' ? 'active' : ''} onClick={() => setView('library')}>Thư viện</button>
+            <button className={view === 'jobs' ? 'active' : ''} onClick={() => setView('jobs')}>Jobs</button>
+          </nav>
         )}
         <div className="sd-head-actions">
           <Bell />
@@ -2112,56 +2117,18 @@ export default function CreatorStudio() {
           </div>
         </main>
       ) : !song ? (
-        <main className="sd-empty">
-          <div className="sd-mobile-brand">
-            <div className="sd-brand">
-              <span>
-                <Music2 />
-              </span>
-              <b>SunoDown</b>
-            </div>
-            <button className="sd-mobile-menu-trigger" aria-label="Mở menu" onClick={() => setNavigationOpen((open) => !open)}><Menu /></button>
-            {navigationOpen && navigationMenu}
+        <main className="sd-empty sd-home-v23">
+          <div className="sd-home-ambient" aria-hidden="true">
+            <i className="orb-a" />
+            <i className="orb-b" />
+            <i className="orb-c" />
           </div>
-          <div className="sd-empty-content">
-            <p>CREATOR STUDIO</p>
-            <h1>
-              Turn your Suno song
-              <br />
-              <em>into content</em>
-            </h1>
-            <div className="sd-input">
-              <Link2 />
-              <input
-                value={url}
-                onChange={(e) => change(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && void resolve()}
-                placeholder="Dán liên kết Suno"
-              />
-              <button onClick={paste}>Paste</button>
-            </div>
-            <button
-              className="sd-analyze"
-              disabled={busy}
-              onClick={() => resolve()}
-            >
-              {busy ? 'Đang phân tích…' : 'Phân tích'}
-            </button>
-            <div className="sd-source-divider"><span>HOẶC</span></div>
-            <label
-              className="sd-audio-upload"
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                void openAudioFile(event.dataTransfer.files[0]);
-              }}
-            >
-              <span className="sd-audio-upload-icon"><Upload /></span>
-              <span>
-                <b>Tải file audio lên</b>
-                <small>Kéo thả hoặc chọn MP3, WAV, M4A, AAC, OGG, FLAC</small>
-              </span>
-              <i>Chọn file</i>
+
+          <aside className="sd-home-side" aria-label="Điều hướng nhanh">
+            <button className="primary" onClick={() => setView('create')}><Plus /><span>Tạo mới</span><i>›</i></button>
+            <button onClick={() => setView('create')}><Link2 /><span>Từ link Suno</span></button>
+            <label className="sd-home-side-upload">
+              <Upload /><span>Tải audio lên</span>
               <input
                 type="file"
                 accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
@@ -2171,52 +2138,175 @@ export default function CreatorStudio() {
                 }}
               />
             </label>
-            {error && <div className="sd-error">{error}</div>}
-            <button
-              className="sd-resume-project"
-              onClick={() => setView('library')}
-            >
-              <BookOpen />
-              <span>
-                <b>Thư viện bài hát</b>
-                <small>Quản lý bài đã lưu và quét bài theo tài khoản Suno</small>
-              </span>
-              <i>Mở thư viện</i>
+            <button onClick={() => setView('library')}><BookOpen /><span>Thư viện bài hát</span></button>
+            <button onClick={() => document.querySelector('.sd-home-featured')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}><Sparkles /><span>Preset & Style</span></button>
+            <button onClick={() => setView('projects')}><Folder /><span>Dự án</span></button>
+            <button onClick={() => setView('jobs')}><ListMusic /><span>Lịch sử render</span></button>
+
+            <button className="sd-home-side-pro" onClick={() => setView('settings')}>
+              <span>♛</span>
+              <b>Nâng cấp Pro</b>
+              <small>Không giới hạn, chất lượng cao hơn</small>
+              <i>›</i>
             </button>
-            {projects[0] && (
-              <button
-                className="sd-resume-project"
-                onClick={() => void openProject(projects[0])}
-              >
-                <Folder />
-                <span>
-                  <b>Tiếp tục dự án gần nhất</b>
-                  <small>{projects[0].title}</small>
-                </span>
-                <i>Tiếp tục</i>
-              </button>
-            )}
-            <span className="sd-choose">Chọn nội dung muốn tạo</span>
-            <div className="sd-intents">
-              <button className="active">
-                <Play />
-                <span>Social Video</span>
-              </button>
-              <button>
-                <Music2 />
-                <span>Audio</span>
-              </button>
-              <button>
-                <FileText />
-                <span>Lyrics</span>
-              </button>
+          </aside>
+
+          <div className="sd-mobile-brand">
+            <div className="sd-brand">
+              <span><Music2 /></span>
+              <b>SunoDown</b>
             </div>
+            <button className="sd-mobile-menu-trigger" aria-label="Mở menu" onClick={() => setNavigationOpen((open) => !open)}><Menu /></button>
+            {navigationOpen && navigationMenu}
           </div>
-          <div className="sd-landscape" />
-          <small>
-            MUSIC LIVES FURTHER · {process.env.NEXT_PUBLIC_BUILD_VERSION}
-            {process.env.NEXT_PUBLIC_BUILD_IDENTITY && ` · ${process.env.NEXT_PUBLIC_BUILD_IDENTITY}`}
-          </small>
+
+          <section className="sd-home-shell">
+            <div className="sd-home-hero">
+              <div className="sd-home-copy">
+                <span className="sd-home-kicker"><Sparkles /> CREATOR STUDIO</span>
+                <h1>
+                  Turn your Suno song
+                  <br />
+                  <em>into stunning content</em>
+                </h1>
+                <p>
+                  Biến nhạc Suno thành video lyric, karaoke và social video chuyên nghiệp
+                  chỉ trong vài phút.
+                </p>
+
+                <div className="sd-home-analyze-row">
+                  <div className="sd-home-linkbox">
+                    <Link2 />
+                    <input
+                      value={url}
+                      onChange={(e) => change(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && void resolve()}
+                      placeholder="https://suno.com/s/..."
+                    />
+                    <button type="button" onClick={paste}>Dán</button>
+                  </div>
+                  <button className="sd-home-analyze" disabled={busy} onClick={() => resolve()}>
+                    <Sparkles />
+                    <span>{busy ? 'Đang phân tích…' : 'Phân tích'}</span>
+                    <i>›</i>
+                  </button>
+                </div>
+
+                <div className="sd-home-or"><span>HOẶC</span></div>
+
+                <div className="sd-home-source-grid">
+                  <label
+                    className="sd-home-source-card"
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      void openAudioFile(event.dataTransfer.files[0]);
+                    }}
+                  >
+                    <span className="icon"><Upload /></span>
+                    <span className="copy">
+                      <b>Tải file audio lên</b>
+                      <small>MP3, WAV, M4A, AAC, OGG, FLAC</small>
+                    </span>
+                    <i>›</i>
+                    <input
+                      type="file"
+                      accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+                      onChange={(event) => {
+                        void openAudioFile(event.target.files?.[0]);
+                        event.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+
+                  <button className="sd-home-source-card" onClick={() => setView('library')}>
+                    <span className="icon"><Music2 /></span>
+                    <span className="copy">
+                      <b>Thư viện bài hát</b>
+                      <small>Quản lý bài đã lưu và quét theo tài khoản Suno</small>
+                    </span>
+                    <i>›</i>
+                  </button>
+                </div>
+
+                {error && <div className="sd-error">{error}</div>}
+
+                {projects[0] && (
+                  <button className="sd-home-continue" onClick={() => void openProject(projects[0])}>
+                    <Folder />
+                    <span><small>TIẾP TỤC DỰ ÁN</small><b>{projects[0].title}</b></span>
+                    <i>›</i>
+                  </button>
+                )}
+              </div>
+
+              <div className="sd-home-showcase" aria-label="Ví dụ video SunoDown">
+                <div className="sd-home-showcase-glow" aria-hidden="true" />
+
+                <div className="sd-home-tool-stack" aria-hidden="true">
+                  <span><FileText /><b>Lyrics</b></span>
+                  <span><Music2 /><b>Waveform</b></span>
+                  <span><ImageIcon /><b>Background</b></span>
+                  <span><Sparkles /><b>Preset</b></span>
+                </div>
+
+                <div className="sd-home-phone">
+                  <div className="sd-home-phone-screen">
+                    <img src="/home-cinematic-v23.svg" alt="" />
+                    <span className="ratio">9:16</span>
+                    <div className="lyrics">Có những ngày<br/>chỉ muốn đi thật xa...</div>
+                    <div className="wave" aria-hidden="true" />
+                    <div className="time"><span>00:42</span><span>03:18</span></div>
+                    <div className="controls"><span>‹</span><b><Play /></b><span>›</span></div>
+                  </div>
+                </div>
+
+                <div className="sd-home-control-card" aria-hidden="true">
+                  <div className="thumb"><img src="/home-cinematic-v23.svg" alt="" /></div>
+                  <b>Cinematic</b>
+                  <label><span>Blur</span><i><u style={{width:'32%'}} /></i><small>30%</small></label>
+                  <label><span>Zoom</span><i><u style={{width:'68%'}} /></i><small>100%</small></label>
+                  <label><span>Glow</span><i><u style={{width:'50%'}} /></i><small>50%</small></label>
+                </div>
+              </div>
+            </div>
+
+            <div className="sd-home-benefits">
+              <span><i>⚡</i><b>Nhanh chóng</b><small>Tạo video trong vài phút</small></span>
+              <span><i>HD</i><b>Chất lượng cao</b><small>Preset và export sắc nét</small></span>
+              <span><i>✦</i><b>Nhiều phong cách</b><small>Lyrics, cinematic, visualizer</small></span>
+              <span><i>9:16</i><b>Tối ưu social</b><small>TikTok, Reels, Shorts</small></span>
+              <span><i>☁</i><b>Không cần cài đặt</b><small>Dùng ngay trên trình duyệt</small></span>
+            </div>
+
+            <section className="sd-home-featured">
+              <header>
+                <div><span>🔥</span><b>Mẫu video nổi bật</b></div>
+                <button onClick={() => setView('create')}>Xem tất cả <i>›</i></button>
+              </header>
+              <div className="sd-home-template-row">
+                {[
+                  ['Cinematic Lyric','cinematic'],
+                  ['Minimal Karaoke','minimal'],
+                  ['Neon Wave','neon'],
+                  ['Vintage Film','vintage'],
+                  ['Aesthetic','aesthetic'],
+                  ['Visualizer','visualizer'],
+                ].map(([name,kind]) => (
+                  <button key={name} className={`sd-home-template ${kind}`}>
+                    <span className="thumb"><img src="/home-cinematic-v23.svg" alt="" /></span>
+                    <b>{name}</b>
+                    <i><Play /></i>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <footer className="sd-home-footer">
+              MUSIC LIVES FURTHER · {process.env.NEXT_PUBLIC_BUILD_VERSION}
+              {process.env.NEXT_PUBLIC_BUILD_IDENTITY && ` · ${process.env.NEXT_PUBLIC_BUILD_IDENTITY}`}
+            </footer>
+          </section>
         </main>
       ) : (
         <main className={`sd-studio ${rendering ? 'sd-render-locked' : ''} ${quickMode ? 'sd-quick-mode' : ''}`}>
