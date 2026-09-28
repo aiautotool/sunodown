@@ -22,8 +22,8 @@
       "custom_domain": true
     },
     {
-      "pattern": "picai.online",
-      "custom_domain": true
+      "pattern": "picai.online/*",
+      "zone_name": "picai.online"
     }
   ],
   "observability": {
