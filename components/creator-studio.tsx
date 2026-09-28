@@ -630,6 +630,7 @@ export default function CreatorStudio() {
   const [subtitleDebugEnabled, setSubtitleDebugEnabled] = useState(false);
   const [subtitleDebugOpen, setSubtitleDebugOpen] = useState(false);
   const [subtitleDebugLogs, setSubtitleDebugLogs] = useState<SubtitleDebugEntry[]>([]);
+  const [webSpeechTesting, setWebSpeechTesting] = useState(false);
   const subtitleDebugEnabledRef = useRef(false);
   const subtitleDebugSeq = useRef(0);
   const [audioBinary, setAudioBinary] = useState<Blob | null>(null);
@@ -760,6 +761,256 @@ export default function CreatorStudio() {
     };
     setSubtitleDebugLogs([entry]);
   }, []);
+
+  const testSafariSpeechTrack = async () => {
+    if (!audioBinary || webSpeechTesting) {
+      pushSubtitleDebug('web-speech-unavailable', {
+        hasAudio: Boolean(audioBinary),
+        testing: webSpeechTesting,
+      });
+      return;
+    }
+
+    type BrowserSpeechRecognition = {
+      continuous: boolean;
+      interimResults: boolean;
+      lang: string;
+      start: (track?: MediaStreamTrack) => void;
+      stop: () => void;
+      abort: () => void;
+      onstart: (() => void) | null;
+      onaudiostart: (() => void) | null;
+      onspeechstart: (() => void) | null;
+      onspeechend: (() => void) | null;
+      onresult: ((event: any) => void) | null;
+      onerror: ((event: any) => void) | null;
+      onend: (() => void) | null;
+    };
+    type BrowserSpeechRecognitionCtor = new () => BrowserSpeechRecognition;
+
+    const SpeechRecognitionCtor =
+      ((window as any).SpeechRecognition ||
+        (window as any).webkitSpeechRecognition) as
+        | BrowserSpeechRecognitionCtor
+        | undefined;
+
+    if (!SpeechRecognitionCtor) {
+      pushSubtitleDebug('web-speech-unsupported', {
+        speechRecognition: false,
+      });
+      return;
+    }
+
+    const AudioCtx =
+      window.AudioContext ||
+      (window as typeof window & {
+        webkitAudioContext?: typeof AudioContext;
+      }).webkitAudioContext;
+
+    if (!AudioCtx) {
+      pushSubtitleDebug('web-speech-unsupported', {
+        speechRecognition: true,
+        audioContext: false,
+      });
+      return;
+    }
+
+    setWebSpeechTesting(true);
+    const objectUrl = URL.createObjectURL(audioBinary);
+    const audio = new Audio(objectUrl);
+    audio.preload = 'auto';
+    audio.playsInline = true;
+
+    let context: AudioContext | null = null;
+    let track: MediaStreamTrack | null = null;
+    let recognition: BrowserSpeechRecognition | null = null;
+    let stopTimer: number | undefined;
+    let endTimer: number | undefined;
+    let finished = false;
+    let stopRequested = false;
+    const startAt =
+      previewTime > 1
+        ? Math.max(0, previewTime)
+        : Math.min(12, Math.max(0, (song?.duration || 0) - 22));
+
+    const cleanup = async (reason: string) => {
+      if (finished) return;
+      finished = true;
+      if (stopTimer) window.clearTimeout(stopTimer);
+      if (endTimer) window.clearTimeout(endTimer);
+      audio.pause();
+      try {
+        recognition?.abort();
+      } catch {}
+      try {
+        track?.stop();
+      } catch {}
+      try {
+        await context?.close();
+      } catch {}
+      URL.revokeObjectURL(objectUrl);
+      setWebSpeechTesting(false);
+      pushSubtitleDebug('web-speech-test-finished', {
+        reason,
+        audioTime: Math.round(audio.currentTime * 100) / 100,
+      });
+    };
+
+    try {
+      context = new AudioCtx();
+      await context.resume();
+
+      const source = context.createMediaElementSource(audio);
+      const streamDestination = context.createMediaStreamDestination();
+      const silentGain = context.createGain();
+      silentGain.gain.value = 0;
+
+      source.connect(streamDestination);
+      source.connect(silentGain);
+      silentGain.connect(context.destination);
+
+      track = streamDestination.stream.getAudioTracks()[0] || null;
+      if (!track) throw new Error('Không tạo được audio MediaStreamTrack.');
+
+      recognition = new SpeechRecognitionCtor();
+      recognition.lang = 'vi-VN';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      pushSubtitleDebug('web-speech-capability', {
+        speechRecognition: true,
+        trackKind: track.kind,
+        trackState: track.readyState,
+        audioType: audioBinary.type || 'unknown',
+        startAt: Math.round(startAt * 100) / 100,
+        testSeconds: 20,
+      });
+
+      audio.addEventListener(
+        'loadedmetadata',
+        () => {
+          if (Number.isFinite(startAt) && startAt > 0) {
+            try {
+              audio.currentTime = Math.min(
+                startAt,
+                Math.max(0, audio.duration - 1),
+              );
+            } catch {}
+          }
+        },
+        { once: true },
+      );
+
+      recognition.onstart = () => {
+        pushSubtitleDebug('web-speech-start', {
+          audioTime: Math.round(audio.currentTime * 100) / 100,
+        });
+      };
+      recognition.onaudiostart = () => {
+        pushSubtitleDebug('web-speech-audio-start', {
+          audioTime: Math.round(audio.currentTime * 100) / 100,
+        });
+      };
+      recognition.onspeechstart = () => {
+        pushSubtitleDebug('web-speech-speech-start', {
+          audioTime: Math.round(audio.currentTime * 100) / 100,
+        });
+      };
+      recognition.onspeechend = () => {
+        pushSubtitleDebug('web-speech-speech-end', {
+          audioTime: Math.round(audio.currentTime * 100) / 100,
+        });
+      };
+      recognition.onresult = (event: any) => {
+        const items: string[] = [];
+        let bestConfidence = 0;
+        let final = false;
+
+        for (
+          let index = event.resultIndex || 0;
+          index < event.results.length;
+          index++
+        ) {
+          const result = event.results[index];
+          const alternative = result?.[0];
+          const transcript = String(alternative?.transcript || '').trim();
+          if (transcript) items.push(transcript);
+          if (Number.isFinite(alternative?.confidence)) {
+            bestConfidence = Math.max(
+              bestConfidence,
+              Number(alternative.confidence),
+            );
+          }
+          final ||= Boolean(result?.isFinal);
+        }
+
+        pushSubtitleDebug('web-speech-result', {
+          transcript: items.join(' ').slice(0, 500),
+          final,
+          confidence: Math.round(bestConfidence * 1000) / 1000,
+          audioTime: Math.round(audio.currentTime * 100) / 100,
+        });
+      };
+      recognition.onerror = (event: any) => {
+        pushSubtitleDebug('web-speech-error', {
+          error: String(event?.error || 'unknown'),
+          message: String(event?.message || ''),
+          audioTime: Math.round(audio.currentTime * 100) / 100,
+        });
+        void cleanup('error');
+      };
+      recognition.onend = () => {
+        pushSubtitleDebug('web-speech-end', {
+          stopRequested,
+          audioTime: Math.round(audio.currentTime * 100) / 100,
+        });
+        void cleanup(stopRequested ? 'completed' : 'ended-early');
+      };
+
+      try {
+        recognition.start(track);
+      } catch (error) {
+        throw new Error(
+          `SpeechRecognition.start(track) bị từ chối: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+
+      await audio.play();
+      pushSubtitleDebug('web-speech-audio-playing', {
+        startAt: Math.round(startAt * 100) / 100,
+      });
+
+      stopTimer = window.setTimeout(() => {
+        if (finished) return;
+        stopRequested = true;
+        audio.pause();
+        pushSubtitleDebug('web-speech-stop-requested', {
+          audioTime: Math.round(audio.currentTime * 100) / 100,
+        });
+        try {
+          recognition?.stop();
+        } catch {
+          void cleanup('stop-failed');
+          return;
+        }
+        endTimer = window.setTimeout(() => {
+          if (!finished) {
+            pushSubtitleDebug('web-speech-end-timeout', {
+              audioTime: Math.round(audio.currentTime * 100) / 100,
+            });
+            void cleanup('end-timeout');
+          }
+        }, 3000);
+      }, 20_000);
+    } catch (error) {
+      pushSubtitleDebug('web-speech-test-error', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await cleanup('setup-error');
+    }
+  };
 
   const updateEditorUrl = (source: string, saved = false, replace = false) => {
     if (typeof window === 'undefined') return;
@@ -2208,6 +2459,13 @@ export default function CreatorStudio() {
                 )) : <p>Chưa có log.</p>}
               </div>
               <footer>
+                <button
+                  type="button"
+                  disabled={!audioBinary || webSpeechTesting}
+                  onClick={() => void testSafariSpeechTrack()}
+                >
+                  {webSpeechTesting ? 'Testing Speech…' : 'Test Safari Speech 20s'}
+                </button>
                 <button
                   type="button"
                   onClick={() => {
