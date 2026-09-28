@@ -25,3 +25,14 @@ jobs:
           nslookup -type=CNAME www.picai.online 1.1.1.1
           nslookup -type=A www.picai.online 1.1.1.1
           nslookup -type=AAAA www.picai.online 1.1.1.1
+          echo "=== AUTHORITATIVE ==="
+          for ns in chip.ns.cloudflare.com ophelia.ns.cloudflare.com; do
+            echo "--- $ns root A ---"
+            nslookup -type=A picai.online "$ns"
+            echo "--- $ns root AAAA ---"
+            nslookup -type=AAAA picai.online "$ns"
+            echo "--- $ns www A ---"
+            nslookup -type=A www.picai.online "$ns"
+            echo "--- $ns www AAAA ---"
+            nslookup -type=AAAA www.picai.online "$ns"
+          done
