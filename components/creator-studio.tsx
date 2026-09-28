@@ -128,6 +128,20 @@ type Song = {
 
 type SignedInUser = { sub: string; email: string; name: string; picture?: string };
 
+type SavedProjectListItem = { url: string; title: string };
+type LocalLibraryItem = {
+  id: string;
+  url: string;
+  title: string;
+  creator?: string;
+  picture?: string;
+  duration?: number;
+  updatedAt: number;
+  lastEvent?: 'resolved' | 'downloaded' | 'rendered';
+  favorite?: boolean;
+  collections?: string[];
+};
+
 type SubtitleDebugValue = string | number | boolean | null;
 type SubtitleDebugEntry = {
   id: number;
@@ -138,6 +152,31 @@ type SubtitleDebugEntry = {
 
 const fmt = (n = 0) =>
   `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
+const shortDate = (value?: number) =>
+  value ? new Date(value).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Gần đây';
+const localLibraryEventLabel: Record<string, string> = {
+  resolved: 'Đã mở',
+  downloaded: 'Đã tải',
+  rendered: 'Đã render',
+};
+const readSavedProjectList = (): SavedProjectListItem[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const items = JSON.parse(localStorage.getItem('sundown-projects') || '[]');
+    return Array.isArray(items) ? items : [];
+  } catch {
+    return [];
+  }
+};
+const readLocalLibraryItems = (): LocalLibraryItem[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const items = JSON.parse(localStorage.getItem('sunodown-v10-local-library') || '[]');
+    return Array.isArray(items) ? items : [];
+  } catch {
+    return [];
+  }
+};
 const valid = (value: string) => {
   try {
     const u = new URL(value);
@@ -549,9 +588,10 @@ export default function CreatorStudio() {
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [signedInUser, setSignedInUser] = useState<SignedInUser | null>(null);
   const [quickMode, setQuickMode] = useState(true);
-  const [projects, setProjects] = useState<{ url: string; title: string }[]>(
-    [],
-  );
+  const [projects, setProjects] = useState<SavedProjectListItem[]>(readSavedProjectList);
+  const [projectQuery, setProjectQuery] = useState('');
+  const [libraryItems, setLibraryItems] = useState<LocalLibraryItem[]>(readLocalLibraryItems);
+  const [libraryQuery, setLibraryQuery] = useState('');
   const [url, setUrl] = useState('https://suno.com/s/tszo0jGdVUua4rT4'),
     [song, setSong] = useState<Song | null>(null),
     [busy, setBusy] = useState(false),
@@ -1937,8 +1977,20 @@ export default function CreatorStudio() {
   }, []);
 
   useEffect(() => {
+    const readProjects = () => setProjects(readSavedProjectList());
+    const readLibrary = () => setLibraryItems(readLocalLibraryItems());
+    window.addEventListener('sunodown-v10-library-change', readLibrary);
+    window.addEventListener('storage', readLibrary);
+    window.addEventListener('storage', readProjects);
+    return () => {
+      window.removeEventListener('sunodown-v10-library-change', readLibrary);
+      window.removeEventListener('storage', readLibrary);
+      window.removeEventListener('storage', readProjects);
+    };
+  }, []);
+
+  useEffect(() => {
     try {
-      setProjects(JSON.parse(localStorage.getItem('sundown-projects') || '[]'));
       const storedPresets = normalizeStoredPresets(
         JSON.parse(localStorage.getItem('sunodown-v16-custom-presets') || '[]'),
       );
@@ -2356,6 +2408,32 @@ export default function CreatorStudio() {
     },
   };
 
+  const filteredProjects = projects.filter((project) =>
+    `${project.title} ${project.url}`.toLowerCase().includes(projectQuery.toLowerCase()),
+  );
+  const filteredLibraryItems = libraryItems.filter((item) =>
+    `${item.title} ${item.creator || ''} ${item.url}`.toLowerCase().includes(libraryQuery.toLowerCase()),
+  );
+  const projectCountLabel = `${projects.length} dự án`;
+  const libraryCountLabel = `${libraryItems.length} bài`;
+  const latestProject = projects[0];
+  const latestLibraryItem = libraryItems[0];
+  const openLibraryItem = (item: LocalLibraryItem) => {
+    setView('create');
+    setUrl(item.url);
+    void resolve(item.url);
+  };
+  const removeProject = (project: SavedProjectListItem) => {
+    const next = projects.filter((item) => item.url !== project.url);
+    setProjects(next);
+    localStorage.setItem('sundown-projects', JSON.stringify(next));
+  };
+  const clearLocalLibrary = () => {
+    localStorage.removeItem('sunodown-v10-local-library');
+    setLibraryItems([]);
+    window.dispatchEvent(new CustomEvent('sunodown-v10-library-change'));
+  };
+
   const navigationItems = [
     [Plus, 'Create', 'create'],
     [Folder, 'Projects', 'projects'],
@@ -2485,41 +2563,166 @@ export default function CreatorStudio() {
       )}
 
       {view !== 'create' && (
-        <section className="sd-section-panel">
+        <section className={`sd-section-panel sd-section-${view}`}>
           <div className="sd-section-head">
             <div>
               <small>SUNODOWN</small>
-              <h1>{view[0].toUpperCase() + view.slice(1)}</h1>
+              <h1>
+                {view === 'projects'
+                  ? 'Dự án'
+                  : view === 'library'
+                    ? 'Thư viện'
+                    : view[0].toUpperCase() + view.slice(1)}
+              </h1>
+              <p>
+                {view === 'projects'
+                  ? 'Lưu, mở lại và tiếp tục dựng video từ những phiên gần đây.'
+                  : view === 'library'
+                    ? 'Tập hợp bài Suno đã mở, tải hoặc render trên thiết bị này.'
+                    : 'Quản lý trạng thái SunoDown.'}
+              </p>
             </div>
-            {view === 'projects' && song && (
-              <button onClick={() => void saveProject()}>
-                + Save current project
-              </button>
-            )}
+            <button onClick={() => setView('create')}>
+              <Plus />
+              Tạo mới
+            </button>
           </div>
           {view === 'projects' && (
-            <div className="sd-section-grid">
-              {projects.length ? (
-                projects.map((x) => (
-                  <button key={x.url} onClick={() => openProject(x)}>
-                    <Folder />
-                    <b>{x.title}</b>
-                    <span>{x.url}</span>
+            <>
+              <div className="sd-library-hero">
+                <article>
+                  <small>PROJECT HUB</small>
+                  <h2>{projectCountLabel}</h2>
+                  <p>
+                    Project lưu toàn bộ preset, subtitle, timeline, media và cấu hình export.
+                  </p>
+                </article>
+                <article>
+                  <small>GẦN NHẤT</small>
+                  <h2>{latestProject?.title || 'Chưa có'}</h2>
+                  <p>{latestProject?.url || 'Lưu project đầu tiên từ Studio để tiếp tục sau.'}</p>
+                </article>
+                <article>
+                  <small>TRẠNG THÁI</small>
+                  <h2>{song ? 'Đang mở bài' : 'Sẵn sàng'}</h2>
+                  <p>{song ? song.title : 'Chọn project hoặc tạo mới từ link Suno/audio.'}</p>
+                </article>
+              </div>
+              <div className="sd-library-toolbar">
+                <label>
+                  <span>Tìm project</span>
+                  <input
+                    value={projectQuery}
+                    onChange={(event) => setProjectQuery(event.target.value)}
+                    placeholder="Tên dự án hoặc link Suno..."
+                  />
+                </label>
+                {song && (
+                  <button className="primary" onClick={() => void saveProject()}>
+                    <Save />
+                    {savingProject ? 'Đang lưu...' : 'Lưu project hiện tại'}
                   </button>
-                ))
-              ) : (
-                <p>No saved projects yet.</p>
-              )}
-            </div>
+                )}
+              </div>
+              <div className="sd-project-list">
+                {filteredProjects.length ? (
+                  filteredProjects.map((project, index) => (
+                    <article key={project.url}>
+                      <button className="sd-project-open" onClick={() => void openProject(project)}>
+                        <span><Folder /></span>
+                        <b>{project.title}</b>
+                        <small>{project.url}</small>
+                        <i>{index === 0 ? 'Gần nhất' : 'Project'}</i>
+                      </button>
+                      <div>
+                        <button onClick={() => void openProject(project)}>Mở</button>
+                        <button onClick={() => removeProject(project)}>Ẩn khỏi danh sách</button>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <div className="sd-empty-state">
+                    <Folder />
+                    <b>Chưa có project phù hợp</b>
+                    <span>Lưu project trong Studio hoặc đổi từ khoá tìm kiếm.</span>
+                    <button onClick={() => setView('create')}>Tạo project mới</button>
+                  </div>
+                )}
+              </div>
+            </>
           )}
           {view === 'library' && (
-            <AccountLibraryPanel
-              onOpenSong={(songUrl) => {
-                setView('create');
-                setUrl(songUrl);
-                void resolve(songUrl);
-              }}
-            />
+            <>
+              <div className="sd-library-hero">
+                <article>
+                  <small>LOCAL LIBRARY</small>
+                  <h2>{libraryCountLabel}</h2>
+                  <p>Những bài từng mở, tải audio hoặc render video trên máy này.</p>
+                </article>
+                <article>
+                  <small>GẦN NHẤT</small>
+                  <h2>{latestLibraryItem?.title || 'Chưa có'}</h2>
+                  <p>{latestLibraryItem ? `${latestLibraryItem.creator || 'Suno'} · ${shortDate(latestLibraryItem.updatedAt)}` : 'Mở một bài Suno để tự động lưu vào thư viện.'}</p>
+                </article>
+                <article>
+                  <small>FAVORITE</small>
+                  <h2>{libraryItems.filter((item) => item.favorite).length}</h2>
+                  <p>Bài đã đánh dấu yêu thích trong lịch sử local.</p>
+                </article>
+              </div>
+              <div className="sd-library-toolbar">
+                <label>
+                  <span>Tìm bài hát</span>
+                  <input
+                    value={libraryQuery}
+                    onChange={(event) => setLibraryQuery(event.target.value)}
+                    placeholder="Tên bài, nghệ sĩ hoặc link Suno..."
+                  />
+                </label>
+                {libraryItems.length > 0 && (
+                  <button onClick={clearLocalLibrary}>Xóa lịch sử local</button>
+                )}
+              </div>
+              <div className="sd-song-library-grid">
+                {filteredLibraryItems.length ? (
+                  filteredLibraryItems.map((item) => (
+                    <article key={item.id || item.url}>
+                      <span
+                        className={item.picture ? 'has-cover' : ''}
+                        style={item.picture ? { backgroundImage: `url("${item.picture}")` } : undefined}
+                      >
+                        {!item.picture && <Music2 />}
+                      </span>
+                      <button onClick={() => openLibraryItem(item)}>
+                        <b>{item.title || 'Suno song'}</b>
+                        <small>{item.creator || 'Suno'} · {fmt(item.duration || 0)}</small>
+                        <em>
+                          {localLibraryEventLabel[item.lastEvent || 'resolved'] || 'Đã mở'} · {shortDate(item.updatedAt)}
+                          {item.collections?.length ? ` · ${item.collections.join(', ')}` : ''}
+                        </em>
+                      </button>
+                      <a href={item.url} target="_blank" rel="noreferrer">Suno</a>
+                    </article>
+                  ))
+                ) : (
+                  <div className="sd-empty-state">
+                    <BookOpen />
+                    <b>Thư viện local còn trống</b>
+                    <span>Dán link Suno ở trang chủ, tải audio hoặc render video để lưu lịch sử.</span>
+                    <button onClick={() => setView('create')}>Mở bài mới</button>
+                  </div>
+                )}
+              </div>
+              <div className="sd-account-library-wrap">
+                <AccountLibraryPanel
+                  onOpenSong={(songUrl) => {
+                    setView('create');
+                    setUrl(songUrl);
+                    void resolve(songUrl);
+                  }}
+                />
+              </div>
+            </>
           )}
           {view === 'jobs' && (
             <div className="sd-job-card">
