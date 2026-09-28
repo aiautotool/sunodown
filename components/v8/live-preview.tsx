@@ -53,6 +53,8 @@ type Props = {
   subtitleStyle?: KaraokeDrawStyle;
   overlayTextStyles?: OverlayTextStyles;
   effects?: EffectConfig;
+  textEditor?: React.ReactNode;
+  onEditText?: (key:'title'|'creator'|'subtitle')=>void;
   onLayoutChange?: (layout: OverlayLayout) => void;
   start: number;
   end?: number;
@@ -565,7 +567,7 @@ export function LivePreview(props: Props) {
       const hasExactLyrics = !p.timelineTracks?.subtitle.hidden && p.lyrics !== 'off' && !!p.karaokeTimeline?.length;
       const background = p.background || DEFAULT_BACKGROUND_CONFIG,
         activeClip = p.timelineTracks?.visual.hidden ? undefined : p.mediaClips?.findLast(
-          (clip) => absoluteTime >= clip.start && absoluteTime < clip.end,
+          (clip) => (!clip.isDefault || background.mode === 'suno') && absoluteTime >= clip.start && absoluteTime < clip.end,
         ),
         activeMedia = activeClip
           ? sceneMedia.current.get(activeClip.id)
@@ -808,6 +810,7 @@ export function LivePreview(props: Props) {
               maxHeight: 340,
             }}
           >
+            {props.textEditor}
             <canvas
               ref={canvas}
               role="img"
@@ -818,6 +821,8 @@ export function LivePreview(props: Props) {
             {props.layout &&
               props.onLayoutChange &&
               (['wave', 'subtitle', 'title', 'creator'] as const).map((key) => {
+                if(props.textEditor)return null;
+                if((key==='title'||key==='creator')&&props.overlayTextStyles?.[key].text==='')return null;
                 if (key === 'subtitle' && props.lyrics === 'off') return null;
                 const p =
                     props.layout?.[key] ||
@@ -852,7 +857,7 @@ export function LivePreview(props: Props) {
                     role="button"
                     tabIndex={0}
                     aria-label={`Kéo trực tiếp ${key}`}
-                    title={`Nắm trực tiếp ${key} để kéo`}
+                    title={key==='wave'?'Kéo để di chuyển sóng':'Nhấp đúp để sửa chữ · Kéo để di chuyển'}
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -892,6 +897,8 @@ export function LivePreview(props: Props) {
                       window.addEventListener('pointermove', move);
                       window.addEventListener('pointerup', up, { once: true });
                     }}
+                    onDoubleClick={(event)=>{event.preventDefault();event.stopPropagation();if(key!=='wave')props.onEditText?.(key);}}
+                    onKeyDown={(event)=>{if(key!=='wave'&&(event.key==='Enter'||event.key===' ')){event.preventDefault();event.stopPropagation();props.onEditText?.(key);}}}
                     onClick={(event) => event.stopPropagation()}
                     className="absolute z-20 -translate-x-1/2 cursor-grab active:cursor-grabbing"
                     style={{
@@ -946,6 +953,7 @@ export function LivePreview(props: Props) {
               })}
             <button
               type="button"
+              style={props.textEditor?{display:"none"}:undefined}
               className={`sd-center-play ${playing ? 'playing' : ''}`}
               aria-label={playing ? 'Tạm dừng' : 'Phát'}
               onClick={(event) => {

@@ -21,6 +21,7 @@ export type PresetVisualStateSetters = {
   setMotion: (value: StudioPresetConfig['motion']) => void;
   setAspect: (value: StudioPresetConfig['aspect']) => void;
   setLyrics: (value: StudioPresetConfig['lyrics']) => void;
+  setEffectSettings?: (value: NonNullable<StudioPresetConfig['effectSettings']>) => void;
   setEffects: (value: StudioPresetConfig['effects']) => void;
   setLayout: (value: StudioPresetConfig['layout']) => void;
   setTextStyles: (value: StudioPresetConfig['textStyles']) => void;
@@ -46,6 +47,7 @@ const stableVisualValue = (config: StudioPresetConfig) => ({
   aspect: config.aspect,
   lyrics: config.lyrics,
   effects: [...config.effects],
+  effectSettings: config.effectSettings,
   layout: config.layout,
   textStyles: config.textStyles,
   subtitleStyle: config.subtitleStyle,
@@ -81,6 +83,7 @@ export function createPresetApplyTransaction(
   const production = normalizeProductionPreset({ mastering:preset.mastering, export:preset.export }, next.aspect);
 
   if (mode === 'preserve-custom') {
+    next.effectSettings = structuredClone(before.effectSettings);
     next.layout = structuredClone(before.layout);
     next.textStyles = structuredClone(before.textStyles);
     next.subtitleStyle = structuredClone(before.subtitleStyle);
@@ -116,6 +119,7 @@ export function commitPresetVisualState(
   setters.setAspect(next.aspect);
   setters.setLyrics(next.lyrics);
   setters.setEffects([...next.effects]);
+  setters.setEffectSettings?.(structuredClone(next.effectSettings!));
   setters.setLayout(structuredClone(next.layout));
   setters.setTextStyles(structuredClone(next.textStyles));
   setters.setSubtitleStyle(structuredClone(next.subtitleStyle));

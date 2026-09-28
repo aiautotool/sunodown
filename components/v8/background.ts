@@ -55,6 +55,18 @@ export function sanitizeStoredBackground(value:any):BackgroundConfig{
   };
 }
 
+/** Preserve session media for preview/export; stored settings must still discard blob URLs. */
+export function normalizeActiveBackground(value:BackgroundConfig):BackgroundConfig{
+  const normalized=sanitizeStoredBackground(value);
+  if(value.mode==='image'&&value.imageUrl){
+    return {...normalized,mode:'image',imageUrl:value.imageUrl,imageFingerprint:value.imageFingerprint};
+  }
+  if(value.mode==='video'&&value.videoUrl){
+    return {...normalized,mode:'video',videoUrl:value.videoUrl,videoFingerprint:value.videoFingerprint};
+  }
+  return normalized;
+}
+
 function roundedGlow(ctx:CanvasRenderingContext2D,x:number,y:number,r:number,color:string,alpha:number){
   const g=ctx.createRadialGradient(x,y,0,x,y,r);
   g.addColorStop(0,color.replace('ALPHA',String(alpha)));

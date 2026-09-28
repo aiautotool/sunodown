@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hmac
 import json
+import math
+import threading
 import os
 import re
 import shutil
@@ -21,7 +23,11 @@ MODEL_NAME = os.getenv("WHISPER_MODEL", "large-v3")
 DEVICE = os.getenv("WHISPER_DEVICE", "cuda")
 COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
 SERVICE_TOKEN = os.getenv("KARAOKE_ALIGN_TOKEN", "").strip()
-model = WhisperModel(MODEL_NAME, device=DEVICE, compute_type=COMPUTE_TYPE)
+model = WhisperModel(
+    MODEL_NAME, device=DEVICE, compute_type=COMPUTE_TYPE,
+    cpu_threads=int(os.getenv("WHISPER_CPU_THREADS", "2")), num_workers=1,
+)
+inference_lock = threading.Lock()
 
 SECTION = re.compile(r"^\s*\[[^\]]+\]\s*$")
 PUNCT = re.compile(r"[^\wÀ-ỹĐđ]+", re.UNICODE)
@@ -302,7 +308,7 @@ def health() -> dict[str, Any]:
 
 
 @app.post("/transcribe")
-async def transcribe(
+def transcribe(
     request: Request,
     audio: UploadFile = File(...),
     language: str = Form("vi"),
@@ -342,7 +348,7 @@ async def transcribe(
 
 
 @app.post("/align")
-async def align(
+def align(
     request: Request,
     audio: UploadFile = File(...),
     lyrics: str = Form(...),
@@ -383,3 +389,31 @@ async def align(
                 "separated_vocals": vocals != source,
             },
         }
+
+
+@app.post("/api/karaoke/align")
+def karaoke_align(
+    request: Request,
+    audio: UploadFile = File(...),
+    duration: float | None = Form(None),
+    language: str = Form("vi"),
+    lyrics: str = Form(""),
+) -> dict[str, Any]:
+    """Multipart endpoint compatible with the web editor's curl request."""
+    require_authorization(request)
+    if duration is not None and (not math.isfinite(duration) or duration <= 0):
+        raise HTTPException(status_code=400, detail="Duration phải lớn hơn 0.")
+    if audio.size is not None and audio.size > 28 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio tối đa 28 MB.")
+    if audio.size == 0:
+        raise HTTPException(status_code=400, detail="Audio trống.")
+    if not inference_lock.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="Server đang nhận diện, thử lại sau.")
+    try:
+        if lyrics.strip():
+            return align(request, audio, lyrics, language)
+        return transcribe(request, audio, language)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Audio hoặc ngôn ngữ không hợp lệ.") from exc
+    finally:
+        inference_lock.release()

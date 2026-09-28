@@ -1,3 +1,4 @@
+import type {EffectSettings} from './v8/video-effects';
 import type { KaraokeLine } from '@/app/lib/karaoke';
 import type { MediaClip } from '@/components/editor-timeline';
 import type { OverlayLayout } from '@/components/v9/overlay-layout-panel';
@@ -37,6 +38,7 @@ export type SavedProject = {
   presetModified?: boolean;
   presetOverrideFields?: Array<'template'|'wave'|'waveAppearance'|'motion'|'aspect'|'lyrics'|'effects'|'layout'|'textStyles'|'subtitleStyle'|'background'>;
   effects: VideoEffect[];
+  effectSettings?:EffectSettings;
   layout: OverlayLayout;
   textStyles?: OverlayTextStyles;
   subtitleStyle?: KaraokeDrawStyle;

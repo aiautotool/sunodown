@@ -51,8 +51,8 @@ export type OverlayLayout = {
   creator: { x: number; y: number; scale: number };
 };
 export type OverlayTextStyles = {
-  title: { font: string; color: string };
-  creator: { font: string; color: string };
+  title: { font: string; color: string; text?: string; bold?: boolean; italic?: boolean };
+  creator: { font: string; color: string; text?: string; bold?: boolean; italic?: boolean };
 };
 export type PreviewAudioAnalysis = {
   samples: Float32Array;
@@ -298,7 +298,7 @@ function drawMeta(
   const fs = Math.max(26, Math.min(54, Math.round(w * 0.039))),
     art = titleTypography(template, fs);
   ctx.font = textStyles?.title.font
-    ? `700 ${fs}px ${textStyles.title.font}`
+    ? `${textStyles.title.italic?'italic ':''}${textStyles.title.bold===false?400:700} ${fs}px ${textStyles.title.font}`
     : art.font;
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
@@ -310,7 +310,7 @@ function drawMeta(
   ctx.shadowBlur = template === 'glass-card' ? 24 : 18;
   const titlePos = layout?.title || { x: 50, y: 67, scale: 100 },
     creatorPos = layout?.creator || { x: 50, y: 75, scale: 100 };
-  const lines = wrap(ctx, song.title || 'Suno Track', w * max, 2),
+  const lines = wrap(ctx, textStyles?.title.text ?? (song.title || 'Suno Track'), w * max, 2),
     lh = fs * 1.22,
     x = (w * titlePos.x) / 100,
     titleY = (h * titlePos.y) / 100,
@@ -323,15 +323,16 @@ function drawMeta(
     drawLetterSpaced(ctx, l, 0, i * lh, art.spacing, align);
   });
   ctx.restore();
-  if (song.creator) {
+  const creatorText=textStyles?.creator.text??song.creator;
+  if (creatorText) {
     ctx.shadowBlur = 7;
-    ctx.font = `600 ${Math.max(15, Math.round(fs * 0.4))}px ${textStyles?.creator.font || "system-ui,-apple-system,'Segoe UI',sans-serif"}`;
+    ctx.font = `${textStyles?.creator.italic?'italic ':''}${textStyles?.creator.bold===false?400:600} ${Math.max(15, Math.round(fs * 0.4))}px ${textStyles?.creator.font || "system-ui,-apple-system,'Segoe UI',sans-serif"}`;
     ctx.fillStyle = textStyles?.creator.color || 'rgba(255,255,255,.7)';
     ctx.textAlign = align;
     ctx.save();
     ctx.translate((w * creatorPos.x) / 100, (h * creatorPos.y) / 100);
     ctx.scale(creatorPos.scale / 100, creatorPos.scale / 100);
-    ctx.fillText(song.creator.toUpperCase(), 0, 0);
+    ctx.fillText(creatorText, 0, 0);
     ctx.restore();
   }
   ctx.restore();
@@ -1440,7 +1441,7 @@ export async function generateVisualizerVideoSafe(
         songT = trimStart + trimT,
         level = amplitude(samples, rate, songT),
         scene = sceneMedia.findLast(
-          ({ clip }) => absoluteT >= clip.start && absoluteT < clip.end,
+          ({ clip }) => (!clip.isDefault || background.mode === 'suno') && absoluteT >= clip.start && absoluteT < clip.end,
         ),
         customBackground = Boolean(scene) || background.mode !== 'suno';
       if (scene?.bitmap) {

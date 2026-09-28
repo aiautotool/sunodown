@@ -1,8 +1,9 @@
 import { DEFAULT_WAVE_APPEARANCE } from '@/components/v4/types';
 import type { EffectConfig } from '@/components/v8/video-effects';
-import { normalizePresetConfig, type StudioPresetConfig } from '@/components/presets/studio-presets';
+import { type StudioPresetConfig } from '@/components/presets/studio-presets';
 import {
   comparePreviewAndRender,
+  normalizeVisualSnapshot,
   visualFingerprint,
   type VisualParityReport,
 } from '@/components/presets/preset-regression';
@@ -18,7 +19,7 @@ export type StudioRenderModel = {
  * Do not build a second render config in either surface: normalize here first.
  */
 export function createStudioRenderModel(config: StudioPresetConfig): StudioRenderModel {
-  const normalized = normalizePresetConfig(config);
+  const normalized = normalizeVisualSnapshot(config);
   const visual = {
     ...normalized,
     waveAppearance: normalized.waveAppearance!,
@@ -28,8 +29,10 @@ export function createStudioRenderModel(config: StudioPresetConfig): StudioRende
     visual,
     effects: {
       effects: [...visual.effects],
-      intensity: 1,
-      speed: 1,
+      intensity: visual.effectSettings!.density,
+      speed: visual.effectSettings!.speed,
+      fallAngle: visual.effectSettings!.angle,
+      particleSize: visual.effectSettings!.size,
       opacity: 0.75,
       wind: 0,
     },

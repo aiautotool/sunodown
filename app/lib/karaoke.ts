@@ -369,6 +369,7 @@ export type KaraokeDrawStyle = {
   fontSize?: number;
   font?: 'system' | 'serif' | 'rounded' | 'mono' | 'impact';
   bold?: boolean;
+  italic?: boolean;
   shadow?: boolean;
   outline?: boolean;
   radius?: number;
@@ -394,7 +395,7 @@ function drawWordLine(
     scale = Math.max(0.6, Math.min(1.8, (style.fontSize || 100) / 100)),
     weight = style.bold === false ? 500 : 700,
     font = KARAOKE_FONTS[style.font || 'system'];
-  ctx.font = `${weight} ${42 * scale}px ${font}`;
+  ctx.font = `${style.italic?'italic ':''}${weight} ${42 * scale}px ${font}`;
   ctx.textBaseline = 'alphabetic';
   const widths = line.words.map((word) => ctx.measureText(word.text).width),
     fullWidth =
@@ -403,7 +404,7 @@ function drawWordLine(
       20,
       Math.floor(42 * scale * Math.min(1, maxWidth / Math.max(1, fullWidth))),
     );
-  ctx.font = `${weight} ${fontSize}px ${font}`;
+  ctx.font = `${style.italic?'italic ':''}${weight} ${fontSize}px ${font}`;
   const measured = line.words.map((word) => ctx.measureText(word.text).width);
   let x =
     centerX -

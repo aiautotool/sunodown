@@ -12,7 +12,7 @@ import {
   type WaveAppearance,
   DEFAULT_WAVE_APPEARANCE,
 } from '@/components/v4/types';
-import { VIDEO_EFFECTS, type VideoEffect } from '@/components/v8/video-effects';
+import { normalizeEffectSettings, type EffectSettings, VIDEO_EFFECTS, type VideoEffect } from '@/components/v8/video-effects';
 import {
   DEFAULT_BACKGROUND_CONFIG,
   sanitizeStoredBackground,
@@ -28,6 +28,7 @@ export type StudioPresetConfig = {
   aspect: VideoAspect;
   lyrics: LyricsMode;
   effects: VideoEffect[];
+  effectSettings?:EffectSettings;
   layout: OverlayLayout;
   textStyles: OverlayTextStyles;
   subtitleStyle: KaraokeDrawStyle;
@@ -109,6 +110,7 @@ export function normalizePresetConfig(value:Partial<StudioPresetConfig>|null|und
     aspect:VALID_ASPECTS.has(value.aspect as VideoAspect)?value.aspect as VideoAspect:fallback.aspect,
     lyrics:VALID_LYRICS.has(value.lyrics as LyricsMode)?value.lyrics as LyricsMode:fallback.lyrics,
     effects:Array.isArray(value.effects)?value.effects.filter((effect):effect is VideoEffect=>VALID_EFFECTS.has(effect as VideoEffect)):[...fallback.effects],
+    effectSettings:normalizeEffectSettings(value.effectSettings),
     layout:normalizeLayout(value.layout,fallback.layout),
     textStyles:structuredClone(value.textStyles||fallback.textStyles),
     subtitleStyle:structuredClone(value.subtitleStyle||fallback.subtitleStyle),

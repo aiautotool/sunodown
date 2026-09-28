@@ -1,15 +1,16 @@
 'use client';
 
 import {useEffect,useRef,useState} from 'react';
+import {PexelsLibrary,type AddPexelsToTimeline} from './pexels-library';
 import {BACKGROUND_PRESETS,DEFAULT_BACKGROUND_CONFIG,backgroundFingerprint,type BackgroundConfig,type BackgroundMode} from './background';
 
-type Props={value:BackgroundConfig;onChange:(next:BackgroundConfig)=>void;onError:(message:string)=>void};
+type Props={onAddToTimeline:AddPexelsToTimeline;value:BackgroundConfig;onChange:(next:BackgroundConfig)=>void;onError:(message:string)=>void};
 
 function fingerprint(file:File){return `${file.name}:${file.size}:${file.lastModified}`}
 function fmtBytes(n:number){if(n<1024*1024)return `${Math.round(n/1024)} KB`;return `${(n/1024/1024).toFixed(1)} MB`}
 function fmtTime(n:number){if(!Number.isFinite(n))return '--';const s=Math.max(0,Math.round(n));return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`}
 
-export function BackgroundPanel({value,onChange,onError}:Props){
+export function BackgroundPanel({value,onChange,onError,onAddToTimeline}:Props){
  const imageInput=useRef<HTMLInputElement>(null),videoInput=useRef<HTMLInputElement>(null);
  const ownedImage=useRef<string|null>(null),ownedVideo=useRef<string|null>(null);
  const [imageName,setImageName]=useState(''),[videoName,setVideoName]=useState(''),[videoDuration,setVideoDuration]=useState<number|null>(null),[videoSize,setVideoSize]=useState(0),[warning,setWarning]=useState('');
@@ -103,6 +104,8 @@ export function BackgroundPanel({value,onChange,onError}:Props){
       <small>MP4 · WebM · MOV</small>
     </button>
   </div>
+
+  <PexelsLibrary onAddToTimeline={onAddToTimeline} onSelect={(file,kind)=>kind==='photo'?selectImage(file):selectVideo(file)}/>
 
   {value.mode==='preset'&&<div className="mt-3 flex gap-2 overflow-x-auto overscroll-x-contain pb-2">
    {BACKGROUND_PRESETS.map((p,i)=><button key={p.id} type="button" onClick={()=>onChange({...value,mode:'preset',presetId:p.id})} className={`shrink-0 w-28 overflow-hidden rounded-xl border text-left ${value.presetId===p.id?'border-fuchsia-300/50':'border-white/10'}`}>

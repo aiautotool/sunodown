@@ -1,4 +1,5 @@
 import type { StudioPreset, StudioPresetConfig } from './studio-presets';
+import { normalizeActiveBackground } from '../v8/background';
 import { normalizePresetConfig } from './studio-presets';
 
 export type VisualParityReport = {
@@ -38,7 +39,7 @@ function fingerprint(value: unknown) {
  * deliberately preserved because compositing order changes the final frame.
  */
 export function normalizeVisualSnapshot(config: StudioPresetConfig): StudioPresetConfig {
-  return normalizePresetConfig(config);
+  return {...normalizePresetConfig(config), background:normalizeActiveBackground(config.background)};
 }
 
 export function visualFingerprint(config: StudioPresetConfig) {
@@ -73,6 +74,7 @@ export function comparePreviewAndRender(
   comparePath(issues, 'aspect', a.aspect, b.aspect);
   comparePath(issues, 'lyrics', a.lyrics, b.lyrics);
   comparePath(issues, 'effects', a.effects, b.effects);
+  comparePath(issues, 'effectSettings', a.effectSettings, b.effectSettings);
 
   for (const key of REQUIRED_LAYOUT_KEYS) {
     comparePath(issues, `layout.${key}`, a.layout[key], b.layout[key]);

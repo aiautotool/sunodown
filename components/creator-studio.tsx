@@ -1,4 +1,5 @@
 'use client';
+import {DEFAULT_EFFECT_SETTINGS,normalizeEffectSettings,type EffectSettings} from './v8/video-effects';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRenderWakeLock } from '@/hooks/use-render-wake-lock';
@@ -33,6 +34,9 @@ import {
   type VideoEffect,
 } from '@/components/v8/video-effects';
 import { LivePreview } from '@/components/v8/live-preview';
+import type { AddPexelsToTimeline } from '@/components/v8/pexels-library';
+import { PreviewTextEditor } from '@/components/v8/preview-text-editor';
+import { SuggestedBackground } from '@/components/v8/suggested-background';
 import { BackgroundPanel } from '@/components/v8/background-panel';
 import {
   BACKGROUND_PRESETS,
@@ -202,6 +206,7 @@ const makeEffectConfig = (effects: VideoEffect[]): EffectConfig => ({
 });
 
 function ToolControls(p: {
+  onAddToTimeline: AddPexelsToTimeline;
   panel: string;
   setPanel: (v: string) => void;
   wave: WaveStyle;
@@ -216,6 +221,8 @@ function ToolControls(p: {
   setLyrics: (v: LyricsMode) => void;
   motion: MotionIntensity;
   setMotion: (v: MotionIntensity) => void;
+  effectSettings:EffectSettings;
+  setEffectSettings:(value:EffectSettings)=>void;
   effects: VideoEffect[];
   setEffects: (v: VideoEffect[]) => void;
   layout: OverlayLayout;
@@ -287,6 +294,7 @@ function ToolControls(p: {
                   {(['title', 'creator'] as const).map((key) => (
                     <div key={key}>
                       <b>{key === 'title' ? 'Tiêu đề' : 'Tác giả'}</b>
+                      {p.textStyles[key].text===''&&<button type="button" onClick={()=>p.setTextStyles({...p.textStyles,[key]:{...p.textStyles[key],text:undefined}})}>Hiện lại</button>}
                       <select
                         value={p.textStyles[key].font}
                         onChange={(e) =>
@@ -456,6 +464,7 @@ function ToolControls(p: {
                 ))}
               {id === 'background' && (
                 <BackgroundPanel
+                  onAddToTimeline={p.onAddToTimeline}
                   value={safeBackground}
                   onChange={p.setBackground}
                   onError={p.onError}
@@ -471,6 +480,16 @@ function ToolControls(p: {
                     {x.icon} {x.label}
                   </button>
                 ))}
+              {id === 'effects' && <div className="w-full space-y-3 rounded-xl border border-white/10 p-3">
+                <p className="text-xs text-white/60">Điều chỉnh chung cho hiệu ứng đã bật. Góc xiên và kích thước áp dụng cho các hạt rơi như mưa, tuyết, lá, cánh hoa.</p>
+                {([
+                  ['speed','Tốc độ rơi',.2,3,.1,'×'],
+                  ['angle','Góc xiên (− trái / + phải)',-60,60,1,'°'],
+                  ['density','Mật độ hạt',.2,3,.1,'×'],
+                  ['size','Kích thước / độ dày hạt',.5,3,.1,'×'],
+                ] as const).map(([key,label,min,max,step,unit])=><label key={key} className="block text-xs text-white/70">{label} · {p.effectSettings[key]}{unit}<input aria-label={label} type="range" min={min} max={max} step={step} value={p.effectSettings[key]} onChange={e=>p.setEffectSettings({...p.effectSettings,[key]:Number(e.target.value)})} className="mt-2 block w-full accent-sky-300"/></label>)}
+                <button type="button" onClick={()=>p.setEffectSettings({...DEFAULT_EFFECT_SETTINGS})}>Đặt lại hiệu ứng</button>
+              </div>}
               {id === 'audio' && (
                 <MasteringPanel audio={p.audioUrl} binary={p.audioBinary} title={p.songTitle} value={p.mastering} onChange={p.setMastering} />
               )}
@@ -586,6 +605,8 @@ export default function CreatorStudio() {
     title: { font: 'Georgia, serif', color: '#ffffff' },
     creator: { font: 'system-ui, sans-serif', color: '#d1d5db' },
   });
+  const [editingText,setEditingText]=useState<'title'|'creator'|'subtitle'|null>(null);
+  const [effectSettings,setEffectSettings]=useState<EffectSettings>({...DEFAULT_EFFECT_SETTINGS});
   const [background, setBackground] = useState<BackgroundConfig>(
     structuredClone(DEFAULT_BACKGROUND_CONFIG),
   );
@@ -617,6 +638,7 @@ export default function CreatorStudio() {
         aspect,
         lyrics,
         effects,
+        effectSettings,
         layout,
         textStyles,
         subtitleStyle,
@@ -630,6 +652,7 @@ export default function CreatorStudio() {
       aspect,
       lyrics,
       effects,
+      effectSettings,
       layout,
       textStyles,
       subtitleStyle,
@@ -742,6 +765,7 @@ export default function CreatorStudio() {
       setAspect,
       setLyrics,
       setEffects,
+      setEffectSettings,
       setLayout,
       setTextStyles,
       setSubtitleStyle,
@@ -796,6 +820,7 @@ export default function CreatorStudio() {
       setAspect,
       setLyrics,
       setEffects,
+      setEffectSettings,
       setLayout,
       setTextStyles,
       setSubtitleStyle,
@@ -1581,6 +1606,7 @@ export default function CreatorStudio() {
         presetModified,
         presetOverrideFields,
         effects,
+        effectSettings,
         layout,
         textStyles,
         subtitleStyle,
@@ -1662,6 +1688,7 @@ export default function CreatorStudio() {
     setPresetModified(Boolean(project.presetModified));
     setPresetOverrideFields(project.presetOverrideFields || []);
     setEffects(project.effects);
+    setEffectSettings(normalizeEffectSettings(project.effectSettings));
     setLayout(project.layout);
     if (project.textStyles) setTextStyles(project.textStyles);
     if (project.subtitleStyle) setSubtitleStyle(project.subtitleStyle);
@@ -1834,7 +1861,24 @@ export default function CreatorStudio() {
     change();
   };
 
+  const addPexelsToTimeline: AddPexelsToTimeline = async (file,kind,duration) => {
+    if(rendering)return;
+    const endOfSong=Math.max(.1,song?.duration||trimEnd||30);
+    const start=Math.max(0,Math.min(previewTime,endOfSong-.1));
+    const length=kind==='video'&&typeof duration==='number'&&Number.isFinite(duration)&&duration>0?duration:5;
+    const clip:MediaClip={id:crypto.randomUUID(),type:kind==='video'?'video':'image',url:URL.createObjectURL(file),name:file.name,start,end:Math.min(endOfSong,start+length)};
+    invalidateRenderedResult();
+    setMediaClips(clips=>[...clips,clip]);
+    setTimelineTracks(tracks=>({...tracks,visual:{...tracks.visual,hidden:false}}));
+    setAutoPreview(false);
+    setTimelinePauseSignal(value=>value+1);
+    setPlaybackStart(start);
+    setPreviewTime(start);
+    setQuickMode(false);
+  };
+
   const toolControlsProps: Parameters<typeof ToolControls>[0] = {
+    onAddToTimeline: addPexelsToTimeline,
     panel,
     setPanel,
     wave,
@@ -1849,6 +1893,8 @@ export default function CreatorStudio() {
     setLyrics: (value) => { markPresetField('lyrics'); changeVisual(() => setLyrics(value)); },
     motion,
     setMotion: (value) => { markPresetField('motion'); changeVisual(() => setMotion(value)); },
+    effectSettings,
+    setEffectSettings:(value)=>{markPresetField('effectSettings');changeVisual(()=>setEffectSettings(value));},
     effects,
     setEffects: (value) => { markPresetField('effects'); changeVisual(() => setEffects(value)); },
     layout,
@@ -1917,6 +1963,7 @@ export default function CreatorStudio() {
 
   return (
     <div className="sd-app">
+
       <header className="sd-header">
         <div className="sd-brand">
           <span>
@@ -2166,7 +2213,10 @@ export default function CreatorStudio() {
             </div>
           </div>
           <div className="sd-landscape" />
-          <small>MUSIC LIVES FURTHER</small>
+          <small>
+            MUSIC LIVES FURTHER · {process.env.NEXT_PUBLIC_BUILD_VERSION}
+            {process.env.NEXT_PUBLIC_BUILD_IDENTITY && ` · ${process.env.NEXT_PUBLIC_BUILD_IDENTITY}`}
+          </small>
         </main>
       ) : (
         <main className={`sd-studio ${rendering ? 'sd-render-locked' : ''} ${quickMode ? 'sd-quick-mode' : ''}`}>
@@ -2191,6 +2241,8 @@ export default function CreatorStudio() {
                 motion={studioModel.visual.motion}
                 lyrics={studioModel.visual.lyrics}
                 layout={studioModel.visual.layout}
+                textEditor={editingText&&song&&<PreviewTextEditor target={editingText} title={song.title} creator={song.creator||''} time={previewTime} styles={textStyles} subtitle={subtitleStyle} layout={layout} lines={karaokeTimeline} onStyles={toolControlsProps.setTextStyles} onSubtitle={toolControlsProps.setSubtitleStyle} onLayout={toolControlsProps.setLayout} onLines={lines=>{invalidateRenderedResult();setKaraokeTimeline(lines);}} onDelete={()=>{if(editingText==='subtitle')toolControlsProps.setLyrics('off');else toolControlsProps.setTextStyles({...textStyles,[editingText]:{...textStyles[editingText],text:''}});setEditingText(null);}} onClose={()=>setEditingText(null)}/>}
+                onEditText={rendering?undefined:(key)=>{setAutoPreview(false);setTimelinePauseSignal(value=>value+1);setEditingText(key);}}
                 onLayoutChange={rendering ? undefined : (value) => { markPresetField('layout'); changeVisual(() => setLayout(value)); }}
                 start={trimStart}
                 end={trimEnd || song.duration || undefined}
@@ -2246,6 +2298,17 @@ export default function CreatorStudio() {
                 </span>
               </output>
             )}
+            <SuggestedBackground
+              key={song.audio}
+              onAddToTimeline={addPexelsToTimeline}
+              songKey={song.audio}
+              text={`${song.title} ${song.style || ''} ${song.tags || ''}`}
+              aspect={aspect}
+              background={background}
+              disabled={rendering}
+              onChange={toolControlsProps.setBackground}
+              onBrowse={() => { setQuickMode(false); setPanel('background'); setMobileTools(true); }}
+            />
             {quickMode && (
               <section className="sd-quick-create" aria-label="Quick Create">
                 <div className="sd-quick-create-head">
