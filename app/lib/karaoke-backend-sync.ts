@@ -533,8 +533,18 @@ export async function buildBackendKaraokeTimeline({
 
   const roughWords = mergeKaraokeChunkWords(streams);
   const failureRatio = failedChunks / Math.max(1, plan.length);
-  if (!roughWords.length || failureRatio > 0.4) {
+
+  // Do not discard usable mobile timing just because several network chunks
+  // failed. The pipeline validator already decides whether the aligned
+  // timeline is trustworthy. This is especially important on iOS where
+  // sequential chunk requests are more likely to hit transient failures.
+  if (!roughWords.length) {
     throw new Error('Dịch vụ subtitle tạm thời chưa ổn định.');
+  }
+  if (failureRatio > 0.4) {
+    onStage?.(
+      `Một số đoạn subtitle chưa tải được (${failedChunks}/${plan.length}) · đang giữ phần timing hợp lệ…`,
+    );
   }
 
   if (lyrics?.trim()) {
