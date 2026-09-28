@@ -27,8 +27,5 @@
   },
   "ai": {
     "binding": "AI"
-  },
-  "build": {
-    "command": "CLOUDFLARE_ZONE_ID=e655c86fa8ded678787759daa263ac8e node scripts/picai-origin-fix.mjs"
   }
 }
