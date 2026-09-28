@@ -1,6 +1,7 @@
 import { type KaraokeLine } from './karaoke';
 import {
   buildBackendKaraokeTimeline,
+  buildFullBackendKaraokeTimeline,
   compensateBackendVocalLatency,
 } from './karaoke-backend-sync';
 import { buildCapCutKaraokeTimeline } from './karaoke-capcut-sync';
@@ -23,7 +24,9 @@ import {
 
 export type KaraokeEngineId =
   | 'backend-whisper'
+  | 'backend-whisper-full'
   | 'backend-whisper-transcription'
+  | 'backend-whisper-full-transcription'
   | 'capcut'
   | 'local-whisper'
   | 'local-whisper-transcription';
@@ -237,19 +240,26 @@ export async function runKaraokePipeline({
     }> = mobile
       ? [
           {
-            engine: 'capcut',
-            label: 'Mobile · đang căn subtitle trên server để giảm tải cho thiết bị…',
+            engine: 'backend-whisper-full',
+            label: 'Mobile · đang nhận diện toàn bài bằng Whisper backend…',
             run: () =>
-              buildCapCutKaraokeTimeline({
+              buildFullBackendKaraokeTimeline({
                 audio,
                 lyrics: lyrics!,
                 duration,
-                language: language === 'vi' ? 'vi-VN' : language,
+                language,
+                onStage: (message) =>
+                  onProgress?.({
+                    stage: 'recognize',
+                    engine: 'backend-whisper-full',
+                    message,
+                  }),
+                onDebug,
               }),
           },
           {
             ...backendEngine,
-            label: 'CapCut chưa đủ tốt · đang fallback sang Whisper backend…',
+            label: 'Whisper full-song chưa đủ tốt · đang fallback sang chunking…',
           },
         ]
       : [
@@ -298,8 +308,25 @@ export async function runKaraokePipeline({
     }> = mobile
       ? [
           {
+            engine: 'backend-whisper-full-transcription',
+            label: 'Mobile · đang tạo subtitle toàn bài bằng Whisper backend…',
+            run: () =>
+              buildFullBackendKaraokeTimeline({
+                audio,
+                duration,
+                language,
+                onStage: (message) =>
+                  onProgress?.({
+                    stage: 'recognize',
+                    engine: 'backend-whisper-full-transcription',
+                    message,
+                  }),
+                onDebug,
+              }),
+          },
+          {
             engine: 'backend-whisper-transcription',
-            label: 'Mobile · đang tạo subtitle bằng Whisper backend…',
+            label: 'Whisper full-song chưa đủ tốt · đang fallback sang chunking…',
             run: () =>
               buildBackendKaraokeTimeline({
                 audio,
