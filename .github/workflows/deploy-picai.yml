@@ -57,7 +57,7 @@ jobs:
                    pattern !== 'www.picai.online' &&
                    pattern !== 'www.picai.online/*';
           });
-          cfg.routes.push({ pattern: 'www.picai.online/*' });
+          cfg.routes.push('www.picai.online/*');
           fs.writeFileSync(path, JSON.stringify(cfg, null, 2));
           NODE
 
