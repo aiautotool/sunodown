@@ -1,6 +1,10 @@
 name: Deploy picai.online routes
 
 on:
+  push:
+    branches: [v20.1]
+    paths:
+      - '.github/workflows/deploy-picai.yml'
   workflow_dispatch:
 
 permissions:
