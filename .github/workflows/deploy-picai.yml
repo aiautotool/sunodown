@@ -1,4 +1,5 @@
 name: Deploy www.picai.online
+# trigger www domain deployment
 
 on:
   push:
