@@ -2313,7 +2313,7 @@ export default function CreatorStudio() {
               <section className="sd-quick-create" aria-label="Quick Create">
                 <div className="sd-quick-create-head">
                   <div>
-                    <small>QUICK CREATE · V16</small>
+                    <small>QUICK CREATE · V23</small>
                     <b>Chọn một mẫu, xem preview rồi xuất</b>
                     <span>Đã gợi ý theo style, lyrics và định dạng phù hợp với bài này.</span>
                   </div>
