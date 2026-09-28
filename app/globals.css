@@ -715,3 +715,230 @@ linear-gradient(180deg,#090d14,#070a0f);overflow:hidden}
 @media(max-width:800px){.sd-subtitle-notice{top:max(10px,env(safe-area-inset-top));right:10px;width:calc(100vw - 20px)}}
 
 .sd-subtitle-job{display:flex;min-height:48px;align-items:center;gap:11px;margin-top:10px;border:1px solid rgba(34,211,238,.2);border-radius:12px;background:rgba(8,18,27,.92);padding:9px 12px;color:#e6faff}.sd-subtitle-job>i{width:20px;height:20px;flex:0 0 20px;border:2px solid rgba(34,211,238,.2);border-top-color:#22d3ee;border-radius:50%;animation:sdSubSpin .85s linear infinite}.sd-subtitle-job>span{display:grid;gap:3px}.sd-subtitle-job b{font-size:10px}.sd-subtitle-job small{color:#8292a6;font-size:9px}.sd-subtitle-job.synced{border-color:rgba(74,222,128,.2);background:rgba(10,28,21,.82)}.sd-subtitle-job.synced>i{border:0;background:#22c55e;animation:none}.sd-subtitle-job.synced>i:after{content:'✓';display:grid;height:20px;place-items:center;color:#07150d;font-size:12px;font-style:normal;font-weight:900}.sd-subtitle-job.fallback{border-color:rgba(245,158,11,.24);background:rgba(35,24,8,.76)}.sd-subtitle-job.fallback>i{border-color:#f59e0b;animation:none}@keyframes sdSubSpin{to{transform:rotate(360deg)}}
+
+
+/* V23 luminous surface system + footer-safe home */
+:root{
+  --sd-glow-violet:139,92,246;
+  --sd-glow-blue:56,189,248;
+  --sd-surface:#0d131d;
+  --sd-surface-2:#111925;
+}
+
+/* Ambient light belongs behind the surfaces, not on top of the content. */
+.sd-empty{
+  overflow-x:hidden;
+  overflow-y:auto;
+  padding-bottom:1px;
+  background:
+    radial-gradient(ellipse 58% 34% at 50% 44%,rgba(var(--sd-glow-blue),.085),transparent 70%),
+    radial-gradient(ellipse 52% 31% at 50% 48%,rgba(var(--sd-glow-violet),.13),transparent 72%),
+    #090d14;
+}
+.sd-empty-content{
+  padding-bottom:0;
+}
+.sd-empty-content::before{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  left:50%;
+  top:54%;
+  width:min(920px,115vw);
+  height:760px;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 46%,rgba(var(--sd-glow-blue),.12),transparent 46%),
+    radial-gradient(circle at 50% 54%,rgba(var(--sd-glow-violet),.10),transparent 62%);
+  filter:blur(52px);
+  pointer-events:none;
+}
+
+/* Reusable V23 dark-premium surface treatment. */
+.sd-input,
+.sd-audio-upload,
+.sd-resume-project,
+.sd-intents button,
+.sd-quick-create,
+.sd-quick-presets>button,
+.sd-profile-menu{
+  transition:
+    transform .2s ease,
+    border-color .2s ease,
+    box-shadow .25s ease,
+    background .25s ease;
+}
+
+.sd-input{
+  border-color:rgba(148,163,184,.20);
+  background:
+    linear-gradient(145deg,rgba(19,27,40,.97),rgba(9,14,22,.985));
+  box-shadow:
+    0 28px 76px rgba(0,0,0,.46),
+    0 0 46px rgba(var(--sd-glow-blue),.055),
+    inset 0 1px 0 rgba(255,255,255,.045);
+}
+.sd-input:focus-within{
+  border-color:rgba(167,139,250,.58);
+  box-shadow:
+    0 30px 84px rgba(0,0,0,.52),
+    0 0 0 1px rgba(var(--sd-glow-violet),.18),
+    0 0 58px rgba(var(--sd-glow-violet),.16),
+    inset 0 1px 0 rgba(255,255,255,.07);
+}
+
+.sd-analyze{
+  position:relative;
+  box-shadow:
+    0 18px 46px rgba(68,46,180,.32),
+    0 0 52px rgba(var(--sd-glow-violet),.20),
+    inset 0 1px 0 rgba(255,255,255,.17);
+  transition:transform .18s ease,box-shadow .22s ease,filter .22s ease;
+}
+.sd-analyze:hover:not(:disabled){
+  transform:translateY(-1px);
+  filter:brightness(1.055);
+  box-shadow:
+    0 22px 58px rgba(68,46,180,.38),
+    0 0 68px rgba(var(--sd-glow-violet),.27),
+    inset 0 1px 0 rgba(255,255,255,.2);
+}
+.sd-analyze:active:not(:disabled){transform:translateY(0) scale(.995)}
+
+.sd-audio-upload{
+  border-color:rgba(151,111,255,.82);
+  background:
+    linear-gradient(135deg,rgba(25,31,47,.97),rgba(12,17,26,.985));
+  box-shadow:
+    0 25px 70px rgba(0,0,0,.42),
+    0 0 52px rgba(var(--sd-glow-violet),.11),
+    inset 0 1px 0 rgba(255,255,255,.045);
+}
+.sd-audio-upload:hover{
+  border-color:rgba(174,139,255,.96);
+  background:
+    linear-gradient(135deg,rgba(29,35,54,.98),rgba(14,19,30,.99));
+  box-shadow:
+    0 30px 76px rgba(0,0,0,.48),
+    0 0 64px rgba(var(--sd-glow-violet),.18),
+    inset 0 1px 0 rgba(255,255,255,.065);
+}
+.sd-audio-upload-icon{
+  box-shadow:
+    0 12px 30px rgba(var(--sd-glow-violet),.18),
+    inset 0 1px 0 rgba(255,255,255,.05);
+}
+
+.sd-resume-project{
+  border-color:rgba(111,126,149,.38);
+  background:
+    linear-gradient(140deg,rgba(17,25,36,.98),rgba(9,15,23,.99));
+  box-shadow:
+    0 24px 62px rgba(0,0,0,.34),
+    0 0 42px rgba(var(--sd-glow-blue),.045),
+    inset 0 1px 0 rgba(255,255,255,.035);
+  cursor:pointer;
+}
+.sd-resume-project:hover{
+  transform:translateY(-1px);
+  border-color:rgba(157,128,255,.5);
+  box-shadow:
+    0 28px 70px rgba(0,0,0,.42),
+    0 0 52px rgba(var(--sd-glow-violet),.10),
+    inset 0 1px 0 rgba(255,255,255,.055);
+}
+
+.sd-intents button{
+  position:relative;
+  border-color:rgba(103,116,137,.38);
+  background:
+    linear-gradient(145deg,rgba(22,29,42,.98),rgba(12,18,27,.99));
+  box-shadow:
+    0 22px 58px rgba(0,0,0,.30),
+    inset 0 1px 0 rgba(255,255,255,.035);
+  cursor:pointer;
+}
+.sd-intents button:hover{
+  transform:translateY(-2px);
+  border-color:rgba(150,126,245,.45);
+  box-shadow:
+    0 28px 70px rgba(0,0,0,.40),
+    0 0 44px rgba(var(--sd-glow-violet),.09),
+    inset 0 1px 0 rgba(255,255,255,.05);
+}
+.sd-intents button.active{
+  border-color:rgba(148,108,255,.95);
+  background:
+    radial-gradient(circle at 50% 20%,rgba(var(--sd-glow-violet),.13),transparent 62%),
+    linear-gradient(145deg,rgba(25,31,46,.99),rgba(14,19,29,.99));
+  box-shadow:
+    0 30px 76px rgba(0,0,0,.46),
+    0 0 0 1px rgba(var(--sd-glow-violet),.12),
+    0 0 62px rgba(var(--sd-glow-violet),.20),
+    inset 0 1px 0 rgba(255,255,255,.07);
+}
+.sd-intents button.active svg{
+  filter:drop-shadow(0 0 13px rgba(151,113,255,.46));
+}
+
+/* Quick Create gets the same surface language once a song is loaded. */
+.sd-quick-create{
+  border-color:rgba(113,126,148,.32);
+  background:
+    radial-gradient(circle at 50% -20%,rgba(var(--sd-glow-blue),.07),transparent 52%),
+    linear-gradient(145deg,rgba(17,24,37,.98),rgba(8,13,21,.99));
+  box-shadow:
+    0 30px 84px rgba(0,0,0,.46),
+    0 0 62px rgba(var(--sd-glow-blue),.055),
+    inset 0 1px 0 rgba(255,255,255,.04);
+}
+.sd-quick-presets>button.active{
+  border-color:rgba(151,115,255,.9);
+  box-shadow:
+    0 16px 44px rgba(0,0,0,.32),
+    0 0 0 1px rgba(var(--sd-glow-violet),.15),
+    0 0 38px rgba(var(--sd-glow-violet),.15),
+    inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+/* Footer participates in document flow so it can never sit on top of cards. */
+.sd-empty>small{
+  position:relative;
+  z-index:3;
+  bottom:auto;
+  left:auto;
+  display:block;
+  width:max-content;
+  max-width:calc(100% - 40px);
+  margin:48px auto 28px;
+  padding:0 10px;
+  color:#657087;
+  font-size:9px;
+  line-height:1.6;
+  letter-spacing:.38em;
+  text-align:center;
+  transform:none;
+  white-space:normal;
+}
+.sd-landscape{
+  z-index:0;
+  pointer-events:none;
+}
+
+@media(max-width:800px){
+  .sd-empty{padding-bottom:max(10px,env(safe-area-inset-bottom))}
+  .sd-empty-content{padding-bottom:18px}
+  .sd-empty-content::before{top:58%;width:150vw;height:760px;filter:blur(44px)}
+  .sd-empty>small{
+    bottom:auto;
+    margin:28px auto max(22px,env(safe-area-inset-bottom));
+    font-size:7px;
+    letter-spacing:.27em;
+    white-space:normal;
+  }
+  .sd-intents button:hover,.sd-resume-project:hover,.sd-audio-upload:hover{transform:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .sd-input,.sd-audio-upload,.sd-resume-project,.sd-intents button,.sd-analyze,.sd-quick-create,.sd-quick-presets>button{transition:none}
+}
