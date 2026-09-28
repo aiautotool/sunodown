@@ -59,3 +59,18 @@ jobs:
             echo "$response" | jq '{success, errors, result: (.result | if . then {hostname, service, zone_name, id} else null end)}'
             echo "$response" | jq -e '.success == true' >/dev/null
           done
+
+      - name: Verify Worker domains and public DNS
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 2de679b502c90e736abad750fd0415f7
+        run: |
+          set -euo pipefail
+          echo "=== Worker Domains ==="
+          curl -sS             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains"             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             -H "Content-Type: application/json"             | jq '.result[] | select(.hostname=="picai.online" or .hostname=="www.picai.online")'
+          echo "=== Public DNS ==="
+          for host in picai.online www.picai.online; do
+            echo "--- $host ---"
+            nslookup "$host" 1.1.1.1 || true
+            nslookup "$host" 8.8.8.8 || true
+          done
