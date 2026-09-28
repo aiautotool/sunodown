@@ -308,6 +308,89 @@ function cleanWord(word: BackendWord): RoughWord | null {
   };
 }
 
+export async function buildFullBackendKaraokeTimeline({
+  audio,
+  lyrics,
+  duration,
+  language = 'vi',
+  onStage,
+  onDebug,
+}: BackendSyncOptions): Promise<KaraokeLine[]> {
+  if (typeof window === 'undefined') {
+    throw new Error('Backend subtitle sync cần chạy từ trình duyệt.');
+  }
+
+  onStage?.('Mobile · đang gửi nguyên audio lên Whisper backend…');
+  onDebug?.('full-backend-start', {
+    audioBytes: audio.size,
+    duration: Math.round(duration * 100) / 100,
+    hasLyrics: Boolean(lyrics?.trim()),
+  });
+
+  const form = new FormData();
+  form.set(
+    'audio',
+    new File([audio], 'song-audio', {
+      type: audio.type || 'audio/mpeg',
+    }),
+  );
+  form.set('duration', String(duration));
+  form.set('language', language);
+  form.set('full', '1');
+  if (lyrics?.trim()) form.set('lyrics', lyrics);
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 180_000);
+  try {
+    const response = await fetch('/api/karaoke/align', {
+      method: 'POST',
+      body: form,
+      signal: controller.signal,
+    });
+    const data = (await response.json().catch(() => ({}))) as BackendResponse;
+    if (!response.ok) {
+      throw new Error(
+        data.error || data.detail || 'Whisper full-song không xử lý được audio.',
+      );
+    }
+
+    const lines = normalizeKaraokeTimeline(
+      (data.lines || [])
+        .map((line) => {
+          const text = String(line.text ?? '').trim();
+          const start = Number(line.start);
+          const end = Number(line.end);
+          if (!text || !Number.isFinite(start) || !Number.isFinite(end)) {
+            return null;
+          }
+          return {
+            text,
+            start,
+            end,
+            words: (line.words || [])
+              .map(cleanWord)
+              .filter((word): word is RoughWord => Boolean(word)),
+          } satisfies KaraokeLine;
+        })
+        .filter((line): line is KaraokeLine => Boolean(line)),
+      duration,
+    );
+
+    if (!lines.length) {
+      throw new Error('Whisper full-song không trả về cue hợp lệ.');
+    }
+
+    onDebug?.('full-backend-result', {
+      lines: lines.length,
+      words: Array.isArray(data.words) ? data.words.length : 0,
+    });
+    onStage?.('Subtitle đã sẵn sàng.');
+    return lines;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 const CHUNK_RETRY_DELAYS_MS = [0, 700, 1800];
 const RETRYABLE_HTTP = new Set([408, 425, 429, 500, 502, 503, 504]);
 
