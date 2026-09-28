@@ -1,0 +1,27 @@
+name: Diagnose picai DNS authority
+
+on:
+  push:
+    branches: [v20.1]
+    paths:
+      - '.github/workflows/picai-dns-debug.yml'
+  workflow_dispatch:
+
+jobs:
+  dns:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check authoritative DNS
+        run: |
+          set +e
+          echo "=== NS ==="
+          nslookup -type=NS picai.online 1.1.1.1
+          nslookup -type=NS picai.online 8.8.8.8
+          echo "=== SOA ==="
+          nslookup -type=SOA picai.online 1.1.1.1
+          echo "=== A/AAAA/CNAME ==="
+          nslookup -type=A picai.online 1.1.1.1
+          nslookup -type=AAAA picai.online 1.1.1.1
+          nslookup -type=CNAME www.picai.online 1.1.1.1
+          nslookup -type=A www.picai.online 1.1.1.1
+          nslookup -type=AAAA www.picai.online 1.1.1.1
