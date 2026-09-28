@@ -666,6 +666,20 @@ export default function CreatorStudio() {
     () => (song ? recommendQuickPresets(song) : []),
     [song],
   );
+
+  const homeFeaturedPresets = useMemo(() => {
+    const featuredIds = [
+      'sad-lyrics',
+      'karaoke-pop',
+      'neon-pulse',
+      'cinematic-story',
+      'romantic-letter',
+      'midnight-drive',
+    ];
+    return featuredIds
+      .map((id) => BUILTIN_STUDIO_PRESETS.find((preset) => preset.id === id))
+      .filter((preset): preset is StudioPreset => Boolean(preset));
+  }, []);
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
   const timelineMediaClips = useMemo<MediaClip[]>(
@@ -807,6 +821,26 @@ export default function CreatorStudio() {
       setResultUrl('');
     }
     setError('');
+  };
+
+  const openHomeFeaturedPreset = async (preset: StudioPreset) => {
+    if (!validSourceInput(url)) {
+      setError('Hãy dán liên kết Suno vào ô Phân tích trước khi chọn mẫu.');
+      document.querySelector<HTMLInputElement>('.sd-home-linkbox input')?.focus();
+      return;
+    }
+
+    setError('');
+    applyPreset(preset, 'replace-all');
+    track('suggested_preset_selected', {
+      preset_id: preset.id,
+      category: preset.category,
+      source: 'home_featured',
+    });
+
+    const resolved = await resolve(url, { replaceUrl: true });
+    if (!resolved) return;
+    setQuickMode(true);
   };
 
   const restorePresetSnapshot = () => {
@@ -1989,12 +2023,12 @@ export default function CreatorStudio() {
     <div className="sd-app">
 
       <header className="sd-header">
-        <div className="sd-brand">
+        <a className="sd-brand" href="/" aria-label="Về trang chủ SunoDown">
           <span>
             <Music2 />
           </span>
           <b>SunoDown</b>
-        </div>
+        </a>
         {song ? (
           <div className="sd-loaded">
             <i>✓</i> Suno song loaded
@@ -2176,10 +2210,10 @@ export default function CreatorStudio() {
           </aside>
 
           <div className="sd-mobile-brand">
-            <div className="sd-brand">
+            <a className="sd-brand" href="/" aria-label="Về trang chủ SunoDown">
               <span><Music2 /></span>
               <b>SunoDown</b>
-            </div>
+            </a>
             <button className="sd-mobile-menu-trigger" aria-label="Mở menu" onClick={() => setNavigationOpen((open) => !open)}><Menu /></button>
             {navigationOpen && navigationMenu}
           </div>
@@ -2309,17 +2343,24 @@ export default function CreatorStudio() {
                 <button onClick={() => setView('create')}>Xem tất cả <i>›</i></button>
               </header>
               <div className="sd-home-template-row">
-                {[
-                  ['Cinematic Lyric','cinematic'],
-                  ['Minimal Karaoke','minimal'],
-                  ['Neon Wave','neon'],
-                  ['Vintage Film','vintage'],
-                  ['Aesthetic','aesthetic'],
-                  ['Visualizer','visualizer'],
-                ].map(([name,kind]) => (
-                  <button key={name} className={`sd-home-template ${kind}`}>
-                    <span className="thumb"><img src="/home-cinematic-v23.svg" alt="" /></span>
-                    <b>{name}</b>
+                {homeFeaturedPresets.map((preset, index) => (
+                  <button
+                    key={preset.id}
+                    className={`sd-home-template preset-${preset.id} ${index === 0 ? 'active' : ''}`}
+                    onClick={() => void openHomeFeaturedPreset(preset)}
+                    title={preset.description}
+                  >
+                    <span
+                      className={`thumb scene-${preset.config.template}`}
+                      style={{
+                        backgroundImage: preset.thumbnail
+                          ? `url(${preset.thumbnail})`
+                          : 'url(/home-cinematic-v23.svg)',
+                      }}
+                    >
+                      <em>{preset.badge || preset.category}</em>
+                    </span>
+                    <b>{preset.name}</b>
                     <i><Play /></i>
                   </button>
                 ))}
