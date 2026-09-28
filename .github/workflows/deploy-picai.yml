@@ -1,4 +1,4 @@
-name: Deploy picai.online routes
+name: Repair picai.online Worker domains
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: picai-domains-deploy
+  group: picai-domain-repair
   cancel-in-progress: true
 
 jobs:
@@ -39,44 +39,48 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Add picai Worker Routes
-        run: |
-          node - <<'NODE'
-          const fs = require('fs');
-          const path = 'wrangler.v6.generated.json';
-          const cfg = JSON.parse(fs.readFileSync(path, 'utf8'));
-          cfg.routes ||= [];
-          const remove = new Set([
-            'picai.online',
-            'picai.online/*',
-            'www.picai.online',
-            'www.picai.online/*'
-          ]);
-          cfg.routes = cfg.routes.filter((route) => {
-            const pattern = typeof route === 'string' ? route : route?.pattern;
-            return !remove.has(pattern);
-          });
-          cfg.routes.push(
-            { pattern: 'picai.online/*', zone_id: 'e655c86fa8ded678787759daa263ac8e' },
-            { pattern: 'www.picai.online/*', zone_id: 'e655c86fa8ded678787759daa263ac8e' }
-          );
-          fs.writeFileSync(path, JSON.stringify(cfg, null, 2));
-          NODE
-
-      - name: Deploy Worker routes
+      - name: Deploy Worker without picai route mutation
         run: npx wrangler deploy --config wrangler.v6.generated.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Verify HTTPS
+      - name: Attach picai Worker domains via Domains API
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 2de679b502c90e736abad750fd0415f7
+          CLOUDFLARE_ZONE_ID: e655c86fa8ded678787759daa263ac8e
         run: |
           set -euo pipefail
-          for url in https://picai.online https://www.picai.online; do
-            echo "=== $url ==="
-            status="$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 20 "$url")"
-            echo "HTTP $status"
-            if [ "$status" -ge 500 ]; then
-              head -c 500 /tmp/body || true
-              exit 1
-            fi
+          for host in picai.online www.picai.online; do
+            response="$(curl -sS -X PUT               "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains"               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               -H "Content-Type: application/json"               --data "{\"hostname\":\"$host\",\"service\":\"suno-aiautotool\",\"zone_id\":\"$CLOUDFLARE_ZONE_ID\",\"zone_name\":\"picai.online\"}")"
+            echo "$response" | jq '{success, errors, result: (.result | if . then {id, hostname, service, zone_id, zone_name} else null end)}'
+            echo "$response" | jq -e '.success == true' >/dev/null
           done
+
+      - name: Verify domain associations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 2de679b502c90e736abad750fd0415f7
+        run: |
+          set -euo pipefail
+          response="$(curl -sS             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains"             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             -H "Content-Type: application/json")"
+          echo "$response" | jq '[.result[] | select(.hostname=="picai.online" or .hostname=="www.picai.online") | {id,hostname,service,zone_id,zone_name}]'
+          test "$(echo "$response" | jq '[.result[] | select((.hostname=="picai.online" or .hostname=="www.picai.online") and .service=="suno-aiautotool")] | length')" -eq 2
+
+      - name: Verify HTTPS reaches Worker
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            all_ok=1
+            for url in https://picai.online https://www.picai.online; do
+              status="$(curl -sS -o /tmp/picai-body -w '%{http_code}' --max-time 20 "$url" || echo 000)"
+              echo "$url -> HTTP $status"
+              case "$status" in
+                2*|3*|4*) ;;
+                *) all_ok=0 ;;
+              esac
+            done
+            if [ "$all_ok" -eq 1 ]; then exit 0; fi
+            sleep 5
+          done
+          exit 1
