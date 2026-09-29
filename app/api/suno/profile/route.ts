@@ -20,19 +20,46 @@ function asString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value : null;
 }
 
+function mediaSource(
+  mediaUrls: Array<Record<string, unknown>>,
+  format: 'mp3' | 'm4a',
+) {
+  const match = mediaUrls.find((media) => {
+    if (typeof media.url !== 'string') return false;
+    const type = String(media.content_type ?? '').toLowerCase();
+    let pathname = '';
+    try {
+      pathname = new URL(media.url).pathname.toLowerCase();
+    } catch {}
+    return format === 'mp3'
+      ? type.includes('mp3') ||
+          type.includes('mpeg') ||
+          pathname.endsWith('.mp3')
+      : type.includes('m4a') || pathname.endsWith('.m4a');
+  });
+  return typeof match?.url === 'string' ? match.url : null;
+}
+
 function mapClip(clip: Record<string, unknown>) {
   const metadata = clip.metadata && typeof clip.metadata === 'object'
     ? clip.metadata as Record<string, unknown>
     : {};
   const id = asString(clip.id);
   if (!id) return null;
+  const mediaUrls = Array.isArray(clip.media_urls)
+    ? clip.media_urls as Array<Record<string, unknown>>
+    : [];
+  const audioUrl =
+    mediaSource(mediaUrls, 'mp3') ||
+    mediaSource(mediaUrls, 'm4a') ||
+    asString(clip.audio_url);
   return {
     id,
     title: asString(clip.title) || 'Untitled',
     creator: asString(clip.display_name) || asString(clip.handle) || 'Suno',
     handle: asString(clip.handle),
     picture: asString(clip.image_large_url) || asString(clip.image_url),
-    audioUrl: asString(clip.audio_url),
+    audioUrl,
     videoUrl: asString(clip.video_url),
     duration: typeof metadata.duration === 'number'
       ? metadata.duration
@@ -70,7 +97,7 @@ export async function POST(request: NextRequest) {
       const response = await fetch(url, {
         headers: {
           accept: 'application/json',
-          'user-agent': 'SunoDown/18 (+https://suno.aiautotool.com)',
+          'user-agent': 'SunoDown/23 (+https://picai.online)',
         },
         cache: 'no-store',
       });
@@ -126,7 +153,7 @@ export async function POST(request: NextRequest) {
       pagesScanned: Math.min(page, maxPages),
       truncated,
       syncedAt: new Date().toISOString(),
-      storage: 'browser-local',
+      storage: 'account',
     });
   } catch (cause) {
     return NextResponse.json(
