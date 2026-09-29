@@ -1,7 +1,8 @@
 import app from './index.js';
 
 const emptyMusicState = () => ({
-  version: 1,
+  version: 2,
+  libraries: [],
   library: null,
   playlists: [],
   liked: [],
@@ -16,6 +17,41 @@ const emptyMusicState = () => ({
   },
   updatedAt: Date.now(),
 });
+
+function normalizeMusicState(value) {
+  const base = emptyMusicState();
+  if (!value || typeof value !== 'object') return base;
+  const libraries = Array.isArray(value.libraries)
+    ? value.libraries
+    : value.library
+      ? [value.library]
+      : [];
+  return {
+    ...base,
+    ...value,
+    version: 2,
+    libraries,
+    library:
+      value.library ||
+      (libraries.length === 1 ? libraries[0] : libraries.length ? {
+        handle: '__all__',
+        displayName: `${libraries.length} tài khoản Suno`,
+        avatarUrl: null,
+        syncedAt: libraries
+          .map((item) => item?.syncedAt || '')
+          .sort()
+          .reverse()[0] || new Date().toISOString(),
+        songs: Array.from(
+          new Map(
+            libraries
+              .flatMap((item) => Array.isArray(item?.songs) ? item.songs : [])
+              .filter((song) => song?.id)
+              .map((song) => [song.id, song]),
+          ).values(),
+        ),
+      } : null),
+  };
+}
 
 const emptyDirectory = () => ({
   version: 2,
@@ -100,8 +136,11 @@ export class MusicUserStore {
     if (url.pathname !== '/state') return json({ error: 'Not found' }, 404);
 
     if (request.method === 'GET') {
-      const state =
-        (await this.state.storage.get('music-state')) || emptyMusicState();
+      const stored = await this.state.storage.get('music-state');
+      const state = normalizeMusicState(stored);
+      if (!stored || stored.version !== 2 || !Array.isArray(stored.libraries)) {
+        await this.state.storage.put('music-state', state);
+      }
       return json({ state });
     }
 
@@ -113,12 +152,13 @@ export class MusicUserStore {
         return json({ error: 'Invalid JSON' }, 400);
       }
 
-      const current =
-        (await this.state.storage.get('music-state')) || emptyMusicState();
+      const current = normalizeMusicState(
+        await this.state.storage.get('music-state'),
+      );
       const next = {
         ...current,
         ...(patch && typeof patch === 'object' ? patch : {}),
-        version: 1,
+        version: 2,
         updatedAt: Date.now(),
       };
 
@@ -305,89 +345,108 @@ export class PublicMusicDirectory {
 
       const publishers = { ...(current.publishers || {}) };
       const profiles = { ...(current.profiles || {}) };
-      const previousHandle =
-        typeof publishers[accountId] === 'string'
-          ? publishers[accountId]
-          : null;
+      const toHandles = (value) =>
+        Array.isArray(value)
+          ? value.filter((item) => typeof item === 'string')
+          : typeof value === 'string'
+            ? [value]
+            : [];
+      const allPublisherHandles = () =>
+        Object.values(publishers).flatMap(toHandles);
+      const previousHandles = toHandles(publishers[accountId]);
 
-      const removePublisher = (handle) => {
-        delete publishers[accountId];
+      const incomingProfiles =
+        body.action === 'remove'
+          ? []
+          : Array.isArray(body.profiles)
+            ? body.profiles
+            : body.profile
+              ? [body.profile]
+              : [];
+
+      const cleanProfiles = incomingProfiles
+        .filter((profile) => profile && typeof profile === 'object')
+        .slice(0, 50)
+        .map((profile) => {
+          const handle =
+            typeof profile.handle === 'string'
+              ? profile.handle.trim().replace(/^@/, '').slice(0, 120)
+              : '';
+          if (!handle) return null;
+
+          const songs = Array.isArray(profile.songs)
+            ? profile.songs
+                .filter((song) => song && song.isPublic !== false)
+                .slice(0, 5000)
+                .map((song) => ({
+                  id: String(song.id || '').slice(0, 120),
+                  title: String(song.title || 'Untitled').slice(0, 240),
+                  creator:
+                    typeof song.creator === 'string'
+                      ? song.creator.slice(0, 200)
+                      : null,
+                  picture:
+                    typeof song.picture === 'string'
+                      ? song.picture.slice(0, 2000)
+                      : null,
+                  duration:
+                    Number.isFinite(song.duration) ? Number(song.duration) : null,
+                  tags:
+                    typeof song.tags === 'string'
+                      ? song.tags.slice(0, 1200)
+                      : null,
+                  createdAt:
+                    typeof song.createdAt === 'string'
+                      ? song.createdAt.slice(0, 80)
+                      : null,
+                  discoveredAt:
+                    typeof song.discoveredAt === 'string'
+                      ? song.discoveredAt.slice(0, 80)
+                      : null,
+                  isPublic: true,
+                }))
+                .filter((song) => song.id)
+            : [];
+
+          return {
+            handle,
+            displayName:
+              typeof profile.displayName === 'string' && profile.displayName.trim()
+                ? profile.displayName.slice(0, 200)
+                : handle,
+            avatarUrl:
+              typeof profile.avatarUrl === 'string'
+                ? profile.avatarUrl.slice(0, 2000)
+                : null,
+            syncedAt:
+              typeof profile.syncedAt === 'string'
+                ? profile.syncedAt.slice(0, 80)
+                : new Date().toISOString(),
+            songs,
+          };
+        })
+        .filter(Boolean);
+
+      const nextHandles = cleanProfiles.map((profile) => profile.handle);
+      if (nextHandles.length) publishers[accountId] = nextHandles;
+      else delete publishers[accountId];
+
+      for (const oldHandle of previousHandles) {
         if (
-          handle &&
-          !Object.values(publishers).some((value) => value === handle)
+          !nextHandles.includes(oldHandle) &&
+          !allPublisherHandles().includes(oldHandle)
         ) {
-          delete profiles[handle];
+          delete profiles[oldHandle];
         }
-      };
+      }
 
-      if (body.action === 'remove' || !body.profile) {
-        removePublisher(previousHandle);
-      } else {
-        const profile = body.profile;
-        const handle =
-          typeof profile.handle === 'string'
-            ? profile.handle.trim().replace(/^@/, '').slice(0, 120)
-            : '';
-        if (!handle) return json({ error: 'Missing handle' }, 400);
-
-        if (previousHandle && previousHandle !== handle) {
-          removePublisher(previousHandle);
-        }
-
-        publishers[accountId] = handle;
-        const songs = Array.isArray(profile.songs)
-          ? profile.songs
-              .filter((song) => song && song.isPublic !== false)
-              .slice(0, 5000)
-              .map((song) => ({
-                id: String(song.id || '').slice(0, 120),
-                title: String(song.title || 'Untitled').slice(0, 240),
-                creator:
-                  typeof song.creator === 'string'
-                    ? song.creator.slice(0, 200)
-                    : null,
-                picture:
-                  typeof song.picture === 'string'
-                    ? song.picture.slice(0, 2000)
-                    : null,
-                duration:
-                  Number.isFinite(song.duration) ? Number(song.duration) : null,
-                tags:
-                  typeof song.tags === 'string'
-                    ? song.tags.slice(0, 1200)
-                    : null,
-                createdAt:
-                  typeof song.createdAt === 'string'
-                    ? song.createdAt.slice(0, 80)
-                    : null,
-                discoveredAt:
-                  typeof song.discoveredAt === 'string'
-                    ? song.discoveredAt.slice(0, 80)
-                    : null,
-                isPublic: true,
-              }))
-              .filter((song) => song.id)
-          : [];
-
-        profiles[handle] = {
-          handle,
-          displayName:
-            typeof profile.displayName === 'string' && profile.displayName.trim()
-              ? profile.displayName.slice(0, 200)
-              : handle,
-          avatarUrl:
-            typeof profile.avatarUrl === 'string'
-              ? profile.avatarUrl.slice(0, 2000)
-              : null,
-          syncedAt:
-            typeof profile.syncedAt === 'string'
-              ? profile.syncedAt.slice(0, 80)
-              : new Date().toISOString(),
-          songs,
-          songCount: songs.length,
-          publisherCount: Object.values(publishers).filter(
-            (value) => value === handle,
-          ).length,
+      for (const profile of cleanProfiles) {
+        profiles[profile.handle] = {
+          ...profile,
+          songCount: profile.songs.length,
+          publisherCount: Object.values(publishers)
+            .map(toHandles)
+            .filter((handles) => handles.includes(profile.handle)).length,
           updatedAt: Date.now(),
         };
       }
