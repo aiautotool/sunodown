@@ -68,6 +68,16 @@ const text = (
 const bg = (presetId:string,dim:number,overlayOpacity:number,blur=0):BackgroundConfig => ({
   mode:'preset',presetId,fit:'cover',blur,dim,overlayOpacity,loopVideo:true,
 });
+const waveLook = (
+  color:string,
+  color2:string,
+  overrides:Partial<WaveAppearance>={},
+):WaveAppearance => ({
+  ...DEFAULT_WAVE_APPEARANCE,
+  color,
+  color2,
+  ...overrides,
+});
 
 export const BUILTIN_STUDIO_PRESETS:StudioPreset[] = [
   {schemaVersion:3,id:'social-hook',name:'Viral Hook',description:'Video dọc bắt mắt ngay 3 giây đầu: chữ lớn, pulse mạnh và nhịp hình rõ cho TikTok/Reels.',category:'Social',badge:'Popular',accent:'#8b5cf6',secondary:'#ec4899',builtin:true,mastering:{profile:'tiktok-loud',spatial:{enabled:false,mode:'immersive',amount:65}},export:{aspect:'9:16',quality:'high',durationMode:'full'},config:{template:'glass-card',wave:'pulse',motion:'high',aspect:'9:16',lyrics:'focus',effects:['sparkles','vignette'],layout:layout(83,61,18,26,118,125,116),textStyles:text('Impact, sans-serif','system-ui, sans-serif'),subtitleStyle:{font:'rounded',color:'#ffffff',activeColor:'#c4b5fd'},background:bg('neon-blur',12,18)}},
@@ -95,6 +105,12 @@ export const BUILTIN_STUDIO_PRESETS:StudioPreset[] = [
 
   {schemaVersion:3,id:'podcast-wave',name:'Podcast Clean',description:'Bố cục sạch cho spoken-word, podcast và audio snippets; waveform dễ đọc, ít nhiễu.',category:'Social',badge:'Voice',accent:'#10b981',secondary:'#94a3b8',builtin:true,mastering:{profile:'clean',spatial:{enabled:false,mode:'immersive',amount:65}},export:{aspect:'1:1',quality:'balanced',durationMode:'full'},config:{template:'glass-card',wave:'center-line',motion:'low',aspect:'1:1',lyrics:'scroll',effects:['vignette'],layout:layout(80,67,18,27,106,92,100),textStyles:text('system-ui, sans-serif','system-ui, sans-serif','#f8fafc','#cbd5e1'),subtitleStyle:{font:'system',color:'#ffffff',activeColor:'#34d399'},background:bg('dark-film',24,4)}},
   {schemaVersion:3,id:'retro-vinyl',name:'Warm Retro Vinyl',description:'Vinyl retro với film grain và tông ấm dành cho soul, jazz, oldies và acoustic cổ điển.',category:'Album',badge:'Retro',accent:'#fbbf24',secondary:'#a16207',builtin:true,mastering:{profile:'clean',spatial:{enabled:false,mode:'immersive',amount:65}},export:{aspect:'1:1',quality:'balanced',durationMode:'full'},config:{template:'vinyl',wave:'orbit-dots',motion:'medium',aspect:'1:1',lyrics:'off',effects:['film','dust','vignette'],layout:layout(73,82,15,23,116,90,102),textStyles:text('Georgia, serif',"'Courier New', monospace",'#fef3c7','#fde68a'),subtitleStyle:{font:'serif',color:'#fff7ed',activeColor:'#fbbf24'},background:bg('bokeh-night',30,8)}},
+
+  // V23 Signature Wave collection — inspired by premium music-cover visualizers.
+  {schemaVersion:3,id:'signature-mirror-glow',name:'Mirror Glow',description:'Ballad/romantic dọc với waveform phản chiếu phát sáng, hạt sáng mềm và title script lớn như một music cover cao cấp.',category:'Visualizer',badge:'Signature · Ballad',accent:'#f24fda',secondary:'#6cbcff',builtin:true,mastering:{profile:'clean',spatial:{enabled:false,mode:'immersive',amount:65}},export:{aspect:'9:16',quality:'high',durationMode:'full'},config:{template:'cover-motion',wave:'mirror-glow',waveAppearance:waveLook('#ff4fd8','#62b7ff',{glow:96,opacity:98,density:78,smoothing:88,height:108,thickness:62,attack:38,release:22,colorMode:'gradient'}),motion:'low',aspect:'9:16',lyrics:'off',effects:['sparkles','bokeh','vignette'],layout:{wave:{x:50,y:70,scale:122},subtitle:{x:50,y:78,scale:92},title:{x:50,y:35,scale:154},creator:{x:50,y:46,scale:90}},textStyles:text('"Pinyon Script", cursive','system-ui, sans-serif','#ffd8f4','#e9d5ff',{kind:'neon-pulse',floatPx:3,tiltDeg:.4,duration:5.8,glow:.54}),subtitleStyle:{font:'serif',color:'#ffffff',activeColor:'#f0abfc'},background:{mode:'suno',fit:'cover',blur:0,dim:24,overlayOpacity:16,loopVideo:true}}},
+  {schemaVersion:3,id:'signature-rounded-spectrum',name:'Rounded Spectrum',description:'EDM/pop dọc với các cột spectrum bo tròn cyan-magenta, reflection và glow kiểu cyberpunk.',category:'Visualizer',badge:'Signature · EDM',accent:'#45d8ff',secondary:'#ff4fd8',builtin:true,mastering:{profile:'punchy',spatial:{enabled:false,mode:'immersive',amount:65}},export:{aspect:'9:16',quality:'high',durationMode:'full'},config:{template:'glass-card',wave:'rounded-spectrum',waveAppearance:waveLook('#49cfff','#ff4fd8',{glow:92,opacity:100,density:64,smoothing:74,height:118,thickness:76,attack:78,release:32,colorMode:'audio-reactive'}),motion:'high',aspect:'9:16',lyrics:'off',effects:['sparkles','lightleak','vignette'],layout:{wave:{x:50,y:73,scale:118},subtitle:{x:50,y:83,scale:90},title:{x:50,y:37,scale:142},creator:{x:50,y:47,scale:88}},textStyles:text('Impact, "Arial Black", sans-serif','system-ui, sans-serif','#ffffff','#a5f3fc',{kind:'neon-pulse',floatPx:0,tiltDeg:-1.2,duration:2.8,glow:.8}),subtitleStyle:{font:'impact',color:'#ffffff',activeColor:'#f472d0'},background:{mode:'suno',fit:'cover',blur:1,dim:22,overlayOpacity:18,loopVideo:true}}},
+  {schemaVersion:3,id:'signature-circular-pulse',name:'Circular Pulse',description:'Cinematic/travel với vòng phổ 360°, spike sáng theo beat, dotted ring và ánh vàng điện ảnh quanh chủ thể.',category:'Cinematic',badge:'Signature · Cinema',accent:'#ffd98a',secondary:'#ff9d55',builtin:true,mastering:{profile:'clean',spatial:{enabled:false,mode:'immersive',amount:65}},export:{aspect:'9:16',quality:'high',durationMode:'full'},config:{template:'spotlight',wave:'circular-pulse',waveAppearance:waveLook('#fff2c7','#ff9f55',{glow:82,opacity:100,density:82,smoothing:68,height:125,thickness:58,attack:72,release:28,colorMode:'dynamic'}),motion:'medium',aspect:'9:16',lyrics:'off',effects:['dust','lightleak','vignette'],layout:{wave:{x:50,y:67,scale:128},subtitle:{x:50,y:84,scale:88},title:{x:50,y:23,scale:138},creator:{x:50,y:34,scale:88}},textStyles:text('Georgia, serif','system-ui, sans-serif','#fff7e6','#fde7bd',{kind:'gold-floating',floatPx:4,tiltDeg:.35,duration:7.2,glow:.45}),subtitleStyle:{font:'serif',color:'#fffaf0',activeColor:'#fbbf24'},background:{mode:'suno',fit:'cover',blur:0,dim:18,overlayOpacity:10,loopVideo:true}}},
+  {schemaVersion:3,id:'signature-ribbon-wave',name:'Ribbon Wave',description:'Acoustic/lofi/dream pop với ba dải lụa ánh sáng chuyển động mềm, glow tím-hồng-xanh và hạt sáng bay.',category:'Visualizer',badge:'Signature · Dream',accent:'#a985ff',secondary:'#ff75d8',builtin:true,mastering:{profile:'clean',spatial:{enabled:false,mode:'immersive',amount:65}},export:{aspect:'9:16',quality:'high',durationMode:'full'},config:{template:'cover-motion',wave:'ribbon-wave',waveAppearance:waveLook('#b586ff','#5fc4ff',{glow:100,opacity:96,density:84,smoothing:92,height:132,thickness:84,attack:34,release:18,colorMode:'gradient'}),motion:'low',aspect:'9:16',lyrics:'off',effects:['sparkles','stars','vignette'],layout:{wave:{x:50,y:72,scale:130},subtitle:{x:50,y:84,scale:90},title:{x:50,y:37,scale:150},creator:{x:50,y:48,scale:88}},textStyles:text('"Great Vibes", cursive','system-ui, sans-serif','#e7f5ff','#f0d5ff',{kind:'midnight-drift',floatPx:5,tiltDeg:.4,duration:7.8,glow:.64}),subtitleStyle:{font:'rounded',color:'#ffffff',activeColor:'#c4b5fd'},background:{mode:'suno',fit:'cover',blur:0,dim:24,overlayOpacity:14,loopVideo:true}}},
 ];
 
 const COOLTEXT_TITLE_FONTS: Record<string, string> = {
@@ -117,6 +133,10 @@ const COOLTEXT_TITLE_FONTS: Record<string, string> = {
   'vintage-love-letter': "'Dancing Script', cursive",
   'midnight-blue-glow': "'Tangerine', Georgia, serif",
   'retro-vinyl': "'Special Elite', Georgia, serif",
+  'signature-mirror-glow': "'Dancing Script', cursive",
+  'signature-rounded-spectrum': "'Bebas Neue', Impact, sans-serif",
+  'signature-circular-pulse': "'Tangerine', Georgia, serif",
+  'signature-ribbon-wave': "'Dancing Script', cursive",
 };
 
 for (const preset of BUILTIN_STUDIO_PRESETS) {
