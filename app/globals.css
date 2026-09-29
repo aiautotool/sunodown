@@ -5281,3 +5281,39 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
   .sd-wave-preview>i,
   .sd-wave-color-mode button i{animation:none!important}
 }
+
+
+/* V23 Groq word-synced music lyrics */
+.sd-premium-now-playing .karaoke-word,
+.sd-track-lyrics-live .karaoke-word{
+  display:inline;
+  color:rgba(214,220,231,.34);
+  transition:color .12s ease,text-shadow .12s ease,opacity .12s ease;
+}
+.sd-premium-now-playing button.active .karaoke-word,
+.sd-track-lyrics-live button.active .karaoke-word{
+  color:rgba(224,228,236,.34);
+}
+.sd-premium-now-playing .karaoke-word.past-word,
+.sd-track-lyrics-live .karaoke-word.past-word{
+  color:rgba(232,235,243,.72);
+}
+.sd-premium-now-playing .karaoke-word.active-word,
+.sd-track-lyrics-live .karaoke-word.active-word{
+  color:#fff;
+  text-shadow:
+    0 0 10px rgba(255,255,255,.24),
+    0 0 22px rgba(174,148,255,.52);
+}
+.sd-premium-now-playing button.past .karaoke-word{
+  color:rgba(206,214,227,.18);
+}
+.sd-track-lyrics-live button.past .karaoke-word{
+  color:rgba(170,180,194,.22);
+}
+@media(prefers-reduced-motion:reduce){
+  .sd-premium-now-playing .karaoke-word,
+  .sd-track-lyrics-live .karaoke-word{
+    transition:none;
+  }
+}
