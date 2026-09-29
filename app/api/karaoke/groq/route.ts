@@ -79,7 +79,7 @@ async function getEnv(): Promise<GroqEnv> {
   }
 }
 
-async function getGroqApiKey(request: NextRequest) {
+async function getGroqApiKey() {
   const bridged =
     typeof (globalThis as typeof globalThis & {
       __SUNODOWN_GROQ_API_KEY?: unknown;
@@ -90,13 +90,14 @@ async function getGroqApiKey(request: NextRequest) {
           }).__SUNODOWN_GROQ_API_KEY,
         ).trim()
       : '';
-  if (bridged) return bridged;
-
-  const internal = request.headers.get('x-sunodown-groq-key')?.trim();
-  if (internal) return internal;
+  if (bridged) return { key: bridged, source: 'worker-isolate' as const };
 
   const env = await getEnv();
-  return env.GROQ_API_KEY?.trim() || '';
+  const key = env.GROQ_API_KEY?.trim() || '';
+  return {
+    key,
+    source: key ? ('cloudflare-env' as const) : ('none' as const),
+  };
 }
 
 function normalizeWord(value: GroqWord): RoughWord | null {
@@ -155,10 +156,11 @@ function extractWords(result: GroqVerboseResponse): RoughWord[] {
   return (result.segments || []).flatMap(distributeSegmentWords);
 }
 
-export async function GET(request: NextRequest) {
-  const apiKey = await getGroqApiKey(request);
+export async function GET() {
+  const credentials = await getGroqApiKey();
   return NextResponse.json({
-    available: Boolean(apiKey),
+    available: Boolean(credentials.key),
+    source: credentials.source,
     engine: 'groq-whisper-large-v3-turbo',
     wordTimestamps: true,
     maxMobileUploadBytes: 24 * 1024 * 1024,
@@ -248,26 +250,30 @@ function wordsToLines(words: RoughWord[], duration: number): KaraokeLine[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const apiKey = await getGroqApiKey(request);
+    const credentials = await getGroqApiKey();
+    const apiKey = credentials.key;
     if (!apiKey) {
       return NextResponse.json(
         {
           error: 'Groq subtitle chưa được cấu hình trên server.',
           code: 'GROQ_NOT_CONFIGURED',
           diagnostics: {
-            bridged: Boolean(
-              (globalThis as typeof globalThis & {
-                __SUNODOWN_GROQ_API_KEY?: unknown;
-              }).__SUNODOWN_GROQ_API_KEY,
-            ),
-            header: Boolean(request.headers.get('x-sunodown-groq-key')),
+            source: credentials.source,
           },
         },
         { status: 503 },
       );
     }
 
-    const incoming = await request.formData();
+    let incoming: FormData;
+    try {
+      incoming = await request.formData();
+    } catch {
+      return NextResponse.json(
+        { error: 'Multipart form-data không hợp lệ.', code: 'INVALID_MULTIPART' },
+        { status: 400 },
+      );
+    }
     const audio = incoming.get('audio');
     const lyricsValue = incoming.get('lyrics');
     const languageValue = incoming.get('language');
