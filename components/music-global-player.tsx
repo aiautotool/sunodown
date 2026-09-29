@@ -26,6 +26,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from 'react';
 
@@ -409,7 +410,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
             max={maxDuration}
             step=".1"
             value={Math.min(time, maxDuration)}
-            style={{ '--sd-player-progress': `${progress}%` } as React.CSSProperties}
+            style={{ '--sd-player-progress': `${progress}%` } as CSSProperties}
             onChange={(event) => seek(Number(event.target.value))}
           />
 
@@ -570,7 +571,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                   max={maxDuration}
                   step=".1"
                   value={Math.min(time, maxDuration)}
-                  style={{ '--sd-player-progress': `${progress}%` } as React.CSSProperties}
+                  style={{ '--sd-player-progress': `${progress}%` } as CSSProperties}
                   onChange={(event) => seek(Number(event.target.value))}
                 />
                 <div>
