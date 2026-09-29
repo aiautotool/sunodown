@@ -1,10 +1,13 @@
 import type { Metadata } from 'next';
 import { PublicMusicHome } from '@/components/public-music-home';
 import { MobileAppNav } from '@/components/mobile-app-nav';
+import { getPublicMusicDirectory } from '@/app/lib/music-directory';
 
-const title = 'SunoDown Music - Nghe nhạc Suno theo @username';
+export const dynamic = 'force-dynamic';
+
+const title = 'SunoDown Music - Nghe nhạc Suno từ creator thật';
 const description =
-  'Mở kho nhạc public của creator Suno theo @username, nghe từng bài với URL riêng, lyrics, cover và trang tối ưu SEO trên SunoDown Music.';
+  'Khám phá creator và bài hát Suno public đang được publish trên SunoDown Music. Mỗi creator có trang @username và mỗi bài hát có URL riêng để nghe, chia sẻ và tìm kiếm.';
 
 export const metadata: Metadata = {
   title,
@@ -12,14 +15,14 @@ export const metadata: Metadata = {
   keywords: [
     'SunoDown Music',
     'nghe nhạc Suno',
-    'Suno username',
-    'Suno creator music',
+    'Suno creator',
     'Suno music player',
     'Suno songs',
     'Suno lyrics',
     'nhạc AI',
     'AI music',
     'music player online',
+    'Suno community',
   ],
   alternates: { canonical: '/music' },
   openGraph: {
@@ -39,13 +42,26 @@ export const metadata: Metadata = {
   },
 };
 
-export default function MusicPage() {
+export default async function MusicPage() {
+  const directory = await getPublicMusicDirectory();
+
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     name: 'SunoDown Music',
     url: 'https://picai.online/music',
     description,
+    numberOfItems: directory.songCount,
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: directory.latestSongs.length,
+      itemListElement: directory.latestSongs.slice(0, 50).map((song, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        url: `https://picai.online/music/@${song.handle}/${song.id}`,
+        name: song.title,
+      })),
+    },
     isPartOf: {
       '@type': 'WebSite',
       name: 'SunoDown',
@@ -61,7 +77,7 @@ export default function MusicPage() {
           __html: JSON.stringify(structuredData).replace(/</g, '\\u003c'),
         }}
       />
-      <PublicMusicHome />
+      <PublicMusicHome directory={directory} />
       <MobileAppNav />
     </main>
   );
