@@ -22,7 +22,12 @@ import {
 import { usePathname } from 'next/navigation';
 import {
   buildEstimatedKaraokeTimeline,
+  type KaraokeLine,
 } from '@/app/lib/karaoke';
+import {
+  timelineFromSuno,
+  type SunoAlignedResponse,
+} from '@/components/v8/suno-aligned';
 import {
   createContext,
   useCallback,
@@ -45,6 +50,7 @@ export type GlobalMusicSong = {
   duration?: number | null;
   tags?: string | null;
   lyrics?: string | null;
+  karaokeTimeline?: KaraokeLine[] | null;
 };
 
 type RepeatMode = 'off' | 'all' | 'one';
@@ -933,17 +939,58 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
     metadataFetchedRef.current.add(current.id);
     const controller = new AbortController();
 
-    void fetch(`/api/music/song?id=${encodeURIComponent(current.id)}`, {
-      signal: controller.signal,
-      cache: 'force-cache',
-    })
-      .then((response) => {
-        if (!response.ok) return null;
-        return response.json() as Promise<{ song?: GlobalMusicSong }>;
-      })
-      .then((payload) => {
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/music/song?id=${encodeURIComponent(current.id)}`,
+          {
+            signal: controller.signal,
+            cache: 'force-cache',
+          },
+        );
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as {
+          song?: GlobalMusicSong;
+        };
         const enriched = payload?.song;
         if (!enriched) return;
+
+        let syncedTimeline: KaraokeLine[] | null = null;
+        try {
+          const subtitleResponse = await fetch(
+            `/api/suno/aligned-lyrics?songId=${encodeURIComponent(current.id)}`,
+            {
+              signal: controller.signal,
+              cache: 'no-store',
+            },
+          );
+          if (subtitleResponse.ok) {
+            const subtitlePayload =
+              (await subtitleResponse.json()) as SunoAlignedResponse & {
+                available?: boolean;
+              };
+            if (subtitlePayload.available !== false) {
+              const aligned = timelineFromSuno(
+                enriched.lyrics || current.lyrics || '',
+                subtitlePayload,
+              );
+              if (aligned.length) {
+                syncedTimeline = aligned.map((line) => ({
+                  text: line.text,
+                  start: line.start,
+                  end: line.end,
+                  words: (line.words || []).map((word) => ({
+                    text: word.word,
+                    start: word.start,
+                    end: word.end,
+                  })),
+                }));
+              }
+            }
+          }
+        } catch {}
+
         setQueue((items) =>
           items.map((item) =>
             item.id === current.id
@@ -952,12 +999,16 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                   ...enriched,
                   id: item.id,
                   title: enriched.title || item.title,
+                  karaokeTimeline:
+                    syncedTimeline?.length
+                      ? syncedTimeline
+                      : item.karaokeTimeline || null,
                 }
               : item,
           ),
         );
-      })
-      .catch(() => {});
+      } catch {}
+    })();
 
     return () => controller.abort();
   }, [current?.id]);
@@ -1065,18 +1116,20 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const progress = Math.max(0, Math.min(100, (time / maxDuration) * 100));
   const karaokeTimeline = useMemo(
     () =>
-      current?.lyrics
-        ? buildEstimatedKaraokeTimeline(current.lyrics, maxDuration)
-        : [],
-    [current?.lyrics, maxDuration],
+      current?.karaokeTimeline?.length
+        ? current.karaokeTimeline
+        : current?.lyrics
+          ? buildEstimatedKaraokeTimeline(current.lyrics, maxDuration)
+          : [],
+    [current?.karaokeTimeline, current?.lyrics, maxDuration],
   );
   const activeLyricIndex = useMemo(() => {
-    let active = -1;
     for (let index = 0; index < karaokeTimeline.length; index += 1) {
-      if (time >= karaokeTimeline[index].start) active = index;
-      else break;
+      const line = karaokeTimeline[index];
+      if (time >= line.start && time <= line.end + 0.35) return index;
+      if (line.start > time) break;
     }
-    return active;
+    return -1;
   }, [karaokeTimeline, time]);
 
   const nowPlayingMorphProgress = nowPlayingOpen
@@ -1398,7 +1451,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                         className={
                           index === activeLyricIndex
                             ? 'active'
-                            : index < activeLyricIndex
+                            : time > line.end
                               ? 'past'
                               : ''
                         }
