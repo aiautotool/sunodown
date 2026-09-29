@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { MobileAppNav } from '@/components/mobile-app-nav';
 
 type LibrarySong = {
   id: string;
@@ -1629,6 +1630,7 @@ export function MusicHub() {
           </div>
         </div>
       )}
+      <MobileAppNav />
     </div>
   );
 }
