@@ -999,7 +999,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
             </div>
             <button
               className={soundPreset !== 'original' ? 'active' : ''}
-              onClick={() => setSoundOpen(true)}
+              onClick={() => { setQueueOpen(false); setSoundOpen(true); }}
               aria-label="Chỉnh âm thanh"
               title="Sound"
             >
@@ -1197,7 +1197,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                 </div>
                 <button
                   className={`now-sound-button ${soundPreset !== 'original' ? 'active' : ''}`}
-                  onClick={() => setSoundOpen(true)}
+                  onClick={() => { setQueueOpen(false); setSoundOpen(true); }}
                 >
                   <Headphones />
                   {SOUND_PRESETS.find((item) => item.id === soundPreset)?.label ||
@@ -1314,8 +1314,8 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                 <div className="sd-music-headphone-note">
                   <Headphones />
                   <span>
-                    Spatial sẽ rõ nhất khi dùng tai nghe. Bass trung tâm được giữ
-                    tự nhiên, phần stereo phía trên được mở rộng.
+                    Spatial sẽ rõ nhất khi dùng tai nghe. Stereo được mở rộng
+                    bằng cross-channel delay rất nhẹ để vẫn giữ cảm giác tự nhiên.
                   </span>
                 </div>
               )}
