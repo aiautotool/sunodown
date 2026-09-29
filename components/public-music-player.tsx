@@ -100,7 +100,7 @@ export function PublicMusicPlayer({
   };
 
   const share = async () => {
-    const url = `${window.location.origin}/music/${id}`;
+    const url = window.location.href.split('#')[0];
     try {
       if (navigator.share) {
         await navigator.share({ title, text: `${title} · ${creator}`, url });
