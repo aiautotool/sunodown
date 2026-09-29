@@ -814,7 +814,7 @@ export default function CreatorStudio({
   const [initProgress, setInitProgress] = useState(0);
   const [initTitle, setInitTitle] = useState('Đang khởi tạo bài hát');
   const [initDetail, setInitDetail] = useState('Chuẩn bị dữ liệu mới…');
-  const [wave, setWave] = useState<WaveStyle>('bars'),
+  const [wave, setWave] = useState<WaveStyle>('mirror-glow'),
     [waveAppearance, setWaveAppearance] = useState<WaveAppearance>({...DEFAULT_WAVE_APPEARANCE}),
     [template, setTemplate] = useState<VisualTemplate>('cover-motion'),
     [aspect, setAspect] = useState<VideoAspect>('9:16'),
