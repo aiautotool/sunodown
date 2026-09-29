@@ -28,6 +28,10 @@ const SCENE_LABEL: Record<string, string> = {
 
 const WAVE_LABEL: Record<string, string> = {
   off: 'No wave',
+  'mirror-glow': 'Mirror Glow',
+  'rounded-spectrum': 'Rounded Spectrum',
+  'circular-pulse': 'Circular Pulse',
+  'ribbon-wave': 'Ribbon Wave',
   bars: 'Bars',
   pulse: 'Pulse',
   line: 'Line',
