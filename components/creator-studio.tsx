@@ -222,32 +222,113 @@ const safeName = (value: string) =>
   (value || 'suno').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120);
 
 const QUICK_PRESET_LIMIT = 3;
+const QUICK_PRESET_RANDOM_POOL = 10;
+
+function shufflePresets<T>(items: T[]) {
+  const copy = [...items];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const pick = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[pick]] = [copy[pick], copy[index]];
+  }
+  return copy;
+}
+
 function recommendQuickPresets(song: Song) {
-  const haystack = `${song.style || ''} ${song.tags || ''} ${song.lyrics || ''}`.toLowerCase();
+  const haystack =
+    `${song.style || ''} ${song.tags || ''} ${song.lyrics || ''}`.toLowerCase();
+
   const score = (preset: StudioPreset) => {
     let value = preset.config.aspect === '9:16' ? 2 : 0;
     if (song.lyrics && preset.config.lyrics !== 'off') value += 3;
+
     if (/ballad|sad|emotional|piano|acoustic|love|romantic/.test(haystack)) {
-      if (['sad-lyrics','romantic-letter','acoustic-room','story-confession'].includes(preset.id)) value += 7;
+      if (
+        [
+          'sad-lyrics',
+          'romantic-letter',
+          'acoustic-room',
+          'story-confession',
+          'golden-floating-title',
+          'silver-moon-script',
+          'vintage-love-letter',
+          'midnight-blue-glow',
+        ].includes(preset.id)
+      ) value += 7;
     }
+
     if (/edm|electronic|dance|house|synth|techno|festival/.test(haystack)) {
-      if (['neon-pulse','festival-energy','reels-velocity'].includes(preset.id)) value += 8;
+      if (
+        [
+          'neon-pulse',
+          'festival-energy',
+          'reels-velocity',
+          'neon-heartbeat-title',
+        ].includes(preset.id)
+      ) value += 8;
     }
+
     if (/rap|hip hop|trap|fast|energetic|pop/.test(haystack)) {
-      if (['social-hook','reels-velocity','neon-pulse'].includes(preset.id)) value += 5;
+      if (
+        ['social-hook', 'reels-velocity', 'neon-pulse', 'neon-heartbeat-title']
+          .includes(preset.id)
+      ) value += 5;
     }
-    if (/chill|lofi|lo-fi|jazz|soul|retro/.test(haystack)) {
-      if (['minimal-clean','midnight-drive','retro-vinyl'].includes(preset.id)) value += 6;
+
+    if (/chill|lofi|lo-fi|jazz|soul|retro|night|dream/.test(haystack)) {
+      if (
+        [
+          'minimal-clean',
+          'midnight-drive',
+          'retro-vinyl',
+          'silver-moon-script',
+          'midnight-blue-glow',
+        ].includes(preset.id)
+      ) value += 6;
     }
+
     if (/podcast|spoken|speech|story/.test(haystack)) {
-      if (['podcast-wave','story-confession'].includes(preset.id)) value += 8;
+      if (['podcast-wave', 'story-confession'].includes(preset.id)) value += 8;
     }
+
     if (preset.id === 'social-hook') value += 1;
     return value;
   };
-  return [...BUILTIN_STUDIO_PRESETS]
-    .sort((a,b) => score(b) - score(a))
-    .slice(0, QUICK_PRESET_LIMIT);
+
+  const ranked = [...BUILTIN_STUDIO_PRESETS]
+    .map((preset) => ({ preset, score: score(preset) }))
+    .sort((a, b) => b.score - a.score);
+
+  if (!ranked.length) return [];
+
+  // Keep one trustworthy recommendation, then rotate the remaining cards
+  // from a high-scoring pool so Quick Create does not look hard-coded.
+  const recommended = ranked[0].preset;
+  const pool = ranked
+    .slice(1, 1 + QUICK_PRESET_RANDOM_POOL)
+    .map((entry) => entry.preset);
+
+  const result: StudioPreset[] = [recommended];
+  const shuffled = shufflePresets(pool);
+
+  // Prefer visual variety: avoid immediately repeating the same template/category.
+  for (const preset of shuffled) {
+    if (result.length >= QUICK_PRESET_LIMIT) break;
+    const templateAlreadyUsed = result.some(
+      (item) => item.config.template === preset.config.template,
+    );
+    const categoryAlreadyUsed = result.some(
+      (item) => item.category === preset.category,
+    );
+    if (!templateAlreadyUsed || !categoryAlreadyUsed) result.push(preset);
+  }
+
+  // If diversity filtering left fewer than three, fill from the same ranked pool.
+  for (const preset of shuffled) {
+    if (result.length >= QUICK_PRESET_LIMIT) break;
+    if (!result.some((item) => item.id === preset.id)) result.push(preset);
+  }
+
+  return result.slice(0, QUICK_PRESET_LIMIT);
 }
 
 const makeEffectConfig = (effects: VideoEffect[]): EffectConfig => ({
