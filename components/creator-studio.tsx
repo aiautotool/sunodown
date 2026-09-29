@@ -7,6 +7,8 @@ import {
   Bell,
   BookOpen,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Download,
   FileText,
   Folder,
@@ -681,6 +683,7 @@ export default function CreatorStudio({
   const [view, setView] = useState<AppView>(initialView);
   const [autoPreview, setAutoPreview] = useState(true);
   const [navigationOpen, setNavigationOpen] = useState(false);
+  const [homeSideCollapsed, setHomeSideCollapsed] = useState(false);
   const [signedInUser, setSignedInUser] = useState<SignedInUser | null>(null);
   const [quickMode, setQuickMode] = useState(true);
   const [projects, setProjects] = useState<SavedProjectListItem[]>(readSavedProjectList);
@@ -871,6 +874,13 @@ export default function CreatorStudio({
     console.info('[SUBTITLE DEBUG]', message, data || '');
     setSubtitleDebugLogs((logs) => [...logs.slice(-199), entry]);
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setHomeSideCollapsed(
+      localStorage.getItem('sunodown-v23-home-side-collapsed') === '1',
+    );
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -2529,6 +2539,20 @@ export default function CreatorStudio({
     window.dispatchEvent(new CustomEvent('sunodown-v10-library-change'));
   };
 
+  const analyzeHomeSource = () => {
+    void resolve();
+  };
+  const toggleHomeSide = () => {
+    setHomeSideCollapsed((collapsed) => {
+      const next = !collapsed;
+      localStorage.setItem(
+        'sunodown-v23-home-side-collapsed',
+        next ? '1' : '0',
+      );
+      return next;
+    });
+  };
+
   const navigationItems = [
     [Plus, 'Create', '/create', 'create'],
     [Music2, 'Music', '/music', 'music'],
@@ -2912,7 +2936,7 @@ export default function CreatorStudio({
           </div>
         </main>
       ) : !song ? (
-        <main className="sd-empty sd-home-v23">
+        <main className={`sd-empty sd-home-v23 ${homeSideCollapsed ? 'sd-home-side-collapsed' : ''}`}>
           <div className="sd-home-ambient" aria-hidden="true">
             <i className="orb-a" />
             <i className="orb-b" />
@@ -2920,7 +2944,17 @@ export default function CreatorStudio({
           </div>
 
           <aside className="sd-home-side" aria-label="Điều hướng nhanh">
-            <button className="primary" onClick={() => setView('create')}><Plus /><span>Tạo mới</span><i>›</i></button>
+            <button
+              type="button"
+              className="sd-home-side-collapse"
+              onClick={toggleHomeSide}
+              aria-label={homeSideCollapsed ? 'Mở rộng menu trái' : 'Thu gọn menu trái'}
+              title={homeSideCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
+            >
+              {homeSideCollapsed ? <ChevronRight /> : <ChevronLeft />}
+              <span>{homeSideCollapsed ? 'Mở menu' : 'Thu gọn'}</span>
+            </button>
+            <button className="primary" disabled={busy} onClick={analyzeHomeSource}><Plus /><span>{busy ? 'Đang phân tích…' : 'Tạo mới'}</span><i>›</i></button>
             <button onClick={() => setView('create')}><Link2 /><span>Từ link Suno</span></button>
             <label className="sd-home-side-upload">
               <Upload /><span>Tải audio lên</span>
@@ -2981,7 +3015,7 @@ export default function CreatorStudio({
                     />
                     <button type="button" onClick={paste}>Dán</button>
                   </div>
-                  <button className="sd-home-analyze" disabled={busy} onClick={() => resolve()}>
+                  <button className="sd-home-analyze" disabled={busy} onClick={analyzeHomeSource}>
                     <Sparkles />
                     <span>{busy ? 'Đang phân tích…' : 'Phân tích'}</span>
                     <i>›</i>
