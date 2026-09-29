@@ -8,6 +8,7 @@ import {
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 
 export const runtime = 'edge';
+// GROQ_API_KEY is provisioned at deploy time as a Cloudflare Worker secret.
 
 type GroqEnv = {
   GROQ_API_KEY?: string;
