@@ -19,13 +19,41 @@ type MusicUserState = {
   updatedAt: number;
 };
 
-type MusicUsersBinding = {
+type DurableBinding = {
   idFromName(name: string): unknown;
   get(id: unknown): { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> };
 };
 
 function binding() {
-  return (env as unknown as { MUSIC_USERS?: MusicUsersBinding }).MUSIC_USERS;
+  return (env as unknown as { MUSIC_USERS?: DurableBinding }).MUSIC_USERS;
+}
+
+function directoryBinding() {
+  return (env as unknown as { MUSIC_DIRECTORY?: DurableBinding }).MUSIC_DIRECTORY;
+}
+
+async function publishLibraryToDirectory(
+  accountId: string,
+  library: unknown | null,
+) {
+  const namespace = directoryBinding();
+  if (!namespace) return false;
+
+  try {
+    const stub = namespace.get(namespace.idFromName('global'));
+    const response = await stub.fetch('https://music.internal/directory', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(
+        library
+          ? { accountId, profile: library }
+          : { accountId, action: 'remove' },
+      ),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 async function userStub(request: NextRequest) {
@@ -199,6 +227,11 @@ export async function GET(request: NextRequest) {
 
   const response = await stub.fetch('https://music.internal/state');
   const payload = await response.json() as { state?: MusicUserState };
+
+  if (payload.state?.library) {
+    void publishLibraryToDirectory(user.sub, payload.state.library);
+  }
+
   return NextResponse.json(
     { user, state: payload.state },
     { headers: { 'cache-control': 'no-store' } },
@@ -233,8 +266,16 @@ export async function PATCH(request: NextRequest) {
   });
   const payload = await response.json() as { state?: MusicUserState };
 
+  let published: boolean | undefined;
+  if ('library' in patch) {
+    published = await publishLibraryToDirectory(
+      user.sub,
+      patch.library ?? null,
+    );
+  }
+
   return NextResponse.json(
-    { user, state: payload.state },
+    { user, state: payload.state, published },
     { headers: { 'cache-control': 'no-store' } },
   );
 }
