@@ -50,8 +50,22 @@ export type OverlayLayout = {
   title: { x: number; y: number; scale: number };
   creator: { x: number; y: number; scale: number };
 };
+export type TitleVisualEffect = {
+  kind?: 'none' | 'gold-floating';
+  floatPx?: number;
+  tiltDeg?: number;
+  duration?: number;
+  glow?: number;
+};
 export type OverlayTextStyles = {
-  title: { font: string; color: string; text?: string; bold?: boolean; italic?: boolean };
+  title: {
+    font: string;
+    color: string;
+    text?: string;
+    bold?: boolean;
+    italic?: boolean;
+    effect?: TitleVisualEffect;
+  };
   creator: { font: string; color: string; text?: string; bold?: boolean; italic?: boolean };
 };
 export type PreviewAudioAnalysis = {
@@ -292,6 +306,7 @@ function drawMeta(
   h = w,
   layout?: OverlayLayout,
   textStyles?: OverlayTextStyles,
+  time = 0,
 ) {
   if (song.title === '__HIDE_META__') return;
   ctx.save();
@@ -314,13 +329,44 @@ function drawMeta(
     lh = fs * 1.22,
     x = (w * titlePos.x) / 100,
     titleY = (h * titlePos.y) / 100,
-    titleScale = titlePos.scale / 100;
+    titleScale = titlePos.scale / 100,
+    titleEffect = textStyles?.title.effect,
+    isGoldenFloat = titleEffect?.kind === 'gold-floating',
+    floatDuration = Math.max(2.8, titleEffect?.duration || 6.2),
+    phase = (time / floatDuration) * Math.PI * 2,
+    floatY = isGoldenFloat
+      ? Math.sin(phase) * Math.max(2, titleEffect?.floatPx || h * 0.0045)
+      : 0,
+    floatX = isGoldenFloat ? Math.cos(phase * 0.72) * w * 0.0025 : 0,
+    tilt = isGoldenFloat
+      ? Math.sin(phase * 0.92) * ((titleEffect?.tiltDeg || 1.35) * Math.PI / 180)
+      : 0,
+    glowPulse = isGoldenFloat
+      ? 0.72 + (Math.sin(phase * 0.78 + 0.8) + 1) * 0.14
+      : 1;
+
   ctx.save();
-  ctx.translate(x, titleY);
+  ctx.translate(x + floatX, titleY + floatY);
+  ctx.rotate(tilt);
   ctx.scale(titleScale, titleScale);
+
+  if (isGoldenFloat) {
+    const gold = ctx.createLinearGradient(0, -fs * 0.9, 0, fs * 1.8);
+    gold.addColorStop(0, '#fff8d8');
+    gold.addColorStop(0.28, '#f8dfa1');
+    gold.addColorStop(0.56, '#d6a44d');
+    gold.addColorStop(0.78, '#ffe9ad');
+    gold.addColorStop(1, '#b87926');
+    ctx.fillStyle = gold;
+    ctx.strokeStyle = 'rgba(255,240,195,.48)';
+    ctx.lineWidth = Math.max(1.2, art.stroke * 1.25);
+    ctx.shadowColor = `rgba(244,188,84,${Math.min(.72, (titleEffect?.glow || 0.48) * glowPulse)})`;
+    ctx.shadowBlur = Math.max(18, fs * (0.34 + (titleEffect?.glow || 0.48) * 0.34));
+  }
+
   lines.forEach((l, i) => {
     ctx.strokeText(l, 0, i * lh);
-    drawLetterSpaced(ctx, l, 0, i * lh, art.spacing, align);
+    drawLetterSpaced(ctx, l, 0, i * lh, isGoldenFloat ? art.spacing * 0.5 : art.spacing, align);
   });
   ctx.restore();
   const creatorText=textStyles?.creator.text??song.creator;
@@ -1161,6 +1207,7 @@ function drawTemplate(
     h,
     layout,
     textStyles,
+    t,
   );
 }
 export function createLiveFramePainter(bitmap: ImageBitmap) {
