@@ -2449,6 +2449,9 @@ export default function CreatorStudio() {
         <span className="sd-avatar">{signedInUser?.picture ? <img src={signedInUser.picture} alt="" /> : (signedInUser?.name?.[0] || 'S').toUpperCase()}</span>
         <span><b>{signedInUser?.name || 'SunoDown'}</b><small>{signedInUser?.email || 'Creator Studio'}</small></span>
       </div>
+      <a href="/music" className="sd-profile-menu-link">
+        <Music2 /><span>Music</span>
+      </a>
       {navigationItems.map(([Icon, label, id]) => (
         <button key={id} className={view === id ? 'active' : ''} onClick={() => { setView(id); setNavigationOpen(false); }}>
           <Icon /><span>{label}</span>
@@ -2494,6 +2497,7 @@ export default function CreatorStudio() {
         ) : (
           <nav className="sd-home-head-nav" aria-label="Điều hướng Home">
             <button className={view === 'create' ? 'active' : ''} onClick={() => setView('create')}>Trang chủ</button>
+            <a href="/music">Music</a>
             <button className={view === 'projects' ? 'active' : ''} onClick={() => setView('projects')}>Dự án</button>
             <button className={view === 'library' ? 'active' : ''} onClick={() => setView('library')}>Thư viện</button>
             <button className={view === 'jobs' ? 'active' : ''} onClick={() => setView('jobs')}>Jobs</button>
@@ -2838,6 +2842,7 @@ export default function CreatorStudio() {
                 }}
               />
             </label>
+            <button onClick={() => { window.location.href = '/music'; }}><Music2 /><span>Music Player</span></button>
             <button onClick={() => setView('library')}><BookOpen /><span>Thư viện bài hát</span></button>
             <button onClick={() => document.querySelector('.sd-home-featured')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}><Sparkles /><span>Preset & Style</span></button>
             <button onClick={() => setView('projects')}><Folder /><span>Dự án</span></button>
