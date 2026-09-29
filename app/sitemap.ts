@@ -10,6 +10,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
+      url: `${base}/music`,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
+    {
       url: `${base}/tai-suno-mp3`,
       changeFrequency: 'monthly',
       priority: 0.85,
