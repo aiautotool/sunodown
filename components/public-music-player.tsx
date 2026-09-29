@@ -7,7 +7,6 @@ import {
   Share2,
   SlidersHorizontal,
 } from 'lucide-react';
-import Link from 'next/link';
 import { useEffect, useMemo, useRef } from 'react';
 import {
   useGlobalMusic,
@@ -144,9 +143,9 @@ export function PublicMusicPlayer({
           <span>TRACK</span>
           <h1>{title}</h1>
           {handle ? (
-            <Link href={`/music/@${encodeURIComponent(handle)}`}>
+            <a href={`/music/@${encodeURIComponent(handle)}`}>
               {creator} · @{handle}
-            </Link>
+            </a>
           ) : (
             <p>{creator}</p>
           )}
