@@ -2683,6 +2683,8 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
 
 /* === Premium Music Player v23 === */
 .sd-premium-player{
+  --sd-mini-morph:1;
+  --sd-mini-translate:0px;
   position:fixed;
   z-index:78;
   right:0;
@@ -2699,6 +2701,18 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
   box-shadow:0 -12px 40px rgba(0,0,0,.26);
   backdrop-filter:blur(24px) saturate(1.12);
   -webkit-backdrop-filter:blur(24px) saturate(1.12);
+  transform:translate3d(0,var(--sd-mini-translate),0);
+  transition:
+    transform .2s cubic-bezier(.2,.78,.2,1),
+    opacity .18s ease,
+    box-shadow .18s ease;
+  will-change:transform,opacity;
+}
+.sd-premium-player.now-playing-morph{
+  z-index:122;
+  opacity:var(--sd-mini-morph);
+  pointer-events:none;
+  box-shadow:0 -18px 52px rgba(0,0,0,.34);
 }
 .sd-premium-player-progress{
   --sd-player-progress:0%;
@@ -2730,6 +2744,7 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
   color:#f4f6fa;
   text-align:left;
   cursor:pointer;
+  touch-action:none;
 }
 .sd-premium-player .track-summary>img,
 .sd-premium-player .track-summary>span{
@@ -2798,23 +2813,28 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
 /* Full-screen Now Playing */
 .sd-premium-now-playing{
   --sd-now-playing-drag:0px;
+  --sd-now-playing-scale:1;
+  --sd-now-playing-radius:0px;
+  --sd-now-playing-content-opacity:1;
   position:fixed;
   z-index:120;
   inset:0;
   overflow:hidden;
+  border-radius:var(--sd-now-playing-radius);
   background:#090b10;
   color:#fff;
-  transform:translate3d(0,var(--sd-now-playing-drag),0);
+  transform:
+    translate3d(0,var(--sd-now-playing-drag),0)
+    scale(var(--sd-now-playing-scale));
   transform-origin:center bottom;
   transition:
     transform .24s cubic-bezier(.22,.78,.18,1),
     border-radius .24s ease,
     box-shadow .24s ease;
-  will-change:transform;
+  will-change:transform,border-radius;
 }
 .sd-premium-now-playing.is-dragging{
   transition:none;
-  border-radius:24px 24px 0 0;
   box-shadow:0 -18px 70px rgba(0,0,0,.42);
   user-select:none;
   -webkit-user-select:none;
@@ -2839,6 +2859,15 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
   position:absolute;
   inset:0;
   background:linear-gradient(180deg,rgba(8,10,15,.42),rgba(8,10,15,.86) 72%,#090b10 100%);
+}
+.sd-premium-now-playing>header,
+.sd-premium-now-playing .now-playing-body{
+  opacity:var(--sd-now-playing-content-opacity);
+  transition:opacity .18s ease;
+}
+.sd-premium-now-playing.is-dragging>header,
+.sd-premium-now-playing.is-dragging .now-playing-body{
+  transition:none;
 }
 .sd-premium-now-playing>header{
   position:relative;
@@ -3137,6 +3166,24 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
     border-left:0;
     background:rgba(9,11,16,.96);
     box-shadow:0 -8px 26px rgba(0,0,0,.26);
+    touch-action:none;
+  }
+  .sd-premium-player:not(.now-playing-morph):before{
+    content:'';
+    position:absolute;
+    top:3px;
+    left:50%;
+    width:28px;
+    height:2px;
+    border-radius:999px;
+    background:rgba(255,255,255,.12);
+    transform:translateX(-50%);
+    pointer-events:none;
+  }
+  .sd-premium-player.now-playing-morph{
+    bottom:var(--sd-mobile-nav-h,68px);
+    border-top-color:rgba(255,255,255,.09);
+    background:rgba(9,11,16,.985);
   }
   .sd-premium-player-progress{height:2px}
   .sd-premium-player .track-summary{gap:9px;min-height:50px}
