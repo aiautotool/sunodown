@@ -485,6 +485,21 @@ export default {
       url.searchParams.set('__picai_assets', 'v23-2');
       return env.ASSETS.fetch(new Request(url, request));
     }
+
+    // Vinext route modules do not consistently expose Cloudflare secret bindings
+    // through cloudflare:workers. Inject the Groq secret only into the internal
+    // request passed to the karaoke route. The header is never returned to the
+    // browser and the route overwrites any client-provided value.
+    if (url.pathname === '/api/karaoke/groq') {
+      const headers = new Headers(request.headers);
+      if (env.GROQ_API_KEY) {
+        headers.set('x-sunodown-groq-key', env.GROQ_API_KEY);
+      } else {
+        headers.delete('x-sunodown-groq-key');
+      }
+      request = new Request(request, { headers });
+    }
+
     return app.fetch(request, env, ctx);
   },
 };
