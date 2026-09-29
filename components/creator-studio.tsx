@@ -497,10 +497,10 @@ function ToolControls(p: {
                   <div className="sd-wave-style-grid">
                     {WAVE_STYLES.map((x) => (
                       <button
-                        className={p.wave === x.id ? 'active' : ''}
+                        className={`${p.wave === x.id ? 'active' : ''} ${x.featured ? 'featured' : ''}`.trim()}
                         onClick={() => p.setWave(x.id)}
                         key={x.id}
-                        title={x.label}
+                        title={x.featured ? `Signature waveform · ${x.label}` : x.label}
                       >
                         <i className={'sd-wave-icon wave-'+x.id} />
                         <span>{x.label}</span>
