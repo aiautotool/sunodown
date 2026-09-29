@@ -32,6 +32,7 @@ import {
   type BackgroundConfig,
 } from '@/components/v8/background';
 import type { MediaClip } from '@/components/editor-timeline';
+import { ensureStudioFontsReady } from '@/components/studio-fonts';
 import { drawVideoEffects, type EffectConfig } from '@/components/v8/video-effects';
 
 const MOTION_GAIN: Record<MotionIntensity, number> = {
@@ -1390,6 +1391,10 @@ export async function generateVisualizerVideoSafe(
   template: VisualTemplate,
   options: SafeRenderOptions,
 ) {
+  await ensureStudioFontsReady([
+    options.overlayTextStyles?.title.font,
+    options.overlayTextStyles?.creator.font,
+  ]);
   if (!song.picture || !song.audio)
     throw new Error('Không đủ ảnh hoặc âm thanh để tạo video.');
   options.onProgress?.(1);
