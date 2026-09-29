@@ -1,7 +1,6 @@
 'use client';
 
 import { Music2, Play } from 'lucide-react';
-import Link from 'next/link';
 import { useGlobalMusic, type GlobalMusicSong } from '@/components/music-global-player';
 
 export type RelatedMusicSong = {
@@ -53,12 +52,12 @@ export function MusicRelatedRail({
               {song.picture ? <img src={song.picture} alt="" /> : <Music2 />}
               <i><Play /></i>
             </button>
-            <Link href={`/music/@${encodeURIComponent(song.handle)}/${song.id}`}>
+            <a href={`/music/@${encodeURIComponent(song.handle)}/${song.id}`}>
               {song.title}
-            </Link>
-            <Link className="creator" href={`/music/@${encodeURIComponent(song.handle)}`}>
+            </a>
+            <a className="creator" href={`/music/@${encodeURIComponent(song.handle)}`}>
               @{song.handle}
-            </Link>
+            </a>
           </article>
         ))}
       </div>
