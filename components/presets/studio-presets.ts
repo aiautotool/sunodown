@@ -97,6 +97,33 @@ export const BUILTIN_STUDIO_PRESETS:StudioPreset[] = [
   {schemaVersion:3,id:'retro-vinyl',name:'Warm Retro Vinyl',description:'Vinyl retro với film grain và tông ấm dành cho soul, jazz, oldies và acoustic cổ điển.',category:'Album',badge:'Retro',accent:'#fbbf24',secondary:'#a16207',builtin:true,mastering:{profile:'clean',spatial:{enabled:false,mode:'immersive',amount:65}},export:{aspect:'1:1',quality:'balanced',durationMode:'full'},config:{template:'vinyl',wave:'orbit-dots',motion:'medium',aspect:'1:1',lyrics:'off',effects:['film','dust','vignette'],layout:layout(73,82,15,23,116,90,102),textStyles:text('Georgia, serif',"'Courier New', monospace",'#fef3c7','#fde68a'),subtitleStyle:{font:'serif',color:'#fff7ed',activeColor:'#fbbf24'},background:bg('bokeh-night',30,8)}},
 ];
 
+const COOLTEXT_TITLE_FONTS: Record<string, string> = {
+  'social-hook': "'Bebas Neue', Impact, sans-serif",
+  'sad-lyrics': "'Dancing Script', cursive",
+  'cinematic-story': "'Tangerine', Georgia, serif",
+  'album-motion': "'Special Elite', Georgia, serif",
+  'neon-pulse': "'Orbitron', 'Trebuchet MS', sans-serif",
+  'karaoke-pop': "'Bebas Neue', Impact, sans-serif",
+  'gold-premiere': "'Tangerine', Georgia, serif",
+  'reels-velocity': "'Bebas Neue', Impact, sans-serif",
+  'story-confession': "'Special Elite', 'Courier New', monospace",
+  'midnight-drive': "'Orbitron', 'Trebuchet MS', sans-serif",
+  'acoustic-room': "'Special Elite', Georgia, serif",
+  'festival-energy': "'Orbitron', Impact, sans-serif",
+  'romantic-letter': "'Dancing Script', cursive",
+  'golden-floating-title': "'Tangerine', Georgia, serif",
+  'silver-moon-script': "'Dancing Script', cursive",
+  'neon-heartbeat-title': "'Orbitron', 'Trebuchet MS', sans-serif",
+  'vintage-love-letter': "'Dancing Script', cursive",
+  'midnight-blue-glow': "'Tangerine', Georgia, serif",
+  'retro-vinyl': "'Special Elite', Georgia, serif",
+};
+
+for (const preset of BUILTIN_STUDIO_PRESETS) {
+  const titleFont = COOLTEXT_TITLE_FONTS[preset.id];
+  if (titleFont) preset.config.textStyles.title.font = titleFont;
+}
+
 const VALID_TEMPLATES = new Set<VisualTemplate>(['cover-motion','vinyl','glass-card','lyrics-focus','editorial','spotlight','gold-record']);
 const VALID_ASPECTS = new Set<VideoAspect>(['16:9','9:16','1:1','4:5','4:3']);
 const VALID_LYRICS = new Set<LyricsMode>(['off','scroll','focus']);
