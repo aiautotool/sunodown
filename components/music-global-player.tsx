@@ -9,6 +9,7 @@ import {
   Play,
   Repeat,
   Repeat1,
+  Share2,
   Shuffle,
   SkipBack,
   SkipForward,
@@ -129,6 +130,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
   const [volume, setVolume] = useState(0.85);
   const [muted, setMuted] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const current = queueIndex >= 0 ? queue[queueIndex] || null : null;
 
@@ -261,6 +263,25 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
       mode === 'off' ? 'all' : mode === 'all' ? 'one' : 'off',
     );
   }, []);
+
+  const shareCurrent = useCallback(async () => {
+    if (!current) return;
+    const path = canonicalSongUrl(current);
+    const shareUrl = new URL(path, window.location.origin).toString();
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: current.title,
+          text: `${current.title} · ${current.creator || current.handle || 'Suno'}`,
+          url: shareUrl,
+        });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        setShareCopied(true);
+        window.setTimeout(() => setShareCopied(false), 1600);
+      }
+    } catch {}
+  }, [current]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -552,6 +573,13 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
               />
             </div>
             <button
+              onClick={() => void shareCurrent()}
+              aria-label="Chia sẻ bài hát"
+              title={shareCopied ? 'Đã copy link' : 'Chia sẻ'}
+            >
+              <Share2 />
+            </button>
+            <button
               className={queueOpen ? 'active' : ''}
               onClick={() => setQueueOpen(!queueOpen)}
               aria-label="Hàng đợi"
@@ -745,12 +773,18 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                     }}
                   />
                 </div>
-                <Link
-                  href={canonicalSongUrl(current)}
-                  onClick={() => setNowPlayingOpen(false)}
-                >
-                  Trang bài hát
-                </Link>
+                <div className="now-share-actions">
+                  <button onClick={() => void shareCurrent()}>
+                    <Share2 />
+                    {shareCopied ? 'Đã copy link' : 'Chia sẻ'}
+                  </button>
+                  <Link
+                    href={canonicalSongUrl(current)}
+                    onClick={() => setNowPlayingOpen(false)}
+                  >
+                    Trang bài hát
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
