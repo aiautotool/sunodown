@@ -64,30 +64,38 @@ export function PublicMusicPlayer({
     [creator, duration, handle, id, lyrics, picture, style, title],
   );
 
+  const resolvedLyrics = active ? music.current?.lyrics || lyrics : lyrics;
   const cleanLyrics = useMemo(
     () =>
-      (lyrics || '')
+      (resolvedLyrics || '')
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
         .slice(0, 160),
-    [lyrics],
+    [resolvedLyrics],
   );
   const karaokeTimeline = useMemo(
     () =>
-      lyrics && resolvedDuration > 0
-        ? buildEstimatedKaraokeTimeline(lyrics, resolvedDuration)
-        : [],
-    [lyrics, resolvedDuration],
+      active && music.current?.karaokeTimeline?.length
+        ? music.current.karaokeTimeline
+        : resolvedLyrics && resolvedDuration > 0
+          ? buildEstimatedKaraokeTimeline(resolvedLyrics, resolvedDuration)
+          : [],
+    [
+      active,
+      music.current?.karaokeTimeline,
+      resolvedDuration,
+      resolvedLyrics,
+    ],
   );
   const activeLyricIndex = useMemo(() => {
     if (!active) return -1;
-    let currentIndex = -1;
     for (let index = 0; index < karaokeTimeline.length; index += 1) {
-      if (time >= karaokeTimeline[index].start) currentIndex = index;
-      else break;
+      const line = karaokeTimeline[index];
+      if (time >= line.start && time <= line.end + 0.35) return index;
+      if (line.start > time) break;
     }
-    return currentIndex;
+    return -1;
   }, [active, karaokeTimeline, time]);
 
   useEffect(() => {
@@ -213,7 +221,7 @@ export function PublicMusicPlayer({
                 className={
                   index === activeLyricIndex
                     ? 'active'
-                    : index < activeLyricIndex
+                    : time > line.end
                       ? 'past'
                       : ''
                 }
