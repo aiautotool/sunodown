@@ -4,7 +4,7 @@ import {
   type KaraokeLine,
   type RoughWord,
 } from './karaoke';
-import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
+import { cleanLyricsForVideo } from '../../components/v4/lyrics-clean.ts';
 
 type GroqWord = {
   word?: string;
