@@ -1624,3 +1624,192 @@ rgba(7,9,14,.98);backdrop-filter:blur(26px)}
   .sd-now-playing .now-art{width:min(78vw,390px);margin:0 auto}
   .sd-now-playing .now-copy h1{font-size:38px}
 }
+
+
+/* Unified mobile navigation + touch reliability */
+.sd-home-side>.sd-home-side-link{
+  display:grid;
+  min-height:48px;
+  grid-template-columns:22px 1fr auto;
+  align-items:center;
+  gap:12px;
+  border:1px solid transparent;
+  border-radius:12px;
+  background:transparent;
+  padding:0 14px;
+  color:#96a3b7;
+  text-align:left;
+  font-size:12px;
+  text-decoration:none;
+  cursor:pointer;
+  transition:.18s ease;
+}
+.sd-home-side>.sd-home-side-link svg{width:19px;height:19px}
+.sd-home-side>.sd-home-side-link:hover{border-color:rgba(255,255,255,.055);background:rgba(255,255,255,.028);color:#e6ebf4}
+.sd-profile-menu-link.active{background:linear-gradient(110deg,rgba(104,86,229,.3),rgba(104,86,229,.13));color:#b6a4ff}
+.sd-home-head-nav a.active{border-color:rgba(144,117,255,.2);background:linear-gradient(135deg,rgba(114,84,232,.26),rgba(77,65,166,.17));color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.055)}
+
+.sd-mobile-app-nav{display:none}
+
+@media(max-width:900px){
+  :root{--sd-mobile-nav-h:calc(64px + env(safe-area-inset-bottom))}
+  .sd-mobile-app-nav{
+    position:fixed;
+    z-index:70;
+    right:0;
+    bottom:0;
+    left:0;
+    display:grid;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    height:var(--sd-mobile-nav-h);
+    padding:4px 6px max(4px,env(safe-area-inset-bottom));
+    border-top:1px solid rgba(148,163,184,.14);
+    background:rgba(8,11,18,.97);
+    box-shadow:0 -14px 38px rgba(0,0,0,.3);
+    backdrop-filter:blur(22px);
+    -webkit-backdrop-filter:blur(22px);
+  }
+  .sd-mobile-app-nav>a{
+    position:relative;
+    z-index:1;
+    min-width:0;
+    min-height:52px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    border-radius:12px;
+    color:#778397;
+    text-decoration:none;
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+    pointer-events:auto;
+  }
+  .sd-mobile-app-nav>a span{display:grid;place-items:center;width:28px;height:25px}
+  .sd-mobile-app-nav>a svg{width:18px;height:18px}
+  .sd-mobile-app-nav>a b{max-width:100%;overflow:hidden;text-overflow:ellipsis;font-size:8px;line-height:1;white-space:nowrap}
+  .sd-mobile-app-nav>a.active{color:#c6baff;background:rgba(116,88,225,.08)}
+  .sd-mobile-app-nav>a.primary span{
+    width:38px;
+    height:38px;
+    margin-top:-19px;
+    border:1px solid rgba(255,255,255,.25);
+    border-radius:50%;
+    background:linear-gradient(135deg,#8c62f4,#6558e9);
+    color:#fff;
+    box-shadow:0 10px 25px rgba(94,66,210,.42);
+  }
+  .sd-mobile-app-nav>a.primary b{margin-top:-1px;color:#b7abc9}
+
+  .sd-home-v23 .sd-home-shell{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+  .sd-section-panel{padding-bottom:calc(112px + env(safe-area-inset-bottom))!important}
+  .sd-public-music-page{padding-bottom:var(--sd-mobile-nav-h)}
+
+  /* One hit-area system for mobile navigation. */
+  .sd-mobile-menu-trigger,
+  .sd-profile-menu a,
+  .sd-profile-menu button,
+  .sd-home-head-nav a,
+  .sd-home-side-link{
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .sd-profile-menu a,.sd-profile-menu button{min-height:46px;pointer-events:auto}
+  .sd-nav-backdrop{z-index:88!important;pointer-events:auto!important}
+  .sd-mobile-brand,.sd-mobile-title{z-index:89!important}
+  .sd-mobile-brand .sd-profile-menu,.sd-mobile-title .sd-profile-menu{
+    z-index:92!important;
+    top:calc(64px + env(safe-area-inset-top))!important;
+    max-height:calc(100vh - 90px - env(safe-area-inset-bottom));
+    overflow:auto;
+    overscroll-behavior:contain;
+    pointer-events:auto!important;
+  }
+
+  /* Music sub-navigation is now a secondary tab bar, not the app bottom menu. */
+  .sd-music-app{
+    display:block;
+    padding-bottom:calc(145px + env(safe-area-inset-bottom))!important;
+  }
+  .sd-music-sidebar{
+    position:sticky!important;
+    z-index:34!important;
+    top:0!important;
+    right:auto!important;
+    bottom:auto!important;
+    left:auto!important;
+    width:100%!important;
+    height:56px!important;
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:4px!important;
+    padding:5px 8px!important;
+    border-right:0!important;
+    border-bottom:1px solid rgba(148,163,184,.1)!important;
+    border-top:0!important;
+    background:rgba(8,11,18,.97)!important;
+    box-sizing:border-box;
+  }
+  .sd-music-sidebar .brand,
+  .sd-music-sidebar>small,
+  .sd-music-sidebar .side-playlists,
+  .sd-music-sidebar .new-playlist{display:none!important}
+  .sd-music-sidebar>button{
+    min-width:0;
+    min-height:44px;
+    display:flex!important;
+    flex-direction:row!important;
+    justify-content:center!important;
+    gap:5px!important;
+    padding:0 5px!important;
+    border-radius:9px!important;
+    font-size:9px!important;
+    white-space:nowrap;
+    touch-action:manipulation;
+    pointer-events:auto;
+  }
+  .sd-music-sidebar>button svg{width:14px!important;height:14px!important}
+  .sd-music-main{padding:0 14px calc(92px + env(safe-area-inset-bottom))!important}
+  .sd-music-topbar{top:56px!important;z-index:30!important}
+
+  .sd-music-player{
+    z-index:65!important;
+    bottom:var(--sd-mobile-nav-h)!important;
+  }
+  .sd-music-queue{
+    z-index:82!important;
+    bottom:calc(var(--sd-mobile-nav-h) + 82px)!important;
+  }
+  .sd-now-playing{
+    z-index:80!important;
+    inset:56px 0 calc(var(--sd-mobile-nav-h) + 72px) 0!important;
+  }
+  .sd-music-modal{z-index:100!important}
+
+  .sd-music-song-row button,
+  .sd-music-song-row a,
+  .sd-music-player button,
+  .sd-music-queue button,
+  .playlist-card,
+  .music-card,
+  .continue-card{
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  /* Editor owns its own tool bar; never stack the global menu over it. */
+  .sd-studio .sd-mobile-app-nav{display:none!important}
+  .sd-mobile-export nav{
+    z-index:72!important;
+    height:calc(76px + env(safe-area-inset-bottom))!important;
+    padding-bottom:max(5px,env(safe-area-inset-bottom))!important;
+  }
+  .sd-mobile-export nav button{
+    min-height:48px;
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+    pointer-events:auto;
+  }
+}
