@@ -130,9 +130,7 @@ const shuffled = (ids: string[]) => {
 };
 
 const audioProxy = (song?: LibrarySong | null) =>
-  song?.audioUrl
-    ? `/api/audio?source=${encodeURIComponent(song.audioUrl)}`
-    : '';
+  song?.id ? `/api/music/audio?id=${encodeURIComponent(song.id)}` : '';
 
 const defaultStats = (): SongStats => ({
   playCount: 0,
@@ -349,7 +347,7 @@ export function MusicHub() {
   ) => {
     if (!state) return;
     const sourceIds = sourceSongs
-      .filter((song) => Boolean(song.audioUrl))
+      .filter((song) => song.isPublic !== false)
       .map((song) => song.id);
     if (!sourceIds.includes(songId)) sourceIds.unshift(songId);
 
@@ -399,9 +397,9 @@ export function MusicHub() {
   };
 
   const shuffleLibrary = () => {
-    const playable = songs.filter((song) => Boolean(song.audioUrl));
+    const playable = songs.filter((song) => song.isPublic !== false);
     if (!playable.length) {
-      setMessage('Thư viện chưa có nguồn audio để phát.');
+      setMessage('Thư viện chưa có bài public để phát.');
       return;
     }
     const ids = shuffled(playable.map((song) => song.id));
@@ -797,7 +795,20 @@ export function MusicHub() {
         ref={audioRef}
         playsInline
         preload="metadata"
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          setPlaying(true);
+          setMessage('');
+        }}
+        onError={(event) => {
+          setPlaying(false);
+          const mediaError = event.currentTarget.error;
+          const code = mediaError?.code || 0;
+          setMessage(
+            code
+              ? `Không phát được audio của bài này (media error ${code}). Hãy thử lại hoặc Sync bài mới.`
+              : 'Không phát được audio của bài này. Hãy thử lại.',
+          );
+        }}
         onPause={() => {
           setPlaying(false);
           if (!currentSong) return;
