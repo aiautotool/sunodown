@@ -153,6 +153,16 @@ type LocalLibraryItem = {
 };
 
 type SubtitleDebugValue = string | number | boolean | null;
+function cacheMusicSubtitle(songId: string | undefined, timeline: KaraokeLine[]) {
+  if (!songId || !timeline.length || typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(
+      `sunodown-music-subtitle:groq-v1:${songId}`,
+      JSON.stringify({ timeline, savedAt: Date.now() }),
+    );
+  } catch {}
+}
+
 type SubtitleDebugEntry = {
   id: number;
   time: string;
@@ -1705,6 +1715,7 @@ export default function CreatorStudio({
           attempts: result.attempts.length,
         });
         setKaraokeTimeline(result.timeline);
+        cacheMusicSubtitle(target.id, result.timeline);
         setKaraokeSyncStatus(result.status);
         setKaraokeSyncMessage(publicResultMessage);
         setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
@@ -1740,6 +1751,7 @@ export default function CreatorStudio({
         lines: bestPartialTimeline.length,
       });
       setKaraokeTimeline(bestPartialTimeline);
+      cacheMusicSubtitle(target.id, bestPartialTimeline);
       setKaraokeSyncStatus('fallback');
       setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
       setKaraokeSyncMessage(
