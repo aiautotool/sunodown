@@ -118,6 +118,11 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const milestonesRef = useRef(new Set<string>());
   const metadataFetchedRef = useRef(new Set<string>());
   const nowLyricsRef = useRef<HTMLDivElement | null>(null);
+  const visualizerCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const visualizerFrameRef = useRef<number | null>(null);
 
   const [queue, setQueue] = useState<GlobalMusicSong[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
@@ -133,6 +138,51 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const [shareCopied, setShareCopied] = useState(false);
 
   const current = queueIndex >= 0 ? queue[queueIndex] || null : null;
+
+  const ensureAudioAnalyser = useCallback(async () => {
+    const audio = audioRef.current;
+    if (!audio || typeof window === 'undefined') return null;
+
+    try {
+      let context = audioContextRef.current;
+      let analyser = analyserRef.current;
+
+      if (!context || !analyser) {
+        const AudioContextCtor =
+          window.AudioContext ||
+          (
+            window as typeof window & {
+              webkitAudioContext?: typeof AudioContext;
+            }
+          ).webkitAudioContext;
+
+        if (!AudioContextCtor) return null;
+
+        context = new AudioContextCtor();
+        analyser = context.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.84;
+        analyser.minDecibels = -92;
+        analyser.maxDecibels = -16;
+
+        const source = context.createMediaElementSource(audio);
+        source.connect(analyser);
+        analyser.connect(context.destination);
+
+        audioContextRef.current = context;
+        analyserRef.current = analyser;
+        audioSourceRef.current = source;
+      }
+
+      if (context.state === 'suspended') {
+        await context.resume();
+      }
+
+      return analyser;
+    } catch {
+      return analyserRef.current;
+    }
+  }, []);
 
   const loadAt = useCallback(
     (list: GlobalMusicSong[], index: number, autoplay = true) => {
@@ -282,6 +332,110 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
       }
     } catch {}
   }, [current]);
+
+  useEffect(() => {
+    if (!nowPlayingOpen || !current) return;
+
+    const canvas = visualizerCanvasRef.current;
+    if (!canvas) return;
+
+    let cancelled = false;
+    let frequencyData: Uint8Array<ArrayBuffer> | null = null;
+
+    const drawFrame = (analyser: AnalyserNode | null) => {
+      if (cancelled) return;
+
+      const context2d = canvas.getContext('2d');
+      if (!context2d) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+      const width = Math.max(1, Math.round(rect.width * dpr));
+      const height = Math.max(1, Math.round(rect.height * dpr));
+
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+
+      context2d.clearRect(0, 0, width, height);
+
+      const barCount = width < 720 ? 30 : 42;
+      const gap = Math.max(2, Math.round(2.2 * dpr));
+      const barWidth = Math.max(
+        2,
+        (width - gap * (barCount - 1)) / barCount,
+      );
+      const audio = audioRef.current;
+      const isPlaying = Boolean(audio && !audio.paused && !audio.ended);
+
+      if (analyser) {
+        if (
+          !frequencyData ||
+          frequencyData.length !== analyser.frequencyBinCount
+        ) {
+          frequencyData = new Uint8Array(analyser.frequencyBinCount);
+        }
+        analyser.getByteFrequencyData(frequencyData);
+      }
+
+      const gradient = context2d.createLinearGradient(0, 0, 0, height);
+      gradient.addColorStop(0, 'rgba(255,255,255,.98)');
+      gradient.addColorStop(.42, 'rgba(213,199,255,.94)');
+      gradient.addColorStop(1, 'rgba(157,126,244,.30)');
+      context2d.fillStyle = gradient;
+
+      for (let index = 0; index < barCount; index += 1) {
+        const normalized = index / Math.max(1, barCount - 1);
+        const shaped = Math.pow(normalized, 1.7);
+        const binIndex = frequencyData
+          ? Math.min(
+              frequencyData.length - 1,
+              Math.floor(shaped * frequencyData.length * 0.72),
+            )
+          : 0;
+        const raw = frequencyData ? frequencyData[binIndex] / 255 : 0;
+        const neighboring = frequencyData
+          ? frequencyData[
+              Math.min(frequencyData.length - 1, binIndex + 2)
+            ] / 255
+          : 0;
+        const energy = Math.max(raw, neighboring * .82);
+        const idle = .055 + ((index * 17) % 8) / 400;
+        const strength = isPlaying
+          ? Math.max(idle, Math.pow(energy, .82))
+          : idle;
+        const barHeight = Math.max(
+          3 * dpr,
+          Math.min(height * .96, height * strength),
+        );
+        const x = index * (barWidth + gap);
+        const y = height - barHeight;
+
+        context2d.globalAlpha = isPlaying
+          ? .52 + Math.min(.45, strength * .5)
+          : .26;
+        context2d.fillRect(x, y, barWidth, barHeight);
+      }
+
+      context2d.globalAlpha = 1;
+      visualizerFrameRef.current = window.requestAnimationFrame(() =>
+        drawFrame(analyser),
+      );
+    };
+
+    void ensureAudioAnalyser().then((analyser) => {
+      if (!cancelled) drawFrame(analyser);
+    });
+
+    return () => {
+      cancelled = true;
+      if (visualizerFrameRef.current != null) {
+        window.cancelAnimationFrame(visualizerFrameRef.current);
+        visualizerFrameRef.current = null;
+      }
+    };
+  }, [current?.id, ensureAudioAnalyser, nowPlayingOpen]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -441,7 +595,10 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
         ref={audioRef}
         playsInline
         preload="metadata"
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          setPlaying(true);
+          void ensureAudioAnalyser();
+        }}
         onPause={() => setPlaying(false)}
         onLoadedMetadata={(event) => {
           const audio = event.currentTarget;
@@ -635,22 +792,11 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
               ) : (
                 <Music2 />
               )}
-              <div
-                className={playing ? 'now-visualizer playing' : 'now-visualizer'}
+              <canvas
+                ref={visualizerCanvasRef}
+                className="now-visualizer-canvas"
                 aria-hidden="true"
-              >
-                {Array.from({ length: 28 }, (_, index) => (
-                  <span
-                    key={index}
-                    style={
-                      {
-                        '--bar-height': `${24 + ((index * 37) % 66)}%`,
-                        '--bar-delay': `${-(index % 9) * 0.09}s`,
-                      } as CSSProperties
-                    }
-                  />
-                ))}
-              </div>
+              />
             </div>
 
             <div className="now-info">
