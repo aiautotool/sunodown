@@ -178,7 +178,7 @@ export default async function PublicMusicRoute({ params }: PageProps) {
           <Link href="/" className="sd-public-brand" aria-label="SunoDown">
             <span><Music2 /></span>
             <b>SunoDown</b>
-          </a>
+          </Link>
           <nav aria-label="Điều hướng">
             <Link href="/">Trang chủ</Link>
             <Link href="/music">Music</Link>
@@ -229,7 +229,7 @@ export default async function PublicMusicRoute({ params }: PageProps) {
         id={song.id}
         title={song.title}
         creator={song.creator}
-        handle={song.handle || canonicalHandle}
+        handle={song.handle}
         picture={song.picture}
         duration={song.duration}
         lyrics={song.lyrics}
