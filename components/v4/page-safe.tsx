@@ -159,12 +159,6 @@ export default function V4SafePage({initialUrl=''}:{initialUrl?:string}) {
     [resultUrl],
   );
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('suno-v8-background');
-      if (raw) setBackground(sanitizeStoredBackground(JSON.parse(raw)));
-    } catch {}
-  }, []);
-  useEffect(() => {
     window.dispatchEvent(
       new CustomEvent('suno-karaoke-timeline-change', {
         detail: karaokeTimeline,
