@@ -131,6 +131,24 @@ const VALID_MOTION = new Set<MotionIntensity>(['low','medium','high']);
 const VALID_WAVES = new Set<WaveStyle>(WAVE_STYLES.map(item=>item.id));
 const VALID_EFFECTS = new Set<VideoEffect>(VIDEO_EFFECTS.map(item=>item.id));
 const clamp=(value:unknown,min:number,max:number,fallback:number)=>{const n=Number(value);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback};
+const WAVE_COLOR_MODES = new Set(['solid','gradient','dynamic','audio-reactive']);
+const normalizeWaveAppearance=(value:Partial<WaveAppearance>|undefined):WaveAppearance=>{
+  const source={...DEFAULT_WAVE_APPEARANCE,...(value||{})};
+  return {
+    color:typeof source.color==='string'&&/^#[0-9a-f]{6}$/i.test(source.color)?source.color:DEFAULT_WAVE_APPEARANCE.color,
+    color2:typeof source.color2==='string'&&/^#[0-9a-f]{6}$/i.test(source.color2)?source.color2:DEFAULT_WAVE_APPEARANCE.color2,
+    glow:clamp(source.glow,0,100,DEFAULT_WAVE_APPEARANCE.glow),
+    opacity:clamp(source.opacity,10,100,DEFAULT_WAVE_APPEARANCE.opacity),
+    density:clamp(source.density,20,100,DEFAULT_WAVE_APPEARANCE.density),
+    smoothing:clamp(source.smoothing,0,100,DEFAULT_WAVE_APPEARANCE.smoothing),
+    height:clamp(source.height,20,160,DEFAULT_WAVE_APPEARANCE.height),
+    thickness:clamp(source.thickness,10,100,DEFAULT_WAVE_APPEARANCE.thickness),
+    attack:clamp(source.attack,0,100,DEFAULT_WAVE_APPEARANCE.attack),
+    release:clamp(source.release,0,100,DEFAULT_WAVE_APPEARANCE.release),
+    rotation:clamp(source.rotation,-180,180,DEFAULT_WAVE_APPEARANCE.rotation),
+    colorMode:WAVE_COLOR_MODES.has(source.colorMode)?source.colorMode:DEFAULT_WAVE_APPEARANCE.colorMode,
+  };
+};
 const normalizeLayout=(value:Partial<OverlayLayout>|undefined,fallback:OverlayLayout):OverlayLayout=>{
   const source=value||{};
   const item=(key:keyof OverlayLayout)=>({x:clamp(source[key]?.x,0,100,fallback[key].x),y:clamp(source[key]?.y,0,100,fallback[key].y),scale:clamp(source[key]?.scale,40,180,fallback[key].scale)});
@@ -147,7 +165,7 @@ export function normalizePresetConfig(value:Partial<StudioPresetConfig>|null|und
   return {
     template:VALID_TEMPLATES.has(value.template as VisualTemplate)?value.template as VisualTemplate:fallback.template,
     wave:VALID_WAVES.has(value.wave as WaveStyle)?value.wave as WaveStyle:fallback.wave,
-    waveAppearance:{...DEFAULT_WAVE_APPEARANCE,...(value.waveAppearance||fallback.waveAppearance||{})},
+    waveAppearance:normalizeWaveAppearance(value.waveAppearance||fallback.waveAppearance),
     motion:VALID_MOTION.has(value.motion as MotionIntensity)?value.motion as MotionIntensity:fallback.motion,
     aspect:VALID_ASPECTS.has(value.aspect as VideoAspect)?value.aspect as VideoAspect:fallback.aspect,
     lyrics:VALID_LYRICS.has(value.lyrics as LyricsMode)?value.lyrics as LyricsMode:fallback.lyrics,
