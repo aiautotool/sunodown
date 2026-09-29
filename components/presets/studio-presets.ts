@@ -144,6 +144,25 @@ for (const preset of BUILTIN_STUDIO_PRESETS) {
   if (titleFont) preset.config.textStyles.title.font = titleFont;
 }
 
+const SIGNATURE_WAVE_PRESETS:Record<string,{wave:WaveStyle;appearance:Partial<WaveAppearance>}>={
+  'sad-lyrics':{wave:'mirror-glow',appearance:{color:'#d946ef',color2:'#60a5fa',glow:88,height:84,thickness:44,smoothing:80,attack:54,release:50,colorMode:'gradient'}},
+  'romantic-letter':{wave:'mirror-glow',appearance:{color:'#f472d0',color2:'#818cf8',glow:82,height:78,thickness:42,smoothing:82,attack:48,release:56,colorMode:'gradient'}},
+  'acoustic-room':{wave:'ribbon-wave',appearance:{color:'#8b5cf6',color2:'#fb7185',glow:72,height:74,thickness:43,smoothing:86,attack:42,release:60,colorMode:'gradient'}},
+  'minimal-clean':{wave:'ribbon-wave',appearance:{color:'#67e8f9',color2:'#a78bfa',glow:54,height:60,thickness:34,smoothing:90,attack:36,release:62,colorMode:'solid'}},
+  'neon-pulse':{wave:'rounded-spectrum',appearance:{color:'#22d3ee',color2:'#f43f9f',glow:96,height:118,thickness:66,smoothing:32,attack:90,release:22,colorMode:'audio-reactive'}},
+  'festival-energy':{wave:'rounded-spectrum',appearance:{color:'#38bdf8',color2:'#e879f9',glow:98,height:126,thickness:72,smoothing:26,attack:94,release:18,colorMode:'dynamic'}},
+  'social-hook':{wave:'rounded-spectrum',appearance:{color:'#8b5cf6',color2:'#ec4899',glow:90,height:108,thickness:64,smoothing:36,attack:86,release:24,colorMode:'audio-reactive'}},
+  'neon-heartbeat-title':{wave:'rounded-spectrum',appearance:{color:'#22d3ee',color2:'#f472d0',glow:98,height:116,thickness:68,smoothing:30,attack:92,release:20,colorMode:'dynamic'}},
+  'cinematic-story':{wave:'circular-pulse',appearance:{color:'#fde68a',color2:'#93c5fd',glow:84,height:96,thickness:50,smoothing:58,attack:72,release:38,colorMode:'dynamic'}},
+  'midnight-drive':{wave:'circular-pulse',appearance:{color:'#818cf8',color2:'#22d3ee',glow:88,height:102,thickness:48,smoothing:52,attack:76,release:34,colorMode:'audio-reactive'}},
+};
+for(const preset of BUILTIN_STUDIO_PRESETS){
+  const signature=SIGNATURE_WAVE_PRESETS[preset.id];
+  if(!signature)continue;
+  preset.config.wave=signature.wave;
+  preset.config.waveAppearance={...DEFAULT_WAVE_APPEARANCE,...signature.appearance};
+}
+
 const VALID_TEMPLATES = new Set<VisualTemplate>(['cover-motion','vinyl','glass-card','lyrics-focus','editorial','spotlight','gold-record']);
 const VALID_ASPECTS = new Set<VideoAspect>(['16:9','9:16','1:1','4:5','4:3']);
 const VALID_LYRICS = new Set<LyricsMode>(['off','scroll','focus']);
