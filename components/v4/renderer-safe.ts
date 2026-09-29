@@ -51,7 +51,13 @@ export type OverlayLayout = {
   creator: { x: number; y: number; scale: number };
 };
 export type TitleVisualEffect = {
-  kind?: 'none' | 'gold-floating';
+  kind?:
+    | 'none'
+    | 'gold-floating'
+    | 'silver-shimmer'
+    | 'neon-pulse'
+    | 'vintage-sway'
+    | 'midnight-drift';
   floatPx?: number;
   tiltDeg?: number;
   duration?: number;
@@ -331,26 +337,57 @@ function drawMeta(
     titleY = (h * titlePos.y) / 100,
     titleScale = titlePos.scale / 100,
     titleEffect = textStyles?.title.effect,
-    isGoldenFloat = titleEffect?.kind === 'gold-floating',
-    floatDuration = Math.max(2.8, titleEffect?.duration || 6.2),
-    phase = (time / floatDuration) * Math.PI * 2,
-    floatY = isGoldenFloat
-      ? Math.sin(phase) * Math.max(2, titleEffect?.floatPx || h * 0.0045)
-      : 0,
-    floatX = isGoldenFloat ? Math.cos(phase * 0.72) * w * 0.0025 : 0,
-    tilt = isGoldenFloat
-      ? Math.sin(phase * 0.92) * ((titleEffect?.tiltDeg || 1.35) * Math.PI / 180)
-      : 0,
-    glowPulse = isGoldenFloat
-      ? 0.72 + (Math.sin(phase * 0.78 + 0.8) + 1) * 0.14
-      : 1;
+    effectKind = titleEffect?.kind || 'none',
+    animatedTitle = effectKind !== 'none',
+    effectDuration = Math.max(2.4, titleEffect?.duration || 6.2),
+    phase = (time / effectDuration) * Math.PI * 2,
+    baseFloat = Math.max(2, titleEffect?.floatPx || h * 0.0045),
+    baseTilt = (titleEffect?.tiltDeg || 1.35) * Math.PI / 180,
+    floatY =
+      effectKind === 'gold-floating'
+        ? Math.sin(phase) * baseFloat
+        : effectKind === 'silver-shimmer'
+          ? Math.sin(phase * 0.74) * baseFloat * 0.72
+          : effectKind === 'vintage-sway'
+            ? Math.sin(phase * 0.58) * baseFloat * 0.38
+            : effectKind === 'midnight-drift'
+              ? Math.sin(phase * 0.66) * baseFloat * 0.55
+              : 0,
+    floatX =
+      effectKind === 'gold-floating'
+        ? Math.cos(phase * 0.72) * w * 0.0025
+        : effectKind === 'silver-shimmer'
+          ? Math.cos(phase * 0.52) * w * 0.003
+          : effectKind === 'vintage-sway'
+            ? Math.cos(phase * 0.46) * w * 0.0018
+            : effectKind === 'midnight-drift'
+              ? Math.sin(phase * 0.54) * w * 0.006
+              : 0,
+    tilt =
+      effectKind === 'gold-floating'
+        ? Math.sin(phase * 0.92) * baseTilt
+        : effectKind === 'silver-shimmer'
+          ? Math.sin(phase * 0.64) * baseTilt * 0.55
+          : effectKind === 'vintage-sway'
+            ? Math.sin(phase * 0.5) * baseTilt
+            : effectKind === 'midnight-drift'
+              ? Math.sin(phase * 0.48) * baseTilt * 0.42
+              : 0,
+    pulse =
+      effectKind === 'neon-pulse'
+        ? 1 + Math.max(0, Math.sin(phase * 2.4)) * 0.045
+        : 1,
+    glowPulse =
+      animatedTitle
+        ? 0.72 + (Math.sin(phase * 0.78 + 0.8) + 1) * 0.14
+        : 1;
 
   ctx.save();
   ctx.translate(x + floatX, titleY + floatY);
   ctx.rotate(tilt);
-  ctx.scale(titleScale, titleScale);
+  ctx.scale(titleScale * pulse, titleScale * pulse);
 
-  if (isGoldenFloat) {
+  if (effectKind === 'gold-floating') {
     const gold = ctx.createLinearGradient(0, -fs * 0.9, 0, fs * 1.8);
     gold.addColorStop(0, '#fff8d8');
     gold.addColorStop(0.28, '#f8dfa1');
@@ -362,11 +399,58 @@ function drawMeta(
     ctx.lineWidth = Math.max(1.2, art.stroke * 1.25);
     ctx.shadowColor = `rgba(244,188,84,${Math.min(.72, (titleEffect?.glow || 0.48) * glowPulse)})`;
     ctx.shadowBlur = Math.max(18, fs * (0.34 + (titleEffect?.glow || 0.48) * 0.34));
+  } else if (effectKind === 'silver-shimmer') {
+    const silver = ctx.createLinearGradient(-fs * 2.2, 0, fs * 2.2, 0);
+    const shimmer = (Math.sin(phase) + 1) / 2;
+    silver.addColorStop(0, '#9ba8ba');
+    silver.addColorStop(Math.max(.12, shimmer * .46), '#f8fbff');
+    silver.addColorStop(Math.min(.88, .48 + shimmer * .36), '#c7d2df');
+    silver.addColorStop(1, '#77869c');
+    ctx.fillStyle = silver;
+    ctx.strokeStyle = 'rgba(240,247,255,.38)';
+    ctx.lineWidth = Math.max(1, art.stroke);
+    ctx.shadowColor = `rgba(174,210,255,${Math.min(.62, (titleEffect?.glow || .42) * glowPulse)})`;
+    ctx.shadowBlur = Math.max(16, fs * .42);
+  } else if (effectKind === 'neon-pulse') {
+    ctx.fillStyle = '#fff1fb';
+    ctx.strokeStyle = '#ff70d8';
+    ctx.lineWidth = Math.max(1.1, art.stroke * 1.12);
+    const neon = .52 + Math.max(0, Math.sin(phase * 2.4)) * .34;
+    ctx.shadowColor = `rgba(241,75,255,${neon})`;
+    ctx.shadowBlur = Math.max(22, fs * (0.5 + neon * .22));
+  } else if (effectKind === 'vintage-sway') {
+    const ink = ctx.createLinearGradient(0, -fs, 0, fs * 1.4);
+    ink.addColorStop(0, '#fff1dc');
+    ink.addColorStop(.55, '#e7c49d');
+    ink.addColorStop(1, '#a86d62');
+    ctx.fillStyle = ink;
+    ctx.strokeStyle = 'rgba(92,38,43,.42)';
+    ctx.lineWidth = Math.max(.8, art.stroke * .8);
+    ctx.shadowColor = `rgba(72,28,30,${Math.min(.55, (titleEffect?.glow || .3) * glowPulse)})`;
+    ctx.shadowBlur = Math.max(10, fs * .22);
+  } else if (effectKind === 'midnight-drift') {
+    const blue = ctx.createLinearGradient(0, -fs, 0, fs * 1.6);
+    blue.addColorStop(0, '#f3fbff');
+    blue.addColorStop(.35, '#bfe7ff');
+    blue.addColorStop(.72, '#6ba7ff');
+    blue.addColorStop(1, '#4362c8');
+    ctx.fillStyle = blue;
+    ctx.strokeStyle = 'rgba(176,215,255,.38)';
+    ctx.lineWidth = Math.max(1, art.stroke);
+    ctx.shadowColor = `rgba(81,128,255,${Math.min(.68, (titleEffect?.glow || .5) * glowPulse)})`;
+    ctx.shadowBlur = Math.max(18, fs * .46);
   }
 
   lines.forEach((l, i) => {
     ctx.strokeText(l, 0, i * lh);
-    drawLetterSpaced(ctx, l, 0, i * lh, isGoldenFloat ? art.spacing * 0.5 : art.spacing, align);
+    drawLetterSpaced(
+      ctx,
+      l,
+      0,
+      i * lh,
+      animatedTitle ? art.spacing * 0.5 : art.spacing,
+      align,
+    );
   });
   ctx.restore();
   const creatorText=textStyles?.creator.text??song.creator;
