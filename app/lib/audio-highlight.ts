@@ -184,7 +184,7 @@ export async function findMusicHighlight(
       const onsetScore = normalize(mean(onsets), onsetLow, onsetHigh);
       const dynamicsScore = normalize(stdev(energies), 0, Math.max(0.015, energyHigh - energyLow));
       const lyricScore = lyricActivity(start, end, options.karaokeTimeline);
-      const center = (start + end / 2) / Math.max(1, safeMaxEnd);
+      const center = ((start + end) / 2) / Math.max(1, safeMaxEnd);
       const placementBonus = clamp(1 - Math.abs(center - 0.62) * 0.45, 0.84, 1);
 
       const score =
