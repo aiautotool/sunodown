@@ -5,6 +5,7 @@ import type { AddPexelsToTimeline } from './pexels-library';
 import type { BackgroundConfig } from './background';
 import {
   backgroundSearchQuery,
+  pexelsOrientation,
   rankBackgroundPhotos,
 } from './pexels-suggestions';
 import {
@@ -159,7 +160,7 @@ export function SuggestedBackground(props: Props) {
         setActiveQuery(query);
         const params = new URLSearchParams({
           q: query,
-          orientation: 'portrait',
+          orientation: pexelsOrientation(start.aspect),
           per_page: '18',
         });
         const response = await fetch(
@@ -234,7 +235,7 @@ export function SuggestedBackground(props: Props) {
                 ? `Random · ${activeQuery}`
                 : `Theo bài hát · ${activeQuery}`}
               {' · '}
-              {IMAGE_SEARCH_KEYWORD_COUNT} chủ đề
+              {IMAGE_SEARCH_KEYWORD_COUNT} cover HD · art
             </small>
           )}
           {status && (
