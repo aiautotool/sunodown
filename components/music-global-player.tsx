@@ -19,6 +19,9 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  buildEstimatedKaraokeTimeline,
+} from '@/app/lib/karaoke';
+import {
   createContext,
   useCallback,
   useContext,
@@ -38,6 +41,7 @@ export type GlobalMusicSong = {
   picture?: string | null;
   duration?: number | null;
   tags?: string | null;
+  lyrics?: string | null;
 };
 
 type RepeatMode = 'off' | 'all' | 'one';
@@ -111,6 +115,8 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const milestonesRef = useRef(new Set<string>());
+  const metadataFetchedRef = useRef(new Set<string>());
+  const nowLyricsRef = useRef<HTMLDivElement | null>(null);
 
   const [queue, setQueue] = useState<GlobalMusicSong[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
@@ -264,6 +270,39 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   }, [muted, volume]);
 
   useEffect(() => {
+    if (!current || metadataFetchedRef.current.has(current.id)) return;
+    metadataFetchedRef.current.add(current.id);
+    const controller = new AbortController();
+
+    void fetch(`/api/music/song?id=${encodeURIComponent(current.id)}`, {
+      signal: controller.signal,
+      cache: 'force-cache',
+    })
+      .then((response) => {
+        if (!response.ok) return null;
+        return response.json() as Promise<{ song?: GlobalMusicSong }>;
+      })
+      .then((payload) => {
+        if (!payload?.song) return;
+        setQueue((items) =>
+          items.map((item) =>
+            item.id === current.id
+              ? {
+                  ...item,
+                  ...payload.song,
+                  id: item.id,
+                  title: payload.song?.title || item.title,
+                }
+              : item,
+          ),
+        );
+      })
+      .catch(() => {});
+
+    return () => controller.abort();
+  }, [current?.id]);
+
+  useEffect(() => {
     setQueueOpen(false);
   }, [pathname]);
 
@@ -348,6 +387,29 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const hidePlayer = pathname === '/music/me';
   const maxDuration = Math.max(1, duration || current?.duration || 1);
   const progress = Math.max(0, Math.min(100, (time / maxDuration) * 100));
+  const karaokeTimeline = useMemo(
+    () =>
+      current?.lyrics
+        ? buildEstimatedKaraokeTimeline(current.lyrics, maxDuration)
+        : [],
+    [current?.lyrics, maxDuration],
+  );
+  const activeLyricIndex = useMemo(() => {
+    let active = -1;
+    for (let index = 0; index < karaokeTimeline.length; index += 1) {
+      if (time >= karaokeTimeline[index].start) active = index;
+      else break;
+    }
+    return active;
+  }, [karaokeTimeline, time]);
+
+  useEffect(() => {
+    if (!nowPlayingOpen || activeLyricIndex < 0) return;
+    const target = nowLyricsRef.current?.querySelector<HTMLElement>(
+      `[data-lyric-index="${activeLyricIndex}"]`,
+    );
+    target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [activeLyricIndex, nowPlayingOpen]);
 
   return (
     <MusicContext.Provider value={contextValue}>
@@ -544,6 +606,22 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
               ) : (
                 <Music2 />
               )}
+              <div
+                className={playing ? 'now-visualizer playing' : 'now-visualizer'}
+                aria-hidden="true"
+              >
+                {Array.from({ length: 28 }, (_, index) => (
+                  <span
+                    key={index}
+                    style={
+                      {
+                        '--bar-height': `${24 + ((index * 37) % 66)}%`,
+                        '--bar-delay': `${-(index % 9) * 0.09}s`,
+                      } as CSSProperties
+                    }
+                  />
+                ))}
+              </div>
             </div>
 
             <div className="now-info">
@@ -562,6 +640,38 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                 )}
                 {current.tags && <em>{current.tags}</em>}
               </div>
+
+              {karaokeTimeline.length > 0 && (
+                <div className="now-lyrics-panel">
+                  <div className="now-lyrics-head">
+                    <span>SYNCED LYRICS</span>
+                    <small>
+                      {activeLyricIndex >= 0
+                        ? `${activeLyricIndex + 1}/${karaokeTimeline.length}`
+                        : `${karaokeTimeline.length} câu`}
+                    </small>
+                  </div>
+                  <div className="now-lyrics-scroll" ref={nowLyricsRef}>
+                    {karaokeTimeline.map((line, index) => (
+                      <button
+                        key={`${index}-${line.text}`}
+                        type="button"
+                        data-lyric-index={index}
+                        className={
+                          index === activeLyricIndex
+                            ? 'active'
+                            : index < activeLyricIndex
+                              ? 'past'
+                              : ''
+                        }
+                        onClick={() => seek(line.start)}
+                      >
+                        {line.text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="now-progress">
                 <input
