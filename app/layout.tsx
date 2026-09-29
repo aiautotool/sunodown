@@ -54,7 +54,7 @@ export const metadata: Metadata = {
       },
     ],
   },
-  manifest: '/manifest.webmanifest',
+  manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     title: 'SunoDown',
