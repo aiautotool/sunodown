@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { Music2, Play, Search, Sparkles } from 'lucide-react';
+import { MusicHub } from '@/components/music-hub';
 
-const title = 'SunoDown Music - Nghe nhạc Suno, lyrics & music player';
+const title = 'SunoDown Music - Nghe nhạc Suno, playlist & Top 20';
 const description =
-  'Nghe nhạc Suno online trên SunoDown Music, mở player theo từng bài, xem lyrics, chia sẻ bài hát và chuyển thẳng sang Creator Studio để tạo lyric video.';
+  'Nghe nhạc Suno online trên SunoDown Music. Shuffle thư viện, tạo playlist, lưu bài yêu thích, xem Top 20 và đồng bộ lịch sử nghe theo tài khoản.';
 
 export const metadata: Metadata = {
   title,
@@ -12,13 +12,14 @@ export const metadata: Metadata = {
     'SunoDown Music',
     'nghe nhạc Suno',
     'Suno music player',
-    'Suno player',
-    'Suno lyrics',
-    'nghe nhạc AI',
-    'AI music player',
     'Suno playlist',
+    'Suno Top 20',
     'Suno songs',
+    'Suno lyrics',
+    'AI music player',
+    'nghe nhạc AI',
     'music player online',
+    'playlist nhạc Suno',
   ],
   alternates: { canonical: '/music' },
   openGraph: {
@@ -41,10 +42,13 @@ export const metadata: Metadata = {
 export default function MusicPage() {
   const structuredData = {
     '@context': 'https://schema.org',
-    '@type': 'CollectionPage',
+    '@type': 'WebApplication',
     name: 'SunoDown Music',
     url: 'https://picai.online/music',
     description,
+    applicationCategory: 'MultimediaApplication',
+    operatingSystem: 'Web',
+    isAccessibleForFree: true,
     isPartOf: {
       '@type': 'WebSite',
       name: 'SunoDown',
@@ -53,39 +57,14 @@ export default function MusicPage() {
   };
 
   return (
-    <main className="sd-music-landing">
+    <main className="sd-music-page">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(structuredData).replace(/</g, '\\u003c'),
+          __html: JSON.stringify(structuredData).replace(/</g, '\u003c'),
         }}
       />
-
-      <header className="sd-public-music-head">
-        <a href="/" className="sd-public-brand">
-          <span><Music2 /></span>
-          <b>SunoDown</b>
-        </a>
-        <nav>
-          <a href="/">Trang chủ</a>
-          <a href="/music" aria-current="page">Music</a>
-          <a href="/tai-suno-mp3">Tải MP3</a>
-          <a href="/tai-video-suno">Tạo video</a>
-        </nav>
-      </header>
-
-      <section className="sd-music-landing-hero">
-        <span><Sparkles /> SUNODOWN MUSIC</span>
-        <h1>Nghe nhạc Suno theo từng bài với một URL riêng.</h1>
-        <p>
-          Mỗi bài public có trang <b>/music/UUID</b> riêng để phát nhạc,
-          xem lời, chia sẻ và mở lại trong Creator Studio.
-        </p>
-        <div>
-          <a className="primary" href="/"><Search /> Mở bài từ link Suno</a>
-          <a href="/tai-video-suno"><Play /> Tạo lyric video</a>
-        </div>
-      </section>
+      <MusicHub />
     </main>
   );
 }
