@@ -240,6 +240,10 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
     startAt: number;
   } | null>(null);
   const nowPlayingCollapseTimerRef = useRef<number | null>(null);
+  const miniPlayerDragRef = useRef<{
+    pointerId: number;
+    startY: number;
+  } | null>(null);
   const lowEqRef = useRef<BiquadFilterNode | null>(null);
   const midEqRef = useRef<BiquadFilterNode | null>(null);
   const highEqRef = useRef<BiquadFilterNode | null>(null);
@@ -263,6 +267,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
   const [nowPlayingDragY, setNowPlayingDragY] = useState(0);
   const [nowPlayingDragging, setNowPlayingDragging] = useState(false);
+  const [miniPlayerLiftY, setMiniPlayerLiftY] = useState(0);
   const [volume, setVolume] = useState(0.85);
   const [muted, setMuted] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
@@ -654,6 +659,60 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [collapseNowPlaying, nowPlayingOpen]);
 
+  const beginMiniPlayerDrag = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (nowPlayingOpen || event.button !== 0) return;
+      const target = event.target as HTMLElement;
+      if (
+        target.closest(
+          '.transport button, .player-tools button, .sd-premium-player-progress',
+        )
+      ) {
+        return;
+      }
+
+      miniPlayerDragRef.current = {
+        pointerId: event.pointerId,
+        startY: event.clientY,
+      };
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {}
+    },
+    [nowPlayingOpen],
+  );
+
+  const moveMiniPlayerDrag = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const drag = miniPlayerDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      const distance = Math.max(0, drag.startY - event.clientY);
+      setMiniPlayerLiftY(Math.min(20, distance * 0.22));
+      if (distance > 6) event.preventDefault();
+    },
+    [],
+  );
+
+  const endMiniPlayerDrag = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const drag = miniPlayerDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      const distance = Math.max(0, drag.startY - event.clientY);
+      miniPlayerDragRef.current = null;
+      setMiniPlayerLiftY(0);
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {}
+      if (distance >= 48) openNowPlaying();
+    },
+    [openNowPlaying],
+  );
+
+  const cancelMiniPlayerDrag = useCallback(() => {
+    miniPlayerDragRef.current = null;
+    setMiniPlayerLiftY(0);
+  }, []);
+
   const shareCurrent = useCallback(async () => {
     if (!current) return;
     const path = canonicalSongUrl(current);
@@ -1021,6 +1080,15 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
     return active;
   }, [karaokeTimeline, time]);
 
+  const nowPlayingMorphProgress = nowPlayingOpen
+    ? Math.max(0, Math.min(1, nowPlayingDragY / 240))
+    : 1;
+  const nowPlayingScale = 1 - nowPlayingMorphProgress * 0.035;
+  const nowPlayingContentOpacity = 1 - nowPlayingMorphProgress * 0.55;
+  const miniPlayerMorphTranslate = nowPlayingOpen
+    ? Math.max(0, 24 * (1 - nowPlayingMorphProgress))
+    : miniPlayerLiftY * -1;
+
   useEffect(() => {
     if (!nowPlayingOpen || activeLyricIndex < 0) return;
     const target = nowLyricsRef.current?.querySelector<HTMLElement>(
@@ -1101,7 +1169,19 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
       />
 
       {!hidePlayer && current && (
-        <div className="sd-premium-player">
+        <div
+          className={`sd-premium-player${nowPlayingOpen ? ' now-playing-morph' : ''}`}
+          style={
+            {
+              '--sd-mini-morph': nowPlayingOpen ? nowPlayingMorphProgress : 1,
+              '--sd-mini-translate': `${miniPlayerMorphTranslate}px`,
+            } as CSSProperties
+          }
+          onPointerDown={beginMiniPlayerDrag}
+          onPointerMove={moveMiniPlayerDrag}
+          onPointerUp={endMiniPlayerDrag}
+          onPointerCancel={cancelMiniPlayerDrag}
+        >
           <input
             className="sd-premium-player-progress"
             aria-label="Tiến trình bài hát"
@@ -1231,6 +1311,11 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
           style={
             {
               '--sd-now-playing-drag': `${nowPlayingDragY}px`,
+              '--sd-now-playing-scale': nowPlayingScale,
+              '--sd-now-playing-radius': `${Math.round(
+                nowPlayingMorphProgress * 28,
+              )}px`,
+              '--sd-now-playing-content-opacity': nowPlayingContentOpacity,
             } as CSSProperties
           }
           onPointerDown={beginNowPlayingDrag}
@@ -1285,7 +1370,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                 {current.handle ? (
                   <Link
                     href={`/music/@${encodeURIComponent(current.handle)}`}
-                    onClick={() => setNowPlayingOpen(false)}
+                    onClick={() => collapseNowPlaying(false)}
                   >
                     {current.creator || `@${current.handle}`}
                   </Link>
@@ -1415,7 +1500,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                   </button>
                   <Link
                     href={canonicalSongUrl(current)}
-                    onClick={() => setNowPlayingOpen(false)}
+                    onClick={() => collapseNowPlaying(false)}
                   >
                     Trang bài hát
                   </Link>
