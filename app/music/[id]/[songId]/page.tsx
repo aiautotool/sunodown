@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { Music2 } from 'lucide-react';
 import { PublicMusicPlayer } from '@/components/public-music-player';
@@ -191,15 +190,15 @@ export default async function PublicSongByCreatorPage({ params }: PageProps) {
       />
 
       <header className="sd-public-music-head">
-        <Link href="/" className="sd-public-brand" aria-label="SunoDown">
+        <a href="/" className="sd-public-brand" aria-label="SunoDown">
           <span><Music2 /></span>
           <b>SunoDown</b>
-        </Link>
+        </a>
         <nav aria-label="Điều hướng">
-          <Link href="/">Trang chủ</Link>
-          <Link href="/music">Music</Link>
-          <Link href={profileUrl}>@{canonicalHandle}</Link>
-          <Link href="/tai-video-suno">Tạo video</Link>
+          <a href="/">Trang chủ</a>
+          <a href="/music">Music</a>
+          <a href={profileUrl}>@{canonicalHandle}</a>
+          <a href="/tai-video-suno">Tạo video</a>
         </nav>
       </header>
 
