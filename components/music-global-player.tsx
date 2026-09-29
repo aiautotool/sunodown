@@ -1580,7 +1580,28 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                         }
                         onClick={() => seek(line.start)}
                       >
-                        {line.text}
+                        {line.words?.length
+                          ? line.words.map((word, wordIndex) => {
+                              const wordActive =
+                                time >= word.start && time <= word.end + 0.08;
+                              const wordPast = time > word.end;
+                              return (
+                                <span
+                                  key={`${wordIndex}-${word.start}-${word.text}`}
+                                  className={`karaoke-word ${
+                                    wordActive
+                                      ? 'active-word'
+                                      : wordPast
+                                        ? 'past-word'
+                                        : ''
+                                  }`.trim()}
+                                >
+                                  {wordIndex > 0 ? ' ' : ''}
+                                  {word.text}
+                                </span>
+                              );
+                            })
+                          : line.text}
                       </button>
                     ))}
                   </div>
