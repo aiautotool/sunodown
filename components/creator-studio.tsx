@@ -114,6 +114,7 @@ import {
 } from '@/components/project-store';
 
 type Song = {
+  id?: string;
   sourceToken?: string;
   title: string;
   creator?: string;
@@ -124,6 +125,7 @@ type Song = {
   lyrics?: string;
   style?: string;
   tags?: string;
+  isPublic?: boolean | null;
 };
 
 type SignedInUser = { sub: string; email: string; name: string; picture?: string };
@@ -191,7 +193,7 @@ const valid = (value: string) => {
 const validSourceInput = (value: string) =>
   valid(value) || (/^[A-Za-z0-9_-]+\.\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value) && value.length <= 5000);
 const renderSong = (song: Song) => ({
-  id: null,
+  id: song.id || null,
   title: song.title,
   picture: song.picture || null,
   audio: song.audio,
@@ -2473,8 +2475,21 @@ export default function CreatorStudio() {
           <b>SunoDown</b>
         </a>
         {song ? (
-          <div className="sd-loaded">
-            <i>✓</i> Suno song loaded
+          <div className="sd-loaded-group">
+            <div className="sd-loaded">
+              <i>✓</i> Suno song loaded
+            </div>
+            {song.id && song.isPublic !== false && (
+              <a
+                className="sd-song-public-link"
+                href={`/music/${song.id}`}
+                target="_blank"
+                rel="noopener"
+                title="Mở trang nghe nhạc public"
+              >
+                <Play /> Trang bài hát
+              </a>
+            )}
           </div>
         ) : (
           <nav className="sd-home-head-nav" aria-label="Điều hướng Home">
