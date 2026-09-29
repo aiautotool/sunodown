@@ -145,6 +145,47 @@ export async function GET() {
   });
 }
 
+function alignGroqWordsToLyrics(
+  lyrics: string,
+  words: RoughWord[],
+  duration: number,
+) {
+  const anchored = alignRoughWordsToLyrics(lyrics, words, duration, {
+    strictAnchors: true,
+  });
+  if (!anchored.length) return anchored;
+
+  const full = alignRoughWordsToLyrics(lyrics, words, duration, {
+    strictAnchors: false,
+  });
+  if (!full.length) return anchored;
+
+  const anchoredIndexes = anchored
+    .map((line) => line.lyricIndex)
+    .filter((value): value is number => Number.isFinite(value));
+  if (!anchoredIndexes.length) return anchored;
+
+  const firstAnchor = Math.min(...anchoredIndexes);
+  const lastAnchor = Math.max(...anchoredIndexes);
+  const lowerBound = firstAnchor <= 1 ? 0 : firstAnchor;
+  const upperBound =
+    lastAnchor >= full.length - 2 ? full.length - 1 : lastAnchor;
+
+  const bounded = full.filter((line) => {
+    const index = line.lyricIndex;
+    return (
+      Number.isFinite(index) &&
+      (index as number) >= lowerBound &&
+      (index as number) <= upperBound
+    );
+  });
+
+  // Only use interpolation when it materially improves lyric coverage.
+  // Leading/trailing unanchored lines remain excluded unless an anchor is
+  // already close to that edge, preventing subtitles during instrumental intro/outro.
+  return bounded.length >= anchored.length + 2 ? bounded : anchored;
+}
+
 function wordsToLines(words: RoughWord[], duration: number): KaraokeLine[] {
   const lines: KaraokeLine[] = [];
   let current: RoughWord[] = [];
@@ -299,9 +340,7 @@ export async function POST(request: NextRequest) {
         : Math.max(0.1, detectedDuration);
 
     const lines = lyrics
-      ? alignRoughWordsToLyrics(lyrics, words, duration, {
-          strictAnchors: true,
-        })
+      ? alignGroqWordsToLyrics(lyrics, words, duration)
       : wordsToLines(words, duration);
 
     if (!lines.length) {
@@ -329,6 +368,8 @@ export async function POST(request: NextRequest) {
         upload_mime: audio.type || 'audio/mpeg',
         word_count: words.length,
         line_count: lines.length,
+        anchored_line_count: lines.filter((line) => line.timingSource === 'anchored').length,
+        interpolated_line_count: lines.filter((line) => line.timingSource === 'interpolated').length,
         lyrics_alignment: Boolean(lyrics),
       },
     });
