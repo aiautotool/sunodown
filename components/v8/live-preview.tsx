@@ -532,11 +532,19 @@ export function LivePreview(props: Props) {
       if(analyser&&player&&!player.paused){
         let bins=spectrumBins.current;
         if(!bins||bins.length!==analyser.frequencyBinCount){bins=new Uint8Array(analyser.frequencyBinCount);spectrumBins.current=bins;}
+        const waveLook={...DEFAULT_WAVE_APPEARANCE,...p.waveAppearance};
+        analyser.smoothingTimeConstant=Math.max(0,Math.min(.92,.04+(waveLook.smoothing/100)*.82));
         analyser.getByteFrequencyData(bins);const hz=(spatialContext.current?.sampleRate||48000)/analyser.fftSize;
         const avg=(lo:number,hi:number)=>{let s=0,n=0;for(let k=Math.max(1,Math.floor(lo/hz));k<Math.min(bins.length,Math.ceil(hi/hz));k++){s+=bins[k];n++}return n?s/n/255:0};
         const q={bass:avg(35,180),lowMid:avg(180,800),vocal:avg(800,4000),high:avg(4000,12000)},o=realtimeBands.current;
-        const env=(a:number,b:number,attack:number,release:number)=>a+(b-a)*(b>a?attack:release);
-        realtimeBands.current={bass:env(o.bass,q.bass,.86,.14),lowMid:env(o.lowMid,q.lowMid,.58,.11),vocal:env(o.vocal,q.vocal,.38,.065),high:env(o.high,q.high,.76,.24)};}
+        const attack=.14+(waveLook.attack/100)*.82,release=.025+(waveLook.release/100)*.34;
+        const env=(a:number,b:number,aScale=1,rScale=1)=>a+(b-a)*(b>a?Math.min(.98,attack*aScale):Math.min(.62,release*rScale));
+        realtimeBands.current={
+          bass:env(o.bass,q.bass,1.08,.82),
+          lowMid:env(o.lowMid,q.lowMid,.88,.78),
+          vocal:env(o.vocal,q.vocal,.72,.62),
+          high:env(o.high,q.high,1.02,1.15),
+        };}
       let absoluteTime = player?.currentTime ?? p.start;
       const end = p.fullPlayback
         ? p.song.duration || p.start + 10
