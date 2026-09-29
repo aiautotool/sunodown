@@ -380,6 +380,7 @@ function ToolControls(p: {
   audioUrl: string;
   audioBinary: Blob | null;
   songTitle: string;
+  songStyle?: string;
   songPicture?: string;
   mastering: ProductionMasteringConfig;
   setMastering: (value: ProductionMasteringConfig) => void;
@@ -388,6 +389,29 @@ function ToolControls(p: {
   presetContent?: React.ReactNode;
 }) {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
+  const waveMoodPresets: Array<{
+    id:string;
+    label:string;
+    hint:string;
+    wave:WaveStyle;
+    appearance:Partial<WaveAppearance>;
+  }> = [
+    {id:'ballad',label:'Ballad',hint:'Mềm · cảm xúc',wave:'mirror-glow',appearance:{color:'#d946ef',color2:'#60a5fa',glow:86,height:84,thickness:46,smoothing:78,attack:54,release:48,colorMode:'gradient'}},
+    {id:'edm',label:'EDM',hint:'Mạnh · neon',wave:'rounded-spectrum',appearance:{color:'#22d3ee',color2:'#f43f9f',glow:94,height:112,thickness:62,smoothing:34,attack:88,release:24,colorMode:'audio-reactive'}},
+    {id:'acoustic',label:'Acoustic',hint:'Ấm · organic',wave:'ribbon-wave',appearance:{color:'#8b5cf6',color2:'#fb7185',glow:72,height:76,thickness:44,smoothing:84,attack:44,release:58,colorMode:'gradient'}},
+    {id:'cinematic',label:'Cinematic',hint:'Rộng · dramatic',wave:'circular-pulse',appearance:{color:'#fde68a',color2:'#93c5fd',glow:82,height:96,thickness:50,smoothing:58,attack:72,release:38,colorMode:'dynamic'}},
+    {id:'lofi',label:'LoFi',hint:'Chill · dreamy',wave:'mirror-glow',appearance:{color:'#818cf8',color2:'#f0abfc',glow:68,height:66,thickness:38,smoothing:90,attack:34,release:66,colorMode:'gradient'}},
+  ];
+  const songWaveHint=(p.songStyle||'').toLowerCase();
+  const recommendedWaveMood =
+    /edm|electronic|dance|house|synth|techno|festival/.test(songWaveHint)?'edm':
+    /acoustic|guitar|folk|unplugged/.test(songWaveHint)?'acoustic':
+    /cinematic|orchestra|epic|soundtrack/.test(songWaveHint)?'cinematic':
+    /lofi|lo-fi|chill|jazz|soul/.test(songWaveHint)?'lofi':'ballad';
+  const applyWaveMood=(preset:(typeof waveMoodPresets)[number])=>{
+    p.setWave(preset.wave);
+    p.setWaveAppearance({...p.waveAppearance,...preset.appearance});
+  };
   const rows = [
     ['audio', 'Âm thanh', Music2],
     ['presets', 'Mẫu hoàn chỉnh', Sparkles],
@@ -488,39 +512,124 @@ function ToolControls(p: {
                 </div>
               )}
               {id === 'wave' && (
-                <p className="sd-control-hint">
-                  Chọn kiểu sóng rồi kéo trực tiếp vùng sóng trên preview.
-                </p>
-              )}
-              {id === 'wave' && (
-                <div className="sd-wave-studio">
-                  <div className="sd-wave-style-grid">
-                    {WAVE_STYLES.map((x) => (
+                <div className="sd-wave-studio sd-wave-studio-v23">
+                  <header className="sd-wave-studio-head">
+                    <div>
+                      <small>SIGNATURE WAVEFORMS</small>
+                      <b>Sóng nhạc phản ứng theo FFT thật</b>
+                      <span>Chọn style, Play preview và xem waveform đổi ngay theo bass, vocal và high.</span>
+                    </div>
+                    <i>LIVE</i>
+                  </header>
+
+                  <div className="sd-wave-featured-grid">
+                    {WAVE_STYLES.filter((x) => x.featured).map((x,index) => (
                       <button
-                        className={`${p.wave === x.id ? 'active' : ''} ${x.featured ? 'featured' : ''}`.trim()}
+                        className={p.wave === x.id ? 'active' : ''}
                         onClick={() => p.setWave(x.id)}
                         key={x.id}
-                        title={x.featured ? `Signature waveform · ${x.label}` : x.label}
+                        title={x.label}
                       >
-                        <i className={'sd-wave-icon wave-'+x.id} />
-                        <span>{x.label}</span>
+                        <span className={'sd-wave-preview wave-'+x.id}>
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                        <b>{index + 1}. {x.label}</b>
+                        <small>{x.id==='mirror-glow'?'Ballad / Romantic':x.id==='rounded-spectrum'?'EDM / Pop':x.id==='circular-pulse'?'Cinematic / Travel':x.id==='ribbon-wave'?'Acoustic / LoFi':x.id==='arc-burst'?'Synth / Neon':x.id==='stacked-spectrum'?'Club / Energy':x.id==='neon-ring'?'Album / Vinyl':'Ambient / Particle'}</small>
                       </button>
                     ))}
                   </div>
-                  <div className="sd-wave-look">
-                    <div className="sd-wave-colors">
-                      <label>Màu chính<input type="color" value={p.waveAppearance.color} onChange={e=>p.setWaveAppearance({...p.waveAppearance,color:e.target.value})}/></label>
-                      <label>Màu phụ<input type="color" value={p.waveAppearance.color2} onChange={e=>p.setWaveAppearance({...p.waveAppearance,color2:e.target.value})}/></label>
+
+                  <details className="sd-wave-more">
+                    <summary>Classic & experimental waveforms <span>{WAVE_STYLES.filter((x)=>!x.featured).length}</span></summary>
+                    <div className="sd-wave-style-grid">
+                      {WAVE_STYLES.filter((x)=>!x.featured).map((x) => (
+                        <button
+                          className={p.wave === x.id ? 'active' : ''}
+                          onClick={() => p.setWave(x.id)}
+                          key={x.id}
+                          title={x.label}
+                        >
+                          <i className={'sd-wave-icon wave-'+x.id} />
+                          <span>{x.label}</span>
+                        </button>
+                      ))}
                     </div>
-                    {[
-                      ['Kích thước',50,180,p.layout.wave.scale,(v:number)=>p.setLayout({...p.layout,wave:{...p.layout.wave,scale:v}}),'%'],
-                      ['Glow',0,100,p.waveAppearance.glow,(v:number)=>p.setWaveAppearance({...p.waveAppearance,glow:v}),'%'],
-                      ['Độ đậm',20,100,p.waveAppearance.opacity,(v:number)=>p.setWaveAppearance({...p.waveAppearance,opacity:v}),'%'],
-                      ['Mật độ',20,100,p.waveAppearance.density,(v:number)=>p.setWaveAppearance({...p.waveAppearance,density:v}),'%'],
-                      ['Mượt',0,100,p.waveAppearance.smoothing,(v:number)=>p.setWaveAppearance({...p.waveAppearance,smoothing:v}),'%'],
-                    ].map(([label,min,max,value,setter,suffix])=><label className="sd-wave-slider" key={String(label)}><span>{String(label)} <b>{Number(value)}{String(suffix)}</b></span><input type="range" min={Number(min)} max={Number(max)} value={Number(value)} onChange={e=>(setter as (v:number)=>void)(+e.target.value)}/></label>)}
-                    <p className="sd-control-hint">Kéo trực tiếp waveform trên preview để đặt vị trí. Preview và video xuất dùng cùng một renderer.</p>
+                  </details>
+
+                  <div className="sd-wave-workspace">
+                    <section className="sd-wave-look">
+                      <header><b>WAVEFORM SETTINGS</b><small>{WAVE_STYLES.find((x)=>x.id===p.wave)?.label}</small></header>
+                      <div className="sd-wave-colors">
+                        <label>Màu chính<input type="color" value={p.waveAppearance.color} onChange={e=>p.setWaveAppearance({...p.waveAppearance,color:e.target.value})}/></label>
+                        <label>Màu phụ<input type="color" value={p.waveAppearance.color2} onChange={e=>p.setWaveAppearance({...p.waveAppearance,color2:e.target.value})}/></label>
+                      </div>
+                      <div className="sd-wave-slider-grid">
+                        {[
+                          ['Height',20,160,p.waveAppearance.height,(v:number)=>p.setWaveAppearance({...p.waveAppearance,height:v}),'%'],
+                          ['Thickness',10,100,p.waveAppearance.thickness,(v:number)=>p.setWaveAppearance({...p.waveAppearance,thickness:v}),'%'],
+                          ['Glow',0,100,p.waveAppearance.glow,(v:number)=>p.setWaveAppearance({...p.waveAppearance,glow:v}),'%'],
+                          ['Smoothing',0,100,p.waveAppearance.smoothing,(v:number)=>p.setWaveAppearance({...p.waveAppearance,smoothing:v}),'%'],
+                          ['Attack',0,100,p.waveAppearance.attack,(v:number)=>p.setWaveAppearance({...p.waveAppearance,attack:v}),''],
+                          ['Release',0,100,p.waveAppearance.release,(v:number)=>p.setWaveAppearance({...p.waveAppearance,release:v}),''],
+                          ['Opacity',10,100,p.waveAppearance.opacity,(v:number)=>p.setWaveAppearance({...p.waveAppearance,opacity:v}),'%'],
+                          ['Density',20,100,p.waveAppearance.density,(v:number)=>p.setWaveAppearance({...p.waveAppearance,density:v}),'%'],
+                          ['Scale',50,180,p.layout.wave.scale,(v:number)=>p.setLayout({...p.layout,wave:{...p.layout.wave,scale:v}}),'%'],
+                          ['Rotation',-180,180,p.waveAppearance.rotation,(v:number)=>p.setWaveAppearance({...p.waveAppearance,rotation:v}),'°'],
+                        ].map(([label,min,max,value,setter,suffix])=>
+                          <label className="sd-wave-slider" key={String(label)}>
+                            <span>{String(label)} <b>{label==='Attack'||label==='Release'?(Number(value)/100).toFixed(2):Number(value)}{String(suffix)}</b></span>
+                            <input type="range" min={Number(min)} max={Number(max)} value={Number(value)} onChange={e=>(setter as (v:number)=>void)(+e.target.value)}/>
+                          </label>
+                        )}
+                      </div>
+                    </section>
+
+                    <section className="sd-wave-color-mode">
+                      <header><b>COLOR MODE</b><small>Animated</small></header>
+                      <div>
+                        {([
+                          ['solid','Solid'],
+                          ['gradient','Gradient'],
+                          ['dynamic','Dynamic'],
+                          ['audio-reactive','Audio Reactive'],
+                        ] as const).map(([value,label])=>(
+                          <button
+                            key={value}
+                            className={p.waveAppearance.colorMode===value?'active':''}
+                            onClick={()=>p.setWaveAppearance({...p.waveAppearance,colorMode:value})}
+                          >
+                            <i className={'mode-'+value} />
+                            <span>{label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
                   </div>
+
+                  <section className="sd-wave-auto">
+                    <header>
+                      <div><b>PRESETS</b><small>AUTO RECOMMEND</small></div>
+                      <span>App gợi ý theo style bài hát</span>
+                    </header>
+                    <div>
+                      {waveMoodPresets.map((preset)=>(
+                        <button
+                          key={preset.id}
+                          className={recommendedWaveMood===preset.id?'recommended':''}
+                          onClick={()=>applyWaveMood(preset)}
+                        >
+                          <span className={'sd-wave-preview wave-'+preset.wave}><i/><i/><i/></span>
+                          <b>{preset.label}</b>
+                          <small>{preset.hint}</small>
+                          {recommendedWaveMood===preset.id&&<em>ĐỀ XUẤT</em>}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  <p className="sd-control-hint">Kéo trực tiếp waveform trên preview để đặt vị trí. Preview và video xuất dùng cùng một renderer nên visual không đổi khi export.</p>
                 </div>
               )}
               {id === 'lyrics' && (
@@ -2559,6 +2668,7 @@ export default function CreatorStudio({
     audioUrl: song?.audio || '',
     audioBinary,
     songTitle: song?.title || 'suno',
+    songStyle: `${song?.style || ''} ${song?.tags || ''}`,
     songPicture: song?.picture || undefined,
     mastering: masteringConfig,
     setMastering: (value) => {
