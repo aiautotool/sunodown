@@ -80,8 +80,21 @@ async function getEnv(): Promise<GroqEnv> {
 }
 
 async function getGroqApiKey(request: NextRequest) {
+  const bridged =
+    typeof (globalThis as typeof globalThis & {
+      __SUNODOWN_GROQ_API_KEY?: unknown;
+    }).__SUNODOWN_GROQ_API_KEY === 'string'
+      ? String(
+          (globalThis as typeof globalThis & {
+            __SUNODOWN_GROQ_API_KEY?: string;
+          }).__SUNODOWN_GROQ_API_KEY,
+        ).trim()
+      : '';
+  if (bridged) return bridged;
+
   const internal = request.headers.get('x-sunodown-groq-key')?.trim();
   if (internal) return internal;
+
   const env = await getEnv();
   return env.GROQ_API_KEY?.trim() || '';
 }
@@ -241,6 +254,14 @@ export async function POST(request: NextRequest) {
         {
           error: 'Groq subtitle chưa được cấu hình trên server.',
           code: 'GROQ_NOT_CONFIGURED',
+          diagnostics: {
+            bridged: Boolean(
+              (globalThis as typeof globalThis & {
+                __SUNODOWN_GROQ_API_KEY?: unknown;
+              }).__SUNODOWN_GROQ_API_KEY,
+            ),
+            header: Boolean(request.headers.get('x-sunodown-groq-key')),
+          },
         },
         { status: 503 },
       );
