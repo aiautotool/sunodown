@@ -33,6 +33,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
 
@@ -233,6 +234,12 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const visualizerFrameRef = useRef<number | null>(null);
+  const nowPlayingDragRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startAt: number;
+  } | null>(null);
+  const nowPlayingCollapseTimerRef = useRef<number | null>(null);
   const lowEqRef = useRef<BiquadFilterNode | null>(null);
   const midEqRef = useRef<BiquadFilterNode | null>(null);
   const highEqRef = useRef<BiquadFilterNode | null>(null);
@@ -254,6 +261,8 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
   const [queueOpen, setQueueOpen] = useState(false);
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
+  const [nowPlayingDragY, setNowPlayingDragY] = useState(0);
+  const [nowPlayingDragging, setNowPlayingDragging] = useState(false);
   const [volume, setVolume] = useState(0.85);
   const [muted, setMuted] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
@@ -525,6 +534,125 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
       mode === 'off' ? 'all' : mode === 'all' ? 'one' : 'off',
     );
   }, []);
+
+  const openNowPlaying = useCallback(() => {
+    if (nowPlayingCollapseTimerRef.current != null) {
+      window.clearTimeout(nowPlayingCollapseTimerRef.current);
+      nowPlayingCollapseTimerRef.current = null;
+    }
+    setNowPlayingDragY(0);
+    setNowPlayingDragging(false);
+    setNowPlayingOpen(true);
+  }, []);
+
+  const collapseNowPlaying = useCallback((animated = true) => {
+    nowPlayingDragRef.current = null;
+    setNowPlayingDragging(false);
+
+    if (!animated || typeof window === 'undefined') {
+      setNowPlayingOpen(false);
+      setNowPlayingDragY(0);
+      return;
+    }
+
+    setNowPlayingDragY(Math.max(window.innerHeight, 720));
+    if (nowPlayingCollapseTimerRef.current != null) {
+      window.clearTimeout(nowPlayingCollapseTimerRef.current);
+    }
+    nowPlayingCollapseTimerRef.current = window.setTimeout(() => {
+      setNowPlayingOpen(false);
+      setNowPlayingDragY(0);
+      nowPlayingCollapseTimerRef.current = null;
+    }, 240);
+  }, []);
+
+  const beginNowPlayingDrag = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (!nowPlayingOpen || event.button !== 0) return;
+      const target = event.target as HTMLElement;
+      if (
+        target.closest(
+          'button, a, input, .now-lyrics-scroll, .now-controls, .now-footer',
+        )
+      ) {
+        return;
+      }
+
+      nowPlayingDragRef.current = {
+        pointerId: event.pointerId,
+        startY: event.clientY,
+        startAt: performance.now(),
+      };
+      setNowPlayingDragging(true);
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {}
+    },
+    [nowPlayingOpen],
+  );
+
+  const moveNowPlayingDrag = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      const drag = nowPlayingDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+
+      const rawDistance = Math.max(0, event.clientY - drag.startY);
+      const distance =
+        rawDistance <= 260 ? rawDistance : 260 + (rawDistance - 260) * 0.58;
+      setNowPlayingDragY(distance);
+
+      if (rawDistance > 6) event.preventDefault();
+    },
+    [],
+  );
+
+  const endNowPlayingDrag = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      const drag = nowPlayingDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+
+      const distance = Math.max(0, event.clientY - drag.startY);
+      const elapsed = Math.max(16, performance.now() - drag.startAt);
+      const velocity = distance / elapsed;
+      nowPlayingDragRef.current = null;
+
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {}
+
+      if (distance >= 110 || (distance >= 42 && velocity >= 0.48)) {
+        collapseNowPlaying(true);
+        return;
+      }
+
+      setNowPlayingDragging(false);
+      setNowPlayingDragY(0);
+    },
+    [collapseNowPlaying],
+  );
+
+  const cancelNowPlayingDrag = useCallback(() => {
+    nowPlayingDragRef.current = null;
+    setNowPlayingDragging(false);
+    setNowPlayingDragY(0);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (nowPlayingCollapseTimerRef.current != null) {
+        window.clearTimeout(nowPlayingCollapseTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!nowPlayingOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') collapseNowPlaying(true);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [collapseNowPlaying, nowPlayingOpen]);
 
   const shareCurrent = useCallback(async () => {
     if (!current) return;
@@ -989,7 +1117,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
           <button
             type="button"
             className="track-summary"
-            onClick={() => setNowPlayingOpen(true)}
+            onClick={openNowPlaying}
             aria-label="Mở Now Playing"
           >
             {current.picture ? (
@@ -1085,7 +1213,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
               <ListMusic />
             </button>
             <button
-              onClick={() => setNowPlayingOpen(true)}
+              onClick={openNowPlaying}
               aria-label="Mở Now Playing"
             >
               <Maximize2 />
@@ -1096,10 +1224,19 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
 
       {!hidePlayer && nowPlayingOpen && current && (
         <section
-          className="sd-premium-now-playing"
+          className={`sd-premium-now-playing${nowPlayingDragging ? ' is-dragging' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-label="Now Playing"
+          style={
+            {
+              '--sd-now-playing-drag': `${nowPlayingDragY}px`,
+            } as CSSProperties
+          }
+          onPointerDown={beginNowPlayingDrag}
+          onPointerMove={moveNowPlayingDrag}
+          onPointerUp={endNowPlayingDrag}
+          onPointerCancel={cancelNowPlayingDrag}
         >
           <div className="visual-bg" aria-hidden="true">
             {current.picture && <img src={current.picture} alt="" />}
@@ -1108,8 +1245,9 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
           <header>
             <button
               className="collapse"
-              onClick={() => setNowPlayingOpen(false)}
-              aria-label="Thu nhỏ player"
+              onClick={() => collapseNowPlaying(true)}
+              aria-label="Thu nhỏ Now Playing"
+              title="Thu nhỏ"
             >
               <ChevronDown />
             </button>
@@ -1422,7 +1560,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
 
             <div className="queue-current">
               <span>Đang phát</span>
-              <button onClick={() => setNowPlayingOpen(true)}>
+              <button onClick={openNowPlaying}>
                 {current.picture ? (
                   <img src={current.picture} alt="" />
                 ) : (
