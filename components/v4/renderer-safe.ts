@@ -34,6 +34,10 @@ import {
 import type { MediaClip } from '@/components/editor-timeline';
 import { ensureStudioFontsReady } from '@/components/studio-fonts';
 import { drawVideoEffects, type EffectConfig } from '@/components/v8/video-effects';
+import {
+  drawSignatureWaveform,
+  isSignatureWaveStyle,
+} from './signature-waveforms';
 
 const MOTION_GAIN: Record<MotionIntensity, number> = {
   low: 0.45,
@@ -575,6 +579,23 @@ function drawWaveBase(
   grad.addColorStop(0,look.color);
   grad.addColorStop(.5,look.color2);
   grad.addColorStop(1,look.color);
+  if (isSignatureWaveStyle(style)) {
+    drawSignatureWaveform(
+      ctx,
+      style,
+      vals,
+      t,
+      {
+        ph,
+        usable,
+        start,
+        cy,
+        max: max * Math.max(0.5, Math.min(1.8, look.height / 78)),
+      },
+      look,
+    );
+    return;
+  }
   const radial = [
     'circle',
     'circle-bars',
