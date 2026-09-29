@@ -5,6 +5,7 @@ import {
 } from './karaoke-backend-sync';
 import { buildCapCutKaraokeTimeline } from './karaoke-capcut-sync';
 import { isMobileKaraokeDevice } from './karaoke-device';
+import { buildGroqKaraokeTimeline } from './karaoke-groq-sync';
 import {
   buildLocalKaraokeTimeline,
   buildMobileLocalKaraokeTimeline,
@@ -24,6 +25,8 @@ import {
 } from './karaoke-validation';
 
 export type KaraokeEngineId =
+  | 'groq-whisper'
+  | 'groq-whisper-transcription'
   | 'backend-whisper'
   | 'backend-whisper-transcription'
   | 'capcut'
@@ -136,7 +139,9 @@ export async function runKaraokePipeline({
       // Mobile local Whisper already works on short chunks. Avoid decoding the
       // whole song a second time for onset refinement on iOS/Safari.
       const refinedTimeline =
-        mobile && engine.startsWith('local-whisper-mobile')
+        mobile &&
+        (engine.startsWith('local-whisper-mobile') ||
+          engine.startsWith('groq-whisper'))
           ? rawTimeline
           : await refineToSungRhythm(rawTimeline, engine);
       const timeline = engine.startsWith('backend-whisper')
@@ -212,7 +217,7 @@ export async function runKaraokePipeline({
   onProgress?.({
     stage: 'prepare',
     message: mobile
-      ? 'Thiết bị mobile · ưu tiên Whisper Tiny chạy trực tiếp trong trình duyệt…'
+      ? 'Thiết bị mobile · ưu tiên Groq Whisper Large V3 Turbo…'
       : 'Thiết bị desktop · ưu tiên Whisper trong trình duyệt…',
   });
 
@@ -246,8 +251,26 @@ export async function runKaraokePipeline({
     }> = mobile
       ? [
           {
+            engine: 'groq-whisper',
+            label: 'Mobile · đang căn subtitle bằng Groq Whisper Large V3 Turbo…',
+            run: () =>
+              buildGroqKaraokeTimeline({
+                audio,
+                lyrics: lyrics!,
+                duration,
+                language,
+                onStage: (message) =>
+                  onProgress?.({
+                    stage: 'recognize',
+                    engine: 'groq-whisper',
+                    message,
+                  }),
+                onDebug,
+              }),
+          },
+          {
             engine: 'local-whisper-mobile',
-            label: 'Mobile · đang chạy Whisper Tiny trực tiếp trên trình duyệt…',
+            label: 'Groq chưa đủ tốt · đang thử Whisper Tiny trực tiếp trên mobile…',
             run: () =>
               buildMobileLocalKaraokeTimeline({
                 audio,
@@ -315,8 +338,25 @@ export async function runKaraokePipeline({
     }> = mobile
       ? [
           {
+            engine: 'groq-whisper-transcription',
+            label: 'Mobile · đang tạo subtitle bằng Groq Whisper Large V3 Turbo…',
+            run: () =>
+              buildGroqKaraokeTimeline({
+                audio,
+                duration,
+                language,
+                onStage: (message) =>
+                  onProgress?.({
+                    stage: 'recognize',
+                    engine: 'groq-whisper-transcription',
+                    message,
+                  }),
+                onDebug,
+              }),
+          },
+          {
             engine: 'local-whisper-mobile-transcription',
-            label: 'Mobile · đang tạo subtitle bằng Whisper Tiny trong trình duyệt…',
+            label: 'Groq lỗi hoặc chưa đủ tốt · đang thử Whisper Tiny trên mobile…',
             run: () =>
               transcribeMobileLocalKaraokeTimeline({
                 audio,
