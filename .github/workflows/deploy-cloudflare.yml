@@ -89,7 +89,7 @@ jobs:
 
       - name: Verify Groq POST sees Worker secret
         run: |
-          status="$(curl --silent --show-error --location --max-time 20 -o /tmp/groq-post.json -w '%{http_code}' -X POST https://picai.online/api/karaoke/groq)"
+          status="$(curl --silent --show-error --location --max-time 20 -o /tmp/groq-post.json -w '%{http_code}' -X POST -F 'probe=1' https://picai.online/api/karaoke/groq)"
           cat /tmp/groq-post.json
           test "$status" = "400"
           grep -Eq '"error"[[:space:]]*:[[:space:]]*"Thiếu audio' /tmp/groq-post.json
