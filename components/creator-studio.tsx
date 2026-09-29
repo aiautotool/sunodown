@@ -82,6 +82,7 @@ import { StudioSheet, StudioTabs } from '@/components/studio-ui';
 import { StyleStudio } from '@/components/style-studio';
 import { AccountLibraryPanel } from '@/components/account-library-panel';
 import { MobileAppNav } from '@/components/mobile-app-nav';
+import { STUDIO_TITLE_FONTS } from '@/components/studio-fonts';
 import {
   BUILTIN_STUDIO_PRESETS,
   PRESET_SCHEMA_VERSION,
@@ -441,13 +442,18 @@ function ToolControls(p: {
                           })
                         }
                       >
-                        <option value="system-ui, sans-serif">Modern</option>
-                        <option value="Georgia, serif">Cinematic</option>
-                        <option value="'Trebuchet MS', sans-serif">
-                          Rounded
-                        </option>
-                        <option value="'Courier New', monospace">Mono</option>
-                        <option value="Impact, sans-serif">Impact</option>
+                        {(['Core', 'CoolText'] as const).map((group) => (
+                          <optgroup
+                            key={group}
+                            label={group === 'CoolText' ? 'CoolText · Title Fonts' : 'Cơ bản'}
+                          >
+                            {STUDIO_TITLE_FONTS.filter((font) => font.group === group).map((font) => (
+                              <option key={font.id} value={font.family}>
+                                {font.label}{group === 'CoolText' ? ` · ${font.hint}` : ''}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
                       </select>
                       <input
                         type="color"
