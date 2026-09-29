@@ -1,6 +1,7 @@
 import { type KaraokeLine } from './karaoke';
 import {
   buildBackendKaraokeTimeline,
+  buildFullBackendKaraokeTimeline,
   compensateBackendVocalLatency,
 } from './karaoke-backend-sync';
 import { buildCapCutKaraokeTimeline } from './karaoke-capcut-sync';
@@ -28,7 +29,9 @@ export type KaraokeEngineId =
   | 'groq-whisper'
   | 'groq-whisper-transcription'
   | 'backend-whisper'
+  | 'backend-whisper-full'
   | 'backend-whisper-transcription'
+  | 'backend-whisper-full-transcription'
   | 'capcut'
   | 'local-whisper'
   | 'local-whisper-mobile'
@@ -141,7 +144,8 @@ export async function runKaraokePipeline({
       const refinedTimeline =
         mobile &&
         (engine.startsWith('local-whisper-mobile') ||
-          engine.startsWith('groq-whisper'))
+          engine.startsWith('groq-whisper') ||
+          engine.startsWith('backend-whisper-full'))
           ? rawTimeline
           : await refineToSungRhythm(rawTimeline, engine);
       const timeline = engine.startsWith('backend-whisper')
@@ -269,8 +273,26 @@ export async function runKaraokePipeline({
               }),
           },
           {
+            engine: 'backend-whisper-full',
+            label: 'Groq chưa đủ tốt · gửi nguyên audio lên backend, không decode trên iPhone…',
+            run: () =>
+              buildFullBackendKaraokeTimeline({
+                audio,
+                lyrics: lyrics!,
+                duration,
+                language,
+                onStage: (message) =>
+                  onProgress?.({
+                    stage: 'fallback',
+                    engine: 'backend-whisper-full',
+                    message,
+                  }),
+                onDebug,
+              }),
+          },
+          {
             engine: 'local-whisper-mobile',
-            label: 'Groq chưa đủ tốt · đang thử Whisper Tiny trực tiếp trên mobile…',
+            label: 'Backend full chưa đủ tốt · mới thử Whisper Tiny trực tiếp trên mobile…',
             run: () =>
               buildMobileLocalKaraokeTimeline({
                 audio,
@@ -355,8 +377,25 @@ export async function runKaraokePipeline({
               }),
           },
           {
+            engine: 'backend-whisper-full-transcription',
+            label: 'Groq lỗi · gửi nguyên audio lên backend, không decode trên iPhone…',
+            run: () =>
+              buildFullBackendKaraokeTimeline({
+                audio,
+                duration,
+                language,
+                onStage: (message) =>
+                  onProgress?.({
+                    stage: 'fallback',
+                    engine: 'backend-whisper-full-transcription',
+                    message,
+                  }),
+                onDebug,
+              }),
+          },
+          {
             engine: 'local-whisper-mobile-transcription',
-            label: 'Groq lỗi hoặc chưa đủ tốt · đang thử Whisper Tiny trên mobile…',
+            label: 'Backend full lỗi hoặc chưa đủ tốt · đang thử Whisper Tiny trên mobile…',
             run: () =>
               transcribeMobileLocalKaraokeTimeline({
                 audio,
