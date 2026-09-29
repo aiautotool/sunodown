@@ -4679,3 +4679,87 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
     animation:none!important;
   }
 }
+
+
+/* V23 collapsible home sidebar */
+.sd-home-v23{
+  transition:grid-template-columns .22s ease;
+}
+.sd-home-side{
+  transition:padding .22s ease,border-color .22s ease,background .22s ease;
+}
+.sd-home-side>.sd-home-side-collapse{
+  min-height:38px;
+  margin:-8px 0 4px;
+  grid-template-columns:22px minmax(0,1fr);
+  border-color:rgba(140,156,184,.08);
+  background:rgba(255,255,255,.018);
+  color:#7f8ba0;
+}
+.sd-home-side>.sd-home-side-collapse:hover{
+  color:#dce4f0;
+  background:rgba(255,255,255,.04);
+}
+.sd-home-side>.sd-home-side-collapse svg{
+  width:17px;
+  height:17px;
+}
+.sd-home-v23.sd-home-side-collapsed{
+  grid-template-columns:76px minmax(0,1fr);
+}
+.sd-home-side-collapsed .sd-home-side{
+  padding-left:10px;
+  padding-right:10px;
+}
+.sd-home-side-collapsed .sd-home-side>button:not(.sd-home-side-pro),
+.sd-home-side-collapsed .sd-home-side>.sd-home-side-link,
+.sd-home-side-collapsed .sd-home-side-upload{
+  grid-template-columns:1fr;
+  place-items:center;
+  gap:0;
+  padding-left:0;
+  padding-right:0;
+}
+.sd-home-side-collapsed .sd-home-side>button:not(.sd-home-side-pro)>span,
+.sd-home-side-collapsed .sd-home-side>button.primary>i,
+.sd-home-side-collapsed .sd-home-side>.sd-home-side-link>span,
+.sd-home-side-collapsed .sd-home-side-upload>span{
+  display:none;
+}
+.sd-home-side-collapsed .sd-home-side>.sd-home-side-collapse{
+  margin-left:0;
+  margin-right:0;
+}
+.sd-home-side-collapsed .sd-home-side>button.primary{
+  min-height:54px;
+  margin-bottom:9px;
+}
+.sd-home-side-collapsed .sd-home-side-pro{
+  min-height:54px!important;
+  grid-template-columns:1fr!important;
+  place-items:center;
+  padding:0!important;
+}
+.sd-home-side-collapsed .sd-home-side-pro>span{
+  grid-row:auto;
+  width:34px;
+  height:34px;
+}
+.sd-home-side-collapsed .sd-home-side-pro>b,
+.sd-home-side-collapsed .sd-home-side-pro>small,
+.sd-home-side-collapsed .sd-home-side-pro>i{
+  display:none;
+}
+.sd-home-side-collapsed .sd-home-shell{
+  padding-left:24px;
+}
+@media(max-width:1180px) and (min-width:901px){
+  .sd-home-v23.sd-home-side-collapsed{
+    grid-template-columns:72px minmax(0,1fr);
+  }
+}
+@media(max-width:900px){
+  .sd-home-v23.sd-home-side-collapsed{
+    display:block;
+  }
+}
