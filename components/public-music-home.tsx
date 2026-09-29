@@ -13,7 +13,6 @@ import {
   TrendingUp,
   UserRound,
 } from 'lucide-react';
-import Link from 'next/link';
 import { FormEvent, useMemo, useState } from 'react';
 import type {
   DirectorySong,
@@ -163,13 +162,13 @@ export function PublicMusicHome({
         {song.picture ? <img src={song.picture} alt="" /> : <Music2 />}
         <span><Play /></span>
       </button>
-      <Link href={`/music/@${encodeURIComponent(song.handle)}/${song.id}`}>
+      <a href={`/music/@${encodeURIComponent(song.handle)}/${song.id}`}>
         <b>{song.title}</b>
-      </Link>
+      </a>
       <div className="sd-discover-card-meta">
-        <Link className="creator" href={`/music/@${encodeURIComponent(song.handle)}`}>
+        <a className="creator" href={`/music/@${encodeURIComponent(song.handle)}`}>
           @{song.handle}
-        </Link>
+        </a>
         <button
           type="button"
           className="share"
@@ -186,11 +185,11 @@ export function PublicMusicHome({
   return (
     <div className="sd-discover">
       <header className="sd-discover-topbar">
-        <Link className="brand" href="/">
+        <a className="brand" href="/">
           <span><Music2 /></span>
           <b>SunoDown</b>
           <em>Music</em>
-        </Link>
+        </a>
 
         <label className="search">
           <Search />
@@ -202,8 +201,8 @@ export function PublicMusicHome({
         </label>
 
         <nav>
-          <Link href="/music" className="active">Khám phá</Link>
-          <Link href="/music/me">Music của tôi</Link>
+          <a href="/music" className="active">Khám phá</a>
+          <a href="/music/me">Music của tôi</a>
         </nav>
       </header>
 
@@ -213,9 +212,9 @@ export function PublicMusicHome({
             <div className="hero-copy">
               <span><Sparkles /> FEATURED</span>
               <h1>{featured.title}</h1>
-              <Link href={`/music/@${encodeURIComponent(featured.handle)}`}>
+              <a href={`/music/@${encodeURIComponent(featured.handle)}`}>
                 @{featured.handle}
-              </Link>
+              </a>
               <p>{featured.tags || 'Khám phá một bài hát mới từ cộng đồng SunoDown.'}</p>
               <div>
                 <button
@@ -238,9 +237,9 @@ export function PublicMusicHome({
                 >
                   <Shuffle /> Random
                 </button>
-                <Link href={`/music/@${encodeURIComponent(featured.handle)}/${featured.id}`}>
+                <a href={`/music/@${encodeURIComponent(featured.handle)}/${featured.id}`}>
                   Chi tiết <ArrowRight />
-                </Link>
+                </a>
                 <button onClick={() => void shareSong(featured)}>
                   <Share2 /> {sharedSongId === featured.id ? 'Đã copy' : 'Share'}
                 </button>
@@ -268,7 +267,7 @@ export function PublicMusicHome({
             <Music2 />
             <h1>Music đang chờ bài hát đầu tiên.</h1>
             <p>Khi một creator được sync vào SunoDown, nhạc public sẽ xuất hiện ở đây.</p>
-            <Link href="/library">Sync thư viện</Link>
+            <a href="/library">Sync thư viện</a>
           </section>
         )}
 
@@ -353,12 +352,12 @@ export function PublicMusicHome({
                     <i><Play /></i>
                   </button>
                   <div>
-                    <Link href={`/music/@${encodeURIComponent(song.handle)}/${song.id}`}>
+                    <a href={`/music/@${encodeURIComponent(song.handle)}/${song.id}`}>
                       {song.title}
-                    </Link>
-                    <Link href={`/music/@${encodeURIComponent(song.handle)}`}>
+                    </a>
+                    <a href={`/music/@${encodeURIComponent(song.handle)}`}>
                       @{song.handle}
-                    </Link>
+                    </a>
                   </div>
                   <span>{song.playCount || 0} lượt nghe</span>
                   <div className="sd-chart-actions">
@@ -405,7 +404,7 @@ export function PublicMusicHome({
           {filteredCreators.length ? (
             <div className="sd-creator-strip">
               {filteredCreators.slice(0, 16).map((creator) => (
-                <Link
+                <a
                   key={creator.handle}
                   href={`/music/@${encodeURIComponent(creator.handle)}`}
                 >
@@ -419,7 +418,7 @@ export function PublicMusicHome({
                   <b>{creator.displayName}</b>
                   <small>@{creator.handle}</small>
                   <em>{creator.songCount} bài</em>
-                </Link>
+                </a>
               ))}
             </div>
           ) : (
