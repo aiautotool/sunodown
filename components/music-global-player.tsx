@@ -22,6 +22,7 @@ import {
 import { usePathname } from 'next/navigation';
 import {
   buildEstimatedKaraokeTimeline,
+  normalizeKaraokeTimeline,
   type KaraokeLine,
 } from '@/app/lib/karaoke';
 import {
@@ -218,6 +219,101 @@ async function trackEvent(songId: string, event: string) {
       body: JSON.stringify({ songId, event }),
     });
   } catch {}
+}
+
+const MUSIC_SUBTITLE_CACHE_VERSION = 'groq-v1';
+
+function subtitleCacheKey(songId: string) {
+  return `sunodown-music-subtitle:${MUSIC_SUBTITLE_CACHE_VERSION}:${songId}`;
+}
+
+function readCachedSubtitle(songId: string, duration: number) {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(subtitleCacheKey(songId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { timeline?: KaraokeLine[]; savedAt?: number };
+    if (!Array.isArray(parsed.timeline) || !parsed.timeline.length) return null;
+    const timeline = normalizeKaraokeTimeline(
+      parsed.timeline,
+      Number.isFinite(duration) && duration > 0
+        ? duration
+        : Number.POSITIVE_INFINITY,
+    );
+    return timeline.length ? timeline : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedSubtitle(songId: string, timeline: KaraokeLine[]) {
+  if (typeof window === 'undefined' || !timeline.length) return;
+  try {
+    localStorage.setItem(
+      subtitleCacheKey(songId),
+      JSON.stringify({ timeline, savedAt: Date.now() }),
+    );
+  } catch {}
+}
+
+function fileExtensionForAudio(type: string) {
+  const mime = type.toLowerCase();
+  if (mime.includes('mp4')) return 'mp4';
+  if (mime.includes('mpeg') || mime.includes('mp3')) return 'mp3';
+  if (mime.includes('m4a')) return 'm4a';
+  if (mime.includes('wav')) return 'wav';
+  if (mime.includes('webm')) return 'webm';
+  if (mime.includes('ogg')) return 'ogg';
+  if (mime.includes('opus')) return 'opus';
+  if (mime.includes('flac')) return 'flac';
+  return 'mp3';
+}
+
+async function fetchGroqMusicSubtitle(
+  song: GlobalMusicSong,
+  duration: number,
+  signal: AbortSignal,
+): Promise<KaraokeLine[] | null> {
+  try {
+    const audioResponse = await fetch(
+      `/api/music/audio?id=${encodeURIComponent(song.id)}`,
+      { signal, cache: 'force-cache' },
+    );
+    if (!audioResponse.ok) return null;
+
+    const audio = await audioResponse.blob();
+    if (!audio.size || audio.size > 24 * 1024 * 1024) return null;
+
+    const form = new FormData();
+    const extension = fileExtensionForAudio(audio.type || 'audio/mpeg');
+    form.set(
+      'audio',
+      new File([audio], `music-${song.id}.${extension}`, {
+        type: audio.type || 'audio/mpeg',
+      }),
+    );
+    form.set('duration', String(duration || song.duration || 0));
+    form.set('language', 'vi');
+    if (song.lyrics?.trim()) form.set('lyrics', song.lyrics);
+
+    const response = await fetch('/api/karaoke/groq', {
+      method: 'POST',
+      body: form,
+      signal,
+    });
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as { lines?: KaraokeLine[] };
+    const timeline = normalizeKaraokeTimeline(
+      Array.isArray(payload.lines) ? payload.lines : [],
+      Number.isFinite(duration) && duration > 0
+        ? duration
+        : Number.POSITIVE_INFINITY,
+    );
+    return timeline.length ? timeline : null;
+  } catch {
+    return null;
+  }
 }
 
 export function useGlobalMusic() {
@@ -956,40 +1052,67 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
         const enriched = payload?.song;
         if (!enriched) return;
 
-        let syncedTimeline: KaraokeLine[] | null = null;
-        try {
-          const subtitleResponse = await fetch(
-            `/api/suno/aligned-lyrics?songId=${encodeURIComponent(current.id)}`,
-            {
-              signal: controller.signal,
-              cache: 'no-store',
-            },
+        const resolvedDuration =
+          Number(enriched.duration || current.duration || duration || 0) || 0;
+        const subtitleSong: GlobalMusicSong = {
+          ...current,
+          ...enriched,
+          id: current.id,
+          title: enriched.title || current.title,
+          lyrics: enriched.lyrics || current.lyrics || null,
+        };
+
+        let syncedTimeline: KaraokeLine[] | null =
+          current.karaokeTimeline?.length
+            ? current.karaokeTimeline
+            : readCachedSubtitle(current.id, resolvedDuration);
+
+        if (!syncedTimeline?.length) {
+          syncedTimeline = await fetchGroqMusicSubtitle(
+            subtitleSong,
+            resolvedDuration,
+            controller.signal,
           );
-          if (subtitleResponse.ok) {
-            const subtitlePayload =
-              (await subtitleResponse.json()) as SunoAlignedResponse & {
-                available?: boolean;
-              };
-            if (subtitlePayload.available !== false) {
-              const aligned = timelineFromSuno(
-                enriched.lyrics || current.lyrics || '',
-                subtitlePayload,
-              );
-              if (aligned.length) {
-                syncedTimeline = aligned.map((line) => ({
-                  text: line.text,
-                  start: line.start,
-                  end: line.end,
-                  words: (line.words || []).map((word) => ({
-                    text: word.word,
-                    start: word.start,
-                    end: word.end,
-                  })),
-                }));
+          if (syncedTimeline?.length) {
+            writeCachedSubtitle(current.id, syncedTimeline);
+          }
+        }
+
+        if (!syncedTimeline?.length) {
+          try {
+            const subtitleResponse = await fetch(
+              `/api/suno/aligned-lyrics?songId=${encodeURIComponent(current.id)}`,
+              {
+                signal: controller.signal,
+                cache: 'no-store',
+              },
+            );
+            if (subtitleResponse.ok) {
+              const subtitlePayload =
+                (await subtitleResponse.json()) as SunoAlignedResponse & {
+                  available?: boolean;
+                };
+              if (subtitlePayload.available !== false) {
+                const aligned = timelineFromSuno(
+                  enriched.lyrics || current.lyrics || '',
+                  subtitlePayload,
+                );
+                if (aligned.length) {
+                  syncedTimeline = aligned.map((line) => ({
+                    text: line.text,
+                    start: line.start,
+                    end: line.end,
+                    words: (line.words || []).map((word) => ({
+                      text: word.word,
+                      start: word.start,
+                      end: word.end,
+                    })),
+                  }));
+                }
               }
             }
-          }
-        } catch {}
+          } catch {}
+        }
 
         setQueue((items) =>
           items.map((item) =>
