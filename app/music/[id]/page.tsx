@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Music2 } from 'lucide-react';
 import { PublicMusicPlayer } from '@/components/public-music-player';
+import { MobileAppNav } from '@/components/mobile-app-nav';
 import {
   getPublicSong,
   songDescription,
@@ -173,6 +174,7 @@ export default async function MusicSongPage({ params }: PageProps) {
           <a href="/tai-video-suno">Tạo lyric video & music visualizer</a>
         </div>
       </section>
+      <MobileAppNav />
     </main>
   );
 }
