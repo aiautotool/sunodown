@@ -19,7 +19,6 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   buildEstimatedKaraokeTimeline,
@@ -1368,12 +1367,12 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                 <span>PLAYING FROM SUNODOWN MUSIC</span>
                 <h1>{current.title}</h1>
                 {current.handle ? (
-                  <Link
+                  <a
                     href={`/music/@${encodeURIComponent(current.handle)}`}
                     onClick={() => collapseNowPlaying(false)}
                   >
                     {current.creator || `@${current.handle}`}
-                  </Link>
+                  </a>
                 ) : (
                   <p>{current.creator || 'Suno'}</p>
                 )}
@@ -1498,12 +1497,12 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                     <Share2 />
                     {shareCopied ? 'Đã copy link' : 'Chia sẻ'}
                   </button>
-                  <Link
+                  <a
                     href={canonicalSongUrl(current)}
                     onClick={() => collapseNowPlaying(false)}
                   >
                     Trang bài hát
-                  </Link>
+                  </a>
                 </div>
               </div>
             </div>
