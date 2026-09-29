@@ -65,6 +65,7 @@ import {
 } from '@/app/lib/audio-processing';
 import { exportSrt } from '@/app/lib/karaoke';
 import { runKaraokePipeline } from '@/app/lib/karaoke-pipeline';
+import { findMusicHighlight } from '@/app/lib/audio-highlight';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 import { initAnalytics, track } from '@/app/lib/analytics';
 import { DEFAULT_PLAN, canUse } from '@/app/lib/entitlements';
@@ -723,6 +724,7 @@ export default function CreatorStudio({
     [progress, setProgress] = useState(0),
     [downloading, setDownloading] = useState('');
   const [renderNotice, setRenderNotice] = useState('');
+  const [highlightNotice, setHighlightNotice] = useState('');
   useRenderWakeLock(rendering);
 
   const [masteringConfig, setMasteringConfig] = useState<ProductionMasteringConfig>(structuredClone(DEFAULT_PRODUCTION_MASTERING));
@@ -1673,6 +1675,7 @@ export default function CreatorStudio({
     // after the editor is visible and never blocks navigation into Studio.
     const syncRun = ++karaokeSyncRun.current;
     setSong(null);
+    setHighlightNotice('');
     setKaraokeTimeline([]);
     setKaraokeSyncStatus('idle');
     setKaraokeSyncMessage('');
@@ -1855,6 +1858,7 @@ export default function CreatorStudio({
     setProgress(0);
     setError('');
     setRenderNotice('');
+    setHighlightNotice(mode === '30' ? 'Đang phân tích toàn bài để tìm đoạn cao trào 30 giây…' : '');
     setLastRenderFailure(null);
     track(attempt > 1 ? 'render_retry' : 'render_started', {
       mode,
@@ -1892,13 +1896,76 @@ export default function CreatorStudio({
 
       stageTrack('prepare');
       const config = studioModel.effects;
-      const startSeconds = trimStart;
       const available = Math.max(
         1,
         (trimEnd || song.duration || 30) - trimStart,
       );
-      const previewSeconds =
+      let startSeconds = trimStart;
+      let previewSeconds =
         mode === '30' ? Math.min(30, available) : available;
+
+      if (mode === '30' && available > 30.5) {
+        try {
+          let sourceForHighlight =
+            audioBinary || mediaCache.current.get(song.audio) || null;
+          if (!sourceForHighlight && song.audio) {
+            const response = await fetch(song.audio, { cache: 'no-store' });
+            if (response.ok) {
+              sourceForHighlight = await response.blob();
+              mediaCache.current.set(song.audio, sourceForHighlight);
+              setAudioBinary(sourceForHighlight);
+            }
+          }
+
+          if (sourceForHighlight) {
+            const highlight = await findMusicHighlight(sourceForHighlight, {
+              duration: song.duration || trimEnd || available,
+              minStart: trimStart,
+              maxEnd: trimEnd || song.duration || trimStart + available,
+              windowSeconds: 30,
+              karaokeTimeline,
+            });
+            startSeconds = highlight.startSeconds;
+            previewSeconds = Math.max(
+              1,
+              Math.min(30, highlight.endSeconds - highlight.startSeconds),
+            );
+            setPlaybackStart(startSeconds);
+            setPreviewTime(startSeconds);
+            setHighlightNotice(
+              `Đã chọn cao trào ${fmt(startSeconds)}–${fmt(startSeconds + previewSeconds)} · ưu tiên năng lượng, nhịp bùng và câu hát.`,
+            );
+            track('smart_30s_highlight_selected', {
+              start_seconds: Math.round(startSeconds * 10) / 10,
+              end_seconds: Math.round((startSeconds + previewSeconds) * 10) / 10,
+              confidence: Math.round(highlight.confidence * 100) / 100,
+              score: Math.round(highlight.score * 1000) / 1000,
+              reason: highlight.reason,
+              subtitle_lines: karaokeTimeline.length,
+            });
+          } else {
+            setHighlightNotice(
+              `Không đọc được audio để dò cao trào · dùng 30 giây từ ${fmt(trimStart)}.`,
+            );
+          }
+        } catch (highlightError) {
+          console.warn('[SunoDown highlight analysis fallback]', highlightError);
+          setHighlightNotice(
+            `Không phân tích được cao trào · dùng 30 giây từ ${fmt(trimStart)}.`,
+          );
+          track('smart_30s_highlight_fallback', {
+            reason:
+              highlightError instanceof Error
+                ? highlightError.message.slice(0, 160)
+                : 'unknown',
+          });
+        }
+      } else if (mode === '30') {
+        setHighlightNotice(
+          `Bài/đoạn chọn dài ${fmt(available)} · dùng toàn bộ phần khả dụng.`,
+        );
+      }
+
       const visual = studioModel.visual;
 
       stageTrack('render');
@@ -3314,9 +3381,15 @@ export default function CreatorStudio({
                     disabled={rendering}
                     onClick={() => triggerQuickRender('30')}
                   >
-                    <Play /> Tạo bản 30s
+                    <Play /> Tạo 30s cao trào
                   </button>
                 </div>
+                {highlightNotice && !error && (
+                  <div className="sd-quick-highlight-status" role="status" aria-live="polite">
+                    <Sparkles />
+                    <span>{highlightNotice}</span>
+                  </div>
+                )}
                 {renderNotice && !error && (
                   <div className="sd-quick-render-status" role="status" aria-live="polite">
                     <b>Đang dùng audio gốc</b>
@@ -3516,7 +3589,7 @@ export default function CreatorStudio({
               <div className="sd-downloads">
                 <button disabled={rendering} onClick={() => renderVideo('30')}>
                   <Play />
-                  30s video
+                  30s cao trào
                 </button>
                 <button
                   disabled={!!downloading}
