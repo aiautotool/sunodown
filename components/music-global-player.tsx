@@ -283,15 +283,16 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
         return response.json() as Promise<{ song?: GlobalMusicSong }>;
       })
       .then((payload) => {
-        if (!payload?.song) return;
+        const enriched = payload?.song;
+        if (!enriched) return;
         setQueue((items) =>
           items.map((item) =>
             item.id === current.id
               ? {
                   ...item,
-                  ...payload.song,
+                  ...enriched,
                   id: item.id,
-                  title: payload.song?.title || item.title,
+                  title: enriched.title || item.title,
                 }
               : item,
           ),
