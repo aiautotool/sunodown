@@ -68,7 +68,7 @@ export function SuggestedBackground(props: Props) {
         ),
         'photo',
       );
-      setStatus('Đã thêm ảnh vào timeline tại vị trí con trỏ (5 giây).');
+      setStatus('');
     } catch {
       setStatus('Chưa thêm được ảnh vào timeline. Vui lòng thử lại.');
     } finally {
@@ -79,7 +79,7 @@ export function SuggestedBackground(props: Props) {
   async function applyPhoto(photo: Photo) {
     if (props.disabled || applyingId !== null) return;
     setApplyingId(photo.id);
-    setStatus('Đang áp dụng ảnh bạn chọn…');
+    setStatus('');
 
     try {
       const source =
@@ -117,7 +117,7 @@ export function SuggestedBackground(props: Props) {
         url: photo.url,
         fingerprint,
       });
-      setStatus('Đã áp dụng ảnh bạn chọn vào preview.');
+      setStatus('');
     } catch (error) {
       setStatus(
         error instanceof Error
@@ -138,7 +138,7 @@ export function SuggestedBackground(props: Props) {
 
     const timer = window.setTimeout(async () => {
       setBusy(true);
-      setStatus('Đang tìm ảnh gợi ý phù hợp với bài hát…');
+      setStatus('');
       const timeout = window.setTimeout(() => controller.abort(), 30000);
 
       try {
@@ -176,11 +176,7 @@ export function SuggestedBackground(props: Props) {
         if (disposed || controller.signal.aborted) return;
 
         setPhotos(ranked);
-        setStatus(
-          start.background.mode === 'suno'
-            ? 'Ảnh gợi ý bên dưới · preview vẫn giữ thumbnail Suno cho tới khi bạn chọn.'
-            : 'Ảnh gợi ý bên dưới · nền hiện tại của bạn được giữ nguyên.',
-        );
+        setStatus('');
       } catch (error) {
         if (!disposed) {
           setStatus(
@@ -212,22 +208,23 @@ export function SuggestedBackground(props: Props) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <b className="text-sm">Ảnh nền gợi ý · Pexels</b>
-          <p
-            className="mt-1 text-xs text-white/60"
-            aria-live="polite"
-          >
-            {status ||
-              'Chỉ gợi ý ảnh. Preview mặc định vẫn dùng thumbnail Suno.'}
-          </p>
+          {status && (
+            <p
+              className="mt-1 text-xs text-rose-200/90"
+              aria-live="polite"
+            >
+              {status}
+            </p>
+          )}
           {credit &&
             props.background.imageFingerprint === credit.fingerprint && (
               <a
                 href={credit.url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-1 inline-block text-xs text-sky-200 underline"
+                className="mt-1 inline-block text-[10px] text-sky-200/75 underline"
               >
-                Ảnh đang dùng: {credit.name} · Pexels ↗
+                {credit.name} · Pexels ↗
               </a>
             )}
         </div>
