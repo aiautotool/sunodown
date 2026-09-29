@@ -47,6 +47,10 @@
       {
         "name": "MUSIC_DIRECTORY",
         "class_name": "PublicMusicDirectory"
+      },
+      {
+        "name": "SUBTITLE_STORE",
+        "class_name": "SubtitleStore"
       }
     ]
   },
@@ -61,6 +65,12 @@
       "tag": "music-v2",
       "new_sqlite_classes": [
         "PublicMusicDirectory"
+      ]
+    },
+    {
+      "tag": "music-v3-subtitles",
+      "new_sqlite_classes": [
+        "SubtitleStore"
       ]
     }
   ],
