@@ -18,20 +18,75 @@ const emptyMusicState = () => ({
 });
 
 const emptyDirectory = () => ({
-  version: 1,
+  version: 2,
   publishers: {},
   profiles: {},
+  stats: {},
   updatedAt: Date.now(),
 });
 
-function json(data, status = 200) {
+function json(data, status = 200, cache = 'no-store') {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
+      'cache-control': cache,
     },
   });
+}
+
+function utcDay(timestamp = Date.now()) {
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function eventWeight(type) {
+  if (type === '30s') return 2;
+  if (type === 'half') return 3;
+  if (type === 'complete') return 5;
+  if (type === 'like') return 4;
+  return 1;
+}
+
+function scoreBucket(bucket = {}) {
+  return (
+    Number(bucket.start || 0) +
+    Number(bucket['30s'] || 0) * 2 +
+    Number(bucket.half || 0) * 3 +
+    Number(bucket.complete || 0) * 5 +
+    Number(bucket.like || 0) * 4
+  );
+}
+
+function scoreEntry(entry = {}) {
+  return scoreBucket(entry.all || {});
+}
+
+function scoreRecent(entry = {}, days = 7) {
+  const daily = entry.daily || {};
+  const keys = Object.keys(daily)
+    .sort()
+    .reverse()
+    .slice(0, days);
+  return keys.reduce((sum, key) => sum + scoreBucket(daily[key]), 0);
+}
+
+function countPlays(entry = {}) {
+  return Number(entry?.all?.start || 0);
+}
+
+function pruneDaily(daily = {}) {
+  const keep = Object.keys(daily).sort().reverse().slice(0, 31);
+  return Object.fromEntries(keep.map((key) => [key, daily[key]]));
+}
+
+function decorateSong(song, stats = {}) {
+  const entry = stats[song.id] || {};
+  return {
+    ...song,
+    playCount: countPlays(entry),
+    score: scoreEntry(entry),
+    trendingScore: scoreRecent(entry, 7),
+  };
 }
 
 export class MusicUserStore {
@@ -95,12 +150,72 @@ export class PublicMusicDirectory {
 
   async fetch(request) {
     const url = new URL(request.url);
+    const current =
+      (await this.state.storage.get('directory')) || emptyDirectory();
+
+    if (url.pathname === '/event' && request.method === 'POST') {
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ error: 'Invalid JSON' }, 400);
+      }
+
+      const songId =
+        typeof body?.songId === 'string' ? body.songId.slice(0, 120) : '';
+      const type =
+        typeof body?.event === 'string' ? body.event.slice(0, 20) : '';
+      const allowed = new Set(['start', '30s', 'half', 'complete', 'like']);
+      if (!songId || !allowed.has(type)) {
+        return json({ error: 'Invalid event' }, 400);
+      }
+
+      const songExists = Object.values(current.profiles || {}).some(
+        (profile) =>
+          Array.isArray(profile?.songs) &&
+          profile.songs.some((song) => song?.id === songId),
+      );
+      if (!songExists) return json({ error: 'Unknown song' }, 404);
+
+      const stats = { ...(current.stats || {}) };
+      const previous = stats[songId] || {
+        all: {},
+        daily: {},
+        lastPlayedAt: 0,
+      };
+      const all = { ...(previous.all || {}) };
+      all[type] = Number(all[type] || 0) + 1;
+
+      const day = utcDay();
+      const daily = { ...(previous.daily || {}) };
+      const dayBucket = { ...(daily[day] || {}) };
+      dayBucket[type] = Number(dayBucket[type] || 0) + 1;
+      daily[day] = dayBucket;
+
+      stats[songId] = {
+        all,
+        daily: pruneDaily(daily),
+        lastPlayedAt: Date.now(),
+        score: scoreBucket(all),
+      };
+
+      const next = {
+        ...current,
+        version: 2,
+        stats,
+      };
+      await this.state.storage.put('directory', next);
+
+      return json({
+        ok: true,
+        score: scoreEntry(stats[songId]),
+        weight: eventWeight(type),
+      });
+    }
+
     if (url.pathname !== '/directory') {
       return json({ error: 'Not found' }, 404);
     }
-
-    const current =
-      (await this.state.storage.get('directory')) || emptyDirectory();
 
     if (request.method === 'GET') {
       const profiles = Object.values(current.profiles || {})
@@ -110,18 +225,25 @@ export class PublicMusicDirectory {
             Number(b.updatedAt || 0) - Number(a.updatedAt || 0),
         );
 
-      const latestSongs = profiles
+      const allSongs = profiles
         .flatMap((profile) =>
           Array.isArray(profile.songs)
-            ? profile.songs.map((song) => ({
-                ...song,
-                handle: profile.handle,
-                creator:
-                  song.creator || profile.displayName || profile.handle,
-              }))
+            ? profile.songs.map((song) =>
+                decorateSong(
+                  {
+                    ...song,
+                    handle: profile.handle,
+                    creator:
+                      song.creator || profile.displayName || profile.handle,
+                  },
+                  current.stats || {},
+                ),
+              )
             : [],
         )
-        .filter((song) => song?.id && song?.title)
+        .filter((song) => song?.id && song?.title);
+
+      const latestSongs = [...allSongs]
         .sort((a, b) =>
           String(b.createdAt || b.discoveredAt || '').localeCompare(
             String(a.createdAt || a.discoveredAt || ''),
@@ -129,24 +251,43 @@ export class PublicMusicDirectory {
         )
         .slice(0, 120);
 
-      return new Response(
-        JSON.stringify({
+      const trendingSongs = [...allSongs]
+        .sort((a, b) => {
+          const scoreDelta =
+            Number(b.trendingScore || 0) - Number(a.trendingScore || 0);
+          if (scoreDelta) return scoreDelta;
+          return String(b.createdAt || '').localeCompare(
+            String(a.createdAt || ''),
+          );
+        })
+        .slice(0, 40);
+
+      const topSongs = [...allSongs]
+        .sort((a, b) => {
+          const scoreDelta = Number(b.score || 0) - Number(a.score || 0);
+          if (scoreDelta) return scoreDelta;
+          return Number(b.playCount || 0) - Number(a.playCount || 0);
+        })
+        .slice(0, 20);
+
+      const featuredSong =
+        trendingSongs.find((song) => Number(song.trendingScore || 0) > 0) ||
+        latestSongs[0] ||
+        null;
+
+      return json(
+        {
           creators: profiles,
           latestSongs,
+          trendingSongs,
+          topSongs,
+          featuredSong,
           creatorCount: profiles.length,
-          songCount: profiles.reduce(
-            (sum, profile) =>
-              sum + (Array.isArray(profile.songs) ? profile.songs.length : 0),
-            0,
-          ),
+          songCount: allSongs.length,
           updatedAt: current.updatedAt || Date.now(),
-        }),
-        {
-          headers: {
-            'content-type': 'application/json; charset=utf-8',
-            'cache-control': 'public, max-age=60, stale-while-revalidate=300',
-          },
         },
+        200,
+        'public, max-age=30, stale-while-revalidate=120',
       );
     }
 
@@ -252,9 +393,11 @@ export class PublicMusicDirectory {
       }
 
       const next = {
-        version: 1,
+        ...current,
+        version: 2,
         publishers,
         profiles,
+        stats: current.stats || {},
         updatedAt: Date.now(),
       };
 
@@ -280,7 +423,7 @@ export default {
           url.pathname,
         ))
     ) {
-      url.searchParams.set('__picai_assets', 'v23-1');
+      url.searchParams.set('__picai_assets', 'v23-2');
       return env.ASSETS.fetch(new Request(url, request));
     }
     return app.fetch(request, env, ctx);
