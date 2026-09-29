@@ -344,6 +344,18 @@ export function AccountLibraryPanel({
               </div>
             </div>
 
+            <a
+              href={`/music/@${library.handle}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                textDecoration: 'none',
+              }}
+            >
+              <Library size={15} />
+              Trang Music public
+            </a>
             <button
               onClick={() => void sync()}
               disabled={busy}
