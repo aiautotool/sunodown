@@ -7,6 +7,7 @@ import {
   Music2,
   Play,
   Search,
+  Share2,
   Shuffle,
   Sparkles,
   TrendingUp,
@@ -62,6 +63,7 @@ export function PublicMusicHome({
   const [query, setQuery] = useState('');
   const [handle, setHandle] = useState('');
   const [style, setStyle] = useState<string | null>(null);
+  const [sharedSongId, setSharedSongId] = useState<string | null>(null);
 
   const allSongs = useMemo(() => {
     const seen = new Set<string>();
@@ -134,6 +136,27 @@ export function PublicMusicHome({
       source.map(toGlobal),
     );
 
+  const shareSong = async (song: DirectorySong) => {
+    const path = `/music/@${encodeURIComponent(song.handle)}/${song.id}`;
+    const shareUrl =
+      typeof window !== 'undefined'
+        ? new URL(path, window.location.origin).toString()
+        : `https://picai.online${path}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: song.title,
+          text: `${song.title} · ${song.creator || '@' + song.handle}`,
+          url: shareUrl,
+        });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        setSharedSongId(song.id);
+        window.setTimeout(() => setSharedSongId(null), 1600);
+      }
+    } catch {}
+  };
+
   const SongCard = ({ song, source }: { song: DirectorySong; source: DirectorySong[] }) => (
     <article className="sd-discover-card">
       <button className="art" onClick={() => play(song, source)} aria-label={`Phát ${song.title}`}>
@@ -143,9 +166,20 @@ export function PublicMusicHome({
       <Link href={`/music/@${encodeURIComponent(song.handle)}/${song.id}`}>
         <b>{song.title}</b>
       </Link>
-      <Link className="creator" href={`/music/@${encodeURIComponent(song.handle)}`}>
-        @{song.handle}
-      </Link>
+      <div className="sd-discover-card-meta">
+        <Link className="creator" href={`/music/@${encodeURIComponent(song.handle)}`}>
+          @{song.handle}
+        </Link>
+        <button
+          type="button"
+          className="share"
+          onClick={() => void shareSong(song)}
+          aria-label={`Chia sẻ ${song.title}`}
+        >
+          <Share2 />
+          <span>{sharedSongId === song.id ? 'Đã copy' : 'Share'}</span>
+        </button>
+      </div>
     </article>
   );
 
@@ -207,6 +241,9 @@ export function PublicMusicHome({
                 <Link href={`/music/@${encodeURIComponent(featured.handle)}/${featured.id}`}>
                   Chi tiết <ArrowRight />
                 </Link>
+                <button onClick={() => void shareSong(featured)}>
+                  <Share2 /> {sharedSongId === featured.id ? 'Đã copy' : 'Share'}
+                </button>
               </div>
             </div>
 
@@ -324,9 +361,18 @@ export function PublicMusicHome({
                     </Link>
                   </div>
                   <span>{song.playCount || 0} lượt nghe</span>
-                  <button className="play" onClick={() => play(song, directory.topSongs)}>
-                    <Play />
-                  </button>
+                  <div className="sd-chart-actions">
+                    <button
+                      className="share"
+                      onClick={() => void shareSong(song)}
+                      aria-label={`Chia sẻ ${song.title}`}
+                    >
+                      <Share2 />
+                    </button>
+                    <button className="play" onClick={() => play(song, directory.topSongs)}>
+                      <Play />
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>
