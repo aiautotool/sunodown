@@ -121,6 +121,7 @@ type Song = {
   sourceToken?: string;
   title: string;
   creator?: string;
+  handle?: string;
   duration?: number;
   picture?: string;
   audio: string;
@@ -2488,7 +2489,7 @@ export default function CreatorStudio({
             {song.id && song.isPublic !== false && (
               <a
                 className="sd-song-public-link"
-                href={`/music/${song.id}`}
+                href={song.handle ? `/music/@${song.handle}/${song.id}` : `/music/${song.id}`}
                 target="_blank"
                 rel="noopener"
                 title="Mở trang nghe nhạc public"
