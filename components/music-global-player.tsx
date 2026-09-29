@@ -1,7 +1,9 @@
 'use client';
 
 import {
+  ChevronDown,
   ListMusic,
+  Maximize2,
   Music2,
   Pause,
   Play,
@@ -10,6 +12,8 @@ import {
   Shuffle,
   SkipBack,
   SkipForward,
+  Volume2,
+  VolumeX,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -106,7 +110,6 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const milestonesRef = useRef(new Set<string>());
-  const lastSongRef = useRef<string | null>(null);
 
   const [queue, setQueue] = useState<GlobalMusicSong[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
@@ -116,6 +119,9 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const [shuffleOn, setShuffleOn] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
   const [queueOpen, setQueueOpen] = useState(false);
+  const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
+  const [volume, setVolume] = useState(0.85);
+  const [muted, setMuted] = useState(false);
 
   const current = queueIndex >= 0 ? queue[queueIndex] || null : null;
 
@@ -129,7 +135,6 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
       setTime(0);
       setDuration(song.duration || 0);
       milestonesRef.current = new Set();
-      lastSongRef.current = song.id;
 
       window.setTimeout(() => {
         const audio = audioRef.current;
@@ -220,7 +225,10 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
     if (!audio) return;
     audio.currentTime = Math.max(
       0,
-      Math.min(Number.isFinite(audio.duration) ? audio.duration : seconds, seconds),
+      Math.min(
+        Number.isFinite(audio.duration) ? audio.duration : seconds,
+        seconds,
+      ),
     );
     setTime(audio.currentTime);
   }, []);
@@ -246,6 +254,26 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
       mode === 'off' ? 'all' : mode === 'all' ? 'one' : 'off',
     );
   }, []);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = volume;
+    audio.muted = muted;
+  }, [muted, volume]);
+
+  useEffect(() => {
+    setQueueOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!nowPlayingOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [nowPlayingOpen]);
 
   useEffect(() => {
     if (!current || !('mediaSession' in navigator)) return;
@@ -317,6 +345,8 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   );
 
   const hidePlayer = pathname === '/music/me';
+  const maxDuration = Math.max(1, duration || current?.duration || 1);
+  const progress = Math.max(0, Math.min(100, (time / maxDuration) * 100));
 
   return (
     <MusicContext.Provider value={contextValue}>
@@ -370,8 +400,25 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
       />
 
       {!hidePlayer && current && (
-        <div className="sd-global-music-player">
-          <Link className="track" href={canonicalSongUrl(current)}>
+        <div className="sd-premium-player">
+          <input
+            className="sd-premium-player-progress"
+            aria-label="Tiến trình bài hát"
+            type="range"
+            min="0"
+            max={maxDuration}
+            step=".1"
+            value={Math.min(time, maxDuration)}
+            style={{ '--sd-player-progress': `${progress}%` } as React.CSSProperties}
+            onChange={(event) => seek(Number(event.target.value))}
+          />
+
+          <button
+            type="button"
+            className="track-summary"
+            onClick={() => setNowPlayingOpen(true)}
+            aria-label="Mở Now Playing"
+          >
             {current.picture ? (
               <img src={current.picture} alt="" />
             ) : (
@@ -379,78 +426,284 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
             )}
             <div>
               <b>{current.title}</b>
-              <small>{current.creator || (current.handle ? `@${current.handle}` : 'Suno')}</small>
+              <small>
+                {current.creator ||
+                  (current.handle ? `@${current.handle}` : 'Suno')}
+              </small>
             </div>
-          </Link>
+          </button>
 
           <div className="transport">
-            <div>
-              <button
-                className={shuffleOn ? 'active' : ''}
-                onClick={toggleShuffle}
-                aria-label="Trộn bài"
-              >
-                <Shuffle />
-              </button>
-              <button onClick={previous} aria-label="Bài trước"><SkipBack /></button>
-              <button className="primary" onClick={toggle} aria-label={playing ? 'Tạm dừng' : 'Phát'}>
-                {playing ? <Pause /> : <Play />}
-              </button>
-              <button onClick={next} aria-label="Bài tiếp"><SkipForward /></button>
-              <button
-                className={repeatMode !== 'off' ? 'active' : ''}
-                onClick={cycleRepeat}
-                aria-label="Lặp"
-              >
-                {repeatMode === 'one' ? <Repeat1 /> : <Repeat />}
-              </button>
-            </div>
-            <label>
-              <span>{fmt(time)}</span>
-              <input
-                type="range"
-                min="0"
-                max={Math.max(1, duration || current.duration || 1)}
-                step=".1"
-                value={Math.min(time, Math.max(1, duration || current.duration || 1))}
-                onChange={(event) => seek(Number(event.target.value))}
-              />
-              <span>{fmt(duration || current.duration || 0)}</span>
-            </label>
+            <button
+              className={shuffleOn ? 'active secondary' : 'secondary'}
+              onClick={toggleShuffle}
+              aria-label="Trộn bài"
+            >
+              <Shuffle />
+            </button>
+            <button onClick={previous} aria-label="Bài trước">
+              <SkipBack />
+            </button>
+            <button
+              className="primary"
+              onClick={toggle}
+              aria-label={playing ? 'Tạm dừng' : 'Phát'}
+            >
+              {playing ? <Pause /> : <Play />}
+            </button>
+            <button onClick={next} aria-label="Bài tiếp">
+              <SkipForward />
+            </button>
+            <button
+              className={
+                repeatMode !== 'off' ? 'active secondary' : 'secondary'
+              }
+              onClick={cycleRepeat}
+              aria-label="Lặp"
+            >
+              {repeatMode === 'one' ? <Repeat1 /> : <Repeat />}
+            </button>
           </div>
 
-          <button className="queue-toggle" onClick={() => setQueueOpen(!queueOpen)} aria-label="Hàng đợi">
-            <ListMusic />
-          </button>
+          <div className="player-tools">
+            <div className="volume">
+              <button
+                onClick={() => setMuted((value) => !value)}
+                aria-label={muted ? 'Bật âm thanh' : 'Tắt âm thanh'}
+              >
+                {muted || volume === 0 ? <VolumeX /> : <Volume2 />}
+              </button>
+              <input
+                aria-label="Âm lượng"
+                type="range"
+                min="0"
+                max="1"
+                step=".01"
+                value={muted ? 0 : volume}
+                onChange={(event) => {
+                  const nextVolume = Number(event.target.value);
+                  setVolume(nextVolume);
+                  if (nextVolume > 0) setMuted(false);
+                }}
+              />
+            </div>
+            <button
+              className={queueOpen ? 'active' : ''}
+              onClick={() => setQueueOpen(!queueOpen)}
+              aria-label="Hàng đợi"
+            >
+              <ListMusic />
+            </button>
+            <button
+              onClick={() => setNowPlayingOpen(true)}
+              aria-label="Mở Now Playing"
+            >
+              <Maximize2 />
+            </button>
+          </div>
         </div>
       )}
 
-      {!hidePlayer && queueOpen && current && (
-        <aside className="sd-global-queue">
-          <header>
-            <div>
-              <small>UP NEXT</small>
-              <b>Queue · {queue.length} bài</b>
-            </div>
-            <button onClick={() => setQueueOpen(false)} aria-label="Đóng"><X /></button>
-          </header>
-          <div>
-            {queue.map((song, index) => (
-              <button
-                key={`${song.id}-${index}`}
-                className={index === queueIndex ? 'active' : ''}
-                onClick={() => loadAt(queue, index)}
-              >
-                {song.picture ? <img src={song.picture} alt="" /> : <Music2 />}
-                <span>
-                  <b>{song.title}</b>
-                  <small>{song.creator || song.handle || 'Suno'}</small>
-                </span>
-                <em>{index + 1}</em>
-              </button>
-            ))}
+      {!hidePlayer && nowPlayingOpen && current && (
+        <section
+          className="sd-premium-now-playing"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Now Playing"
+        >
+          <div className="visual-bg" aria-hidden="true">
+            {current.picture && <img src={current.picture} alt="" />}
           </div>
-        </aside>
+
+          <header>
+            <button
+              className="collapse"
+              onClick={() => setNowPlayingOpen(false)}
+              aria-label="Thu nhỏ player"
+            >
+              <ChevronDown />
+            </button>
+            <div>
+              <small>NOW PLAYING</small>
+              <b>SunoDown Music</b>
+            </div>
+            <button
+              className={queueOpen ? 'active' : ''}
+              onClick={() => setQueueOpen(!queueOpen)}
+              aria-label="Hàng đợi"
+            >
+              <ListMusic />
+            </button>
+          </header>
+
+          <div className="now-playing-body">
+            <div className="now-art">
+              {current.picture ? (
+                <img src={current.picture} alt="" />
+              ) : (
+                <Music2 />
+              )}
+            </div>
+
+            <div className="now-info">
+              <div className="now-title">
+                <span>PLAYING FROM SUNODOWN MUSIC</span>
+                <h1>{current.title}</h1>
+                {current.handle ? (
+                  <Link
+                    href={`/music/@${encodeURIComponent(current.handle)}`}
+                    onClick={() => setNowPlayingOpen(false)}
+                  >
+                    {current.creator || `@${current.handle}`}
+                  </Link>
+                ) : (
+                  <p>{current.creator || 'Suno'}</p>
+                )}
+                {current.tags && <em>{current.tags}</em>}
+              </div>
+
+              <div className="now-progress">
+                <input
+                  aria-label="Tiến trình bài hát"
+                  type="range"
+                  min="0"
+                  max={maxDuration}
+                  step=".1"
+                  value={Math.min(time, maxDuration)}
+                  style={{ '--sd-player-progress': `${progress}%` } as React.CSSProperties}
+                  onChange={(event) => seek(Number(event.target.value))}
+                />
+                <div>
+                  <span>{fmt(time)}</span>
+                  <span>{fmt(maxDuration)}</span>
+                </div>
+              </div>
+
+              <div className="now-controls">
+                <button
+                  className={shuffleOn ? 'active secondary' : 'secondary'}
+                  onClick={toggleShuffle}
+                  aria-label="Trộn bài"
+                >
+                  <Shuffle />
+                </button>
+                <button onClick={previous} aria-label="Bài trước">
+                  <SkipBack />
+                </button>
+                <button
+                  className="primary"
+                  onClick={toggle}
+                  aria-label={playing ? 'Tạm dừng' : 'Phát'}
+                >
+                  {playing ? <Pause /> : <Play />}
+                </button>
+                <button onClick={next} aria-label="Bài tiếp">
+                  <SkipForward />
+                </button>
+                <button
+                  className={
+                    repeatMode !== 'off' ? 'active secondary' : 'secondary'
+                  }
+                  onClick={cycleRepeat}
+                  aria-label="Lặp"
+                >
+                  {repeatMode === 'one' ? <Repeat1 /> : <Repeat />}
+                </button>
+              </div>
+
+              <div className="now-footer">
+                <div className="volume">
+                  <button
+                    onClick={() => setMuted((value) => !value)}
+                    aria-label={muted ? 'Bật âm thanh' : 'Tắt âm thanh'}
+                  >
+                    {muted || volume === 0 ? <VolumeX /> : <Volume2 />}
+                  </button>
+                  <input
+                    aria-label="Âm lượng"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step=".01"
+                    value={muted ? 0 : volume}
+                    onChange={(event) => {
+                      const nextVolume = Number(event.target.value);
+                      setVolume(nextVolume);
+                      if (nextVolume > 0) setMuted(false);
+                    }}
+                  />
+                </div>
+                <Link
+                  href={canonicalSongUrl(current)}
+                  onClick={() => setNowPlayingOpen(false)}
+                >
+                  Trang bài hát
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {!hidePlayer && queueOpen && current && (
+        <>
+          <button
+            className="sd-player-sheet-backdrop"
+            aria-label="Đóng hàng đợi"
+            onClick={() => setQueueOpen(false)}
+          />
+          <aside className="sd-premium-queue" aria-label="Hàng đợi phát nhạc">
+            <header>
+              <div>
+                <small>UP NEXT</small>
+                <b>Hàng đợi</b>
+                <span>{queue.length} bài</span>
+              </div>
+              <button onClick={() => setQueueOpen(false)} aria-label="Đóng">
+                <X />
+              </button>
+            </header>
+
+            <div className="queue-current">
+              <span>Đang phát</span>
+              <button onClick={() => setNowPlayingOpen(true)}>
+                {current.picture ? (
+                  <img src={current.picture} alt="" />
+                ) : (
+                  <Music2 />
+                )}
+                <div>
+                  <b>{current.title}</b>
+                  <small>{current.creator || current.handle || 'Suno'}</small>
+                </div>
+              </button>
+            </div>
+
+            <div className="queue-list">
+              <span>Tiếp theo</span>
+              {queue.map((song, index) => {
+                if (index === queueIndex) return null;
+                return (
+                  <button
+                    key={`${song.id}-${index}`}
+                    onClick={() => loadAt(queue, index)}
+                  >
+                    {song.picture ? (
+                      <img src={song.picture} alt="" />
+                    ) : (
+                      <Music2 />
+                    )}
+                    <div>
+                      <b>{song.title}</b>
+                      <small>{song.creator || song.handle || 'Suno'}</small>
+                    </div>
+                    <em>{index + 1}</em>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+        </>
       )}
     </MusicContext.Provider>
   );
