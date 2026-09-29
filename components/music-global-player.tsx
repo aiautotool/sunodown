@@ -401,13 +401,19 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
       setDuration(song.duration || 0);
       milestonesRef.current = new Set();
 
-      window.setTimeout(() => {
-        const audio = audioRef.current;
-        if (!audio) return;
-        audio.src = mediaUrl(song);
-        audio.load();
+      // Match the Creator v22 playback model: keep a real HTMLAudioElement
+      // as the primary transport and start it inside the original interaction.
+      // Moving play() into a timer breaks the user-activation chain on iOS and
+      // makes background/lock-screen playback less reliable.
+      const audio = audioRef.current;
+      if (audio) {
+        const nextSource = mediaUrl(song);
+        if (audio.getAttribute('src') !== nextSource) {
+          audio.src = nextSource;
+          audio.load();
+        }
         if (autoplay) void audio.play().catch(() => {});
-      }, 0);
+      }
 
       void trackEvent(song.id, 'start');
     },
@@ -793,15 +799,31 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
         ? [{ src: current.picture, sizes: '512x512' }]
         : undefined,
     });
+
     try {
+      navigator.mediaSession.playbackState =
+        audioRef.current && !audioRef.current.paused ? 'playing' : 'paused';
       navigator.mediaSession.setActionHandler('play', () => {
         void audioRef.current?.play();
       });
       navigator.mediaSession.setActionHandler('pause', () => {
         audioRef.current?.pause();
       });
+      navigator.mediaSession.setActionHandler('stop', () => {
+        audioRef.current?.pause();
+      });
       navigator.mediaSession.setActionHandler('previoustrack', previous);
       navigator.mediaSession.setActionHandler('nexttrack', next);
+      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        seek(audio.currentTime - (details.seekOffset || 10));
+      });
+      navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        seek(audio.currentTime + (details.seekOffset || 10));
+      });
       navigator.mediaSession.setActionHandler('seekto', (details) => {
         if (details.seekTime != null) seek(details.seekTime);
       });
@@ -889,9 +911,21 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
         preload="metadata"
         onPlay={() => {
           setPlaying(true);
+          if ('mediaSession' in navigator) {
+            try {
+              navigator.mediaSession.playbackState = 'playing';
+            } catch {}
+          }
           if (liveAudioFxAvailable) void ensureAudioAnalyser();
         }}
-        onPause={() => setPlaying(false)}
+        onPause={() => {
+          setPlaying(false);
+          if ('mediaSession' in navigator) {
+            try {
+              navigator.mediaSession.playbackState = 'paused';
+            } catch {}
+          }
+        }}
         onLoadedMetadata={(event) => {
           const audio = event.currentTarget;
           if (Number.isFinite(audio.duration)) setDuration(audio.duration);
@@ -928,6 +962,11 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
           }
         }}
         onEnded={() => {
+          if ('mediaSession' in navigator) {
+            try {
+              navigator.mediaSession.playbackState = 'none';
+            } catch {}
+          }
           if (current) void trackEvent(current.id, 'complete');
           next();
         }}
