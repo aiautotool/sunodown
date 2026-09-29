@@ -5,6 +5,7 @@ import {
   Music2,
   Play,
   Search,
+  Share2,
   Shuffle,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -38,6 +39,7 @@ export function PublicArtistMusic({
 }) {
   const music = useGlobalMusic();
   const [query, setQuery] = useState('');
+  const [sharedSongId, setSharedSongId] = useState<string | null>(null);
 
   const visibleSongs = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -74,6 +76,27 @@ export function PublicArtistMusic({
     music.playSong(toGlobal(song), source.map(toGlobal));
   };
 
+  const shareSong = async (song: PublicProfileSong) => {
+    const path = `/music/@${encodeURIComponent(profile.handle)}/${song.id}`;
+    const shareUrl =
+      typeof window !== 'undefined'
+        ? new URL(path, window.location.origin).toString()
+        : `https://picai.online${path}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: song.title,
+          text: `${song.title} · ${song.creator}`,
+          url: shareUrl,
+        });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        setSharedSongId(song.id);
+        window.setTimeout(() => setSharedSongId(null), 1600);
+      }
+    } catch {}
+  };
+
   const SongRow = ({
     song,
     source,
@@ -101,9 +124,19 @@ export function PublicArtistMusic({
         </small>
       </div>
       <span>{song.playCount ? `${song.playCount} plays` : ''}</span>
-      <button className="row-play" onClick={() => playSong(song, source)}>
-        <Play />
-      </button>
+      <div className="sd-artist-row-actions">
+        <button
+          className="row-share"
+          onClick={() => void shareSong(song)}
+          aria-label={`Chia sẻ ${song.title}`}
+          title={sharedSongId === song.id ? 'Đã copy link' : 'Chia sẻ'}
+        >
+          <Share2 />
+        </button>
+        <button className="row-play" onClick={() => playSong(song, source)}>
+          <Play />
+        </button>
+      </div>
     </article>
   );
 
