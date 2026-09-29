@@ -7,6 +7,10 @@ import {
   backgroundSearchQuery,
   rankBackgroundPhotos,
 } from './pexels-suggestions';
+import {
+  IMAGE_SEARCH_KEYWORD_COUNT,
+  randomImageSearchKeyword,
+} from './pexels-keywords';
 
 type Props = {
   onAddToTimeline: AddPexelsToTimeline;
@@ -37,6 +41,8 @@ type Photo = {
 
 export function SuggestedBackground(props: Props) {
   const [attempt, setAttempt] = useState(0);
+  const [randomKeyword, setRandomKeyword] = useState<string | null>(null);
+  const [activeQuery, setActiveQuery] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [applyingId, setApplyingId] = useState<number | null>(null);
@@ -51,6 +57,12 @@ export function SuggestedBackground(props: Props) {
   useEffect(() => {
     current.current = props;
   });
+
+  useEffect(() => {
+    setRandomKeyword(null);
+    setActiveQuery('');
+    setAttempt(0);
+  }, [props.songKey]);
 
   async function addSelected() {
     const url = props.background.imageUrl;
@@ -142,7 +154,9 @@ export function SuggestedBackground(props: Props) {
       const timeout = window.setTimeout(() => controller.abort(), 30000);
 
       try {
-        const query = backgroundSearchQuery(start.text);
+        const query =
+          randomKeyword || backgroundSearchQuery(start.text);
+        setActiveQuery(query);
         const params = new URLSearchParams({
           q: query,
           orientation: 'portrait',
@@ -198,7 +212,13 @@ export function SuggestedBackground(props: Props) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [props.songKey, props.aspect, attempt, props.disabled]);
+  }, [
+    props.songKey,
+    props.aspect,
+    attempt,
+    props.disabled,
+    randomKeyword,
+  ]);
 
   return (
     <section
@@ -208,6 +228,15 @@ export function SuggestedBackground(props: Props) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <b className="text-sm">Ảnh nền gợi ý · Pexels</b>
+          {activeQuery && (
+            <small className="mt-1 block max-w-[240px] truncate text-[9px] text-white/35">
+              {randomKeyword
+                ? `Random · ${activeQuery}`
+                : `Theo bài hát · ${activeQuery}`}
+              {' · '}
+              {IMAGE_SEARCH_KEYWORD_COUNT} chủ đề
+            </small>
+          )}
           {status && (
             <p
               className="mt-1 text-xs text-rose-200/90"
@@ -232,7 +261,11 @@ export function SuggestedBackground(props: Props) {
         <button
           type="button"
           disabled={props.disabled || busy}
-          onClick={() => setAttempt((value) => value + 1)}
+          onClick={() => {
+            const nextKeyword = randomImageSearchKeyword(activeQuery);
+            setRandomKeyword(nextKeyword);
+            setAttempt((value) => value + 1);
+          }}
           className="shrink-0 rounded-lg bg-sky-300/15 px-3 py-2 text-xs disabled:opacity-50"
         >
           {busy ? 'Đang tìm…' : 'Gợi ý khác'}
