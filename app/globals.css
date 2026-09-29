@@ -4452,3 +4452,230 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
   .sd-music-ambient i,.sd-discover-hero:before{animation:none!important}
   .sd-discover-card,.sd-discover-card:before,.sd-discover-card .art .art-shine,.sd-creator-strip>a{transition:none!important}
 }
+
+
+/* === V23 animated moving-border system === */
+@property --sd-border-angle{
+  syntax:'<angle>';
+  inherits:false;
+  initial-value:0deg;
+}
+@property --sd-glow-phase{
+  syntax:'<number>';
+  inherits:false;
+  initial-value:0;
+}
+@keyframes sdBorderOrbit{
+  to{--sd-border-angle:360deg}
+}
+@keyframes sdBorderOrbitReverse{
+  to{--sd-border-angle:-360deg}
+}
+@keyframes sdBorderPulse{
+  0%,100%{box-shadow:0 0 0 1px rgba(137,103,255,.05),0 14px 40px rgba(0,0,0,.22),0 0 22px rgba(124,92,246,.08)}
+  50%{box-shadow:0 0 0 1px rgba(137,103,255,.10),0 18px 48px rgba(0,0,0,.28),0 0 42px rgba(124,92,246,.17)}
+}
+
+/* Quick Create: always-on slow premium border */
+.sd-quick-create{
+  position:relative;
+  border:1px solid transparent;
+  background:
+    radial-gradient(circle at 50% -20%,rgba(var(--sd-glow-blue),.07),transparent 52%) padding-box,
+    linear-gradient(145deg,rgba(17,24,37,.985),rgba(8,13,21,.995)) padding-box,
+    conic-gradient(
+      from var(--sd-border-angle),
+      rgba(124,92,246,.08) 0deg,
+      rgba(124,92,246,.08) 48deg,
+      rgba(157,112,255,.86) 76deg,
+      rgba(65,210,255,.82) 104deg,
+      rgba(65,210,255,.07) 136deg,
+      rgba(65,210,255,.04) 225deg,
+      rgba(226,105,255,.64) 272deg,
+      rgba(124,92,246,.08) 320deg,
+      rgba(124,92,246,.08) 360deg
+    ) border-box;
+  animation:sdBorderOrbit 10s linear infinite,sdBorderPulse 5.5s ease-in-out infinite;
+}
+
+/* Quick preset cards: selected card gets a faster animated ring */
+.sd-quick-presets>button{
+  position:relative;
+  border:1px solid transparent;
+  background:
+    linear-gradient(#0c121b,#0c121b) padding-box,
+    linear-gradient(130deg,#28313e,#28313e) border-box;
+  transition:transform .18s ease,box-shadow .18s ease,filter .18s ease;
+}
+.sd-quick-presets>button:hover{
+  transform:translateY(-2px);
+  background:
+    linear-gradient(#0c121b,#0c121b) padding-box,
+    conic-gradient(
+      from var(--sd-border-angle),
+      rgba(121,90,244,.08),
+      #8b6cff 16%,
+      #47cfff 27%,
+      rgba(71,207,255,.06) 42%,
+      rgba(71,207,255,.04) 70%,
+      #d76cff 86%,
+      rgba(121,90,244,.08)
+    ) border-box;
+  animation:sdBorderOrbit 4.8s linear infinite;
+  box-shadow:0 15px 38px rgba(0,0,0,.32),0 0 30px rgba(122,88,255,.10);
+}
+.sd-quick-presets>button.active{
+  border-color:transparent;
+  background:
+    linear-gradient(#0c121b,#0c121b) padding-box,
+    conic-gradient(
+      from var(--sd-border-angle),
+      rgba(151,115,255,.10) 0 12%,
+      #9b73ff 20%,
+      #58dcff 31%,
+      rgba(88,220,255,.06) 43% 68%,
+      #ef77ff 80%,
+      #9b73ff 91%,
+      rgba(151,115,255,.10)
+    ) border-box;
+  animation:sdBorderOrbit 3.7s linear infinite,sdBorderPulse 4.2s ease-in-out infinite;
+}
+
+/* Full preset gallery: active presets look alive, hover presets get a moving highlight */
+.sd-preset-grid>article{
+  position:relative;
+  border:1px solid transparent;
+  background:
+    linear-gradient(#0b1017,#0b1017) padding-box,
+    linear-gradient(145deg,#29313d,#29313d) border-box;
+}
+.sd-preset-grid>article:hover{
+  border-color:transparent;
+  background:
+    linear-gradient(#0b1017,#0b1017) padding-box,
+    conic-gradient(
+      from var(--sd-border-angle),
+      transparent 0 13%,
+      color-mix(in srgb,var(--preset-accent) 72%,#ffffff) 21%,
+      color-mix(in srgb,var(--preset-secondary) 72%,#63d8ff) 30%,
+      transparent 40% 77%,
+      color-mix(in srgb,var(--preset-accent) 58%,#e879f9) 87%,
+      transparent 96%
+    ) border-box;
+  animation:sdBorderOrbit 5.8s linear infinite;
+  box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 26px color-mix(in srgb,var(--preset-accent) 12%,transparent);
+}
+.sd-preset-grid>article.active{
+  border-color:transparent;
+  background:
+    linear-gradient(#0b1017,#0b1017) padding-box,
+    conic-gradient(
+      from var(--sd-border-angle),
+      color-mix(in srgb,var(--preset-accent) 18%,transparent) 0 12%,
+      color-mix(in srgb,var(--preset-accent) 92%,white) 19%,
+      color-mix(in srgb,var(--preset-secondary) 88%,#62d8ff) 29%,
+      color-mix(in srgb,var(--preset-secondary) 8%,transparent) 41% 67%,
+      color-mix(in srgb,var(--preset-accent) 90%,#ef7bff) 80%,
+      color-mix(in srgb,var(--preset-accent) 18%,transparent) 92% 100%
+    ) border-box;
+  animation:sdBorderOrbit 3.9s linear infinite,sdBorderPulse 4.6s ease-in-out infinite;
+}
+
+/* Home preset cards get a moving selected ring too */
+.sd-home-template.active{
+  border:1px solid transparent;
+  background:
+    linear-gradient(145deg,rgba(17,23,35,.98),rgba(9,14,22,.99)) padding-box,
+    conic-gradient(
+      from var(--sd-border-angle),
+      rgba(141,92,255,.10),
+      #9468ff 18%,
+      #50cbff 31%,
+      rgba(80,203,255,.06) 46% 72%,
+      #d96cff 86%,
+      rgba(141,92,255,.10)
+    ) border-box;
+  animation:sdBorderOrbit 4.6s linear infinite;
+}
+
+/* Music discovery cards: animate only on interaction for performance */
+.sd-discover-card:hover,
+.sd-discover-card:focus-within{
+  border-color:transparent;
+  background:
+    linear-gradient(180deg,rgba(20,23,34,.82),rgba(11,13,20,.92)) padding-box,
+    conic-gradient(
+      from var(--sd-border-angle),
+      rgba(139,101,255,.05) 0 15%,
+      rgba(166,126,255,.88) 23%,
+      rgba(78,211,255,.80) 32%,
+      rgba(78,211,255,.04) 43% 69%,
+      rgba(220,111,255,.70) 82%,
+      rgba(139,101,255,.05) 94%
+    ) border-box;
+  animation:sdBorderOrbit 5.2s linear infinite;
+}
+
+/* The featured hero has a very slow, cinematic moving rim */
+.sd-discover-hero{
+  border:1px solid transparent;
+  background:
+    radial-gradient(circle at 78% 30%,rgba(132,92,255,.28),transparent 26rem) padding-box,
+    radial-gradient(circle at 12% 110%,rgba(74,190,255,.11),transparent 27rem) padding-box,
+    linear-gradient(118deg,rgba(20,24,36,.96),rgba(12,14,23,.86)) padding-box,
+    conic-gradient(
+      from var(--sd-border-angle),
+      rgba(146,111,255,.08) 0 12%,
+      rgba(158,125,255,.46) 20%,
+      rgba(76,202,255,.38) 29%,
+      rgba(255,255,255,.035) 41% 72%,
+      rgba(204,104,255,.35) 84%,
+      rgba(146,111,255,.08) 96%
+    ) border-box;
+  animation:sdBorderOrbit 15s linear infinite;
+}
+
+/* Primary CTAs get a restrained moving light rim */
+.sd-home-side>button.primary,
+.sd-section-head>button,
+.sd-quick-actions .primary{
+  border:1px solid transparent;
+  background:
+    linear-gradient(115deg,#8258ef,#665ae8) padding-box,
+    conic-gradient(
+      from var(--sd-border-angle),
+      rgba(255,255,255,.20),
+      rgba(255,255,255,.75) 10%,
+      #8ee8ff 18%,
+      rgba(142,232,255,.08) 32% 72%,
+      #dd9cff 85%,
+      rgba(255,255,255,.20)
+    ) border-box;
+  animation:sdBorderOrbit 6.2s linear infinite;
+}
+
+/* Mobile: keep the effect but reduce simultaneous GPU work. */
+@media(max-width:800px){
+  .sd-quick-create{animation:sdBorderOrbit 14s linear infinite}
+  .sd-discover-hero{animation:sdBorderOrbit 20s linear infinite}
+  .sd-home-side>button.primary,
+  .sd-section-head>button,
+  .sd-quick-actions .primary{animation:none}
+  .sd-preset-grid>article:not(.active){animation:none!important}
+  .sd-discover-card:not(:hover):not(:focus-within){animation:none!important}
+}
+
+/* Accessibility / battery: honor reduced-motion preference. */
+@media(prefers-reduced-motion:reduce){
+  .sd-quick-create,
+  .sd-quick-presets>button,
+  .sd-preset-grid>article,
+  .sd-home-template,
+  .sd-discover-card,
+  .sd-discover-hero,
+  .sd-home-side>button.primary,
+  .sd-section-head>button,
+  .sd-quick-actions .primary{
+    animation:none!important;
+  }
+}
