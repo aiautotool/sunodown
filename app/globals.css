@@ -4763,3 +4763,29 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
     display:block;
   }
 }
+
+
+/* V23 smart 30s highlight status */
+.sd-quick-highlight-status{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  border:1px solid rgba(139,105,255,.28);
+  border-radius:11px;
+  background:linear-gradient(135deg,rgba(107,78,224,.12),rgba(15,22,34,.9));
+  padding:9px 11px;
+  color:#b9c3d4;
+  font-size:9px;
+  line-height:1.45;
+}
+.sd-quick-highlight-status svg{
+  width:15px;
+  height:15px;
+  flex:0 0 auto;
+  margin-top:1px;
+  color:#ad87ff;
+  filter:drop-shadow(0 0 8px rgba(151,103,255,.32));
+}
+.sd-quick-highlight-status span{
+  min-width:0;
+}
