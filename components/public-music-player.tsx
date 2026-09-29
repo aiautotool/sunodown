@@ -8,11 +8,12 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   useGlobalMusic,
   type GlobalMusicSong,
 } from '@/components/music-global-player';
+import { buildEstimatedKaraokeTimeline } from '@/app/lib/karaoke';
 
 type Props = {
   id: string;
@@ -41,6 +42,7 @@ export function PublicMusicPlayer({
   style,
 }: Props) {
   const music = useGlobalMusic();
+  const lyricsRef = useRef<HTMLDivElement | null>(null);
   const active = music.current?.id === id;
   const time = active ? music.time : 0;
   const resolvedDuration = active
@@ -58,8 +60,9 @@ export function PublicMusicPlayer({
       picture,
       duration,
       tags: style,
+      lyrics,
     }),
-    [creator, duration, handle, id, picture, style, title],
+    [creator, duration, handle, id, lyrics, picture, style, title],
   );
 
   const cleanLyrics = useMemo(
@@ -71,6 +74,31 @@ export function PublicMusicPlayer({
         .slice(0, 160),
     [lyrics],
   );
+  const karaokeTimeline = useMemo(
+    () =>
+      lyrics && resolvedDuration > 0
+        ? buildEstimatedKaraokeTimeline(lyrics, resolvedDuration)
+        : [],
+    [lyrics, resolvedDuration],
+  );
+  const activeLyricIndex = useMemo(() => {
+    if (!active) return -1;
+    let currentIndex = -1;
+    for (let index = 0; index < karaokeTimeline.length; index += 1) {
+      if (time >= karaokeTimeline[index].start) currentIndex = index;
+      else break;
+    }
+    return currentIndex;
+  }, [active, karaokeTimeline, time]);
+
+  useEffect(() => {
+    if (activeLyricIndex < 0) return;
+    lyricsRef.current
+      ?.querySelector<HTMLElement>(
+        `[data-track-lyric-index="${activeLyricIndex}"]`,
+      )
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [activeLyricIndex]);
 
   const toggle = () => {
     if (!active) {
@@ -163,14 +191,43 @@ export function PublicMusicPlayer({
       </section>
 
       {cleanLyrics.length > 0 && (
-        <section className="sd-track-lyrics">
+        <section className="sd-track-lyrics sd-track-lyrics-live">
           <header>
-            <span>LYRICS</span>
+            <span>SYNCED LYRICS</span>
             <h2>Lời bài hát</h2>
+            <small>Chạm vào câu để tua tới đoạn đó</small>
           </header>
-          <div>
-            {cleanLyrics.map((line, index) => (
-              <p key={`${index}-${line}`}>{line}</p>
+          <div ref={lyricsRef}>
+            {(karaokeTimeline.length
+              ? karaokeTimeline
+              : cleanLyrics.map((text) => ({
+                  text,
+                  start: 0,
+                  end: 0,
+                  words: [],
+                }))
+            ).map((line, index) => (
+              <button
+                key={`${index}-${line.text}`}
+                type="button"
+                data-track-lyric-index={index}
+                className={
+                  index === activeLyricIndex
+                    ? 'active'
+                    : index < activeLyricIndex
+                      ? 'past'
+                      : ''
+                }
+                onClick={() => {
+                  if (!active) {
+                    music.playSong(song, [song]);
+                    return;
+                  }
+                  if (karaokeTimeline.length) music.seek(line.start);
+                }}
+              >
+                {line.text}
+              </button>
             ))}
           </div>
         </section>
