@@ -225,8 +225,6 @@ export function useGlobalMusic() {
 export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
-  const backgroundModeRef = useRef(false);
   const milestonesRef = useRef(new Set<string>());
   const metadataFetchedRef = useRef(new Set<string>());
   const nowLyricsRef = useRef<HTMLDivElement | null>(null);
@@ -263,52 +261,17 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const [soundPreset, setSoundPreset] = useState<SoundPreset>('original');
   const [quickEq, setQuickEq] = useState({ low: 0, mid: 0, high: 0 });
   const [soundGraphReady, setSoundGraphReady] = useState(false);
+  const [liveAudioFxAvailable, setLiveAudioFxAvailable] = useState(false);
 
   const current = queueIndex >= 0 ? queue[queueIndex] || null : null;
 
-  const activeAudio = useCallback(
-    () =>
-      backgroundModeRef.current
-        ? backgroundAudioRef.current
-        : audioRef.current,
-    [],
-  );
-
-  const syncShadowAudio = useCallback(
-    (foreground: HTMLAudioElement, forcePlay = false) => {
-      const shadow = backgroundAudioRef.current;
-      if (!shadow || backgroundModeRef.current) return;
-
-      const src = foreground.currentSrc || foreground.src;
-      if (!src) return;
-
-      const syncPosition = () => {
-        try {
-          if (Math.abs((shadow.currentTime || 0) - foreground.currentTime) > 0.3) {
-            shadow.currentTime = foreground.currentTime;
-          }
-        } catch {}
-        shadow.volume = volume;
-        shadow.muted = true;
-        if ((forcePlay || !foreground.paused) && shadow.paused) {
-          void shadow.play().catch(() => {});
-        }
-      };
-
-      if (shadow.currentSrc !== src && shadow.src !== src) {
-        shadow.src = src;
-        shadow.load();
-        shadow.addEventListener('loadedmetadata', syncPosition, { once: true });
-      } else {
-        syncPosition();
-      }
-    },
-    [volume],
-  );
-
   const ensureAudioAnalyser = useCallback(async () => {
     const audio = audioRef.current;
-    if (!audio || typeof window === 'undefined') return null;
+    if (
+      !audio ||
+      typeof window === 'undefined' ||
+      !liveAudioFxAvailable
+    ) return null;
 
     try {
       let context = audioContextRef.current;
@@ -425,7 +388,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
     } catch {
       return analyserRef.current;
     }
-  }, []);
+  }, [liveAudioFxAvailable]);
 
   const loadAt = useCallback(
     (list: GlobalMusicSong[], index: number, autoplay = true) => {
@@ -439,30 +402,11 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
       milestonesRef.current = new Set();
 
       window.setTimeout(() => {
-        const foreground = audioRef.current;
-        const background = backgroundAudioRef.current;
-        const url = mediaUrl(song);
-
-        if (backgroundModeRef.current && background) {
-          background.src = url;
-          background.load();
-          if (foreground) {
-            foreground.pause();
-            foreground.src = url;
-            foreground.load();
-          }
-          if (autoplay) void background.play().catch(() => {});
-          return;
-        }
-
-        if (!foreground) return;
-        foreground.src = url;
-        foreground.load();
-        if (autoplay) {
-          void foreground.play().then(() => {
-            if (audioContextRef.current) syncShadowAudio(foreground, true);
-          }).catch(() => {});
-        }
+        const audio = audioRef.current;
+        if (!audio) return;
+        audio.src = mediaUrl(song);
+        audio.load();
+        if (autoplay) void audio.play().catch(() => {});
       }, 0);
 
       void trackEvent(song.id, 'start');
@@ -524,7 +468,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   }, [loadAt, queue, queueIndex, repeatMode]);
 
   const previous = useCallback(() => {
-    const audio = activeAudio();
+    const audio = audioRef.current;
     if (audio && audio.currentTime > 4) {
       audio.currentTime = 0;
       return;
@@ -532,17 +476,17 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
     if (!queue.length) return;
     const index = queueIndex <= 0 ? queue.length - 1 : queueIndex - 1;
     loadAt(queue, index);
-  }, [activeAudio, loadAt, queue, queueIndex]);
+  }, [loadAt, queue, queueIndex]);
 
   const toggle = useCallback(() => {
-    const audio = activeAudio();
+    const audio = audioRef.current;
     if (!audio || !current) return;
     if (audio.paused) void audio.play().catch(() => {});
     else audio.pause();
-  }, [activeAudio, current]);
+  }, [current]);
 
   const seek = useCallback((seconds: number) => {
-    const audio = activeAudio();
+    const audio = audioRef.current;
     if (!audio) return;
     audio.currentTime = Math.max(
       0,
@@ -552,7 +496,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
       ),
     );
     setTime(audio.currentTime);
-  }, [activeAudio]);
+  }, []);
 
   const toggleShuffle = useCallback(() => {
     if (!queue.length) {
@@ -594,6 +538,21 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
       }
     } catch {}
   }, [current]);
+
+  useEffect(() => {
+    const ua = navigator.userAgent || '';
+    const isiOS =
+      /iPhone|iPad|iPod/i.test(ua) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(ua);
+    const isMobile = isiOS || isAndroid || /Mobile/i.test(ua);
+
+    // Mobile must stay on the browser's native media pipeline so iOS/Android
+    // can continue playback after screen lock. createMediaElementSource()
+    // permanently reroutes this element through AudioContext, which mobile OSes
+    // may suspend in the background.
+    setLiveAudioFxAvailable(!isMobile);
+  }, []);
 
   useEffect(() => {
     try {
@@ -753,9 +712,13 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
       );
     };
 
-    void ensureAudioAnalyser().then((analyser) => {
-      if (!cancelled) drawFrame(analyser);
-    });
+    if (liveAudioFxAvailable) {
+      void ensureAudioAnalyser().then((analyser) => {
+        if (!cancelled) drawFrame(analyser);
+      });
+    } else {
+      drawFrame(null);
+    }
 
     return () => {
       cancelled = true;
@@ -764,19 +727,13 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
         visualizerFrameRef.current = null;
       }
     };
-  }, [current?.id, ensureAudioAnalyser, nowPlayingOpen]);
+  }, [current?.id, ensureAudioAnalyser, liveAudioFxAvailable, nowPlayingOpen]);
 
   useEffect(() => {
-    const foreground = audioRef.current;
-    const background = backgroundAudioRef.current;
-    if (foreground) {
-      foreground.volume = volume;
-      foreground.muted = muted;
-    }
-    if (background) {
-      background.volume = volume;
-      background.muted = backgroundModeRef.current ? muted : true;
-    }
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = volume;
+    audio.muted = muted;
   }, [muted, volume]);
 
   useEffect(() => {
@@ -814,107 +771,6 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   }, [current?.id]);
 
   useEffect(() => {
-    const handoffToBackground = () => {
-      const foreground = audioRef.current;
-      const background = backgroundAudioRef.current;
-      if (
-        document.visibilityState !== 'hidden' ||
-        !foreground ||
-        !background ||
-        foreground.paused ||
-        !audioContextRef.current
-      ) {
-        return;
-      }
-
-      const src = foreground.currentSrc || foreground.src;
-      if (!src) return;
-      const position = foreground.currentTime || 0;
-
-      const activate = () => {
-        try {
-          background.currentTime = position;
-        } catch {}
-        background.volume = volume;
-        background.muted = muted;
-        backgroundModeRef.current = true;
-        setPlaying(true);
-        if (background.paused) {
-          void background.play().catch(() => {
-            backgroundModeRef.current = false;
-          });
-        }
-        foreground.pause();
-      };
-
-      if (background.currentSrc !== src && background.src !== src) {
-        background.src = src;
-        background.load();
-        background.addEventListener('loadedmetadata', activate, { once: true });
-      } else {
-        activate();
-      }
-    };
-
-    const handoffToForeground = () => {
-      if (
-        document.visibilityState === 'hidden' ||
-        !backgroundModeRef.current
-      ) {
-        return;
-      }
-
-      const foreground = audioRef.current;
-      const background = backgroundAudioRef.current;
-      if (!foreground || !background) return;
-
-      const position = background.currentTime || 0;
-      const shouldPlay = !background.paused;
-      const src = background.currentSrc || background.src;
-
-      const activate = () => {
-        try {
-          foreground.currentTime = position;
-        } catch {}
-        foreground.volume = volume;
-        foreground.muted = muted;
-        background.muted = true;
-        backgroundModeRef.current = false;
-
-        if (shouldPlay) {
-          void ensureAudioAnalyser()
-            .then(() => foreground.play())
-            .then(() => syncShadowAudio(foreground, true))
-            .catch(() => {});
-        }
-      };
-
-      if (src && foreground.currentSrc !== src && foreground.src !== src) {
-        foreground.src = src;
-        foreground.load();
-        foreground.addEventListener('loadedmetadata', activate, { once: true });
-      } else {
-        activate();
-      }
-    };
-
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') handoffToBackground();
-      else handoffToForeground();
-    };
-
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', handoffToBackground);
-    window.addEventListener('pageshow', handoffToForeground);
-
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', handoffToBackground);
-      window.removeEventListener('pageshow', handoffToForeground);
-    };
-  }, [ensureAudioAnalyser, muted, syncShadowAudio, volume]);
-
-  useEffect(() => {
     setQueueOpen(false);
   }, [pathname]);
 
@@ -939,10 +795,10 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
     });
     try {
       navigator.mediaSession.setActionHandler('play', () => {
-        void activeAudio()?.play();
+        void audioRef.current?.play();
       });
       navigator.mediaSession.setActionHandler('pause', () => {
-        activeAudio()?.pause();
+        audioRef.current?.pause();
       });
       navigator.mediaSession.setActionHandler('previoustrack', previous);
       navigator.mediaSession.setActionHandler('nexttrack', next);
@@ -950,7 +806,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
         if (details.seekTime != null) seek(details.seekTime);
       });
     } catch {}
-  }, [activeAudio, current, next, previous, seek]);
+  }, [current, next, previous, seek]);
 
   const contextValue = useMemo<MusicContextValue>(
     () => ({
@@ -1031,81 +887,16 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
         ref={audioRef}
         playsInline
         preload="metadata"
-        onPlay={(event) => {
-          if (!backgroundModeRef.current) {
-            setPlaying(true);
-            void ensureAudioAnalyser().then(() => {
-              syncShadowAudio(event.currentTarget, true);
-            });
-          }
+        onPlay={() => {
+          setPlaying(true);
+          if (liveAudioFxAvailable) void ensureAudioAnalyser();
         }}
-        onPause={() => {
-          if (!backgroundModeRef.current) setPlaying(false);
-        }}
+        onPause={() => setPlaying(false)}
         onLoadedMetadata={(event) => {
           const audio = event.currentTarget;
           if (Number.isFinite(audio.duration)) setDuration(audio.duration);
         }}
         onTimeUpdate={(event) => {
-          const audio = event.currentTarget;
-          const nextTime = audio.currentTime || 0;
-          if (!backgroundModeRef.current) {
-            setTime(nextTime);
-            if (audioContextRef.current) syncShadowAudio(audio);
-          }
-
-          if (!current || !audio.duration) return;
-          const key30 = `${current.id}:30s`;
-          const keyHalf = `${current.id}:half`;
-
-          if (nextTime >= 30 && !milestonesRef.current.has(key30)) {
-            milestonesRef.current.add(key30);
-            void trackEvent(current.id, '30s');
-          }
-          if (
-            nextTime / audio.duration >= 0.5 &&
-            !milestonesRef.current.has(keyHalf)
-          ) {
-            milestonesRef.current.add(keyHalf);
-            void trackEvent(current.id, 'half');
-          }
-
-          if ('mediaSession' in navigator) {
-            try {
-              navigator.mediaSession.setPositionState({
-                duration: audio.duration,
-                playbackRate: audio.playbackRate,
-                position: Math.min(nextTime, audio.duration),
-              });
-            } catch {}
-          }
-        }}
-        onEnded={() => {
-          if (current) void trackEvent(current.id, 'complete');
-          next();
-        }}
-      />
-
-      <audio
-        ref={backgroundAudioRef}
-        playsInline
-        preload="metadata"
-        onPlay={() => {
-          if (backgroundModeRef.current) setPlaying(true);
-        }}
-        onPause={() => {
-          if (backgroundModeRef.current) setPlaying(false);
-        }}
-        onLoadedMetadata={(event) => {
-          if (
-            backgroundModeRef.current &&
-            Number.isFinite(event.currentTarget.duration)
-          ) {
-            setDuration(event.currentTarget.duration);
-          }
-        }}
-        onTimeUpdate={(event) => {
-          if (!backgroundModeRef.current) return;
           const audio = event.currentTarget;
           const nextTime = audio.currentTime || 0;
           setTime(nextTime);
@@ -1230,14 +1021,16 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                 }}
               />
             </div>
-            <button
-              className={soundPreset !== 'original' ? 'active' : ''}
-              onClick={() => { setQueueOpen(false); setSoundOpen(true); }}
-              aria-label="Chỉnh âm thanh"
-              title="Sound"
-            >
-              <SlidersHorizontal />
-            </button>
+            {liveAudioFxAvailable && (
+              <button
+                className={soundPreset !== 'original' ? 'active' : ''}
+                onClick={() => { setQueueOpen(false); setSoundOpen(true); }}
+                aria-label="Chỉnh âm thanh"
+                title="Sound"
+              >
+                <SlidersHorizontal />
+              </button>
+            )}
             <button
               onClick={() => void shareCurrent()}
               aria-label="Chia sẻ bài hát"
@@ -1428,14 +1221,16 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                     }}
                   />
                 </div>
-                <button
-                  className={`now-sound-button ${soundPreset !== 'original' ? 'active' : ''}`}
-                  onClick={() => { setQueueOpen(false); setSoundOpen(true); }}
-                >
-                  <Headphones />
-                  {SOUND_PRESETS.find((item) => item.id === soundPreset)?.label ||
-                    'Sound'}
-                </button>
+                {liveAudioFxAvailable && (
+                  <button
+                    className={`now-sound-button ${soundPreset !== 'original' ? 'active' : ''}`}
+                    onClick={() => { setQueueOpen(false); setSoundOpen(true); }}
+                  >
+                    <Headphones />
+                    {SOUND_PRESETS.find((item) => item.id === soundPreset)?.label ||
+                      'Sound'}
+                  </button>
+                )}
                 <div className="now-share-actions">
                   <button onClick={() => void shareCurrent()}>
                     <Share2 />
@@ -1454,7 +1249,7 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
         </section>
       )}
 
-      {!hidePlayer && soundOpen && current && (
+      {!hidePlayer && liveAudioFxAvailable && soundOpen && current && (
         <>
           <button
             className="sd-player-sheet-backdrop"
