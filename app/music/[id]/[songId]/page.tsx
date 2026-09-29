@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { Music2 } from 'lucide-react';
 import { PublicMusicPlayer } from '@/components/public-music-player';
+import { MusicRelatedRail } from '@/components/music-related-rail';
 import { MobileAppNav } from '@/components/mobile-app-nav';
 import {
   getPublicSong,
@@ -10,6 +11,8 @@ import {
   songDescription,
   songSeoKeywords,
 } from '@/app/lib/public-song';
+import { getPublicMusicProfile } from '@/app/lib/public-music-profile';
+import { getPublicMusicDirectory } from '@/app/lib/music-directory';
 
 export const revalidate = 900;
 
@@ -104,6 +107,48 @@ export default async function PublicSongByCreatorPage({ params }: PageProps) {
   const canonicalUrl = `https://picai.online/music/@${canonicalHandle}/${song.id}`;
   const profileUrl = `/music/@${canonicalHandle}`;
   const description = songDescription(song);
+  const [profile, directory] = await Promise.all([
+    getPublicMusicProfile(canonicalHandle),
+    getPublicMusicDirectory(),
+  ]);
+
+  const moreFromCreator = (profile?.songs || [])
+    .filter((item) => item.id !== song.id)
+    .slice(0, 8)
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      creator: item.creator,
+      handle: item.handle || canonicalHandle,
+      picture: item.picture,
+      duration: item.duration,
+      tags: item.tags,
+    }));
+
+  const styleTokens = (song.tags || song.style || '')
+    .toLowerCase()
+    .split(/[,;/|]+/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+
+  const similarStyle = directory.latestSongs
+    .filter((item) => {
+      if (item.id === song.id || item.handle === canonicalHandle) return false;
+      if (!styleTokens.length) return false;
+      const haystack = (item.tags || '').toLowerCase();
+      return styleTokens.some((token) => haystack.includes(token));
+    })
+    .slice(0, 8)
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      creator: item.creator || item.handle,
+      handle: item.handle,
+      picture: item.picture,
+      duration: item.duration,
+      tags: item.tags,
+    }));
 
   const structuredData = {
     '@context': 'https://schema.org',
@@ -167,6 +212,17 @@ export default async function PublicSongByCreatorPage({ params }: PageProps) {
         duration={song.duration}
         lyrics={song.lyrics}
         style={song.style || song.tags}
+      />
+
+      <MusicRelatedRail
+        eyebrow="MORE FROM CREATOR"
+        title={`Thêm từ ${song.creator}`}
+        songs={moreFromCreator}
+      />
+      <MusicRelatedRail
+        eyebrow="SIMILAR STYLE"
+        title="Có thể bạn sẽ thích"
+        songs={similarStyle}
       />
 
       <section className="sd-public-song-seo">
