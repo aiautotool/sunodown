@@ -38,6 +38,19 @@ export type GroqKaraokeOptions = {
   ) => void;
 };
 
+function extensionFromMime(type: string) {
+  const mime = type.toLowerCase().split(';')[0].trim();
+  if (mime === 'audio/flac' || mime === 'audio/x-flac') return 'flac';
+  if (mime === 'audio/mpeg' || mime === 'audio/mp3') return 'mp3';
+  if (mime === 'audio/mp4' || mime === 'video/mp4') return 'mp4';
+  if (mime === 'audio/x-m4a' || mime === 'audio/m4a') return 'm4a';
+  if (mime === 'audio/ogg' || mime === 'application/ogg') return 'ogg';
+  if (mime === 'audio/opus') return 'opus';
+  if (mime === 'audio/wav' || mime === 'audio/x-wav' || mime === 'audio/wave') return 'wav';
+  if (mime === 'audio/webm' || mime === 'video/webm') return 'webm';
+  return 'mp3';
+}
+
 export async function buildGroqKaraokeTimeline({
   audio,
   lyrics,
@@ -64,12 +77,18 @@ export async function buildGroqKaraokeTimeline({
   });
 
   const form = new FormData();
+  const uploadName = `mobile-audio.${extensionFromMime(audio.type || 'audio/mpeg')}`;
   form.set(
     'audio',
-    new File([audio], 'mobile-audio', {
+    new File([audio], uploadName, {
       type: audio.type || 'audio/mpeg',
     }),
   );
+  onDebug?.('groq-upload', {
+    uploadName,
+    mime: audio.type || 'audio/mpeg',
+    audioBytes: audio.size,
+  });
   form.set('duration', String(duration));
   form.set('language', language);
   if (lyrics?.trim()) form.set('lyrics', lyrics);
