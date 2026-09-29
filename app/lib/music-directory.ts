@@ -11,6 +11,9 @@ export type DirectorySong = {
   createdAt?: string | null;
   discoveredAt?: string | null;
   isPublic: true;
+  playCount?: number;
+  score?: number;
+  trendingScore?: number;
 };
 
 export type DirectoryCreator = {
@@ -27,6 +30,9 @@ export type DirectoryCreator = {
 export type PublicMusicDirectorySnapshot = {
   creators: DirectoryCreator[];
   latestSongs: DirectorySong[];
+  trendingSongs: DirectorySong[];
+  topSongs: DirectorySong[];
+  featuredSong: DirectorySong | null;
   creatorCount: number;
   songCount: number;
   updatedAt: number;
@@ -40,6 +46,9 @@ type DurableBinding = {
 const emptyDirectory = (): PublicMusicDirectorySnapshot => ({
   creators: [],
   latestSongs: [],
+  trendingSongs: [],
+  topSongs: [],
+  featuredSong: null,
   creatorCount: 0,
   songCount: 0,
   updatedAt: 0,
@@ -55,7 +64,16 @@ export async function getPublicMusicDirectory(): Promise<PublicMusicDirectorySna
     const stub = namespace.get(namespace.idFromName('global'));
     const response = await stub.fetch('https://music.internal/directory');
     if (!response.ok) return emptyDirectory();
-    return (await response.json()) as PublicMusicDirectorySnapshot;
+    const value = (await response.json()) as Partial<PublicMusicDirectorySnapshot>;
+    return {
+      ...emptyDirectory(),
+      ...value,
+      creators: Array.isArray(value.creators) ? value.creators : [],
+      latestSongs: Array.isArray(value.latestSongs) ? value.latestSongs : [],
+      trendingSongs: Array.isArray(value.trendingSongs) ? value.trendingSongs : [],
+      topSongs: Array.isArray(value.topSongs) ? value.topSongs : [],
+      featuredSong: value.featuredSong || null,
+    };
   } catch {
     return emptyDirectory();
   }
