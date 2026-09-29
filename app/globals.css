@@ -3430,3 +3430,114 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
     font-size:20px;
   }
 }
+
+
+/* Per-track share affordances */
+.sd-discover-card-meta{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-top:3px;
+}
+.sd-discover-card-meta .creator{
+  min-width:0;
+  margin-top:0!important;
+  flex:1;
+}
+.sd-discover-card-meta .share{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  border:0;
+  background:transparent;
+  padding:3px 0;
+  color:#657286;
+  font-size:8px;
+  cursor:pointer;
+}
+.sd-discover-card-meta .share:hover{color:#c5b8fb}
+.sd-discover-card-meta .share svg{width:11px;height:11px}
+.sd-chart-actions,
+.sd-artist-row-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:4px;
+}
+.sd-chart-actions .share,
+.sd-artist-row-actions .row-share{
+  display:grid;
+  place-items:center;
+  width:30px;
+  height:30px;
+  border:0;
+  border-radius:50%;
+  background:transparent;
+  color:#6f7c90;
+}
+.sd-chart-actions .share:hover,
+.sd-artist-row-actions .row-share:hover{
+  background:rgba(255,255,255,.045);
+  color:#c5b8fb;
+}
+.sd-chart-actions .share svg,
+.sd-artist-row-actions .row-share svg{width:12px;height:12px}
+.sd-chart article{
+  grid-template-columns:28px 46px minmax(0,1fr) auto auto;
+}
+.sd-artist-song-list article{
+  grid-template-columns:auto 46px minmax(0,1fr) auto auto;
+}
+.sd-premium-now-playing .now-share-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-left:auto;
+}
+.sd-premium-now-playing .now-share-actions button,
+.sd-premium-now-playing .now-share-actions a{
+  min-height:34px;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border:0;
+  border-radius:999px;
+  background:rgba(255,255,255,.06);
+  padding:0 11px;
+  color:#cbd3de;
+  text-decoration:none;
+  font-size:9px;
+  font-weight:780;
+}
+.sd-premium-now-playing .now-share-actions button:hover,
+.sd-premium-now-playing .now-share-actions a:hover{
+  background:rgba(255,255,255,.09);
+  color:#fff;
+}
+.sd-premium-now-playing .now-share-actions svg{width:13px;height:13px}
+
+@media(max-width:900px){
+  .sd-discover-card-meta .share span{display:none}
+  .sd-chart article{
+    grid-template-columns:24px 42px minmax(0,1fr) auto;
+  }
+  .sd-chart article>span{display:none}
+  .sd-chart-actions{gap:1px}
+  .sd-chart-actions .share,
+  .sd-chart-actions .play{width:28px;height:28px}
+  .sd-artist-song-list article{
+    grid-template-columns:auto 42px minmax(0,1fr) auto;
+  }
+  .sd-artist-song-list article>span{display:none}
+  .sd-artist-row-actions{gap:1px}
+  .sd-artist-row-actions .row-share,
+  .sd-artist-row-actions .row-play{width:28px;height:28px}
+  .sd-premium-now-playing .now-footer{
+    align-items:flex-end;
+  }
+  .sd-premium-now-playing .now-share-actions{
+    width:100%;
+    justify-content:flex-end;
+  }
+}
