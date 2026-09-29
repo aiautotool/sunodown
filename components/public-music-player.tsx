@@ -233,7 +233,28 @@ export function PublicMusicPlayer({
                   if (karaokeTimeline.length) music.seek(line.start);
                 }}
               >
-                {line.text}
+                {line.words?.length
+                  ? line.words.map((word, wordIndex) => {
+                      const wordActive =
+                        active && time >= word.start && time <= word.end + 0.08;
+                      const wordPast = active && time > word.end;
+                      return (
+                        <span
+                          key={`${wordIndex}-${word.start}-${word.text}`}
+                          className={`karaoke-word ${
+                            wordActive
+                              ? 'active-word'
+                              : wordPast
+                                ? 'past-word'
+                                : ''
+                          }`.trim()}
+                        >
+                          {wordIndex > 0 ? ' ' : ''}
+                          {word.text}
+                        </span>
+                      );
+                    })
+                  : line.text}
               </button>
             ))}
           </div>
