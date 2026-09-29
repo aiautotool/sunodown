@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
-import { MusicHub } from '@/components/music-hub';
+import { PublicMusicHome } from '@/components/public-music-home';
+import { MobileAppNav } from '@/components/mobile-app-nav';
 
-const title = 'SunoDown Music - Nghe nhạc Suno, playlist & Top 20';
+const title = 'SunoDown Music - Nghe nhạc Suno theo @username';
 const description =
-  'Nghe nhạc Suno online trên SunoDown Music. Shuffle thư viện, tạo playlist, lưu bài yêu thích, xem Top 20 và đồng bộ lịch sử nghe theo tài khoản.';
+  'Mở kho nhạc public của creator Suno theo @username, nghe từng bài với URL riêng, lyrics, cover và trang tối ưu SEO trên SunoDown Music.';
 
 export const metadata: Metadata = {
   title,
@@ -11,15 +12,14 @@ export const metadata: Metadata = {
   keywords: [
     'SunoDown Music',
     'nghe nhạc Suno',
+    'Suno username',
+    'Suno creator music',
     'Suno music player',
-    'Suno playlist',
-    'Suno Top 20',
     'Suno songs',
     'Suno lyrics',
-    'AI music player',
-    'nghe nhạc AI',
+    'nhạc AI',
+    'AI music',
     'music player online',
-    'playlist nhạc Suno',
   ],
   alternates: { canonical: '/music' },
   openGraph: {
@@ -42,13 +42,10 @@ export const metadata: Metadata = {
 export default function MusicPage() {
   const structuredData = {
     '@context': 'https://schema.org',
-    '@type': 'WebApplication',
+    '@type': 'CollectionPage',
     name: 'SunoDown Music',
     url: 'https://picai.online/music',
     description,
-    applicationCategory: 'MultimediaApplication',
-    operatingSystem: 'Web',
-    isAccessibleForFree: true,
     isPartOf: {
       '@type': 'WebSite',
       name: 'SunoDown',
@@ -61,10 +58,11 @@ export default function MusicPage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(structuredData).replace(/</g, '\u003c'),
+          __html: JSON.stringify(structuredData).replace(/</g, '\\u003c'),
         }}
       />
-      <MusicHub />
+      <PublicMusicHome />
+      <MobileAppNav />
     </main>
   );
 }
