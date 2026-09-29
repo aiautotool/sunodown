@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPublicSong, PUBLIC_SONG_UUID_RE } from '@/app/lib/public-song';
-import { createMediaToken } from '@/app/lib/media-token';
+import { proxyAudioSource } from '@/app/lib/audio-proxy';
 
-export async function GET(request: NextRequest) {
+async function streamSong(request: NextRequest, headOnly = false) {
   const id = request.nextUrl.searchParams.get('id') || '';
   if (!PUBLIC_SONG_UUID_RE.test(id)) {
     return NextResponse.json(
@@ -25,15 +25,17 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const token = await createMediaToken(song.audioUrl, 'audio', 60 * 60 * 2);
-  const target = new URL('/api/audio', request.url);
-  target.searchParams.set('token', token);
+  // Keep the browser on one stable URL and return the ranged media response
+  // directly. Creator v22 used this native-media pattern successfully on
+  // mobile; avoiding a 307 here is especially important after iOS locks the
+  // screen and performs follow-up Range requests in the background.
+  return proxyAudioSource(request, song.audioUrl, headOnly);
+}
 
-  const response = NextResponse.redirect(target, 307);
-  response.headers.set('cache-control', 'public, max-age=300');
-  return response;
+export async function GET(request: NextRequest) {
+  return streamSong(request);
 }
 
 export async function HEAD(request: NextRequest) {
-  return GET(request);
+  return streamSong(request, true);
 }
