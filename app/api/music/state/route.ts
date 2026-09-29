@@ -2,9 +2,18 @@ import { env } from 'cloudflare:workers';
 import { NextRequest, NextResponse } from 'next/server';
 import { readUserSession } from '@/app/lib/user-auth';
 
+type StoredLibrary = {
+  handle: string;
+  displayName: string;
+  avatarUrl: string | null;
+  syncedAt: string;
+  songs: Array<Record<string, unknown>>;
+};
+
 type MusicUserState = {
-  version: 1;
-  library: unknown | null;
+  version: 2;
+  libraries: StoredLibrary[];
+  library: StoredLibrary | null;
   playlists: unknown[];
   liked: string[];
   stats: Record<string, unknown>;
@@ -32,9 +41,9 @@ function directoryBinding() {
   return (env as unknown as { MUSIC_DIRECTORY?: DurableBinding }).MUSIC_DIRECTORY;
 }
 
-async function publishLibraryToDirectory(
+async function publishLibrariesToDirectory(
   accountId: string,
-  library: unknown | null,
+  libraries: StoredLibrary[],
 ) {
   const namespace = directoryBinding();
   if (!namespace) return false;
@@ -44,11 +53,11 @@ async function publishLibraryToDirectory(
     const response = await stub.fetch('https://music.internal/directory', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(
-        library
-          ? { accountId, profile: library }
-          : { accountId, action: 'remove' },
-      ),
+      body: JSON.stringify({
+        accountId,
+        profiles: libraries,
+        action: libraries.length ? 'sync' : 'remove',
+      }),
     });
     return response.ok;
   } catch {
@@ -67,11 +76,17 @@ async function userStub(request: NextRequest) {
   };
 }
 
-function sanitizeLibrary(value: unknown) {
+function sanitizeLibrary(value: unknown): StoredLibrary | null {
   if (value == null) return null;
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
 
   const raw = value as Record<string, unknown>;
+  const handle =
+    typeof raw.handle === 'string'
+      ? raw.handle.trim().replace(/^@/, '').slice(0, 120)
+      : '';
+  if (!handle) return null;
+
   const songs = Array.isArray(raw.songs) ? raw.songs.slice(0, 5000) : [];
   const cleanSongs = songs
     .map((item) => {
@@ -89,7 +104,7 @@ function sanitizeLibrary(value: unknown) {
         id,
         title,
         creator: stringOrNull('creator', 200),
-        handle: stringOrNull('handle', 120),
+        handle: stringOrNull('handle', 120) || handle,
         picture: stringOrNull('picture', 2000),
         audioUrl: stringOrNull('audioUrl', 2000),
         videoUrl: stringOrNull('videoUrl', 2000),
@@ -104,12 +119,14 @@ function sanitizeLibrary(value: unknown) {
         discoveredAt: stringOrNull('discoveredAt', 80),
       };
     })
-    .filter(Boolean);
+    .filter((song): song is NonNullable<typeof song> => Boolean(song));
 
   return {
-    handle: typeof raw.handle === 'string' ? raw.handle.slice(0, 120) : '',
+    handle,
     displayName:
-      typeof raw.displayName === 'string' ? raw.displayName.slice(0, 200) : '',
+      typeof raw.displayName === 'string' && raw.displayName.trim()
+        ? raw.displayName.slice(0, 200)
+        : handle,
     avatarUrl:
       typeof raw.avatarUrl === 'string' ? raw.avatarUrl.slice(0, 2000) : null,
     syncedAt:
@@ -118,6 +135,46 @@ function sanitizeLibrary(value: unknown) {
         : new Date().toISOString(),
     songs: cleanSongs,
   };
+}
+
+function sanitizeLibraries(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  const byHandle = new Map<string, StoredLibrary>();
+  for (const item of value.slice(0, 50)) {
+    const library = sanitizeLibrary(item);
+    if (library) byHandle.set(library.handle.toLowerCase(), library);
+  }
+  return [...byHandle.values()];
+}
+
+function aggregateLibraries(libraries: StoredLibrary[]): StoredLibrary | null {
+  if (!libraries.length) return null;
+  if (libraries.length === 1) return libraries[0];
+
+  const songs = new Map<string, Record<string, unknown>>();
+  let latestSync = '';
+  for (const library of libraries) {
+    if (library.syncedAt > latestSync) latestSync = library.syncedAt;
+    for (const song of library.songs) {
+      const id = typeof song.id === 'string' ? song.id : '';
+      if (id && !songs.has(id)) songs.set(id, song);
+    }
+  }
+
+  return {
+    handle: '__all__',
+    displayName: `${libraries.length} tài khoản Suno`,
+    avatarUrl: null,
+    syncedAt: latestSync || new Date().toISOString(),
+    songs: [...songs.values()].slice(0, 20000),
+  };
+}
+
+function stateLibraries(state?: Partial<MusicUserState> & { library?: unknown }) {
+  const many = sanitizeLibraries(state?.libraries);
+  if (many.length) return many;
+  const legacy = sanitizeLibrary(state?.library);
+  return legacy ? [legacy] : [];
 }
 
 function sanitizePlaylists(value: unknown) {
@@ -227,13 +284,24 @@ export async function GET(request: NextRequest) {
 
   const response = await stub.fetch('https://music.internal/state');
   const payload = await response.json() as { state?: MusicUserState };
+  const libraries = stateLibraries(payload.state);
 
-  if (payload.state?.library) {
-    await publishLibraryToDirectory(user.sub, payload.state.library);
+  if (libraries.length) {
+    await publishLibrariesToDirectory(user.sub, libraries);
   }
 
   return NextResponse.json(
-    { user, state: payload.state },
+    {
+      user,
+      state: payload.state
+        ? {
+            ...payload.state,
+            version: 2,
+            libraries,
+            library: aggregateLibraries(libraries),
+          }
+        : payload.state,
+    },
     { headers: { 'cache-control': 'no-store' } },
   );
 }
@@ -248,9 +316,18 @@ export async function PATCH(request: NextRequest) {
   }
 
   const raw = await request.json() as Record<string, unknown>;
-  const patch: Record<string, unknown> = {};
+  const patch: Record<string, unknown> = { version: 2 };
 
-  if ('library' in raw) patch.library = sanitizeLibrary(raw.library);
+  if ('libraries' in raw) {
+    const libraries = sanitizeLibraries(raw.libraries);
+    patch.libraries = libraries;
+    patch.library = aggregateLibraries(libraries);
+  } else if ('library' in raw) {
+    const legacy = sanitizeLibrary(raw.library);
+    const libraries = legacy ? [legacy] : [];
+    patch.libraries = libraries;
+    patch.library = aggregateLibraries(libraries);
+  }
   if ('playlists' in raw) patch.playlists = sanitizePlaylists(raw.playlists);
   if ('liked' in raw) patch.liked = sanitizeLiked(raw.liked);
   if ('stats' in raw) patch.stats = sanitizeStats(raw.stats);
@@ -267,10 +344,10 @@ export async function PATCH(request: NextRequest) {
   const payload = await response.json() as { state?: MusicUserState };
 
   let published: boolean | undefined;
-  if ('library' in patch) {
-    published = await publishLibraryToDirectory(
+  if ('libraries' in patch) {
+    published = await publishLibrariesToDirectory(
       user.sub,
-      patch.library ?? null,
+      patch.libraries as StoredLibrary[],
     );
   }
 
