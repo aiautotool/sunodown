@@ -133,6 +133,14 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="vi">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Allura&family=Birthstone&family=Ephesis&family=Great+Vibes&family=Italianno&family=Lavishly+Yours&family=Mea+Culpa&family=Pinyon+Script&display=swap"
+        />
+      </head>
       <body className={`${font.variable} antialiased`}>
         <script
           type="application/ld+json"
