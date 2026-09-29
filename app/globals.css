@@ -4789,3 +4789,92 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
 .sd-quick-highlight-status span{
   min-width:0;
 }
+
+
+/* V23 signature waveform studio */
+.sd-wave-style-grid>button.featured{
+  position:relative;
+  overflow:hidden;
+  border-color:rgba(146,104,255,.28)!important;
+  background:
+    linear-gradient(145deg,rgba(30,24,52,.92),rgba(12,18,29,.96)) padding-box,
+    conic-gradient(from var(--sd-border-angle),#7c5cff,#22d3ee,#ff4fd8,#7c5cff) border-box!important;
+  box-shadow:0 10px 30px rgba(76,52,165,.14),inset 0 1px 0 rgba(255,255,255,.04);
+}
+.sd-wave-style-grid>button.featured:after{
+  content:"SIGNATURE";
+  position:absolute;
+  right:5px;
+  top:4px;
+  border-radius:999px;
+  background:rgba(11,14,24,.76);
+  padding:2px 4px;
+  color:#d8ceff;
+  font-size:5px;
+  font-weight:900;
+  letter-spacing:.08em;
+}
+.sd-wave-style-grid>button.featured.active{
+  box-shadow:0 0 0 1px rgba(165,120,255,.62),0 12px 34px rgba(92,57,207,.3),0 0 26px rgba(99,189,255,.09)!important;
+}
+.wave-mirror-glow{
+  width:58px;
+  height:24px;
+  margin:0;
+  border-radius:0;
+  background:
+    radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.7) 0 3%,transparent 5%),
+    linear-gradient(90deg,#5fc8ff 0%,#8e78ff 35%,#ff5bd6 70%,#6cc6ff 100%);
+  clip-path:polygon(0 48%,7% 31%,14% 60%,22% 17%,30% 70%,39% 28%,49% 76%,58% 25%,68% 67%,77% 34%,87% 61%,94% 39%,100% 51%,100% 58%,94% 47%,87% 69%,77% 42%,68% 75%,58% 34%,49% 84%,39% 36%,30% 78%,22% 26%,14% 68%,7% 40%,0 56%);
+  filter:drop-shadow(0 0 6px #986cff) drop-shadow(0 0 9px rgba(255,80,214,.55));
+}
+.wave-rounded-spectrum{
+  width:58px;
+  height:25px;
+  margin:0;
+  border-radius:5px;
+  background:
+    linear-gradient(90deg,#42d6ff,#8a66ff 48%,#ff4fce),
+    repeating-linear-gradient(90deg,#fff 0 4px,transparent 4px 7px);
+  mask:repeating-linear-gradient(90deg,#000 0 4px,transparent 4px 7px);
+  -webkit-mask:repeating-linear-gradient(90deg,#000 0 4px,transparent 4px 7px);
+  clip-path:polygon(0 82%,7% 56%,14% 68%,21% 36%,28% 52%,35% 18%,42% 34%,49% 6%,56% 30%,63% 17%,70% 42%,77% 28%,84% 52%,91% 39%,100% 66%,100% 100%,0 100%);
+  filter:drop-shadow(0 0 6px rgba(106,101,255,.75));
+}
+.wave-circular-pulse{
+  width:30px;
+  height:30px;
+  margin:-5px 0;
+  border-radius:50%;
+  border:2px solid #ffe8b4;
+  background:
+    radial-gradient(circle,transparent 42%,rgba(255,231,179,.75) 44% 47%,transparent 49%),
+    repeating-conic-gradient(from 0deg,#fff4ce 0deg 2deg,transparent 2deg 7deg);
+  box-shadow:0 0 9px rgba(255,205,116,.75),0 0 18px rgba(255,157,85,.3);
+}
+.wave-ribbon-wave{
+  width:58px;
+  height:24px;
+  margin:0;
+  border-radius:0;
+  background:transparent;
+  filter:drop-shadow(0 0 6px rgba(155,99,255,.65));
+}
+.wave-ribbon-wave:before,
+.wave-ribbon-wave:after{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  top:50%;
+  height:7px;
+  border-radius:50%;
+  border-top:3px solid transparent;
+  background:linear-gradient(90deg,#5ec8ff,#a680ff,#ff66d6);
+  clip-path:polygon(0 43%,8% 18%,16% 50%,24% 74%,33% 39%,42% 12%,52% 47%,61% 77%,70% 43%,79% 15%,88% 49%,100% 64%,100% 82%,88% 65%,79% 32%,70% 61%,61% 91%,52% 65%,42% 29%,33% 55%,24% 89%,16% 67%,8% 36%,0 59%);
+  transform:translateY(-50%);
+}
+.wave-ribbon-wave:after{
+  opacity:.65;
+  transform:translateY(-50%) scaleY(-1) translateY(-6px);
+}
