@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { Music2 } from 'lucide-react';
 import { PublicArtistMusic } from '@/components/public-artist-music';
@@ -174,15 +175,15 @@ export default async function PublicMusicRoute({ params }: PageProps) {
           }}
         />
         <header className="sd-public-music-head">
-          <a href="/" className="sd-public-brand" aria-label="SunoDown">
+          <Link href="/" className="sd-public-brand" aria-label="SunoDown">
             <span><Music2 /></span>
             <b>SunoDown</b>
           </a>
           <nav aria-label="Điều hướng">
-            <a href="/">Trang chủ</a>
-            <a href="/music">Music</a>
-            <a href="/music/me">Music của tôi</a>
-            <a href="/tai-video-suno">Tạo video</a>
+            <Link href="/">Trang chủ</Link>
+            <Link href="/music">Music</Link>
+            <Link href="/music/me">Music của tôi</Link>
+            <Link href="/tai-video-suno">Tạo video</Link>
           </nav>
         </header>
 
@@ -202,7 +203,6 @@ export default async function PublicMusicRoute({ params }: PageProps) {
   }
 
   const description = songDescription(song);
-  const audioProxy = `/api/music/audio?id=${encodeURIComponent(song.id)}`;
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'MusicRecording',
@@ -229,8 +229,8 @@ export default async function PublicMusicRoute({ params }: PageProps) {
         id={song.id}
         title={song.title}
         creator={song.creator}
+        handle={song.handle || canonicalHandle}
         picture={song.picture}
-        audioUrl={audioProxy}
         duration={song.duration}
         lyrics={song.lyrics}
         style={song.style || song.tags}
