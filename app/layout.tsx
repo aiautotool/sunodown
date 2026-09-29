@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Be_Vietnam_Pro } from 'next/font/google';
 import { PasteLinkEnhancer } from '@/components/paste-link-enhancer';
+import { PwaInstaller } from '@/components/pwa-installer';
 import './globals.css';
 
 const font = Be_Vietnam_Pro({
@@ -54,6 +55,17 @@ export const metadata: Metadata = {
     ],
   },
   manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    title: 'SunoDown',
+    statusBarStyle: 'black-translucent',
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
   openGraph: {
     title,
     description,
@@ -129,6 +141,7 @@ export default function RootLayout({
           }}
         />
         <PasteLinkEnhancer />
+        <PwaInstaller />
         {children}
       </body>
     </html>
