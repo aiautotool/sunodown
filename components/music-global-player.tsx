@@ -3,6 +3,7 @@
 import {
   ChevronDown,
   ListMusic,
+  Headphones,
   Maximize2,
   Music2,
   Pause,
@@ -11,6 +12,7 @@ import {
   Repeat1,
   Share2,
   Shuffle,
+  SlidersHorizontal,
   SkipBack,
   SkipForward,
   Volume2,
@@ -46,6 +48,114 @@ export type GlobalMusicSong = {
 };
 
 type RepeatMode = 'off' | 'all' | 'one';
+type SoundPreset =
+  | 'original'
+  | 'clean'
+  | 'vocal'
+  | 'punchy'
+  | 'bass'
+  | 'wide'
+  | 'immersive';
+
+type SoundPresetConfig = {
+  id: SoundPreset;
+  label: string;
+  description: string;
+  low: number;
+  mid: number;
+  high: number;
+  threshold: number;
+  ratio: number;
+  makeupDb: number;
+  spatial: 0 | 0.45 | 0.72;
+};
+
+const SOUND_PRESETS: SoundPresetConfig[] = [
+  {
+    id: 'original',
+    label: 'Original',
+    description: 'Âm thanh gốc, không tăng màu.',
+    low: 0,
+    mid: 0,
+    high: 0,
+    threshold: 0,
+    ratio: 1,
+    makeupDb: 0,
+    spatial: 0,
+  },
+  {
+    id: 'clean',
+    label: 'Clean',
+    description: 'Rõ hơn, thoáng hơn và vẫn giữ độ tự nhiên.',
+    low: 0.4,
+    mid: 0.8,
+    high: 1.2,
+    threshold: -17,
+    ratio: 1.45,
+    makeupDb: 0.4,
+    spatial: 0,
+  },
+  {
+    id: 'vocal',
+    label: 'Vocal',
+    description: 'Đưa giọng hát ra trước, giảm cảm giác đục.',
+    low: -0.8,
+    mid: 2.6,
+    high: 1.1,
+    threshold: -18,
+    ratio: 1.7,
+    makeupDb: 0.5,
+    spatial: 0,
+  },
+  {
+    id: 'punchy',
+    label: 'Punchy',
+    description: 'Kick/snare chắc hơn, nghe có lực hơn.',
+    low: 1.6,
+    mid: 0.6,
+    high: 1,
+    threshold: -19,
+    ratio: 2.15,
+    makeupDb: 0.9,
+    spatial: 0,
+  },
+  {
+    id: 'bass',
+    label: 'Bass+',
+    description: 'Tăng low-end nhưng vẫn giữ vocal rõ.',
+    low: 4,
+    mid: -0.5,
+    high: 0.5,
+    threshold: -18,
+    ratio: 1.65,
+    makeupDb: 0.3,
+    spatial: 0,
+  },
+  {
+    id: 'wide',
+    label: 'Wide',
+    description: 'Mở rộng stereo nhẹ, hợp tai nghe.',
+    low: 0.3,
+    mid: 0.5,
+    high: 1,
+    threshold: -17,
+    ratio: 1.4,
+    makeupDb: 0.3,
+    spatial: 0.45,
+  },
+  {
+    id: 'immersive',
+    label: 'Immersive',
+    description: 'Không gian rộng và sâu hơn, nên dùng tai nghe.',
+    low: 0.5,
+    mid: 0.6,
+    high: 1.2,
+    threshold: -18,
+    ratio: 1.55,
+    makeupDb: 0.45,
+    spatial: 0.72,
+  },
+];
 
 type MusicContextValue = {
   current: GlobalMusicSong | null;
@@ -123,6 +233,17 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const visualizerFrameRef = useRef<number | null>(null);
+  const lowEqRef = useRef<BiquadFilterNode | null>(null);
+  const midEqRef = useRef<BiquadFilterNode | null>(null);
+  const highEqRef = useRef<BiquadFilterNode | null>(null);
+  const compressorRef = useRef<DynamicsCompressorNode | null>(null);
+  const makeupGainRef = useRef<GainNode | null>(null);
+  const directGainRef = useRef<GainNode | null>(null);
+  const spatialGainRef = useRef<GainNode | null>(null);
+  const spatialCrossLRef = useRef<GainNode | null>(null);
+  const spatialCrossRRef = useRef<GainNode | null>(null);
+  const spatialDelayLRef = useRef<DelayNode | null>(null);
+  const spatialDelayRRef = useRef<DelayNode | null>(null);
 
   const [queue, setQueue] = useState<GlobalMusicSong[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
@@ -136,6 +257,10 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
   const [volume, setVolume] = useState(0.85);
   const [muted, setMuted] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [soundOpen, setSoundOpen] = useState(false);
+  const [soundPreset, setSoundPreset] = useState<SoundPreset>('original');
+  const [quickEq, setQuickEq] = useState({ low: 0, mid: 0, high: 0 });
+  const [soundGraphReady, setSoundGraphReady] = useState(false);
 
   const current = queueIndex >= 0 ? queue[queueIndex] || null : null;
 
@@ -166,12 +291,88 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
         analyser.maxDecibels = -16;
 
         const source = context.createMediaElementSource(audio);
-        source.connect(analyser);
+
+        const lowEq = context.createBiquadFilter();
+        lowEq.type = 'lowshelf';
+        lowEq.frequency.value = 120;
+
+        const midEq = context.createBiquadFilter();
+        midEq.type = 'peaking';
+        midEq.frequency.value = 2600;
+        midEq.Q.value = 0.75;
+
+        const highEq = context.createBiquadFilter();
+        highEq.type = 'highshelf';
+        highEq.frequency.value = 7600;
+
+        const compressor = context.createDynamicsCompressor();
+        compressor.knee.value = 10;
+        compressor.attack.value = 0.012;
+        compressor.release.value = 0.16;
+
+        const makeup = context.createGain();
+        const directGain = context.createGain();
+        const spatialGain = context.createGain();
+
+        source
+          .connect(lowEq)
+          .connect(midEq)
+          .connect(highEq)
+          .connect(compressor)
+          .connect(makeup);
+
+        // Direct branch.
+        makeup.connect(directGain).connect(analyser);
+
+        // Live stereo-width branch. The original left/right stay intact while
+        // a tiny delayed, inverted cross-channel signal creates width without
+        // changing playback position or rendering a new file.
+        const splitter = context.createChannelSplitter(2);
+        const merger = context.createChannelMerger(2);
+        const dryL = context.createGain();
+        const dryR = context.createGain();
+        const crossL = context.createGain();
+        const crossR = context.createGain();
+        const delayL = context.createDelay(0.05);
+        const delayR = context.createDelay(0.05);
+
+        makeup.connect(splitter);
+        splitter.connect(dryL, 0);
+        splitter.connect(dryR, 1);
+        dryL.connect(merger, 0, 0);
+        dryR.connect(merger, 0, 1);
+
+        splitter.connect(crossL, 1);
+        splitter.connect(crossR, 0);
+        crossL.connect(delayL).connect(merger, 0, 0);
+        crossR.connect(delayR).connect(merger, 0, 1);
+        merger.connect(spatialGain).connect(analyser);
+
         analyser.connect(context.destination);
 
         audioContextRef.current = context;
         analyserRef.current = analyser;
         audioSourceRef.current = source;
+        lowEqRef.current = lowEq;
+        midEqRef.current = midEq;
+        highEqRef.current = highEq;
+        compressorRef.current = compressor;
+        makeupGainRef.current = makeup;
+        directGainRef.current = directGain;
+        spatialGainRef.current = spatialGain;
+        spatialCrossLRef.current = crossL;
+        spatialCrossRRef.current = crossR;
+        spatialDelayLRef.current = delayL;
+        spatialDelayRRef.current = delayR;
+
+        directGain.gain.value = 1;
+        spatialGain.gain.value = 0;
+        crossL.gain.value = 0;
+        crossR.gain.value = 0;
+        delayL.delayTime.value = 0.007;
+        delayR.delayTime.value = 0.011;
+
+        setSoundGraphReady(true);
       }
 
       if (context.state === 'suspended') {
@@ -332,6 +533,73 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
       }
     } catch {}
   }, [current]);
+
+  useEffect(() => {
+    try {
+      const savedPreset = localStorage.getItem('sunodown-music-sound-preset');
+      const savedEq = localStorage.getItem('sunodown-music-quick-eq');
+      if (savedPreset && SOUND_PRESETS.some((item) => item.id === savedPreset)) {
+        setSoundPreset(savedPreset as SoundPreset);
+      }
+      if (savedEq) {
+        const parsed = JSON.parse(savedEq) as Partial<typeof quickEq>;
+        setQuickEq({
+          low: Math.max(-6, Math.min(6, Number(parsed.low) || 0)),
+          mid: Math.max(-6, Math.min(6, Number(parsed.mid) || 0)),
+          high: Math.max(-6, Math.min(6, Number(parsed.high) || 0)),
+        });
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!soundGraphReady) return;
+    const preset =
+      SOUND_PRESETS.find((item) => item.id === soundPreset) || SOUND_PRESETS[0];
+    const now = audioContextRef.current?.currentTime || 0;
+    const ramp = 0.06;
+
+    const setAudioParam = (param: AudioParam | undefined, value: number) => {
+      if (!param) return;
+      param.cancelScheduledValues(now);
+      param.setValueAtTime(param.value, now);
+      param.linearRampToValueAtTime(value, now + ramp);
+    };
+
+    setAudioParam(lowEqRef.current?.gain, preset.low + quickEq.low);
+    setAudioParam(midEqRef.current?.gain, preset.mid + quickEq.mid);
+    setAudioParam(highEqRef.current?.gain, preset.high + quickEq.high);
+
+    if (compressorRef.current) {
+      compressorRef.current.threshold.value = preset.threshold;
+      compressorRef.current.ratio.value = preset.ratio;
+    }
+
+    setAudioParam(
+      makeupGainRef.current?.gain,
+      Math.pow(10, preset.makeupDb / 20),
+    );
+
+    const spatialAmount = preset.spatial;
+    setAudioParam(directGainRef.current?.gain, spatialAmount ? 0 : 1);
+    setAudioParam(spatialGainRef.current?.gain, spatialAmount ? 1 : 0);
+    setAudioParam(spatialCrossLRef.current?.gain, -0.11 * spatialAmount);
+    setAudioParam(spatialCrossRRef.current?.gain, -0.11 * spatialAmount);
+
+    if (spatialDelayLRef.current) {
+      spatialDelayLRef.current.delayTime.value =
+        soundPreset === 'immersive' ? 0.011 : 0.006;
+    }
+    if (spatialDelayRRef.current) {
+      spatialDelayRRef.current.delayTime.value =
+        soundPreset === 'immersive' ? 0.016 : 0.009;
+    }
+
+    try {
+      localStorage.setItem('sunodown-music-sound-preset', soundPreset);
+      localStorage.setItem('sunodown-music-quick-eq', JSON.stringify(quickEq));
+    } catch {}
+  }, [quickEq.high, quickEq.low, quickEq.mid, soundGraphReady, soundPreset]);
 
   useEffect(() => {
     if (!nowPlayingOpen || !current) return;
@@ -730,6 +998,14 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
               />
             </div>
             <button
+              className={soundPreset !== 'original' ? 'active' : ''}
+              onClick={() => setSoundOpen(true)}
+              aria-label="Chỉnh âm thanh"
+              title="Sound"
+            >
+              <SlidersHorizontal />
+            </button>
+            <button
               onClick={() => void shareCurrent()}
               aria-label="Chia sẻ bài hát"
               title={shareCopied ? 'Đã copy link' : 'Chia sẻ'}
@@ -919,6 +1195,14 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
                     }}
                   />
                 </div>
+                <button
+                  className={`now-sound-button ${soundPreset !== 'original' ? 'active' : ''}`}
+                  onClick={() => setSoundOpen(true)}
+                >
+                  <Headphones />
+                  {SOUND_PRESETS.find((item) => item.id === soundPreset)?.label ||
+                    'Sound'}
+                </button>
                 <div className="now-share-actions">
                   <button onClick={() => void shareCurrent()}>
                     <Share2 />
@@ -935,6 +1219,119 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
             </div>
           </div>
         </section>
+      )}
+
+      {!hidePlayer && soundOpen && current && (
+        <>
+          <button
+            className="sd-player-sheet-backdrop"
+            aria-label="Đóng Sound"
+            onClick={() => setSoundOpen(false)}
+          />
+          <aside className="sd-music-sound-sheet" aria-label="Chỉnh âm thanh">
+            <header>
+              <div>
+                <small>SOUND</small>
+                <b>Nghe theo cách bạn thích</b>
+                <span>Áp dụng trực tiếp · không render lại</span>
+              </div>
+              <button onClick={() => setSoundOpen(false)} aria-label="Đóng">
+                <X />
+              </button>
+            </header>
+
+            <div className="sd-music-sound-body">
+              <section>
+                <div className="sd-music-sound-section-title">
+                  <span>Chất âm</span>
+                  <small>
+                    {SOUND_PRESETS.find((item) => item.id === soundPreset)
+                      ?.description}
+                  </small>
+                </div>
+                <div className="sd-music-sound-presets">
+                  {SOUND_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      className={soundPreset === preset.id ? 'active' : ''}
+                      onClick={() => {
+                        setSoundPreset(preset.id);
+                        void ensureAudioAnalyser();
+                      }}
+                    >
+                      <b>{preset.label}</b>
+                      <small>{preset.description}</small>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section>
+                <div className="sd-music-sound-section-title">
+                  <span>Quick EQ</span>
+                  <button
+                    onClick={() => setQuickEq({ low: 0, mid: 0, high: 0 })}
+                  >
+                    Reset
+                  </button>
+                </div>
+                {(
+                  [
+                    ['low', 'Bass', 'Âm trầm'],
+                    ['mid', 'Vocal', 'Giọng hát'],
+                    ['high', 'Treble', 'Độ sáng'],
+                  ] as const
+                ).map(([key, label, hint]) => (
+                  <label className="sd-music-eq-row" key={key}>
+                    <span>
+                      <b>{label}</b>
+                      <small>{hint}</small>
+                    </span>
+                    <input
+                      type="range"
+                      min="-6"
+                      max="6"
+                      step=".5"
+                      value={quickEq[key]}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        setQuickEq((currentEq) => ({
+                          ...currentEq,
+                          [key]: value,
+                        }));
+                        void ensureAudioAnalyser();
+                      }}
+                    />
+                    <em>
+                      {quickEq[key] > 0 ? '+' : ''}
+                      {quickEq[key].toFixed(1)} dB
+                    </em>
+                  </label>
+                ))}
+              </section>
+
+              {(soundPreset === 'wide' || soundPreset === 'immersive') && (
+                <div className="sd-music-headphone-note">
+                  <Headphones />
+                  <span>
+                    Spatial sẽ rõ nhất khi dùng tai nghe. Bass trung tâm được giữ
+                    tự nhiên, phần stereo phía trên được mở rộng.
+                  </span>
+                </div>
+              )}
+
+              <button
+                className="sd-music-sound-original"
+                onClick={() => {
+                  setSoundPreset('original');
+                  setQuickEq({ low: 0, mid: 0, high: 0 });
+                }}
+              >
+                Về âm thanh gốc
+              </button>
+            </div>
+          </aside>
+        </>
       )}
 
       {!hidePlayer && queueOpen && current && (
