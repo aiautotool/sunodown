@@ -63,7 +63,7 @@ import {
   convertProcessedAudio,
   renderTikTokLikeAudio,
 } from '@/app/lib/audio-processing';
-import { exportSrt } from '@/app/lib/karaoke';
+import { exportSrt, normalizeKaraokeTimeline } from '@/app/lib/karaoke';
 import { runKaraokePipeline } from '@/app/lib/karaoke-pipeline';
 import { findMusicHighlight } from '@/app/lib/audio-highlight';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
@@ -157,7 +157,7 @@ function cacheMusicSubtitle(songId: string | undefined, timeline: KaraokeLine[])
   if (!songId || !timeline.length || typeof window === 'undefined') return;
   try {
     localStorage.setItem(
-      `sunodown-music-subtitle:groq-v1:${songId}`,
+      `sunodown-music-subtitle:cloud-v1:${songId}`,
       JSON.stringify({ timeline, savedAt: Date.now() }),
     );
   } catch {}
@@ -1632,6 +1632,77 @@ export default function CreatorStudio({
       hasLyrics: Boolean(target.lyrics?.trim()),
       lyricChars: target.lyrics?.length || 0,
     });
+
+    if (target.id) {
+      const cloudEndpoint = `/api/music/subtitle?songId=${encodeURIComponent(target.id)}&language=vi`;
+      try {
+        pushSubtitleDebug('cloud-subtitle-lookup', { songId: target.id });
+        let response = await fetch(cloudEndpoint, { cache: 'no-store' });
+        if (response.status === 404) {
+          pushSubtitleDebug('cloud-subtitle-generate', { songId: target.id });
+          response = await fetch('/api/music/subtitle/generate', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ songId: target.id, language: 'vi' }),
+          });
+          if (response.status === 202) {
+            for (let poll = 0; poll < 8; poll += 1) {
+              if (karaokeSyncRun.current !== syncRun) return;
+              setKaraokeSyncMessage('Đang đồng bộ subtitle trên server…');
+              await new Promise<void>((resolvePoll) =>
+                window.setTimeout(resolvePoll, 1500),
+              );
+              response = await fetch(cloudEndpoint, { cache: 'no-store' });
+              if (response.ok) break;
+              if (response.status !== 404) break;
+            }
+          }
+        }
+        if (response.ok) {
+          const payload = (await response.json()) as {
+            subtitle?: {
+              lines?: KaraokeLine[];
+              status?: 'synced' | 'fallback' | 'manual';
+              confidence?: number;
+              engine?: string;
+            };
+            cached?: boolean;
+            realigned?: boolean;
+          };
+          const cloudLines = normalizeKaraokeTimeline(
+            Array.isArray(payload.subtitle?.lines) ? payload.subtitle!.lines! : [],
+            duration,
+          );
+          if (cloudLines.length) {
+            if (karaokeSyncRun.current !== syncRun) return;
+            const cloudStatus = payload.subtitle?.status === 'fallback' ? 'fallback' : 'synced';
+            const message = cloudStatus === 'synced'
+              ? 'Subtitle cloud đã sẵn sàng.'
+              : 'Subtitle cloud đã tạo. Nên kiểm tra lại timing.';
+            pushSubtitleDebug('cloud-subtitle-ready', {
+              lines: cloudLines.length,
+              confidence: payload.subtitle?.confidence ?? null,
+              engine: payload.subtitle?.engine || 'unknown',
+              cached: Boolean(payload.cached),
+              realigned: Boolean(payload.realigned),
+            });
+            setKaraokeTimeline(cloudLines);
+            cacheMusicSubtitle(target.id, cloudLines);
+            setKaraokeSyncStatus(cloudStatus);
+            setKaraokeSyncMessage(message);
+            setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
+            setSubtitleNotice(message);
+            track('karaoke_cloud_ready', { lines: cloudLines.length, cached: Boolean(payload.cached) });
+            return;
+          }
+        }
+        pushSubtitleDebug('cloud-subtitle-fallback-local', { status: response.status });
+      } catch (error) {
+        pushSubtitleDebug('cloud-subtitle-error', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     // Mobile backend emits useful chunk-by-chunk timelines before the whole
     // song has finished. Keep the best one so a later network/validation
