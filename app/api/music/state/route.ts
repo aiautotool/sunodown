@@ -229,7 +229,7 @@ export async function GET(request: NextRequest) {
   const payload = await response.json() as { state?: MusicUserState };
 
   if (payload.state?.library) {
-    void publishLibraryToDirectory(user.sub, payload.state.library);
+    await publishLibraryToDirectory(user.sub, payload.state.library);
   }
 
   return NextResponse.json(
