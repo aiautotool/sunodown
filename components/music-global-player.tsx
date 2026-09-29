@@ -221,7 +221,7 @@ async function trackEvent(songId: string, event: string) {
   } catch {}
 }
 
-const MUSIC_SUBTITLE_CACHE_VERSION = 'groq-v1';
+const MUSIC_SUBTITLE_CACHE_VERSION = 'cloud-v1';
 
 function subtitleCacheKey(songId: string) {
   return `sunodown-music-subtitle:${MUSIC_SUBTITLE_CACHE_VERSION}:${songId}`;
@@ -256,61 +256,90 @@ function writeCachedSubtitle(songId: string, timeline: KaraokeLine[]) {
   } catch {}
 }
 
-function fileExtensionForAudio(type: string) {
-  const mime = type.toLowerCase();
-  if (mime.includes('mp4')) return 'mp4';
-  if (mime.includes('mpeg') || mime.includes('mp3')) return 'mp3';
-  if (mime.includes('m4a')) return 'm4a';
-  if (mime.includes('wav')) return 'wav';
-  if (mime.includes('webm')) return 'webm';
-  if (mime.includes('ogg')) return 'ogg';
-  if (mime.includes('opus')) return 'opus';
-  if (mime.includes('flac')) return 'flac';
-  return 'mp3';
+type CloudSubtitlePayload = {
+  status?: 'ready' | 'missing' | 'generating';
+  subtitle?: {
+    lines?: KaraokeLine[];
+  };
+};
+
+function normalizeCloudTimeline(
+  payload: CloudSubtitlePayload,
+  duration: number,
+) {
+  const lines = payload.subtitle?.lines;
+  if (!Array.isArray(lines) || !lines.length) return null;
+  const timeline = normalizeKaraokeTimeline(
+    lines,
+    Number.isFinite(duration) && duration > 0
+      ? duration
+      : Number.POSITIVE_INFINITY,
+  );
+  return timeline.length ? timeline : null;
 }
 
-async function fetchGroqMusicSubtitle(
+async function fetchCloudMusicSubtitle(
   song: GlobalMusicSong,
   duration: number,
   signal: AbortSignal,
 ): Promise<KaraokeLine[] | null> {
+  const endpoint = `/api/music/subtitle?songId=${encodeURIComponent(song.id)}&language=vi`;
+
   try {
-    const audioResponse = await fetch(
-      `/api/music/audio?id=${encodeURIComponent(song.id)}`,
-      { signal, cache: 'force-cache' },
-    );
-    if (!audioResponse.ok) return null;
+    const existing = await fetch(endpoint, {
+      signal,
+      cache: 'no-store',
+    });
+    if (existing.ok) {
+      return normalizeCloudTimeline(
+        (await existing.json()) as CloudSubtitlePayload,
+        duration,
+      );
+    }
+    if (existing.status !== 404) return null;
 
-    const audio = await audioResponse.blob();
-    if (!audio.size || audio.size > 24 * 1024 * 1024) return null;
-
-    const form = new FormData();
-    const extension = fileExtensionForAudio(audio.type || 'audio/mpeg');
-    form.set(
-      'audio',
-      new File([audio], `music-${song.id}.${extension}`, {
-        type: audio.type || 'audio/mpeg',
-      }),
-    );
-    form.set('duration', String(duration || song.duration || 0));
-    form.set('language', 'vi');
-    if (song.lyrics?.trim()) form.set('lyrics', song.lyrics);
-
-    const response = await fetch('/api/karaoke/groq', {
+    const generated = await fetch('/api/music/subtitle/generate', {
       method: 'POST',
-      body: form,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ songId: song.id, language: 'vi' }),
       signal,
     });
-    if (!response.ok) return null;
 
-    const payload = (await response.json()) as { lines?: KaraokeLine[] };
-    const timeline = normalizeKaraokeTimeline(
-      Array.isArray(payload.lines) ? payload.lines : [],
-      Number.isFinite(duration) && duration > 0
-        ? duration
-        : Number.POSITIVE_INFINITY,
-    );
-    return timeline.length ? timeline : null;
+    if (generated.ok) {
+      return normalizeCloudTimeline(
+        (await generated.json()) as CloudSubtitlePayload,
+        duration,
+      );
+    }
+
+    if (generated.status !== 202) return null;
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await new Promise<void>((resolve, reject) => {
+        const timer = window.setTimeout(resolve, 1500);
+        signal.addEventListener(
+          'abort',
+          () => {
+            window.clearTimeout(timer);
+            reject(new DOMException('Aborted', 'AbortError'));
+          },
+          { once: true },
+        );
+      });
+
+      const polled = await fetch(endpoint, {
+        signal,
+        cache: 'no-store',
+      });
+      if (polled.ok) {
+        return normalizeCloudTimeline(
+          (await polled.json()) as CloudSubtitlePayload,
+          duration,
+        );
+      }
+      if (polled.status !== 404) break;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -1065,10 +1094,10 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
         let syncedTimeline: KaraokeLine[] | null =
           current.karaokeTimeline?.length
             ? current.karaokeTimeline
-            : readCachedSubtitle(current.id, resolvedDuration);
+            : null;
 
         if (!syncedTimeline?.length) {
-          syncedTimeline = await fetchGroqMusicSubtitle(
+          syncedTimeline = await fetchCloudMusicSubtitle(
             subtitleSong,
             resolvedDuration,
             controller.signal,
@@ -1076,6 +1105,10 @@ export function MusicGlobalProvider({ children }: { children: ReactNode }) {
           if (syncedTimeline?.length) {
             writeCachedSubtitle(current.id, syncedTimeline);
           }
+        }
+
+        if (!syncedTimeline?.length) {
+          syncedTimeline = readCachedSubtitle(current.id, resolvedDuration);
         }
 
         if (!syncedTimeline?.length) {
