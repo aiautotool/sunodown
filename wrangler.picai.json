@@ -43,6 +43,10 @@
       {
         "name": "MUSIC_USERS",
         "class_name": "MusicUserStore"
+      },
+      {
+        "name": "MUSIC_DIRECTORY",
+        "class_name": "PublicMusicDirectory"
       }
     ]
   },
@@ -51,6 +55,12 @@
       "tag": "music-v1",
       "new_sqlite_classes": [
         "MusicUserStore"
+      ]
+    },
+    {
+      "tag": "music-v2",
+      "new_sqlite_classes": [
+        "PublicMusicDirectory"
       ]
     }
   ]
