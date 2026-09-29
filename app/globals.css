@@ -3541,3 +3541,27 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
     justify-content:flex-end;
   }
 }
+
+
+/* Real audio-reactive spectrum for Now Playing */
+.sd-premium-now-playing .now-visualizer-canvas{
+  position:absolute;
+  z-index:4;
+  right:7%;
+  bottom:6%;
+  left:7%;
+  width:86%;
+  height:20%;
+  pointer-events:none;
+  opacity:.9;
+  filter:drop-shadow(0 8px 18px rgba(0,0,0,.28));
+}
+@media(max-width:900px){
+  .sd-premium-now-playing .now-visualizer-canvas{
+    right:6%;
+    bottom:5%;
+    left:6%;
+    width:88%;
+    height:18%;
+  }
+}
