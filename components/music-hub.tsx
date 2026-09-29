@@ -737,7 +737,7 @@ export function MusicHub() {
               <button onClick={() => setPlaylistPickerSongId(song.id)}>
                 Thêm vào playlist
               </button>
-              <a href={`/music/${song.id}`}>Trang bài hát</a>
+              <a href={song.handle ? `/music/@${song.handle}/${song.id}` : `/music/${song.id}`}>Trang bài hát</a>
               <a
                 href={`/editor?source=${encodeURIComponent(
                   `https://suno.com/song/${song.id}`,
@@ -1556,7 +1556,7 @@ export function MusicHub() {
             <p>{currentSong.creator || 'Suno'}</p>
             {currentSong.tags && <em>{currentSong.tags}</em>}
             <div className="now-actions">
-              <a href={`/music/${currentSong.id}`}>Trang bài hát</a>
+              <a href={currentSong.handle ? `/music/@${currentSong.handle}/${currentSong.id}` : `/music/${currentSong.id}`}>Trang bài hát</a>
               <a
                 href={`/editor?source=${encodeURIComponent(
                   `https://suno.com/song/${currentSong.id}`,
