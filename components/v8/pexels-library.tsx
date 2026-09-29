@@ -20,7 +20,7 @@ function mediaUrl(item:Media){
 export type AddPexelsToTimeline=(file:File,kind:'photo'|'video',duration?:number)=>Promise<void>;
 
 export function PexelsLibrary({onSelect,onAddToTimeline}:{onAddToTimeline:AddPexelsToTimeline;onSelect:(file:File,kind:'photo'|'video')=>Promise<void>}){
- const [query,setQuery]=useState('nature'),[kind,setKind]=useState('photos'),[orientation,setOrientation]=useState('portrait');
+ const [query,setQuery]=useState('cinematic music cover'),[kind,setKind]=useState('photos'),[orientation,setOrientation]=useState('portrait');
  const [page,setPage]=useState(1),[items,setItems]=useState<Media[]>([]),[more,setMore]=useState(false);
  const [notice,setNotice]=useState(''),[loading,setLoading]=useState(false),[error,setError]=useState(''),[retry,setRetry]=useState(0),[selecting,setSelecting]=useState<number|null>(null);
  const download=useRef<AbortController|null>(null);
@@ -67,11 +67,11 @@ export function PexelsLibrary({onSelect,onAddToTimeline}:{onAddToTimeline:AddPex
   <summary className="cursor-pointer px-3 py-3 text-sm font-semibold">Kho ảnh & video Pexels</summary>
   <div className="space-y-3 p-3 pt-0">
    <div className="flex flex-wrap gap-2">
-    <input aria-label="Tìm nền Pexels" placeholder="Tìm nền: ocean, rain, night city…" value={query} onChange={e=>{setQuery(e.target.value);setPage(1)}} className={`${control} min-w-0 flex-1`}/>
+    <input aria-label="Tìm nền Pexels" placeholder="Tìm cover: cinematic portrait, neon night, abstract art…" value={query} onChange={e=>{setQuery(e.target.value);setPage(1)}} className={`${control} min-w-0 flex-1`}/>
     <select aria-label="Loại media" value={kind} onChange={e=>{setKind(e.target.value);setPage(1)}} className={control}><option value="photos">Ảnh</option><option value="videos">Video</option></select>
     <select aria-label="Khung hình" value={orientation} onChange={e=>{setOrientation(e.target.value);setPage(1)}} className={control}><option value="">Mọi khung hình</option><option value="portrait">Dọc</option><option value="landscape">Ngang</option><option value="square">Vuông</option></select>
    </div>
-   <div className="flex flex-wrap gap-2">{['nature','ocean','rain','night city','abstract','Vietnam'].map(word=><button key={word} type="button" className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-white/70" onClick={()=>{setQuery(word);setPage(1)}}>{word}</button>)}</div>
+   <div className="flex flex-wrap gap-2">{['cinematic portrait','neon night','dreamy landscape','abstract light','dark aesthetic','editorial art'].map(word=><button key={word} type="button" className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-white/70" onClick={()=>{setQuery(word);setPage(1)}}>{word}</button>)}</div>
    <p className="text-[10px] text-white/50">Nguồn: <a href="https://www.pexels.com" target="_blank" rel="noreferrer" className="underline">Pexels</a> · Chọn một nền để tải về và sử dụng.</p>
    {notice&&<output className="block text-xs text-sky-200">{notice}</output>}
    {error&&<p role="alert" className="text-xs text-amber-200">{error} <button type="button" onClick={()=>setRetry(x=>x+1)} className="underline">Thử lại tìm kiếm</button></p>}
