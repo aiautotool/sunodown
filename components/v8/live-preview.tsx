@@ -758,16 +758,6 @@ export function LivePreview(props: Props) {
           <b className="text-sm text-cyan-100">
             {props.resultUrl ? 'Video đã xuất' : 'Xem trước trực tiếp'}
           </b>
-          <p className="mt-0.5 text-[10px] text-white/35">
-            {props.resultUrl
-              ? 'Kết quả thay trực tiếp khung preview.'
-              : 'Hình ảnh, lyrics và nhạc chạy cùng một timeline.'}
-          </p>
-          {!props.resultUrl && (
-            <span className="sd-preview-performance">
-              Preview tự cân bằng chất lượng để giữ chuyển động mượt trên mobile
-            </span>
-          )}
         </div>
         {!props.resultUrl && (
           <button
