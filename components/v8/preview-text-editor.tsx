@@ -9,7 +9,28 @@ import type {KaraokeDrawStyle,KaraokeLine} from '../../app/lib/karaoke';
 import type {OverlayLayout} from '../v9/overlay-layout-panel';
 
 type Props={target:'title'|'creator'|'subtitle';title:string;creator:string;time:number;styles:OverlayTextStyles;subtitle:KaraokeDrawStyle;layout:OverlayLayout;lines:KaraokeLine[];onStyles:(s:OverlayTextStyles)=>void;onSubtitle:(s:KaraokeDrawStyle)=>void;onLayout:(s:OverlayLayout)=>void;onLines:(s:KaraokeLine[])=>void;onClose:()=>void;onDelete:()=>void};
-const fonts=[['system','Modern','system-ui, sans-serif'],['serif','Cinematic','Georgia, serif'],['rounded','Rounded',"'Trebuchet MS', sans-serif"],['mono','Mono',"'Courier New', monospace"],['impact','Impact','Impact, sans-serif']] as const;
+const subtitleFonts=[
+ ['system','Modern','system-ui, sans-serif'],
+ ['serif','Cinematic','Georgia, serif'],
+ ['rounded','Rounded',"'Trebuchet MS', sans-serif"],
+ ['mono','Mono',"'Courier New', monospace"],
+ ['impact','Impact','Impact, sans-serif'],
+] as const;
+
+const titleFonts=[
+ ['system-ui, sans-serif','Modern'],
+ ['Georgia, serif','Cinematic Serif'],
+ ['Impact, sans-serif','Impact'],
+ ['"Great Vibes", cursive','Great Vibes'],
+ ['Allura, cursive','Allura'],
+ ['"Alex Brush", cursive','Alex Brush'],
+ ['Italianno, cursive','Italianno'],
+ ['"Pinyon Script", cursive','Pinyon Script'],
+ ['Ephesis, cursive','Ephesis'],
+ ['Birthstone, cursive','Birthstone'],
+ ['"Mea Culpa", cursive','Mea Culpa'],
+ ['"Lavishly Yours", cursive','Lavishly Yours'],
+] as const;
 export function PreviewTextEditor(p:Props){
  const root=useRef<HTMLDivElement>(null);
  const close=useRef(p.onClose);
@@ -36,10 +57,37 @@ export function PreviewTextEditor(p:Props){
   }));
  }
  const position=p.layout[p.target];
- const font=isSubtitle?fonts.find(([id])=>id===(p.subtitle.font||'system'))?.[2]:p.styles[key].font;
+ const font=isSubtitle?subtitleFonts.find(([id])=>id===(p.subtitle.font||'system'))?.[2]:p.styles[key].font;
  return <div ref={root} className="absolute inset-0 z-40 pointer-events-none" onClick={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>{e.stopPropagation();if(e.key==='Escape')p.onClose();}}>
   <div role="toolbar" aria-label="Chỉnh chữ trên preview" className="pointer-events-auto absolute left-2 right-2 top-2 flex flex-wrap items-center gap-2 rounded-xl border border-white/20 bg-zinc-950/95 p-2 text-xs text-white shadow-xl">
-   <select aria-label="Font" className="min-w-0 rounded bg-zinc-800 p-1" value={isSubtitle?p.subtitle.font||'system':p.styles[key].font} onChange={e=>updateStyle({font:e.target.value})}>{fonts.map(([id,label,font])=><option key={id} value={isSubtitle?id:font}>{label}</option>)}</select>
+   {isSubtitle ? (
+    <select
+      aria-label="Font"
+      className="min-w-0 rounded bg-zinc-800 p-1"
+      value={p.subtitle.font||'system'}
+      onChange={event=>updateStyle({font:event.target.value})}
+    >
+      {subtitleFonts.map(([id,label])=><option key={id} value={id}>{label}</option>)}
+    </select>
+   ) : (
+    <select
+      aria-label="Font title"
+      className="min-w-0 rounded bg-zinc-800 p-1"
+      value={p.styles[key].font}
+      onChange={event=>{
+        const next=event.target.value;
+        void document.fonts?.load(`32px ${next}`).catch(()=>{});
+        updateStyle({font:next});
+      }}
+    >
+      <optgroup label="Cơ bản">
+        {titleFonts.slice(0,3).map(([font,label])=><option key={font} value={font}>{label}</option>)}
+      </optgroup>
+      <optgroup label="Calligraphy · Việt">
+        {titleFonts.slice(3).map(([font,label])=><option key={font} value={font}>{label}</option>)}
+      </optgroup>
+    </select>
+   )}
    <input aria-label="Màu chữ" title="Màu chữ" type="color" className="h-7 w-8" value={style.color||'#ffffff'} onChange={e=>updateStyle({color:e.target.value})}/>
    <button type="button" aria-label="Đậm" aria-pressed={style.bold!==false} className="rounded bg-white/10 px-2 py-1 font-bold" onClick={()=>updateStyle({bold:style.bold===false})}>B</button>
    <button type="button" aria-label="Nghiêng" aria-pressed={!!style.italic} className="rounded bg-white/10 px-2 py-1 italic" onClick={()=>updateStyle({italic:!style.italic})}>I</button>
