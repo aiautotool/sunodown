@@ -2954,9 +2954,9 @@ export default function CreatorStudio({
               {homeSideCollapsed ? <ChevronRight /> : <ChevronLeft />}
               <span>{homeSideCollapsed ? 'Mở menu' : 'Thu gọn'}</span>
             </button>
-            <button className="primary" disabled={busy} onClick={analyzeHomeSource}><Plus /><span>{busy ? 'Đang phân tích…' : 'Tạo mới'}</span><i>›</i></button>
-            <button onClick={() => setView('create')}><Link2 /><span>Từ link Suno</span></button>
-            <label className="sd-home-side-upload">
+            <button className="primary" disabled={busy} onClick={analyzeHomeSource} aria-label="Tạo mới từ link Suno" title="Tạo mới"><Plus /><span>{busy ? 'Đang phân tích…' : 'Tạo mới'}</span><i>›</i></button>
+            <button onClick={() => setView('create')} aria-label="Từ link Suno" title="Từ link Suno"><Link2 /><span>Từ link Suno</span></button>
+            <label className="sd-home-side-upload" aria-label="Tải audio lên" title="Tải audio lên">
               <Upload /><span>Tải audio lên</span>
               <input
                 type="file"
@@ -2967,13 +2967,13 @@ export default function CreatorStudio({
                 }}
               />
             </label>
-            <a className="sd-home-side-link" href="/music"><Music2 /><span>Music Player</span></a>
-            <a className="sd-home-side-link" href="/library"><BookOpen /><span>Thư viện bài hát</span></a>
-            <button onClick={() => document.querySelector('.sd-home-featured')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}><Sparkles /><span>Preset & Style</span></button>
-            <a className="sd-home-side-link" href="/projects"><Folder /><span>Dự án</span></a>
-            <a className="sd-home-side-link" href="/jobs"><ListMusic /><span>Lịch sử render</span></a>
+            <a className="sd-home-side-link" href="/music" aria-label="Music Player" title="Music Player"><Music2 /><span>Music Player</span></a>
+            <a className="sd-home-side-link" href="/library" aria-label="Thư viện bài hát" title="Thư viện bài hát"><BookOpen /><span>Thư viện bài hát</span></a>
+            <button aria-label="Preset và Style" title="Preset & Style" onClick={() => document.querySelector('.sd-home-featured')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}><Sparkles /><span>Preset & Style</span></button>
+            <a className="sd-home-side-link" href="/projects" aria-label="Dự án" title="Dự án"><Folder /><span>Dự án</span></a>
+            <a className="sd-home-side-link" href="/jobs" aria-label="Lịch sử render" title="Lịch sử render"><ListMusic /><span>Lịch sử render</span></a>
 
-            <button className="sd-home-side-pro" onClick={() => setView('settings')}>
+            <button className="sd-home-side-pro" onClick={() => setView('settings')} aria-label="Nâng cấp Pro" title="Nâng cấp Pro">
               <span>♛</span>
               <b>Nâng cấp Pro</b>
               <small>Không giới hạn, chất lượng cao hơn</small>
