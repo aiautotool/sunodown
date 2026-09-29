@@ -79,6 +79,13 @@ async function getEnv(): Promise<GroqEnv> {
   }
 }
 
+async function getGroqApiKey(request: NextRequest) {
+  const internal = request.headers.get('x-sunodown-groq-key')?.trim();
+  if (internal) return internal;
+  const env = await getEnv();
+  return env.GROQ_API_KEY?.trim() || '';
+}
+
 function normalizeWord(value: GroqWord): RoughWord | null {
   const text = String(value.word ?? value.text ?? '').trim();
   const start = Number(value.start);
@@ -135,10 +142,10 @@ function extractWords(result: GroqVerboseResponse): RoughWord[] {
   return (result.segments || []).flatMap(distributeSegmentWords);
 }
 
-export async function GET() {
-  const env = await getEnv();
+export async function GET(request: NextRequest) {
+  const apiKey = await getGroqApiKey(request);
   return NextResponse.json({
-    available: Boolean(env.GROQ_API_KEY?.trim()),
+    available: Boolean(apiKey),
     engine: 'groq-whisper-large-v3-turbo',
     wordTimestamps: true,
     maxMobileUploadBytes: 24 * 1024 * 1024,
@@ -228,8 +235,7 @@ function wordsToLines(words: RoughWord[], duration: number): KaraokeLine[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const env = await getEnv();
-    const apiKey = env.GROQ_API_KEY?.trim();
+    const apiKey = await getGroqApiKey(request);
     if (!apiKey) {
       return NextResponse.json(
         {
