@@ -108,6 +108,16 @@ function extractWords(result: GroqVerboseResponse): RoughWord[] {
   return (result.segments || []).flatMap(distributeSegmentWords);
 }
 
+export async function GET() {
+  const env = await getEnv();
+  return NextResponse.json({
+    available: Boolean(env.GROQ_API_KEY?.trim()),
+    engine: 'groq-whisper-large-v3-turbo',
+    wordTimestamps: true,
+    maxMobileUploadBytes: 24 * 1024 * 1024,
+  });
+}
+
 function wordsToLines(words: RoughWord[], duration: number): KaraokeLine[] {
   const lines: KaraokeLine[] = [];
   let current: RoughWord[] = [];
