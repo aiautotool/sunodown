@@ -63,5 +63,12 @@
         "PublicMusicDirectory"
       ]
     }
+  ],
+  "d1_databases": [
+    {
+      "binding": "RENDER_DB",
+      "database_name": "suno-render-db",
+      "database_id": "2b633973-71ea-401a-85f7-7a7a6d31b018"
+    }
   ]
 }
