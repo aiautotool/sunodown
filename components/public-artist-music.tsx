@@ -8,7 +8,6 @@ import {
   Share2,
   Shuffle,
 } from 'lucide-react';
-import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import type {
   PublicMusicProfile,
@@ -113,11 +112,11 @@ export function PublicArtistMusic({
         <i><Play /></i>
       </button>
       <div className="song-copy">
-        <Link
+        <a
           href={`/music/@${encodeURIComponent(profile.handle)}/${song.id}`}
         >
           {song.title}
-        </Link>
+        </a>
         <small>
           {song.tags || song.creator}
           {song.duration ? ` · ${fmt(song.duration)}` : ''}
@@ -223,11 +222,11 @@ export function PublicArtistMusic({
                   {song.picture ? <img src={song.picture} alt="" /> : <Music2 />}
                   <i><Play /></i>
                 </button>
-                <Link
+                <a
                   href={`/music/@${encodeURIComponent(profile.handle)}/${song.id}`}
                 >
                   {song.title}
-                </Link>
+                </a>
                 <small>{song.tags || profile.displayName}</small>
               </article>
             ))}
