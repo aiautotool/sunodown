@@ -37,5 +37,21 @@
   },
   "build": {
     "command": "cp worker-picai.js dist/server/worker-picai.js"
-  }
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MUSIC_USERS",
+        "class_name": "MusicUserStore"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "music-v1",
+      "new_sqlite_classes": [
+        "MusicUserStore"
+      ]
+    }
+  ]
 }
