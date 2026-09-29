@@ -170,6 +170,11 @@ export async function runKaraokePipeline({
         ok: true,
         confidence: quality.confidence,
         lines: quality.timeline.length,
+        coverage: Math.round(quality.coverage * 1000) / 1000,
+        wordCoverage: Math.round(quality.wordCoverage * 1000) / 1000,
+        criticalIssues: quality.issues.filter((issue) => issue.severity === 'critical').length,
+        warningIssues: quality.issues.filter((issue) => issue.severity === 'warning').length,
+        issueCodes: quality.issues.map((issue) => issue.code).join(',') || 'none',
       });
       return { engine, timeline: quality.timeline, quality };
     } catch (error) {
@@ -481,11 +486,19 @@ export async function runKaraokePipeline({
     }
   }
 
-  if (bestTimed && bestTimed.quality.confidence >= 50) {
+  const groqFallback =
+    bestTimed?.engine.startsWith('groq-whisper') &&
+    bestTimed.timeline.length >= 6 &&
+    bestTimed.quality.wordCoverage >= 0.9;
+  const fallbackThreshold = groqFallback ? 25 : 50;
+
+  if (bestTimed && bestTimed.quality.confidence >= fallbackThreshold) {
     onProgress?.({
       stage: 'fallback',
       engine: bestTimed.engine,
-      message: `${karaokeQualitySummary(bestTimed.quality)} · cần kiểm tra lại`,
+      message: groqFallback
+        ? `${karaokeQualitySummary(bestTimed.quality)} · giữ timing Groq thay vì bỏ trắng subtitle`
+        : `${karaokeQualitySummary(bestTimed.quality)} · cần kiểm tra lại`,
     });
     onDebug?.('pipeline-fallback', {
       engine: bestTimed.engine,
