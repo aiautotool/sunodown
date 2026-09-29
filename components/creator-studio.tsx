@@ -2995,8 +2995,15 @@ export default function CreatorStudio() {
             </section>
 
             <footer className="sd-home-footer">
-              MUSIC LIVES FURTHER · {process.env.NEXT_PUBLIC_BUILD_VERSION}
-              {process.env.NEXT_PUBLIC_BUILD_IDENTITY && ` · ${process.env.NEXT_PUBLIC_BUILD_IDENTITY}`}
+              <nav aria-label="Công cụ SunoDown">
+                <a href="/tai-suno-mp3">Tải Suno MP3</a>
+                <a href="/tai-suno-wav">Tải Suno WAV</a>
+                <a href="/tai-video-suno">Tải & tạo video Suno</a>
+              </nav>
+              <span>
+                MUSIC LIVES FURTHER · {process.env.NEXT_PUBLIC_BUILD_VERSION}
+                {process.env.NEXT_PUBLIC_BUILD_IDENTITY && ` · ${process.env.NEXT_PUBLIC_BUILD_IDENTITY}`}
+              </span>
             </footer>
           </section>
         </main>
