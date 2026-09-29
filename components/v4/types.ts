@@ -1,8 +1,35 @@
 export type Song = { id:string|null; title:string; picture:string|null; audio:string; sourceAudio:string; video:string|null; description:string|null; lyrics:string|null; style:string|null; tags:string|null; duration:number|null; creator:string|null };
 export type VideoAspect = '16:9'|'9:16'|'1:1'|'4:5'|'4:3';
-export type WaveAppearance = { color:string; color2:string; glow:number; opacity:number; density:number; smoothing:number };
-export const DEFAULT_WAVE_APPEARANCE:WaveAppearance={color:'#8b5cf6',color2:'#22d3ee',glow:55,opacity:92,density:72,smoothing:55};
-export type WaveStyle = 'bars'|'mirror'|'line'|'dots'|'pulse'|'thin-bars'|'blocks'|'needles'|'mountain'|'ribbon'|'spark'|'center-line'|'equalizer'|'circle'|'circle-bars'|'orbit-dots'|'radial-spectrum'|'neon-ring'|'arc-burst'|'spiral'|'radial-wave'|'pinwheel'|'mandala'|'spectrum-rings'|'wave-bars'|'stacked-spectrum';
+export type WaveColorMode = 'solid'|'gradient'|'dynamic'|'audio-reactive';
+export type WaveAppearance = {
+  color:string;
+  color2:string;
+  glow:number;
+  opacity:number;
+  density:number;
+  smoothing:number;
+  height:number;
+  thickness:number;
+  attack:number;
+  release:number;
+  rotation:number;
+  colorMode:WaveColorMode;
+};
+export const DEFAULT_WAVE_APPEARANCE:WaveAppearance={
+  color:'#8b5cf6',
+  color2:'#22d3ee',
+  glow:72,
+  opacity:94,
+  density:72,
+  smoothing:58,
+  height:78,
+  thickness:54,
+  attack:62,
+  release:34,
+  rotation:0,
+  colorMode:'gradient',
+};
+export type WaveStyle = 'mirror-glow'|'rounded-spectrum'|'circular-pulse'|'ribbon-wave'|'bars'|'mirror'|'line'|'dots'|'pulse'|'thin-bars'|'blocks'|'needles'|'mountain'|'ribbon'|'spark'|'center-line'|'equalizer'|'circle'|'circle-bars'|'orbit-dots'|'radial-spectrum'|'neon-ring'|'arc-burst'|'spiral'|'radial-wave'|'pinwheel'|'mandala'|'spectrum-rings'|'wave-bars'|'stacked-spectrum';
 export type VisualTemplate = 'cover-motion'|'vinyl'|'glass-card'|'lyrics-focus'|'editorial'|'spotlight'|'gold-record';
 export type MotionIntensity = 'low'|'medium'|'high';
 export type LyricsMode = 'off'|'scroll'|'focus';
@@ -23,9 +50,17 @@ export const PLATFORM_PRESETS:{id:PlatformPreset;label:string;aspect:VideoAspect
   {id:'instagram-feed',label:'Bảng tin Instagram',aspect:'4:5',hint:'864×1080'},
 ];
 
-export const WAVE_STYLES:{id:WaveStyle;label:string}[] = [
+export const WAVE_STYLES:{id:WaveStyle;label:string;featured?:boolean}[] = [
+  {id:'mirror-glow',label:'Mirror Glow',featured:true},
+  {id:'rounded-spectrum',label:'Rounded Spectrum',featured:true},
+  {id:'circular-pulse',label:'Circular Pulse',featured:true},
+  {id:'ribbon-wave',label:'Ribbon Wave',featured:true},
+  {id:'arc-burst',label:'Neon Arc',featured:true},
+  {id:'stacked-spectrum',label:'Stacked Bars',featured:true},
+  {id:'neon-ring',label:'Vinyl Ring',featured:true},
+  {id:'orbit-dots',label:'Particle Pulse',featured:true},
   {id:'bars',label:'Cột sóng'},{id:'mirror',label:'Đối xứng'},{id:'line',label:'Đường sóng'},{id:'dots',label:'Chấm'},{id:'pulse',label:'Nhịp đập'},
-  {id:'thin-bars',label:'Cột mảnh'},{id:'blocks',label:'Khối LED'},{id:'needles',label:'Kim phổ'},{id:'mountain',label:'Dãy núi'},{id:'ribbon',label:'Dải lụa'},{id:'spark',label:'Tia sáng'},{id:'center-line',label:'Đường tâm'},{id:'equalizer',label:'Equalizer'},{id:'circle',label:'Vòng tròn'},{id:'circle-bars',label:'Cột vòng tròn'},{id:'orbit-dots',label:'Chấm quỹ đạo'},{id:'radial-spectrum',label:'Phổ xuyên tâm'},{id:'neon-ring',label:'Vòng neon đổi màu'},{id:'arc-burst',label:'Arc Burst 360°'},{id:'spiral',label:'Spiral Spectrum'},{id:'radial-wave',label:'Radial Wave'},{id:'pinwheel',label:'Pinwheel'},{id:'mandala',label:'Mandala'},{id:'spectrum-rings',label:'Spectrum Rings'},{id:'wave-bars',label:'Wave Bars'},{id:'stacked-spectrum',label:'Stacked Spectrum'}
+  {id:'thin-bars',label:'Cột mảnh'},{id:'blocks',label:'Khối LED'},{id:'needles',label:'Kim phổ'},{id:'mountain',label:'Dãy núi'},{id:'ribbon',label:'Dải lụa Classic'},{id:'spark',label:'Tia sáng'},{id:'center-line',label:'Đường tâm'},{id:'equalizer',label:'Equalizer'},{id:'circle',label:'Vòng tròn'},{id:'circle-bars',label:'Cột vòng tròn'},{id:'radial-spectrum',label:'Phổ xuyên tâm'},{id:'spiral',label:'Spiral Spectrum'},{id:'radial-wave',label:'Radial Wave'},{id:'pinwheel',label:'Pinwheel'},{id:'mandala',label:'Mandala'},{id:'spectrum-rings',label:'Spectrum Rings'},{id:'wave-bars',label:'Wave Bars'}
 ];
 
 export const VISUAL_TEMPLATES:{id:VisualTemplate;label:string;hint:string}[] = [
