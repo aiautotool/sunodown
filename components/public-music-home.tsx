@@ -156,34 +156,51 @@ export function PublicMusicHome({
     } catch {}
   };
 
-  const SongCard = ({ song, source }: { song: DirectorySong; source: DirectorySong[] }) => (
-    <article className="sd-discover-card">
-      <button className="art" onClick={() => play(song, source)} aria-label={`Phát ${song.title}`}>
-        {song.picture ? <img src={song.picture} alt="" /> : <Music2 />}
-        <span><Play /></span>
-      </button>
-      <a href={`/music/@${encodeURIComponent(song.handle)}/${song.id}`}>
-        <b>{song.title}</b>
-      </a>
-      <div className="sd-discover-card-meta">
-        <a className="creator" href={`/music/@${encodeURIComponent(song.handle)}`}>
-          @{song.handle}
-        </a>
-        <button
-          type="button"
-          className="share"
-          onClick={() => void shareSong(song)}
-          aria-label={`Chia sẻ ${song.title}`}
-        >
-          <Share2 />
-          <span>{sharedSongId === song.id ? 'Đã copy' : 'Share'}</span>
+  const SongCard = ({ song, source }: { song: DirectorySong; source: DirectorySong[] }) => {
+    const primaryTag = (song.tags || '')
+      .split(/[,;/|]+/)
+      .map((value) => value.trim())
+      .find(Boolean);
+
+    return (
+      <article className="sd-discover-card">
+        <button className="art" onClick={() => play(song, source)} aria-label={`Phát ${song.title}`}>
+          {song.picture ? <img src={song.picture} alt="" /> : <Music2 />}
+          <i className="art-shine" aria-hidden="true" />
+          {song.duration ? <small className="duration">{fmt(song.duration)}</small> : null}
+          <span className="play-fab"><Play /></span>
         </button>
-      </div>
-    </article>
-  );
+        <div className="sd-discover-card-copy">
+          <a className="song-title" href={`/music/@${encodeURIComponent(song.handle)}/${song.id}`}>
+            <b>{song.title}</b>
+          </a>
+          <div className="sd-discover-card-meta">
+            <a className="creator" href={`/music/@${encodeURIComponent(song.handle)}`}>
+              @${song.handle}
+            </a>
+            {primaryTag ? <em>{primaryTag}</em> : null}
+            <button
+              type="button"
+              className="share"
+              onClick={() => void shareSong(song)}
+              aria-label={`Chia sẻ ${song.title}`}
+            >
+              <Share2 />
+              <span>{sharedSongId === song.id ? 'Đã copy' : 'Share'}</span>
+            </button>
+          </div>
+        </div>
+      </article>
+    );
+  };
 
   return (
     <div className="sd-discover">
+      <div className="sd-music-ambient" aria-hidden="true">
+        <i className="glow-one" />
+        <i className="glow-two" />
+        <i className="glow-three" />
+      </div>
       <header className="sd-discover-topbar">
         <a className="brand" href="/">
           <span><Music2 /></span>
@@ -210,7 +227,8 @@ export function PublicMusicHome({
         {featured ? (
           <section className="sd-discover-hero">
             <div className="hero-copy">
-              <span><Sparkles /> FEATURED</span>
+              <div className="hero-kicker"><i /> LIVE DISCOVERY <i /></div>
+              <span><Sparkles /> FEATURED PICK</span>
               <h1>{featured.title}</h1>
               <a href={`/music/@${encodeURIComponent(featured.handle)}`}>
                 @{featured.handle}
@@ -272,6 +290,7 @@ export function PublicMusicHome({
         )}
 
         <section className="sd-discover-summary">
+          <strong className="summary-label">SUNODOWN MUSIC</strong>
           <span><b>{directory.creatorCount}</b> creator</span>
           <span><b>{directory.songCount}</b> bài public</span>
           <form onSubmit={openProfile}>
