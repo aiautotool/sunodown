@@ -11,6 +11,7 @@ import {
 } from '../v4/renderer-safe';
 import {
   VIDEO_SIZES,
+  DEFAULT_WAVE_APPEARANCE,
   type Song,
   type VideoAspect,
   type VisualTemplate,
