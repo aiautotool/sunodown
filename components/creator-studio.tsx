@@ -81,6 +81,7 @@ import {
 import { StudioSheet, StudioTabs } from '@/components/studio-ui';
 import { StyleStudio } from '@/components/style-studio';
 import { AccountLibraryPanel } from '@/components/account-library-panel';
+import { MobileAppNav } from '@/components/mobile-app-nav';
 import {
   BUILTIN_STUDIO_PRESETS,
   PRESET_SCHEMA_VERSION,
@@ -112,6 +113,8 @@ import {
   loadProjectData,
   saveProjectData,
 } from '@/components/project-store';
+
+type AppView = 'create' | 'projects' | 'library' | 'jobs' | 'settings';
 
 type Song = {
   id?: string;
@@ -582,10 +585,12 @@ function ToolControls(p: {
   );
 }
 
-export default function CreatorStudio() {
-  const [view, setView] = useState<
-    'create' | 'projects' | 'library' | 'jobs' | 'settings'
-  >('create');
+export default function CreatorStudio({
+  initialView = 'create',
+}: {
+  initialView?: AppView;
+}) {
+  const [view, setView] = useState<AppView>(initialView);
   const [autoPreview, setAutoPreview] = useState(true);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [signedInUser, setSignedInUser] = useState<SignedInUser | null>(null);
@@ -2437,11 +2442,12 @@ export default function CreatorStudio() {
   };
 
   const navigationItems = [
-    [Plus, 'Create', 'create'],
-    [Folder, 'Projects', 'projects'],
-    [BookOpen, 'Library', 'library'],
-    [ListMusic, 'Jobs', 'jobs'],
-    [Settings, 'Settings', 'settings'],
+    [Plus, 'Create', '/create', 'create'],
+    [Music2, 'Music', '/music', 'music'],
+    [Folder, 'Projects', '/projects', 'projects'],
+    [BookOpen, 'Library', '/library', 'library'],
+    [ListMusic, 'Jobs', '/jobs', 'jobs'],
+    [Settings, 'Settings', '/settings', 'settings'],
   ] as const;
   const navigationMenu = (
     <nav className="sd-profile-menu" aria-label="Điều hướng chính">
@@ -2449,13 +2455,10 @@ export default function CreatorStudio() {
         <span className="sd-avatar">{signedInUser?.picture ? <img src={signedInUser.picture} alt="" /> : (signedInUser?.name?.[0] || 'S').toUpperCase()}</span>
         <span><b>{signedInUser?.name || 'SunoDown'}</b><small>{signedInUser?.email || 'Creator Studio'}</small></span>
       </div>
-      <a href="/music" className="sd-profile-menu-link">
-        <Music2 /><span>Music</span>
-      </a>
-      {navigationItems.map(([Icon, label, id]) => (
-        <button key={id} className={view === id ? 'active' : ''} onClick={() => { setView(id); setNavigationOpen(false); }}>
+      {navigationItems.map(([Icon, label, href, id]) => (
+        <a key={href} href={href} className={view === id ? 'sd-profile-menu-link active' : 'sd-profile-menu-link'}>
           <Icon /><span>{label}</span>
-        </button>
+        </a>
       ))}
       <div className="sd-profile-auth">
         {signedInUser ? (
@@ -2496,11 +2499,11 @@ export default function CreatorStudio() {
           </div>
         ) : (
           <nav className="sd-home-head-nav" aria-label="Điều hướng Home">
-            <button className={view === 'create' ? 'active' : ''} onClick={() => setView('create')}>Trang chủ</button>
+            <a href="/" className={view === 'create' ? 'active' : ''}>Trang chủ</a>
             <a href="/music">Music</a>
-            <button className={view === 'projects' ? 'active' : ''} onClick={() => setView('projects')}>Dự án</button>
-            <button className={view === 'library' ? 'active' : ''} onClick={() => setView('library')}>Thư viện</button>
-            <button className={view === 'jobs' ? 'active' : ''} onClick={() => setView('jobs')}>Jobs</button>
+            <a href="/projects" className={view === 'projects' ? 'active' : ''}>Dự án</a>
+            <a href="/library" className={view === 'library' ? 'active' : ''}>Thư viện</a>
+            <a href="/jobs" className={view === 'jobs' ? 'active' : ''}>Jobs</a>
           </nav>
         )}
         <div className="sd-head-actions">
@@ -2842,11 +2845,11 @@ export default function CreatorStudio() {
                 }}
               />
             </label>
-            <button onClick={() => { window.location.href = '/music'; }}><Music2 /><span>Music Player</span></button>
-            <button onClick={() => setView('library')}><BookOpen /><span>Thư viện bài hát</span></button>
+            <a className="sd-home-side-link" href="/music"><Music2 /><span>Music Player</span></a>
+            <a className="sd-home-side-link" href="/library"><BookOpen /><span>Thư viện bài hát</span></a>
             <button onClick={() => document.querySelector('.sd-home-featured')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}><Sparkles /><span>Preset & Style</span></button>
-            <button onClick={() => setView('projects')}><Folder /><span>Dự án</span></button>
-            <button onClick={() => setView('jobs')}><ListMusic /><span>Lịch sử render</span></button>
+            <a className="sd-home-side-link" href="/projects"><Folder /><span>Dự án</span></a>
+            <a className="sd-home-side-link" href="/jobs"><ListMusic /><span>Lịch sử render</span></a>
 
             <button className="sd-home-side-pro" onClick={() => setView('settings')}>
               <span>♛</span>
@@ -3506,6 +3509,7 @@ export default function CreatorStudio() {
             />} />
         </StudioSheet>
       )}
+      {!song && <MobileAppNav />}
     </div>
   );
 }
