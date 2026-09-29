@@ -81,6 +81,12 @@ jobs:
       - name: Smoke check picai.online
         run: curl --fail --location --retry 5 --retry-delay 3 --max-time 20 https://picai.online/ >/dev/null
 
+      - name: Verify Groq subtitle engine is available
+        run: |
+          response="$(curl --fail --silent --show-error --location --retry 5 --retry-delay 3 --max-time 20 https://picai.online/api/karaoke/groq)"
+          echo "$response"
+          echo "$response" | grep -Eq '"available"[[:space:]]*:[[:space:]]*true'
+
       - name: Mark deploy success
         if: success()
         env:
