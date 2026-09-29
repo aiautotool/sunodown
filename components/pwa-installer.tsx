@@ -40,9 +40,13 @@ export function PwaInstaller() {
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
-      }, { once: true });
+      const register = () => {
+        void navigator.serviceWorker
+          .register('/sw.js', { scope: '/' })
+          .catch(() => {});
+      };
+      if (document.readyState === 'complete') register();
+      else window.addEventListener('load', register, { once: true });
     }
 
     const standalone = isStandaloneMode();
