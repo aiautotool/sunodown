@@ -41,6 +41,32 @@ type GroqVerboseResponse = {
   };
 };
 
+const GROQ_EXTENSIONS = new Set([
+  'flac', 'mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'ogg', 'opus', 'wav', 'webm',
+]);
+
+function extensionFromMime(type: string) {
+  const mime = type.toLowerCase().split(';')[0].trim();
+  if (mime === 'audio/flac' || mime === 'audio/x-flac') return 'flac';
+  if (mime === 'audio/mpeg' || mime === 'audio/mp3') return 'mp3';
+  if (mime === 'audio/mp4' || mime === 'video/mp4') return 'mp4';
+  if (mime === 'audio/x-m4a' || mime === 'audio/m4a') return 'm4a';
+  if (mime === 'audio/ogg' || mime === 'application/ogg') return 'ogg';
+  if (mime === 'audio/opus') return 'opus';
+  if (mime === 'audio/wav' || mime === 'audio/x-wav' || mime === 'audio/wave') return 'wav';
+  if (mime === 'audio/webm' || mime === 'video/webm') return 'webm';
+  return '';
+}
+
+function groqUploadName(file: File) {
+  const nameExt = file.name.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || '';
+  const extension =
+    (GROQ_EXTENSIONS.has(nameExt) ? nameExt : '') ||
+    extensionFromMime(file.type) ||
+    'mp3';
+  return `mobile-audio.${extension}`;
+}
+
 async function getEnv(): Promise<GroqEnv> {
   try {
     const mod = await import('cloudflare:workers');
@@ -207,9 +233,10 @@ export async function POST(request: NextRequest) {
     const requestedDuration = Number(durationValue);
 
     const form = new FormData();
+    const uploadName = groqUploadName(audio);
     form.set(
       'file',
-      new File([audio], audio.name || 'mobile-audio.mp3', {
+      new File([audio], uploadName, {
         type: audio.type || 'audio/mpeg',
       }),
     );
@@ -298,6 +325,8 @@ export async function POST(request: NextRequest) {
         language: result.language || language,
         duration,
         audio_bytes: audio.size,
+        upload_filename: uploadName,
+        upload_mime: audio.type || 'audio/mpeg',
         word_count: words.length,
         line_count: lines.length,
         lyrics_alignment: Boolean(lyrics),
