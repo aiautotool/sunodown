@@ -41,6 +41,7 @@ const defaultTracks:TimelineTrackState={
 export function UniversalEditorTimeline({
   compact=false,duration,playhead,onSeek,subtitles,onSubtitlesChange,
   clips,onClipsChange,effects,trackState,onTrackStateChange,onAddMedia,
+  trimStart=0,trimEnd,onTrimChange,
 }:{
   compact?:boolean;
   duration:number;
@@ -54,6 +55,9 @@ export function UniversalEditorTimeline({
   trackState?:TimelineTrackState;
   onTrackStateChange:(state:TimelineTrackState)=>void;
   onAddMedia:()=>void;
+  trimStart?:number;
+  trimEnd?:number;
+  onTrimChange?:(start:number,end:number)=>void;
 }){
   const [zoom,setZoom]=useState(1);
   const [tool,setTool]=useState<Tool>('select');
@@ -65,6 +69,12 @@ export function UniversalEditorTimeline({
   const [clipboard,setClipboard]=useState<ClipboardItem|null>(null);
   const tracks=trackState||defaultTracks;
   const safeDuration=Math.max(1,duration||1);
+  const safeTrimStart=clamp(trimStart,0,Math.max(0,safeDuration-.1));
+  const safeTrimEnd=clamp(trimEnd??safeDuration,safeTrimStart+.1,safeDuration);
+  const setTrim=(start:number,end:number)=>onTrimChange?.(
+    clamp(start,0,Math.max(0,safeDuration-.1)),
+    clamp(end,Math.min(safeDuration,start+.1),safeDuration),
+  );
   const canvasWidth=Math.max(viewportWidth,Math.max(900,safeDuration*22)*zoom);
   const px=canvasWidth/safeDuration;
   const scrollRef=useRef<ScrollView>(null);
@@ -253,6 +263,9 @@ export function UniversalEditorTimeline({
         <Tool disabled={!undoStack.length} onPress={undo} icon={<Undo2 size={14}/>} label="Undo"/>
         <Tool disabled={!redoStack.length} onPress={redo} icon={<Redo2 size={14}/>} label="Redo"/>
         <Tool onPress={onAddMedia} icon={<ImagePlus size={14}/>} label="Media"/>
+        <Tool onPress={()=>setTrim(Math.min(playhead,safeTrimEnd-.1),safeTrimEnd)} icon={<Scissors size={14}/>} label="Set IN"/>
+        <Tool onPress={()=>setTrim(safeTrimStart,Math.max(playhead,safeTrimStart+.1))} icon={<Scissors size={14}/>} label="Set OUT"/>
+        <Tool onPress={()=>setTrim(0,safeDuration)} icon={<Focus size={14}/>} label="Full"/>
       </ScrollView>
       <View style={styles.zoom}>
         <Pressable disabled={zoom<=MIN_ZOOM} onPress={()=>setZoom(value=>clamp(value-.25,MIN_ZOOM,MAX_ZOOM))} style={styles.zoomBtn}><Minus size={13} color="#cdd4df"/></Pressable>
@@ -302,6 +315,11 @@ export function UniversalEditorTimeline({
           <View {...rulerResponder.panHandlers} style={styles.ruler}>
             {ticks.map(value=><View key={value} style={[styles.tick,{left:value*px}]}><Text style={styles.tickText}>{stamp(value)}</Text></View>)}
           </View>
+          <View pointerEvents="none" style={[styles.trimRegion,{left:safeTrimStart*px,width:Math.max(2,(safeTrimEnd-safeTrimStart)*px)}]}>
+            <Text style={styles.trimRegionText}>WORK AREA · {stamp(safeTrimStart)} → {stamp(safeTrimEnd)}</Text>
+          </View>
+          <TrimHandle side="start" value={safeTrimStart} other={safeTrimEnd} px={px} duration={safeDuration} snap={snap} onChange={(value)=>setTrim(value,safeTrimEnd)}/>
+          <TrimHandle side="end" value={safeTrimEnd} other={safeTrimStart} px={px} duration={safeDuration} snap={snap} onChange={(value)=>setTrim(safeTrimStart,value)}/>
 
           <TrackHeader name="audio" label="Audio" icon={<Waves size={14}/>} state={tracks.audio} onUpdate={patch=>updateTrack('audio',patch)}/>
           {!tracks.audio.hidden&&<View style={[styles.audioLane,{top:62,width:canvasWidth}]}>
@@ -361,6 +379,25 @@ export function UniversalEditorTimeline({
       </ScrollView>
     </View>
   </View>;
+}
+
+function TrimHandle({side,value,other,px,duration,snap,onChange}:{side:'start'|'end';value:number;other:number;px:number;duration:number;snap:(value:number)=>number;onChange:(value:number)=>void}){
+  const origin=useRef(value);
+  origin.current=value;
+  const responder=useMemo(()=>PanResponder.create({
+    onStartShouldSetPanResponder:()=>true,
+    onMoveShouldSetPanResponder:()=>true,
+    onPanResponderGrant:()=>{origin.current=value},
+    onPanResponderMove:(_,gesture)=>{
+      const raw=snap(origin.current+gesture.dx/px);
+      const next=side==='start'?clamp(raw,0,other-.1):clamp(raw,other+.1,duration);
+      onChange(next);
+    },
+  }),[side,value,other,px,duration,snap,onChange]);
+  return <View
+    {...responder.panHandlers}
+    style={[styles.trimHandle,{left:value*px},side==='start'?styles.trimHandleStart:styles.trimHandleEnd]}
+  ><View style={styles.trimHandleGrip}/></View>;
 }
 
 function Tool({active=false,disabled=false,onPress,icon,label}:{active?:boolean;disabled?:boolean;onPress:()=>void;icon:React.ReactNode;label:string}){
@@ -439,6 +476,8 @@ const styles=StyleSheet.create({
   zoom:{flexDirection:'row',alignItems:'center',gap:6},zoomBtn:{width:29,height:29,borderWidth:1,borderColor:'#313a49',borderRadius:8,backgroundColor:'#111722',alignItems:'center',justifyContent:'center'},zoomBound:{color:'#616e81',fontSize:7},zoomValue:{minWidth:37,color:'#d6deea',fontSize:8,textAlign:'center',fontWeight:'800'},
   nudge:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:6,padding:8,borderBottomWidth:1,borderColor:'rgba(217,70,239,.12)',backgroundColor:'rgba(217,70,239,.04)'},nudgeLabel:{color:'#d8dce5',fontSize:9,fontWeight:'800',marginRight:4},nudgeBtn:{minHeight:29,borderWidth:1,borderColor:'#3a3248',borderRadius:7,backgroundColor:'#121019',paddingHorizontal:8,alignItems:'center',justifyContent:'center'},nudgeText:{color:'#c5bed0',fontSize:8},
   canvas:{position:'relative',backgroundColor:'#070a10'},ruler:{position:'absolute',left:0,right:0,top:0,height:30,borderBottomWidth:1,borderColor:'#28303d'},tick:{position:'absolute',top:16,height:14,borderLeftWidth:1,borderColor:'#3b4556'},tickText:{position:'absolute',bottom:12,left:4,color:'#8792a5',fontSize:8,width:42},
+  trimRegion:{position:'absolute',zIndex:4,top:30,bottom:0,borderLeftWidth:1,borderRightWidth:1,borderColor:'rgba(139,108,255,.6)',backgroundColor:'rgba(123,91,255,.045)'},trimRegionText:{position:'absolute',top:4,left:5,color:'#9f8cf4',fontSize:7,fontWeight:'800',letterSpacing:.4},
+  trimHandle:{position:'absolute',zIndex:40,top:20,bottom:0,width:14,marginLeft:-7,alignItems:'center'},trimHandleStart:{},trimHandleEnd:{},trimHandleGrip:{width:9,height:24,borderWidth:1,borderColor:'#cabdff',borderRadius:4,backgroundColor:'#7258e8',shadowColor:'#7c5cff',shadowOpacity:.45,shadowRadius:6,elevation:4},
   trackHeader:{position:'absolute',left:6,width:120,height:25,zIndex:10,borderRadius:6,backgroundColor:'rgba(17,23,34,.94)',paddingHorizontal:6,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},trackLabel:{flex:1,flexDirection:'row',alignItems:'center',gap:4},trackText:{flex:1,color:'#818da1',fontSize:8,fontWeight:'700'},trackActions:{flexDirection:'row',alignItems:'center',gap:5},cc:{color:'#aa97ff',fontSize:7,fontWeight:'900'},
   audioLane:{position:'absolute',left:0,height:58,borderBottomWidth:1,borderColor:'#171d27',justifyContent:'center',paddingLeft:58},waveBars:{height:46,flexDirection:'row',alignItems:'center',gap:2,overflow:'hidden'},waveBar:{width:2,borderRadius:2,backgroundColor:'#765cec',opacity:.75},
   clip:{position:'absolute',height:44,borderWidth:1,borderRadius:5,overflow:'hidden',justifyContent:'center',paddingHorizontal:12},clipText:{color:'#e9edf5',fontSize:8,fontWeight:'700'},edge:{position:'absolute',zIndex:6,left:0,top:0,bottom:0,width:8,backgroundColor:'#9d7bff',opacity:.38},edgeRight:{left:undefined,right:0},edgeActive:{opacity:.95},
