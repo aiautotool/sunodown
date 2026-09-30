@@ -233,7 +233,7 @@ const styles=StyleSheet.create({
   proCrown:{width:30,height:30,borderRadius:10,backgroundColor:'rgba(245,174,67,.1)',alignItems:'center',justifyContent:'center'},proCrownText:{color:'#ffc45f',fontSize:15},
   proTitle:{color:'#f3f5f8',fontSize:12,fontWeight:'700'},proSub:{color:'#717e92',fontSize:8,marginTop:4},proArrow:{color:'#8e9bb0',fontSize:22},
 
-  scroll:{flex:1},shell:{paddingTop:26,paddingHorizontal:28,paddingBottom:22},shellMid:{paddingTop:22,paddingHorizontal:20,paddingBottom:22},shellStacked:{paddingTop:18,paddingHorizontal:18,paddingBottom:90},shellMobile:{paddingTop:12,paddingHorizontal:16,paddingBottom:56},
+  scroll:{flex:1},shell:{paddingTop:26,paddingHorizontal:28,paddingBottom:22},shellMid:{paddingTop:22,paddingHorizontal:20,paddingBottom:22},shellStacked:{paddingTop:18,paddingHorizontal:18,paddingBottom:90},shellMobile:{paddingTop:12,paddingHorizontal:16,paddingBottom:92},
   mobileBrand:{height:52,flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:4,marginBottom:8},
   mobileBrandLeft:{flexDirection:'row',alignItems:'center',gap:10},mobileBrandText:{color:'#f5f7fb',fontSize:21,fontWeight:'700'},
   hero:{minHeight:520,flexDirection:'row',gap:18,alignItems:'center'},heroStack:{flexDirection:'column',alignItems:'stretch',paddingTop:18},
