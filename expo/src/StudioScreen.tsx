@@ -623,14 +623,25 @@ function QuickCreate({
   renderStage:'idle'|'validation'|'prepare'|'render'|'finalize'; renderMessage:string; highlightNotice:string;
   onPreset:(item:(typeof V24_PRESETS)[number])=>void; onExport:()=>void; onHighlight:()=>void; onCustomize?:()=>void;
 }){
-  const cards=quickPresets.map((item,index)=><Pressable key={item.id} onPress={()=>onPreset(item)} style={[styles.quickPreset,compact&&styles.quickPresetCompact,config.presetId===item.id&&{borderColor:item.accent}]}>
+  const cards=quickPresets.map((item,index)=><Pressable
+    key={item.id}
+    onPress={()=>onPreset(item)}
+    style={[
+      styles.quickPreset,
+      compact?styles.quickPresetCompact:styles.quickPresetDesktop,
+      config.presetId===item.id&&{borderColor:item.accent},
+    ]}
+  >
     <View style={[styles.quickPresetArt,compact&&styles.quickPresetArtCompact,{backgroundColor:item.accent+'22'}]}>
       {song.picture&&<Image source={{uri:song.picture}} style={StyleSheet.absoluteFill}/>}
       <View style={styles.quickShade}/>
-      <Text style={styles.quickBadge}>{index===0?'ĐỀ XUẤT':item.badge}</Text>
+      {!compact&&<Text style={styles.quickBadge}>{index===0?'ĐỀ XUẤT':item.badge}</Text>}
     </View>
-    <Text numberOfLines={1} style={styles.quickPresetName}>{item.name}</Text>
-    <Text style={styles.quickPresetMeta}>{item.aspect} · {item.lyrics==='off'?'Visualizer':'Lyrics'}</Text>
+    <View style={[styles.quickPresetCopy,compact&&styles.quickPresetCopyCompact]}>
+      {compact&&<Text style={styles.quickBadgeCompact}>{index===0?'ĐỀ XUẤT':item.badge}</Text>}
+      <Text numberOfLines={1} style={[styles.quickPresetName,compact&&styles.quickPresetNameCompact]}>{item.name}</Text>
+      <Text numberOfLines={1} style={[styles.quickPresetMeta,compact&&styles.quickPresetMetaCompact]}>{item.aspect} · {item.lyrics==='off'?'Visualizer':'Lyrics'}</Text>
+    </View>
   </Pressable>);
 
   return <View style={[styles.quickCreate,compact&&styles.quickCreateCompact]}>
@@ -639,7 +650,7 @@ function QuickCreate({
       {compact?<Text style={styles.quickHint}>Preset phù hợp bài này</Text>:<Pressable style={styles.quickCustomize} onPress={onCustomize}><SlidersHorizontal size={14} color="#cbd3df"/><Text style={styles.quickCustomizeText}>Customize</Text></Pressable>}
     </View>
     {compact
-      ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickPresetScroll}>{cards}</ScrollView>
+      ? <View style={styles.quickPresetList}>{cards}</View>
       : <View style={styles.quickPresetRow}>{cards}</View>}
     <View style={styles.quickActions}>
       <Pressable disabled={rendering} onPress={onExport} style={[styles.quickAction,styles.quickActionPrimary,rendering&&styles.disabled]}><Upload size={compact?15:16} color="#fff"/><Text style={styles.quickActionPrimaryText}>{rendering?stageLabel(renderStage)+' '+Math.round(renderProgress)+'%':'Create video'}</Text></Pressable>
@@ -722,15 +733,21 @@ const styles=StyleSheet.create({
   quickCustomize:{height:34,borderWidth:1,borderColor:'#303a49',borderRadius:10,backgroundColor:'#121925',paddingHorizontal:11,flexDirection:'row',alignItems:'center',gap:6},
   quickCustomizeText:{color:'#cbd3df',fontSize:10},
   quickPresetRow:{flexDirection:'row',gap:8,marginTop:11},
-  quickPresetScroll:{gap:8,paddingTop:10,paddingBottom:2},
-  quickPreset:{flex:1,overflow:'hidden',borderWidth:1,borderColor:'#29313d',borderRadius:10,backgroundColor:'#0b1017'},
-  quickPresetCompact:{width:145,flex:0},
+  quickPresetList:{gap:8,marginTop:10},
+  quickPreset:{overflow:'hidden',borderWidth:1,borderColor:'#29313d',borderRadius:10,backgroundColor:'#0b1017'},
+  quickPresetDesktop:{flex:1},
+  quickPresetCompact:{width:'100%',minHeight:64,flexDirection:'row',alignItems:'stretch',flexGrow:0,flexShrink:0},
   quickPresetArt:{height:66,overflow:'hidden',position:'relative'},
-  quickPresetArtCompact:{height:70},
+  quickPresetArtCompact:{width:62,height:62,flexShrink:0},
   quickShade:{...StyleSheet.absoluteFill,backgroundColor:'rgba(7,10,16,.42)'},
   quickBadge:{position:'absolute',left:7,top:7,color:'#eee8ff',fontSize:7,fontWeight:'900'},
+  quickPresetCopy:{minWidth:0},
+  quickPresetCopyCompact:{flex:1,justifyContent:'center',paddingHorizontal:9,paddingVertical:6},
+  quickBadgeCompact:{color:'#8d72ff',fontSize:7,fontWeight:'900',letterSpacing:.5,marginBottom:2},
   quickPresetName:{color:'#f5f7fb',fontSize:9,fontWeight:'800',paddingHorizontal:8,paddingTop:7},
+  quickPresetNameCompact:{paddingHorizontal:0,paddingTop:0,fontSize:10},
   quickPresetMeta:{color:'#727e90',fontSize:7,paddingHorizontal:8,paddingTop:3,paddingBottom:8},
+  quickPresetMetaCompact:{paddingHorizontal:0,paddingTop:3,paddingBottom:0,fontSize:8},
   quickActions:{flexDirection:'row',gap:8,marginTop:10},
   quickAction:{flex:1,minHeight:42,borderWidth:1,borderColor:'#5b49ba',borderRadius:9,backgroundColor:'rgba(112,85,225,.12)',flexDirection:'row',alignItems:'center',justifyContent:'center',gap:7},
   quickActionPrimary:{backgroundColor:'#7058ed'},
