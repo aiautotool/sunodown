@@ -3,6 +3,7 @@ import {
   Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View,
   type LayoutChangeEvent,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   ChevronDown, Copy, Eye, EyeOff, Focus, ImagePlus, Lock, Magnet, Minus,
   MousePointer2, Plus, Redo2, Scissors, Sparkles, Trash2,
@@ -488,7 +489,13 @@ function MovableClip({
     ]}
   >
     <View {...leftResponder.panHandlers} style={[styles.edge,selected&&styles.edgeActive]}/>
-    {!subtitle&&thumbnail&&<Image source={{uri:thumbnail}} style={styles.clipThumb}/>}
+    {!subtitle&&thumbnail&&(
+      thumbnail.startsWith('v23-local-audio-cover:')
+        ? <LinearGradient colors={['#17112d','#5234b8','#111827']} locations={[0,.52,1]} style={styles.clipThumb}>
+            <Text style={styles.localAudioThumbNote}>♫</Text>
+          </LinearGradient>
+        : <Image source={{uri:thumbnail}} style={styles.clipThumb}/>
+    )}
     {!subtitle&&video&&<View style={styles.clipThumb}><Video size={14} color="#cbd5e1"/></View>}
     <Text numberOfLines={1} style={[styles.clipText,subtitle&&styles.subtitleText]}>{label}</Text>
     <View {...rightResponder.panHandlers} style={[styles.edge,styles.edgeRight,selected&&styles.edgeActive]}/>
@@ -549,6 +556,7 @@ const styles=StyleSheet.create({
   subtitleClip:{height:36,backgroundColor:'#352366'},
   clipSelected:{shadowColor:'#8b5cf6',shadowOpacity:.25,shadowRadius:10,elevation:3},
   clipThumb:{height:'100%',width:54,flexShrink:0,alignItems:'center',justifyContent:'center',backgroundColor:'#121924'},
+  localAudioThumbNote:{color:'#fff',fontSize:18,fontWeight:'700'},
   clipText:{flex:1,color:'#e9edf5',fontSize:8,fontWeight:'700',paddingHorizontal:8},
   subtitleText:{paddingHorizontal:12,fontWeight:'500'},
   edge:{position:'absolute',zIndex:12,left:0,top:0,bottom:0,width:9,backgroundColor:'#9d7bff',opacity:.0},
