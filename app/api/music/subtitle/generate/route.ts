@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
   }
 
   const song = await getPublicSong(songId);
-  if (!song || !song.isPublic) {
+  if (!song) {
     return NextResponse.json(
       { error: 'song_not_found' },
       { status: 404, headers: { 'cache-control': 'no-store' } },
