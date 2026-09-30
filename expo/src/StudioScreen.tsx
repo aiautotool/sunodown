@@ -14,6 +14,7 @@ import { findHighlight } from './highlight-engine';
 import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendPresets, V24_PRESETS, type StudioPanel, type StudioVisualConfig } from './V24StudioControls';
 import { UniversalEditorTimeline } from './UniversalEditorTimeline';
 import { storage } from './storage';
+import { backgroundPresetColors } from './background-presets';
 
 type Tool=StudioPanel|null;
 
@@ -178,6 +179,8 @@ export function StudioScreen({
         waveDensity:config.waveDensity,
         waveRotation:config.waveRotation,
         backgroundUri:background,
+        backgroundMode:config.backgroundMode,
+        backgroundPreset:config.backgroundPreset,
         lyricsMode:config.lyrics,
         timeline,
         mediaClips:clips,
@@ -485,7 +488,9 @@ function PreviewStage({
   const innerH=Math.max(1,Math.min(stageBox.height,stageBox.width/ratio));
   const innerW=Math.max(1,Math.min(stageBox.width,innerH*ratio));
   const activeClip=[...clips].reverse().find(clip=>currentTime>=clip.start&&currentTime<clip.end);
-  const activeVisual=trackState.visual.hidden?undefined:(activeClip?.type==='image'?activeClip.uri:background);
+  const sourceVisual=config.backgroundMode==='suno'?song.picture:config.backgroundMode==='preset'?undefined:background;
+  const activeVisual=trackState.visual.hidden?undefined:(activeClip?.type==='image'?activeClip.uri:sourceVisual);
+  const presetColors=backgroundPresetColors(config.backgroundPreset);
   const barCount=Math.max(18,Math.round((compact?38:54)*((config.waveDensity??72)/72)));
 
   return <View>
