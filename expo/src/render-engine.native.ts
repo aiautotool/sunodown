@@ -130,7 +130,8 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
   const viz=spectrum
     ? `showspectrum=s=${waveW}x${waveH}:mode=combined:color=intensity:slide=scroll:scale=log,format=rgba,colorchannelmixer=aa=${opacity}`
     : `showwaves=s=${waveW}x${waveH}:mode=cline:rate=30:colors=${c1}|${c2},format=rgba,colorchannelmixer=aa=${opacity}`;
-  const y=Math.max(30,Math.round(height*.78-waveH/2));
+  const waveX=Math.max(0,Math.min(width-waveW,Math.round(width*((options.waveX??50)/100)-waveW/2)));
+  const y=Math.max(0,Math.min(height-waveH,Math.round(height*((options.waveY??82)/100)-waveH/2)));
   const filters:string[]=[];
 
   let audioLabel='';
@@ -165,7 +166,7 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
 
   let compositeLabel=baseLabel;
   if(options.visualVisible!==false){
-    filters.push(`[${baseLabel}][viz]overlay=(W-w)/2:${y}:shortest=1[composite]`);
+    filters.push(`[${baseLabel}][viz]overlay=${waveX}:${y}:shortest=1[composite]`);
     compositeLabel='composite';
   }
   const enabledEffects=options.effectsVisible===false?[]:(options.effects||[]);
