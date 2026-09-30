@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Music2 } from 'lucide-react-native';
 import { colors } from './theme';
@@ -10,13 +10,34 @@ export function StartupScreen() {
   const opacity=useRef(new Animated.Value(1)).current;
 
   useEffect(()=>{
-    const timer=setInterval(()=>setProgress(value=>Math.min(92,value+Math.max(1,Math.round((92-value)*.08)))),120);
-    const done=setTimeout(()=>{
+    let cancelled=false;
+    const started=Date.now();
+    const timer=setInterval(()=>setProgress(value=>Math.min(88,value+Math.max(1,Math.round((92-value)*.08)))),120);
+    const delay=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
+    const pageReady=Platform.OS==='web'
+      ? new Promise<void>(resolve=>{
+          const doc=(globalThis as any).document;
+          const win=(globalThis as any).window;
+          if(!doc||doc.readyState==='complete')resolve();
+          else win?.addEventListener?.('load',()=>resolve(),{once:true});
+        })
+      : Promise.resolve();
+    const fontsReady=Platform.OS==='web'
+      ? Promise.resolve((globalThis as any).document?.fonts?.ready).then(()=>undefined).catch(()=>undefined)
+      : Promise.resolve();
+    void Promise.race([
+      Promise.all([pageReady,fontsReady,delay(1450)]).then(()=>undefined),
+      delay(4500),
+    ]).then(async()=>{
+      if(cancelled)return;
       clearInterval(timer);
       setProgress(100);
-      setTimeout(()=>Animated.timing(opacity,{toValue:0,duration:520,useNativeDriver:true}).start(()=>setVisible(false)),180);
-    },1650);
-    return()=>{clearInterval(timer);clearTimeout(done)};
+      const remaining=Math.max(0,1650-(Date.now()-started));
+      await delay(remaining+180);
+      if(cancelled)return;
+      Animated.timing(opacity,{toValue:0,duration:520,useNativeDriver:true}).start(()=>{if(!cancelled)setVisible(false)});
+    });
+    return()=>{cancelled=true;clearInterval(timer)};
   },[opacity]);
 
   if(!visible)return null;
