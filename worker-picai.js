@@ -592,6 +592,49 @@ export default {
       return env.ASSETS.fetch(new Request(url, request));
     }
 
+    if (
+      url.pathname === '/api/music/subtitle' &&
+      request.method === 'GET' &&
+      env.SUBTITLE_STORE
+    ) {
+      const songId = String(url.searchParams.get('songId') || '');
+      const language = subtitleLanguage(url.searchParams.get('language'));
+      const validSongId =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          songId,
+        );
+      if (!validSongId) {
+        return json({ error: 'invalid_song_id' }, 400);
+      }
+
+      try {
+        const id = env.SUBTITLE_STORE.idFromName(songId);
+        const stub = env.SUBTITLE_STORE.get(id);
+        const target = new URL('https://subtitle.internal/artifact');
+        target.searchParams.set('language', language);
+        const response = await stub.fetch(target);
+        if (response.status === 404) {
+          return json({ status: 'missing', songId, language }, 404);
+        }
+        if (!response.ok) {
+          return json({ error: 'subtitle_store_failed' }, 502);
+        }
+        const payload = await response.json();
+        return json(
+          {
+            status: 'ready',
+            cached: true,
+            subtitle: payload?.subtitle || null,
+          },
+          200,
+          'no-store',
+        );
+      } catch (error) {
+        console.error('subtitle store read failed', error);
+        return json({ error: 'subtitle_store_failed' }, 502);
+      }
+    }
+
     // Vinext route modules do not consistently expose secret bindings.
     // Keep public health deterministic at the outer Worker layer and inject
     // the Groq secret into the internal request body only for the two routes
