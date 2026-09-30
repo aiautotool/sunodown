@@ -64,7 +64,7 @@ export function StudioScreen({
   const lyricLines=useMemo(()=>song.lyrics?.split(/\n+/).map(v=>v.trim()).filter(Boolean).slice(0,14)||[],[song.lyrics]);
   const quickPresets=useMemo(()=>recommendPresets(song),[song]);
   const selectedPreset=V24_PRESETS.find(item=>item.id===config.presetId)||V24_PRESETS[0]!;
-  const stageHeight=Math.max(420,Math.min(680,height-470));
+  const stageHeight=Math.max(420,height-330);
   const seekPercent=playback.duration>0?Math.max(0,Math.min(100,playback.current/playback.duration*100)):0;
   useEffect(()=>{
     if(playback.duration>0&&config.trimEnd<=0){
