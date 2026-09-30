@@ -13,7 +13,8 @@
     "preview:local": "node scripts/local-preview.mjs",
     "lint": "oxlint",
     "format": "oxfmt",
-    "test:karaoke": "node --experimental-strip-types --test tests/karaoke-regression.test.ts"
+    "test:karaoke": "node --experimental-strip-types --test tests/karaoke-regression.test.ts",
+    "test": "node --experimental-strip-types --import ./scripts/register-test-loader.mjs --test tests/*.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

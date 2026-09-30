@@ -1,4 +1,6 @@
 'use client';
+import { EffectLayerTracks } from '@/components/scene-editor/effect-layer-tracks';
+import type { SceneLayer } from '@/packages/scene-core/src';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -35,6 +37,7 @@ export type MediaClip = {
   start: number;
   end: number;
   isDefault?: boolean;
+  trimStartMs?: number;
 };
 
 export type TimelineTrackState = Record<TrackName, TrackState>;
@@ -64,6 +67,12 @@ type Props = {
   audioUrl?: string;
   visualLabel?: string;
   effectLabels?: string[];
+  effectLayers?: SceneLayer[];
+  selectedEffectId?: string;
+  onSelectEffect?: (id:string)=>void;
+  onEffectsChange?: (layers:SceneLayer[])=>void;
+  effectEditor?: React.ReactNode;
+  disabled?: boolean;
   onTrackStateChange?: (state: TimelineTrackState) => void;
   trackState?: TimelineTrackState;
 };
@@ -123,13 +132,15 @@ export function EditorTimeline(props: Props) {
     zoomRef.current = zoom;
   }, [zoom]);
 
-  const width = Math.max(900, props.duration * 22 * zoom);
-  const px = width / Math.max(1, props.duration);
+  const gutter = 170;
+  const contentWidth = Math.max(600, props.duration * 22) * zoom;
+  const width = contentWidth + gutter;
+  const px = contentWidth / Math.max(1, props.duration);
   const grid = preferences.snapInterval;
   useEffect(() => {
     if (!preferences.autoScroll || !scroller.current) return;
     const node = scroller.current;
-    const x = props.playhead * px;
+    const x = gutter + props.playhead * px;
     if (x < node.scrollLeft || x > node.scrollLeft + node.clientWidth - 40) {
       node.scrollLeft = Math.max(0,x - node.clientWidth * 0.3);
     }
@@ -291,7 +302,7 @@ export function EditorTimeline(props: Props) {
     if (!node) return props.playhead;
     const box = node.getBoundingClientRect();
     return clamp(
-      (clientX - box.left + node.scrollLeft) / px,
+      (clientX - box.left + node.scrollLeft - gutter) / px,
       0,
       props.duration,
     );
@@ -616,10 +627,9 @@ export function EditorTimeline(props: Props) {
     setSelected(added[0].id);
   };
 
-  const ticks = Array.from(
-    { length: Math.ceil(props.duration / Math.max(1, 10 / zoom)) + 1 },
-    (_, i) => i * Math.max(1, 10 / zoom),
-  );
+  const tickStep = [.1,.25,.5,1,2,5,10,30,60,120,300].find(step=>step*px>=60) ?? 300;
+  const ticks = Array.from({length:Math.floor(props.duration/tickStep)+1},(_,i)=>i*tickStep);
+
 
   const toggleTrack = (track: typeof expandedTrack) =>
     setExpandedTrack((current) => (current === track ? 'audio' : track));
@@ -690,7 +700,7 @@ export function EditorTimeline(props: Props) {
   };
 
   return (
-    <section className="sd-edit-timeline">
+    <section className="sd-edit-timeline sd-compact-timeline">
       <header>
         <div className="sd-timeline-title">
           <b>Creator Timeline</b>
@@ -838,10 +848,11 @@ export function EditorTimeline(props: Props) {
         onPointerDown={scrub}
         onTouchEnd={touchSeek}
       >
-        <div className={`sd-timeline-canvas tool-${tool}`} style={{ width, '--track-scale': trackHeight } as React.CSSProperties}>
+        <div className={`sd-timeline-canvas tool-${tool}`} style={{ width, height:30+ (4+Math.max(0,(props.effectLayers?.length||0)))*52*trackHeight, '--track-scale': trackHeight } as React.CSSProperties}>
           <div className="sd-time-ruler">
+            <div className="sd-ruler-gutter">Lớp</div>
             {ticks.map((t) => (
-              <i key={t} style={{ left: t * px }}>
+              <i key={t} style={{ left: gutter + t * px }}>
                 <span>{stamp(t)}</span>
               </i>
             ))}
@@ -850,6 +861,7 @@ export function EditorTimeline(props: Props) {
           <div
             className={`sd-track sd-audio-track ${expandedTrack === 'audio' ? 'expanded' : ''} ${tracks.audio.hidden ? 'track-hidden' : ''} ${tracks.audio.locked ? 'track-locked' : ''}`}
           >
+            <div className="sd-track-header">
             <button
               className="sd-track-label"
               onClick={(e) => {
@@ -860,7 +872,8 @@ export function EditorTimeline(props: Props) {
               <Waves /> Audio <ChevronDown />
             </button>
             {trackActions('audio')}
-            <div className="sd-waveform-clip" style={{ left: 0, width, display: preferences.showWaveform ? undefined : 'none' }}>
+            </div>
+            <div className="sd-waveform-clip" style={{ left: gutter, width: contentWidth, display: preferences.showWaveform ? undefined : 'none' }}>
               <div
                 className="sd-waveform-bars"
                 aria-label="Waveform âm thanh thật"
@@ -886,6 +899,7 @@ export function EditorTimeline(props: Props) {
           <div
             className={`sd-track sd-video-track ${expandedTrack === 'visual' ? 'expanded' : ''} ${tracks.visual.hidden ? 'track-hidden' : ''} ${tracks.visual.locked ? 'track-locked' : ''}`}
           >
+            <div className="sd-track-header">
             <button
               className="sd-track-label"
               onClick={(e) => {
@@ -896,12 +910,13 @@ export function EditorTimeline(props: Props) {
               <Video /> Visual <ChevronDown />
             </button>
             {trackActions('visual')}
+            </div>
             {props.clips.map((clip, index) => (
               <div
                 key={clip.id}
                 className={`sd-timeline-clip ${selected === clip.id ? 'selected' : ''}`}
                 style={{
-                  left: clip.start * px,
+                  left: gutter + clip.start * px,
                   width: Math.max(24, (clip.end - clip.start) * px),
                 }}
                 onPointerDown={(e) => {
@@ -949,6 +964,7 @@ export function EditorTimeline(props: Props) {
           <div
             className={`sd-track sd-subtitle-track ${expandedTrack === 'subtitle' ? 'expanded' : ''} ${tracks.subtitle.hidden ? 'track-hidden' : ''} ${tracks.subtitle.locked ? 'track-locked' : ''}`}
           >
+            <div className="sd-track-header">
             <button
               className="sd-track-label"
               onClick={(e) => {
@@ -961,6 +977,7 @@ export function EditorTimeline(props: Props) {
               <ChevronDown />
             </button>
             {trackActions('subtitle')}
+            </div>
             {!props.subtitles.length && expandedTrack === 'subtitle' && (
               <div className="sd-sub-empty">
                 Chưa có cue subtitle được căn thời gian
@@ -971,7 +988,7 @@ export function EditorTimeline(props: Props) {
                 key={`${index}-${line.text}`}
                 className={`sd-sub-clip ${selected === `sub-${index}` ? 'selected' : ''}`}
                 style={{
-                  left: line.start * px,
+                  left: gutter + line.start * px,
                   width: Math.max(20, (line.end - line.start) * px),
                 }}
                 title={`${stamp(line.start)} → ${stamp(line.end)}\n${line.text}`}
@@ -1001,6 +1018,7 @@ export function EditorTimeline(props: Props) {
           <div
             className={`sd-track sd-effects-track ${expandedTrack === 'effects' ? 'expanded' : ''} ${tracks.effects.hidden ? 'track-hidden' : ''} ${tracks.effects.locked ? 'track-locked' : ''}`}
           >
+            <div className="sd-track-header">
             <button
               className="sd-track-label"
               onClick={(e) => {
@@ -1011,34 +1029,23 @@ export function EditorTimeline(props: Props) {
               <Sparkles /> Effects <ChevronDown />
             </button>
             {trackActions('effects')}
-            {(props.effectLabels?.length
-              ? props.effectLabels
-              : ['Không có effect']
-            ).map((effect, index) => (
-              <div
-                key={`${effect}-${index}`}
-                className="sd-timeline-effect"
-                style={{
-                  left: index * 6,
-                  width: Math.max(90, width - index * 12),
-                }}
-              >
-                {effect}
-              </div>
-            ))}
+            </div>
+            {!props.effectLayers?.length && <div className="sd-timeline-effect" style={{left:gutter,width:contentWidth}}>Chưa có lớp hiệu ứng · thêm bên dưới</div>}
           </div>
+          {props.effectLayers && <EffectLayerTracks layers={props.effectLayers} px={px} durationMs={props.duration*1000} gutter={gutter} selectedId={props.selectedEffectId} onSelect={props.onSelectEffect} onChange={props.onEffectsChange} disabled={props.disabled} groupHidden={tracks.effects.hidden} groupLocked={tracks.effects.locked} onEditStart={props.onEditStart} onEditEnd={props.onEditEnd}/>}
 
           {snapHint !== null && (
-            <div className="sd-snap-guide" style={{ left: snapHint * px }}>
+            <div className="sd-snap-guide" style={{ left: gutter + snapHint * px }}>
               <span>{stamp(snapHint)}</span>
             </div>
           )}
-          <div className="sd-playhead" style={{ left: props.playhead * px }}>
+          <div className="sd-playhead" style={{ left: gutter + props.playhead * px }}>
             <i />
             <span>{stamp(props.playhead)}</span>
           </div>
         </div>
       </div>
+      {props.effectEditor}
     </section>
   );
 }

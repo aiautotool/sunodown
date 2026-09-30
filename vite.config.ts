@@ -17,7 +17,7 @@ const buildBranch = process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME
   || process.env.CF_PAGES_BRANCH || gitBuildValue(['branch', '--show-current']);
 const buildCommit = (process.env.GITHUB_SHA || process.env.CF_PAGES_COMMIT_SHA
   || gitBuildValue(['rev-parse', '--short=7', 'HEAD'])).slice(0, 7);
-const buildVersion = process.env.BUILD_VERSION || 'v23';
+const buildVersion = process.env.BUILD_VERSION || 'v25';
 const buildIdentity = [buildBranch, buildCommit].filter(Boolean).join('.');
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =

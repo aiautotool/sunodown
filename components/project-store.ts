@@ -1,3 +1,4 @@
+import type { SceneDocument } from '@/packages/scene-core/src';
 import type { StudioPresetConfig } from './presets/studio-presets';
 import type {EffectSettings} from './v8/video-effects';
 import type { KaraokeLine } from '@/app/lib/karaoke';
@@ -24,6 +25,7 @@ import type {
 
 export type SavedProject = {
   schemaVersion?: number;
+  scene?: SceneDocument;
   url: string;
   title: string;
   updatedAt: number;

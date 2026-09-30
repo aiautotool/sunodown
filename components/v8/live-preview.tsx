@@ -597,7 +597,7 @@ export function LivePreview(props: Props) {
       } else if (activeMedia?.video && activeClip) {
         const v = activeMedia.video,
           duration = v.duration || 1,
-          target = (absoluteTime - activeClip.start) % duration;
+          target = (absoluteTime - activeClip.start + (activeClip.trimStartMs || 0) / 1000) % duration;
         if (Math.abs(v.currentTime - target) > 0.1)
           try {
             v.currentTime = target;
@@ -765,8 +765,8 @@ export function LivePreview(props: Props) {
   const relative = Math.max(0, Math.min(previewDuration, time - props.start));
 
   return (
-    <div className="mb-4 rounded-xl border border-cyan-300/20 bg-black/30 p-3">
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <div className="sd-preview-player mb-4 rounded-xl border border-cyan-300/20 bg-black/30 p-3">
+      <div className="sd-preview-toolbar mb-3 flex items-center justify-between gap-2">
         <div>
           <b className="text-sm text-cyan-100">
             {props.resultUrl ? 'Video đã xuất' : 'Xem trước trực tiếp'}
@@ -784,7 +784,8 @@ export function LivePreview(props: Props) {
         )}
       </div>
 
-      <div className="flex justify-center overflow-hidden rounded-lg bg-black">
+      <div className="sd-preview-surface flex justify-center overflow-hidden rounded-lg bg-black"
+        style={{'--preview-aspect': size.width / size.height} as React.CSSProperties}>
         {props.resultUrl ? (
           <video
             ref={video}
@@ -981,7 +982,7 @@ export function LivePreview(props: Props) {
             onEnded={() => setPlaying(false)}
             className="hidden"
           />
-          <div className="mt-3 grid grid-cols-[auto_1fr_auto] items-center gap-3">
+          <div className="sd-preview-transport mt-3 grid grid-cols-[auto_1fr_auto] items-center gap-3">
             <button
               type="button"
               disabled={props.exporting}
@@ -1016,7 +1017,7 @@ export function LivePreview(props: Props) {
         </p>
       )}
       {!props.resultUrl && (
-        <p className="mt-2 text-[11px] leading-5 text-white/45">
+        <p className="sd-preview-hint mt-2 text-[11px] leading-5 text-white/45">
           {props.exporting
             ? 'Preview đã dừng trong lúc xuất video.'
             : 'Preview dùng audio thật làm clock. Nắm trực tiếp sóng hoặc subtitle trên video để kéo tới vị trí mong muốn.'}

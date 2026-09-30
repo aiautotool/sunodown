@@ -32,3 +32,31 @@ void test('rain responds to direction, speed, density and thickness',()=>{
  assert.equal(rain({intensity:2}).lines.length,base.lines.length*2);
  assert.equal(rain({particleSize:2}).width,base.width*2);
 });
+
+void test('scene FX reach export when the legacy effect list is empty',()=>{
+ const config={...BUILTIN_STUDIO_PRESETS[0].config,effects:[]};
+ const migrated=createStudioRenderModel(config).scene;
+ const layer={...migrated.layers[0],id:'new-rain',name:'Rain',type:'effect' as const,effectId:'rain',params:{density:1,speed:1,angle:0,size:1},zIndex:6};
+ const model=createStudioRenderModel(config,30000,[layer]);
+ assert.deepEqual(model.effects.effects,['rain']);
+ assert.notEqual(model.fingerprint,createStudioRenderModel(config).fingerprint);
+ const lines:number[][]=[];let from:number[]=[];
+ const ctx={save(){},restore(){},transform(){},beginPath(){},moveTo(x:number,y:number){from=[x,y]},lineTo(x:number,y:number){lines.push([...from,x,y])},stroke(){},lineWidth:0};
+ drawVideoEffects(ctx as unknown as CanvasRenderingContext2D,1280,720,1,model.effects);
+ assert.equal(lines.length,85);
+ lines.length=0;layer.visible=false;
+ drawVideoEffects(ctx as unknown as CanvasRenderingContext2D,1280,720,1,createStudioRenderModel(config,30000,[layer]).effects);
+ assert.equal(lines.length,0);
+});
+void test('scene FX timing, opacity and keyframes use the same evaluated source',()=>{
+ const config={...BUILTIN_STUDIO_PRESETS[0].config,effects:['rain'] as const};
+ const base=createStudioRenderModel({...config,effects:[...config.effects]});
+ const fx=base.scene.layers.filter(l=>l.type==='effect');fx[0].startMs=1000;fx[0].endMs=2000;
+ fx[0].animations=[{property:'params.density',keyframes:[{timeMs:1000,value:1},{timeMs:2000,value:3}]}];
+ const model=createStudioRenderModel({...config,effects:[...config.effects]},30000,fx);
+ let count=0;
+ const ctx={save(){},restore(){},transform(){},beginPath(){},moveTo(){},lineTo(){count++},stroke(){},lineWidth:0};
+ drawVideoEffects(ctx as unknown as CanvasRenderingContext2D,1280,720,.99,model.effects);assert.equal(count,0);
+ drawVideoEffects(ctx as unknown as CanvasRenderingContext2D,1280,720,1.5,model.effects);assert.equal(count,170);
+ count=0;drawVideoEffects(ctx as unknown as CanvasRenderingContext2D,1280,720,2,model.effects);assert.equal(count,0);
+});

@@ -1778,7 +1778,7 @@ export async function generateVisualizerVideoSafe(
           background,
         );
       } else if (scene?.video) {
-        await seekVideoFrame(scene.video, absoluteT - scene.clip.start, true);
+        await seekVideoFrame(scene.video, absoluteT - scene.clip.start + (scene.clip.trimStartMs || 0) / 1000, true);
         drawMediaBackground(
           ctx,
           scene.video,

@@ -1,5 +1,20 @@
 'use client';
-import {DEFAULT_EFFECT_SETTINGS,normalizeEffectSettings,type EffectSettings} from './v8/video-effects';
+import { SceneTimeline } from '@/components/scene-editor/scene-timeline';
+import { buildStudioScene } from '@/components/scene-editor/studio-scene';
+import { EffectLayerPanel } from '@/components/scene-editor/effect-layer-panel';
+import {
+  validateScene,
+  createSceneTemplate,
+  instantiateTemplate,
+  type SceneDocument,
+  type SceneLayer,
+} from '@/packages/scene-core/src';
+
+import {
+  DEFAULT_EFFECT_SETTINGS,
+  normalizeEffectSettings,
+  type EffectSettings,
+} from './v8/video-effects';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { requestRegeneratedSubtitle } from '@/app/lib/subtitle-regeneration';
@@ -64,14 +79,21 @@ import {
   convertProcessedAudio,
   renderTikTokLikeAudio,
 } from '@/app/lib/audio-processing';
-import { buildEstimatedKaraokeTimeline, exportSrt, normalizeKaraokeTimeline } from '@/app/lib/karaoke';
+import {
+  buildEstimatedKaraokeTimeline,
+  exportSrt,
+  normalizeKaraokeTimeline,
+} from '@/app/lib/karaoke';
 import { runKaraokePipeline } from '@/app/lib/karaoke-pipeline';
 import { findMusicHighlight } from '@/app/lib/audio-highlight';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 import { initAnalytics, track } from '@/app/lib/analytics';
 import { DEFAULT_PLAN } from '@/app/lib/entitlements';
 import type { KaraokeLine } from '@/app/lib/karaoke';
-import { EditorTimeline, type MediaClip, type TimelineTrackState } from '@/components/editor-timeline';
+import {
+  type MediaClip,
+  type TimelineTrackState,
+} from '@/components/editor-timeline';
 import { PresetGallery } from '@/components/presets/preset-gallery';
 import { MasteringPanel } from '@/components/mastering-panel';
 import {
@@ -85,7 +107,11 @@ import {
 import { StudioSheet, StudioTabs } from '@/components/studio-ui';
 import { StyleStudio } from '@/components/style-studio';
 import { StudioSettingsPanel } from '@/components/studio-settings-panel';
-import { readSettings, useStudioSettings, applySubtitleOffset } from '@/app/lib/studio-settings';
+import {
+  readSettings,
+  useStudioSettings,
+  applySubtitleOffset,
+} from '@/app/lib/studio-settings';
 import { AccountLibraryPanel } from '@/components/account-library-panel';
 import { MobileAppNav } from '@/components/mobile-app-nav';
 import { STUDIO_TITLE_FONTS } from '@/components/studio-fonts';
@@ -139,7 +165,12 @@ type Song = {
   isPublic?: boolean | null;
 };
 
-type SignedInUser = { sub: string; email: string; name: string; picture?: string };
+type SignedInUser = {
+  sub: string;
+  email: string;
+  name: string;
+  picture?: string;
+};
 
 type SavedProjectListItem = { url: string; title: string };
 type LocalLibraryItem = {
@@ -156,7 +187,10 @@ type LocalLibraryItem = {
 };
 
 type SubtitleDebugValue = string | number | boolean | null;
-function cacheMusicSubtitle(songId: string | undefined, timeline: KaraokeLine[]) {
+function cacheMusicSubtitle(
+  songId: string | undefined,
+  timeline: KaraokeLine[],
+) {
   if (!songId || !timeline.length || typeof window === 'undefined') return;
   try {
     localStorage.setItem(
@@ -176,7 +210,13 @@ type SubtitleDebugEntry = {
 const fmt = (n = 0) =>
   `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
 const shortDate = (value?: number) =>
-  value ? new Date(value).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Gần đây';
+  value
+    ? new Date(value).toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    : 'Gần đây';
 const localLibraryEventLabel: Record<string, string> = {
   resolved: 'Đã mở',
   downloaded: 'Đã tải',
@@ -194,7 +234,9 @@ const readSavedProjectList = (): SavedProjectListItem[] => {
 const readLocalLibraryItems = (): LocalLibraryItem[] => {
   if (typeof window === 'undefined') return [];
   try {
-    const items = JSON.parse(localStorage.getItem('sunodown-v10-local-library') || '[]');
+    const items = JSON.parse(
+      localStorage.getItem('sunodown-v10-local-library') || '[]',
+    );
     return Array.isArray(items) ? items : [];
   } catch {
     return [];
@@ -212,7 +254,11 @@ const valid = (value: string) => {
   }
 };
 const validSourceInput = (value: string) =>
-  valid(value) || (/^[A-Za-z0-9_-]+\.\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value) && value.length <= 5000);
+  valid(value) ||
+  (/^[A-Za-z0-9_-]+\.\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(
+    value,
+  ) &&
+    value.length <= 5000);
 const renderSong = (song: Song) => ({
   id: song.id || null,
   title: song.title,
@@ -270,7 +316,8 @@ function recommendQuickPresets(song: Song) {
           'vintage-love-letter',
           'midnight-blue-glow',
         ].includes(preset.id)
-      ) value += 7;
+      )
+        value += 7;
     }
 
     if (/edm|electronic|dance|house|synth|techno|festival/.test(haystack)) {
@@ -281,14 +328,20 @@ function recommendQuickPresets(song: Song) {
           'reels-velocity',
           'neon-heartbeat-title',
         ].includes(preset.id)
-      ) value += 8;
+      )
+        value += 8;
     }
 
     if (/rap|hip hop|trap|fast|energetic|pop/.test(haystack)) {
       if (
-        ['social-hook', 'reels-velocity', 'neon-pulse', 'neon-heartbeat-title']
-          .includes(preset.id)
-      ) value += 5;
+        [
+          'social-hook',
+          'reels-velocity',
+          'neon-pulse',
+          'neon-heartbeat-title',
+        ].includes(preset.id)
+      )
+        value += 5;
     }
 
     if (/chill|lofi|lo-fi|jazz|soul|retro|night|dream/.test(haystack)) {
@@ -300,7 +353,8 @@ function recommendQuickPresets(song: Song) {
           'silver-moon-script',
           'midnight-blue-glow',
         ].includes(preset.id)
-      ) value += 6;
+      )
+        value += 6;
     }
 
     if (/podcast|spoken|speech|story/.test(haystack)) {
@@ -372,8 +426,8 @@ function ToolControls(p: {
   setLyrics: (v: LyricsMode) => void;
   motion: MotionIntensity;
   setMotion: (v: MotionIntensity) => void;
-  effectSettings:EffectSettings;
-  setEffectSettings:(value:EffectSettings)=>void;
+  effectSettings: EffectSettings;
+  setEffectSettings: (value: EffectSettings) => void;
   effects: VideoEffect[];
   setEffects: (v: VideoEffect[]) => void;
   layout: OverlayLayout;
@@ -403,27 +457,112 @@ function ToolControls(p: {
 }) {
   const safeBackground = p.background || DEFAULT_BACKGROUND_CONFIG;
   const waveMoodPresets: Array<{
-    id:string;
-    label:string;
-    hint:string;
-    wave:WaveStyle;
-    appearance:Partial<WaveAppearance>;
+    id: string;
+    label: string;
+    hint: string;
+    wave: WaveStyle;
+    appearance: Partial<WaveAppearance>;
   }> = [
-    {id:'ballad',label:'Ballad',hint:'Mềm · cảm xúc',wave:'mirror-glow',appearance:{color:'#d946ef',color2:'#60a5fa',glow:86,height:84,thickness:46,smoothing:78,attack:54,release:48,colorMode:'gradient'}},
-    {id:'edm',label:'EDM',hint:'Mạnh · neon',wave:'rounded-spectrum',appearance:{color:'#22d3ee',color2:'#f43f9f',glow:94,height:112,thickness:62,smoothing:34,attack:88,release:24,colorMode:'audio-reactive'}},
-    {id:'acoustic',label:'Acoustic',hint:'Ấm · organic',wave:'ribbon-wave',appearance:{color:'#8b5cf6',color2:'#fb7185',glow:72,height:76,thickness:44,smoothing:84,attack:44,release:58,colorMode:'gradient'}},
-    {id:'cinematic',label:'Cinematic',hint:'Rộng · dramatic',wave:'circular-pulse',appearance:{color:'#fde68a',color2:'#93c5fd',glow:82,height:96,thickness:50,smoothing:58,attack:72,release:38,colorMode:'dynamic'}},
-    {id:'lofi',label:'LoFi',hint:'Chill · dreamy',wave:'mirror-glow',appearance:{color:'#818cf8',color2:'#f0abfc',glow:68,height:66,thickness:38,smoothing:90,attack:34,release:66,colorMode:'gradient'}},
+    {
+      id: 'ballad',
+      label: 'Ballad',
+      hint: 'Mềm · cảm xúc',
+      wave: 'mirror-glow',
+      appearance: {
+        color: '#d946ef',
+        color2: '#60a5fa',
+        glow: 86,
+        height: 84,
+        thickness: 46,
+        smoothing: 78,
+        attack: 54,
+        release: 48,
+        colorMode: 'gradient',
+      },
+    },
+    {
+      id: 'edm',
+      label: 'EDM',
+      hint: 'Mạnh · neon',
+      wave: 'rounded-spectrum',
+      appearance: {
+        color: '#22d3ee',
+        color2: '#f43f9f',
+        glow: 94,
+        height: 112,
+        thickness: 62,
+        smoothing: 34,
+        attack: 88,
+        release: 24,
+        colorMode: 'audio-reactive',
+      },
+    },
+    {
+      id: 'acoustic',
+      label: 'Acoustic',
+      hint: 'Ấm · organic',
+      wave: 'ribbon-wave',
+      appearance: {
+        color: '#8b5cf6',
+        color2: '#fb7185',
+        glow: 72,
+        height: 76,
+        thickness: 44,
+        smoothing: 84,
+        attack: 44,
+        release: 58,
+        colorMode: 'gradient',
+      },
+    },
+    {
+      id: 'cinematic',
+      label: 'Cinematic',
+      hint: 'Rộng · dramatic',
+      wave: 'circular-pulse',
+      appearance: {
+        color: '#fde68a',
+        color2: '#93c5fd',
+        glow: 82,
+        height: 96,
+        thickness: 50,
+        smoothing: 58,
+        attack: 72,
+        release: 38,
+        colorMode: 'dynamic',
+      },
+    },
+    {
+      id: 'lofi',
+      label: 'LoFi',
+      hint: 'Chill · dreamy',
+      wave: 'mirror-glow',
+      appearance: {
+        color: '#818cf8',
+        color2: '#f0abfc',
+        glow: 68,
+        height: 66,
+        thickness: 38,
+        smoothing: 90,
+        attack: 34,
+        release: 66,
+        colorMode: 'gradient',
+      },
+    },
   ];
-  const songWaveHint=(p.songStyle||'').toLowerCase();
+  const songWaveHint = (p.songStyle || '').toLowerCase();
   const recommendedWaveMood =
-    /edm|electronic|dance|house|synth|techno|festival/.test(songWaveHint)?'edm':
-    /acoustic|guitar|folk|unplugged/.test(songWaveHint)?'acoustic':
-    /cinematic|orchestra|epic|soundtrack/.test(songWaveHint)?'cinematic':
-    /lofi|lo-fi|chill|jazz|soul/.test(songWaveHint)?'lofi':'ballad';
-  const applyWaveMood=(preset:(typeof waveMoodPresets)[number])=>{
+    /edm|electronic|dance|house|synth|techno|festival/.test(songWaveHint)
+      ? 'edm'
+      : /acoustic|guitar|folk|unplugged/.test(songWaveHint)
+        ? 'acoustic'
+        : /cinematic|orchestra|epic|soundtrack/.test(songWaveHint)
+          ? 'cinematic'
+          : /lofi|lo-fi|chill|jazz|soul/.test(songWaveHint)
+            ? 'lofi'
+            : 'ballad';
+  const applyWaveMood = (preset: (typeof waveMoodPresets)[number]) => {
     p.setWave(preset.wave);
-    p.setWaveAppearance({...p.waveAppearance,...preset.appearance});
+    p.setWaveAppearance({ ...p.waveAppearance, ...preset.appearance });
   };
   const rows = [
     ['audio', 'Âm thanh', Music2],
@@ -445,355 +584,664 @@ function ToolControls(p: {
     );
   return (
     <>
-      <StudioTabs value={(p.panel || 'audio') as string} tabs={rows.map(([id,label,Icon])=>({value:id,label,icon:<Icon/>}))} onChange={id=>p.setPanel(id)} />
-      {rows.map(([id]) => p.panel === id && (
-        <div className="sd-tab-panel" key={id}>
-          <div className="sd-options">
-              {id === 'presets' && p.presetContent}
-              {id === 'style' && (
-                <StyleStudio
-                  template={p.template}
-                  setTemplate={p.setTemplate}
-                  motion={p.motion}
-                  setMotion={p.setMotion}
-                  picture={p.songPicture}
-                  onOpenPanel={p.setPanel}
-                />
-              )}
-              {id === 'text' && (
-                <div className="sd-text-style">
-                  <p className="sd-control-hint">
-                    Chọn font, màu, kích thước hoặc bấm chữ trên video rồi kéo
-                    nút tím ở góc để resize.
-                  </p>
-                  {(['title', 'creator'] as const).map((key) => (
-                    <div key={key}>
-                      <b>{key === 'title' ? 'Tiêu đề' : 'Tác giả'}</b>
-                      {p.textStyles[key].text===''&&<button type="button" onClick={()=>p.setTextStyles({...p.textStyles,[key]:{...p.textStyles[key],text:undefined}})}>Hiện lại</button>}
-                      <select
-                        value={p.textStyles[key].font}
-                        onChange={(e) =>
-                          p.setTextStyles({
-                            ...p.textStyles,
-                            [key]: {
-                              ...p.textStyles[key],
-                              font: e.target.value,
-                            },
-                          })
-                        }
-                      >
-                        {(['Core', 'CoolText'] as const).map((group) => (
-                          <optgroup
-                            key={group}
-                            label={group === 'CoolText' ? 'CoolText · Title Fonts' : 'Cơ bản'}
+      <StudioTabs
+        value={(p.panel || 'audio') as string}
+        tabs={rows.map(([id, label, Icon]) => ({
+          value: id,
+          label,
+          icon: <Icon />,
+        }))}
+        onChange={(id) => p.setPanel(id)}
+      />
+      {rows.map(
+        ([id]) =>
+          p.panel === id && (
+            <div className="sd-tab-panel" key={id}>
+              <div className="sd-options">
+                {id === 'presets' && p.presetContent}
+                {id === 'style' && (
+                  <StyleStudio
+                    template={p.template}
+                    setTemplate={p.setTemplate}
+                    motion={p.motion}
+                    setMotion={p.setMotion}
+                    picture={p.songPicture}
+                    onOpenPanel={p.setPanel}
+                  />
+                )}
+                {id === 'text' && (
+                  <div className="sd-text-style">
+                    <p className="sd-control-hint">
+                      Chọn font, màu, kích thước hoặc bấm chữ trên video rồi kéo
+                      nút tím ở góc để resize.
+                    </p>
+                    {(['title', 'creator'] as const).map((key) => (
+                      <div key={key}>
+                        <b>{key === 'title' ? 'Tiêu đề' : 'Tác giả'}</b>
+                        {p.textStyles[key].text === '' && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              p.setTextStyles({
+                                ...p.textStyles,
+                                [key]: {
+                                  ...p.textStyles[key],
+                                  text: undefined,
+                                },
+                              })
+                            }
                           >
-                            {STUDIO_TITLE_FONTS.filter((font) => font.group === group).map((font) => (
-                              <option key={font.id} value={font.family}>
-                                {font.label}{group === 'CoolText' ? ` · ${font.hint}` : ''}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                      <input
-                        type="color"
-                        value={p.textStyles[key].color}
-                        onChange={(e) =>
-                          p.setTextStyles({
-                            ...p.textStyles,
-                            [key]: {
-                              ...p.textStyles[key],
-                              color: e.target.value,
-                            },
-                          })
-                        }
-                      />
-                      <input
-                        type="range"
-                        min="40"
-                        max="220"
-                        value={p.layout[key].scale}
-                        onChange={(e) =>
-                          p.setLayout({
-                            ...p.layout,
-                            [key]: { ...p.layout[key], scale: +e.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-              {id === 'wave' && (
-                <div className="sd-wave-studio sd-wave-studio-v23">
-                  <header className="sd-wave-studio-head">
-                    <div>
-                      <small>SIGNATURE WAVEFORMS</small>
-                      <b>Sóng nhạc phản ứng theo FFT thật</b>
-                      <span>Chọn style, Play preview và xem waveform đổi ngay theo bass, vocal và high.</span>
-                    </div>
-                    <i>LIVE</i>
-                  </header>
-
-                  <div className="sd-wave-featured-grid">
-                    {WAVE_STYLES.filter((x) => x.featured).map((x,index) => (
-                      <button
-                        className={p.wave === x.id ? 'active' : ''}
-                        onClick={() => p.setWave(x.id)}
-                        key={x.id}
-                        title={x.label}
-                      >
-                        <span className={'sd-wave-preview wave-'+x.id}>
-                          <i />
-                          <i />
-                          <i />
-                        </span>
-                        <b>{index + 1}. {x.label}</b>
-                        <small>{x.id==='mirror-glow'?'Ballad / Romantic':x.id==='rounded-spectrum'?'EDM / Pop':x.id==='circular-pulse'?'Cinematic / Travel':x.id==='ribbon-wave'?'Acoustic / LoFi':x.id==='arc-burst'?'Synth / Neon':x.id==='stacked-spectrum'?'Club / Energy':x.id==='neon-ring'?'Album / Vinyl':'Ambient / Particle'}</small>
-                      </button>
+                            Hiện lại
+                          </button>
+                        )}
+                        <select
+                          value={p.textStyles[key].font}
+                          onChange={(e) =>
+                            p.setTextStyles({
+                              ...p.textStyles,
+                              [key]: {
+                                ...p.textStyles[key],
+                                font: e.target.value,
+                              },
+                            })
+                          }
+                        >
+                          {(['Core', 'CoolText'] as const).map((group) => (
+                            <optgroup
+                              key={group}
+                              label={
+                                group === 'CoolText'
+                                  ? 'CoolText · Title Fonts'
+                                  : 'Cơ bản'
+                              }
+                            >
+                              {STUDIO_TITLE_FONTS.filter(
+                                (font) => font.group === group,
+                              ).map((font) => (
+                                <option key={font.id} value={font.family}>
+                                  {font.label}
+                                  {group === 'CoolText'
+                                    ? ` · ${font.hint}`
+                                    : ''}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                        <input
+                          type="color"
+                          value={p.textStyles[key].color}
+                          onChange={(e) =>
+                            p.setTextStyles({
+                              ...p.textStyles,
+                              [key]: {
+                                ...p.textStyles[key],
+                                color: e.target.value,
+                              },
+                            })
+                          }
+                        />
+                        <input
+                          type="range"
+                          min="40"
+                          max="220"
+                          value={p.layout[key].scale}
+                          onChange={(e) =>
+                            p.setLayout({
+                              ...p.layout,
+                              [key]: {
+                                ...p.layout[key],
+                                scale: +e.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </div>
                     ))}
                   </div>
+                )}
+                {id === 'wave' && (
+                  <div className="sd-wave-studio sd-wave-studio-v23">
+                    <header className="sd-wave-studio-head">
+                      <div>
+                        <small>SIGNATURE WAVEFORMS</small>
+                        <b>Sóng nhạc phản ứng theo FFT thật</b>
+                        <span>
+                          Chọn style, Play preview và xem waveform đổi ngay theo
+                          bass, vocal và high.
+                        </span>
+                      </div>
+                      <i>LIVE</i>
+                    </header>
 
-                  <details className="sd-wave-more">
-                    <summary>Classic & experimental waveforms <span>{WAVE_STYLES.filter((x)=>!x.featured).length}</span></summary>
-                    <div className="sd-wave-style-grid">
-                      {WAVE_STYLES.filter((x)=>!x.featured).map((x) => (
+                    <div className="sd-wave-featured-grid">
+                      {WAVE_STYLES.filter((x) => x.featured).map((x, index) => (
                         <button
                           className={p.wave === x.id ? 'active' : ''}
                           onClick={() => p.setWave(x.id)}
                           key={x.id}
                           title={x.label}
                         >
-                          <i className={'sd-wave-icon wave-'+x.id} />
-                          <span>{x.label}</span>
+                          <span className={'sd-wave-preview wave-' + x.id}>
+                            <i />
+                            <i />
+                            <i />
+                          </span>
+                          <b>
+                            {index + 1}. {x.label}
+                          </b>
+                          <small>
+                            {x.id === 'mirror-glow'
+                              ? 'Ballad / Romantic'
+                              : x.id === 'rounded-spectrum'
+                                ? 'EDM / Pop'
+                                : x.id === 'circular-pulse'
+                                  ? 'Cinematic / Travel'
+                                  : x.id === 'ribbon-wave'
+                                    ? 'Acoustic / LoFi'
+                                    : x.id === 'arc-burst'
+                                      ? 'Synth / Neon'
+                                      : x.id === 'stacked-spectrum'
+                                        ? 'Club / Energy'
+                                        : x.id === 'neon-ring'
+                                          ? 'Album / Vinyl'
+                                          : 'Ambient / Particle'}
+                          </small>
                         </button>
                       ))}
                     </div>
-                  </details>
 
-                  <div className="sd-wave-workspace">
-                    <section className="sd-wave-look">
-                      <header><b>WAVEFORM SETTINGS</b><small>{WAVE_STYLES.find((x)=>x.id===p.wave)?.label}</small></header>
-                      <div className="sd-wave-colors">
-                        <label>Màu chính<input type="color" value={p.waveAppearance.color} onChange={e=>p.setWaveAppearance({...p.waveAppearance,color:e.target.value})}/></label>
-                        <label>Màu phụ<input type="color" value={p.waveAppearance.color2} onChange={e=>p.setWaveAppearance({...p.waveAppearance,color2:e.target.value})}/></label>
-                      </div>
-                      <div className="sd-wave-slider-grid">
-                        {[
-                          ['Height',20,160,p.waveAppearance.height,(v:number)=>p.setWaveAppearance({...p.waveAppearance,height:v}),'%'],
-                          ['Thickness',10,100,p.waveAppearance.thickness,(v:number)=>p.setWaveAppearance({...p.waveAppearance,thickness:v}),'%'],
-                          ['Glow',0,100,p.waveAppearance.glow,(v:number)=>p.setWaveAppearance({...p.waveAppearance,glow:v}),'%'],
-                          ['Smoothing',0,100,p.waveAppearance.smoothing,(v:number)=>p.setWaveAppearance({...p.waveAppearance,smoothing:v}),'%'],
-                          ['Attack',0,100,p.waveAppearance.attack,(v:number)=>p.setWaveAppearance({...p.waveAppearance,attack:v}),''],
-                          ['Release',0,100,p.waveAppearance.release,(v:number)=>p.setWaveAppearance({...p.waveAppearance,release:v}),''],
-                          ['Opacity',10,100,p.waveAppearance.opacity,(v:number)=>p.setWaveAppearance({...p.waveAppearance,opacity:v}),'%'],
-                          ['Density',20,100,p.waveAppearance.density,(v:number)=>p.setWaveAppearance({...p.waveAppearance,density:v}),'%'],
-                          ['Scale',50,180,p.layout.wave.scale,(v:number)=>p.setLayout({...p.layout,wave:{...p.layout.wave,scale:v}}),'%'],
-                          ['Rotation',-180,180,p.waveAppearance.rotation,(v:number)=>p.setWaveAppearance({...p.waveAppearance,rotation:v}),'°'],
-                        ].map(([label,min,max,value,setter,suffix])=>
-                          <label className="sd-wave-slider" key={String(label)}>
-                            <span>{String(label)} <b>{label==='Attack'||label==='Release'?(Number(value)/100).toFixed(2):Number(value)}{String(suffix)}</b></span>
-                            <input type="range" min={Number(min)} max={Number(max)} value={Number(value)} onChange={e=>(setter as (v:number)=>void)(+e.target.value)}/>
-                          </label>
-                        )}
-                      </div>
-                    </section>
-
-                    <section className="sd-wave-color-mode">
-                      <header><b>COLOR MODE</b><small>Animated</small></header>
-                      <div>
-                        {([
-                          ['solid','Solid'],
-                          ['gradient','Gradient'],
-                          ['dynamic','Dynamic'],
-                          ['audio-reactive','Audio Reactive'],
-                        ] as const).map(([value,label])=>(
+                    <details className="sd-wave-more">
+                      <summary>
+                        Classic & experimental waveforms{' '}
+                        <span>
+                          {WAVE_STYLES.filter((x) => !x.featured).length}
+                        </span>
+                      </summary>
+                      <div className="sd-wave-style-grid">
+                        {WAVE_STYLES.filter((x) => !x.featured).map((x) => (
                           <button
-                            key={value}
-                            className={p.waveAppearance.colorMode===value?'active':''}
-                            onClick={()=>p.setWaveAppearance({...p.waveAppearance,colorMode:value})}
+                            className={p.wave === x.id ? 'active' : ''}
+                            onClick={() => p.setWave(x.id)}
+                            key={x.id}
+                            title={x.label}
                           >
-                            <i className={'mode-'+value} />
-                            <span>{label}</span>
+                            <i className={'sd-wave-icon wave-' + x.id} />
+                            <span>{x.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </details>
+
+                    <div className="sd-wave-workspace">
+                      <section className="sd-wave-look">
+                        <header>
+                          <b>WAVEFORM SETTINGS</b>
+                          <small>
+                            {WAVE_STYLES.find((x) => x.id === p.wave)?.label}
+                          </small>
+                        </header>
+                        <div className="sd-wave-colors">
+                          <label>
+                            Màu chính
+                            <input
+                              type="color"
+                              value={p.waveAppearance.color}
+                              onChange={(e) =>
+                                p.setWaveAppearance({
+                                  ...p.waveAppearance,
+                                  color: e.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Màu phụ
+                            <input
+                              type="color"
+                              value={p.waveAppearance.color2}
+                              onChange={(e) =>
+                                p.setWaveAppearance({
+                                  ...p.waveAppearance,
+                                  color2: e.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                        </div>
+                        <div className="sd-wave-slider-grid">
+                          {[
+                            [
+                              'Height',
+                              20,
+                              160,
+                              p.waveAppearance.height,
+                              (v: number) =>
+                                p.setWaveAppearance({
+                                  ...p.waveAppearance,
+                                  height: v,
+                                }),
+                              '%',
+                            ],
+                            [
+                              'Thickness',
+                              10,
+                              100,
+                              p.waveAppearance.thickness,
+                              (v: number) =>
+                                p.setWaveAppearance({
+                                  ...p.waveAppearance,
+                                  thickness: v,
+                                }),
+                              '%',
+                            ],
+                            [
+                              'Glow',
+                              0,
+                              100,
+                              p.waveAppearance.glow,
+                              (v: number) =>
+                                p.setWaveAppearance({
+                                  ...p.waveAppearance,
+                                  glow: v,
+                                }),
+                              '%',
+                            ],
+                            [
+                              'Smoothing',
+                              0,
+                              100,
+                              p.waveAppearance.smoothing,
+                              (v: number) =>
+                                p.setWaveAppearance({
+                                  ...p.waveAppearance,
+                                  smoothing: v,
+                                }),
+                              '%',
+                            ],
+                            [
+                              'Attack',
+                              0,
+                              100,
+                              p.waveAppearance.attack,
+                              (v: number) =>
+                                p.setWaveAppearance({
+                                  ...p.waveAppearance,
+                                  attack: v,
+                                }),
+                              '',
+                            ],
+                            [
+                              'Release',
+                              0,
+                              100,
+                              p.waveAppearance.release,
+                              (v: number) =>
+                                p.setWaveAppearance({
+                                  ...p.waveAppearance,
+                                  release: v,
+                                }),
+                              '',
+                            ],
+                            [
+                              'Opacity',
+                              10,
+                              100,
+                              p.waveAppearance.opacity,
+                              (v: number) =>
+                                p.setWaveAppearance({
+                                  ...p.waveAppearance,
+                                  opacity: v,
+                                }),
+                              '%',
+                            ],
+                            [
+                              'Density',
+                              20,
+                              100,
+                              p.waveAppearance.density,
+                              (v: number) =>
+                                p.setWaveAppearance({
+                                  ...p.waveAppearance,
+                                  density: v,
+                                }),
+                              '%',
+                            ],
+                            [
+                              'Scale',
+                              50,
+                              180,
+                              p.layout.wave.scale,
+                              (v: number) =>
+                                p.setLayout({
+                                  ...p.layout,
+                                  wave: { ...p.layout.wave, scale: v },
+                                }),
+                              '%',
+                            ],
+                            [
+                              'Rotation',
+                              -180,
+                              180,
+                              p.waveAppearance.rotation,
+                              (v: number) =>
+                                p.setWaveAppearance({
+                                  ...p.waveAppearance,
+                                  rotation: v,
+                                }),
+                              '°',
+                            ],
+                          ].map(([label, min, max, value, setter, suffix]) => (
+                            <label
+                              className="sd-wave-slider"
+                              key={String(label)}
+                            >
+                              <span>
+                                {String(label)}{' '}
+                                <b>
+                                  {label === 'Attack' || label === 'Release'
+                                    ? (Number(value) / 100).toFixed(2)
+                                    : Number(value)}
+                                  {String(suffix)}
+                                </b>
+                              </span>
+                              <input
+                                type="range"
+                                min={Number(min)}
+                                max={Number(max)}
+                                value={Number(value)}
+                                onChange={(e) =>
+                                  (setter as (v: number) => void)(
+                                    +e.target.value,
+                                  )
+                                }
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="sd-wave-color-mode">
+                        <header>
+                          <b>COLOR MODE</b>
+                          <small>Animated</small>
+                        </header>
+                        <div>
+                          {(
+                            [
+                              ['solid', 'Solid'],
+                              ['gradient', 'Gradient'],
+                              ['dynamic', 'Dynamic'],
+                              ['audio-reactive', 'Audio Reactive'],
+                            ] as const
+                          ).map(([value, label]) => (
+                            <button
+                              key={value}
+                              className={
+                                p.waveAppearance.colorMode === value
+                                  ? 'active'
+                                  : ''
+                              }
+                              onClick={() =>
+                                p.setWaveAppearance({
+                                  ...p.waveAppearance,
+                                  colorMode: value,
+                                })
+                              }
+                            >
+                              <i className={'mode-' + value} />
+                              <span>{label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+                    </div>
+
+                    <section className="sd-wave-auto">
+                      <header>
+                        <div>
+                          <b>PRESETS</b>
+                          <small>AUTO RECOMMEND</small>
+                        </div>
+                        <span>App gợi ý theo style bài hát</span>
+                      </header>
+                      <div>
+                        {waveMoodPresets.map((preset) => (
+                          <button
+                            key={preset.id}
+                            className={
+                              recommendedWaveMood === preset.id
+                                ? 'recommended'
+                                : ''
+                            }
+                            onClick={() => applyWaveMood(preset)}
+                          >
+                            <span
+                              className={'sd-wave-preview wave-' + preset.wave}
+                            >
+                              <i />
+                              <i />
+                              <i />
+                            </span>
+                            <b>{preset.label}</b>
+                            <small>{preset.hint}</small>
+                            {recommendedWaveMood === preset.id && (
+                              <em>ĐỀ XUẤT</em>
+                            )}
                           </button>
                         ))}
                       </div>
                     </section>
+
+                    <p className="sd-control-hint">
+                      Kéo trực tiếp waveform trên preview để đặt vị trí. Preview
+                      và video xuất dùng cùng một renderer nên visual không đổi
+                      khi export.
+                    </p>
                   </div>
-
-                  <section className="sd-wave-auto">
-                    <header>
-                      <div><b>PRESETS</b><small>AUTO RECOMMEND</small></div>
-                      <span>App gợi ý theo style bài hát</span>
-                    </header>
-                    <div>
-                      {waveMoodPresets.map((preset)=>(
-                        <button
-                          key={preset.id}
-                          className={recommendedWaveMood===preset.id?'recommended':''}
-                          onClick={()=>applyWaveMood(preset)}
+                )}
+                {id === 'lyrics' && (
+                  <p className="sd-control-hint">
+                    Bật subtitle rồi kéo trực tiếp chữ trên preview.
+                  </p>
+                )}
+                {id === 'lyrics' &&
+                  (['off', 'scroll', 'focus'] as LyricsMode[]).map((x) => (
+                    <button
+                      className={p.lyrics === x ? 'active' : ''}
+                      onClick={() => p.setLyrics(x)}
+                      key={x}
+                    >
+                      {x === 'off'
+                        ? 'Off'
+                        : x === 'scroll'
+                          ? 'Scroll'
+                          : 'Karaoke'}
+                    </button>
+                  ))}
+                {id === 'lyrics' && p.lyrics !== 'off' && (
+                  <>
+                    <div className="sd-text-style">
+                      <div>
+                        <b>Kiểu subtitle</b>
+                        <select
+                          value={p.subtitleStyle.font || 'system'}
+                          onChange={(e) =>
+                            p.setSubtitleStyle({
+                              ...p.subtitleStyle,
+                              font: e.target.value as KaraokeDrawStyle['font'],
+                            })
+                          }
                         >
-                          <span className={'sd-wave-preview wave-'+preset.wave}><i/><i/><i/></span>
-                          <b>{preset.label}</b>
-                          <small>{preset.hint}</small>
-                          {recommendedWaveMood===preset.id&&<em>ĐỀ XUẤT</em>}
-                        </button>
-                      ))}
+                          <option value="system">Modern</option>
+                          <option value="serif">Serif</option>
+                          <option value="rounded">Rounded</option>
+                          <option value="mono">Mono</option>
+                          <option value="impact">Impact</option>
+                        </select>
+                        <input
+                          type="color"
+                          value={p.subtitleStyle.color || '#ffffff'}
+                          onChange={(e) =>
+                            p.setSubtitleStyle({
+                              ...p.subtitleStyle,
+                              color: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
                     </div>
-                  </section>
-
-                  <p className="sd-control-hint">Kéo trực tiếp waveform trên preview để đặt vị trí. Preview và video xuất dùng cùng một renderer nên visual không đổi khi export.</p>
-                </div>
-              )}
-              {id === 'lyrics' && (
-                <p className="sd-control-hint">
-                  Bật subtitle rồi kéo trực tiếp chữ trên preview.
-                </p>
-              )}
-              {id === 'lyrics' &&
-                (['off', 'scroll', 'focus'] as LyricsMode[]).map((x) => (
-                  <button
-                    className={p.lyrics === x ? 'active' : ''}
-                    onClick={() => p.setLyrics(x)}
-                    key={x}
-                  >
-                    {x === 'off'
-                      ? 'Off'
-                      : x === 'scroll'
-                        ? 'Scroll'
-                        : 'Karaoke'}
-                  </button>
-                ))}
-              {id === 'lyrics' && p.lyrics !== 'off' && (
-                <>
-                  <div className="sd-text-style">
-                    <div>
-                      <b>Kiểu subtitle</b>
-                      <select
-                        value={p.subtitleStyle.font || 'system'}
-                        onChange={(e) =>
-                          p.setSubtitleStyle({
-                            ...p.subtitleStyle,
-                            font: e.target.value as KaraokeDrawStyle['font'],
-                          })
-                        }
-                      >
-                        <option value="system">Modern</option>
-                        <option value="serif">Serif</option>
-                        <option value="rounded">Rounded</option>
-                        <option value="mono">Mono</option>
-                        <option value="impact">Impact</option>
-                      </select>
+                    <label className="sd-scale">
+                      Kích thước chữ
                       <input
-                        type="color"
-                        value={p.subtitleStyle.color || '#ffffff'}
+                        type="range"
+                        min="60"
+                        max="180"
+                        value={p.layout.subtitle.scale}
                         onChange={(e) =>
-                          p.setSubtitleStyle({
-                            ...p.subtitleStyle,
-                            color: e.target.value,
+                          p.setLayout({
+                            ...p.layout,
+                            subtitle: {
+                              ...p.layout.subtitle,
+                              scale: +e.target.value,
+                            },
                           })
                         }
                       />
-                    </div>
+                      <span>{p.layout.subtitle.scale}%</span>
+                    </label>
+                  </>
+                )}
+                {id === 'format' &&
+                  (['16:9', '9:16', '1:1', '4:5'] as VideoAspect[]).map((x) => (
+                    <button
+                      className={p.aspect === x ? 'active' : ''}
+                      onClick={() => p.setAspect(x)}
+                      key={x}
+                    >
+                      {x}
+                    </button>
+                  ))}
+                {id === 'background' && (
+                  <BackgroundPanel
+                    onAddToTimeline={p.onAddToTimeline}
+                    value={safeBackground}
+                    onChange={p.setBackground}
+                    onError={p.onError}
+                  />
+                )}
+                {id === 'effects' &&
+                  VIDEO_EFFECTS.map((x) => (
+                    <button
+                      className={p.effects.includes(x.id) ? 'active' : ''}
+                      onClick={() => toggle(x.id)}
+                      key={x.id}
+                    >
+                      {x.icon} {x.label}
+                    </button>
+                  ))}
+                {id === 'effects' && (
+                  <div className="w-full space-y-3 rounded-xl border border-white/10 p-3">
+                    <p className="text-xs text-white/60">
+                      Điều chỉnh chung cho hiệu ứng đã bật. Góc xiên và kích
+                      thước áp dụng cho các hạt rơi như mưa, tuyết, lá, cánh
+                      hoa.
+                    </p>
+                    {(
+                      [
+                        ['speed', 'Tốc độ rơi', 0.2, 3, 0.1, '×'],
+                        [
+                          'angle',
+                          'Góc xiên (− trái / + phải)',
+                          -60,
+                          60,
+                          1,
+                          '°',
+                        ],
+                        ['density', 'Mật độ hạt', 0.2, 3, 0.1, '×'],
+                        ['size', 'Kích thước / độ dày hạt', 0.5, 3, 0.1, '×'],
+                      ] as const
+                    ).map(([key, label, min, max, step, unit]) => (
+                      <label key={key} className="block text-xs text-white/70">
+                        {label} · {p.effectSettings[key]}
+                        {unit}
+                        <input
+                          aria-label={label}
+                          type="range"
+                          min={min}
+                          max={max}
+                          step={step}
+                          value={p.effectSettings[key]}
+                          onChange={(e) =>
+                            p.setEffectSettings({
+                              ...p.effectSettings,
+                              [key]: Number(e.target.value),
+                            })
+                          }
+                          className="mt-2 block w-full accent-sky-300"
+                        />
+                      </label>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        p.setEffectSettings({ ...DEFAULT_EFFECT_SETTINGS })
+                      }
+                    >
+                      Đặt lại hiệu ứng
+                    </button>
                   </div>
-                  <label className="sd-scale">
-                    Kích thước chữ
-                    <input
-                      type="range"
-                      min="60"
-                      max="180"
-                      value={p.layout.subtitle.scale}
-                      onChange={(e) =>
-                        p.setLayout({
-                          ...p.layout,
-                          subtitle: {
-                            ...p.layout.subtitle,
-                            scale: +e.target.value,
-                          },
-                        })
-                      }
-                    />
-                    <span>{p.layout.subtitle.scale}%</span>
-                  </label>
-                </>
-              )}
-              {id === 'format' &&
-                (['16:9', '9:16', '1:1', '4:5'] as VideoAspect[]).map((x) => (
-                  <button
-                    className={p.aspect === x ? 'active' : ''}
-                    onClick={() => p.setAspect(x)}
-                    key={x}
-                  >
-                    {x}
-                  </button>
-                ))}
-              {id === 'background' && (
-                <BackgroundPanel
-                  onAddToTimeline={p.onAddToTimeline}
-                  value={safeBackground}
-                  onChange={p.setBackground}
-                  onError={p.onError}
-                />
-              )}
-              {id === 'effects' &&
-                VIDEO_EFFECTS.map((x) => (
-                  <button
-                    className={p.effects.includes(x.id) ? 'active' : ''}
-                    onClick={() => toggle(x.id)}
-                    key={x.id}
-                  >
-                    {x.icon} {x.label}
-                  </button>
-                ))}
-              {id === 'effects' && <div className="w-full space-y-3 rounded-xl border border-white/10 p-3">
-                <p className="text-xs text-white/60">Điều chỉnh chung cho hiệu ứng đã bật. Góc xiên và kích thước áp dụng cho các hạt rơi như mưa, tuyết, lá, cánh hoa.</p>
-                {([
-                  ['speed','Tốc độ rơi',.2,3,.1,'×'],
-                  ['angle','Góc xiên (− trái / + phải)',-60,60,1,'°'],
-                  ['density','Mật độ hạt',.2,3,.1,'×'],
-                  ['size','Kích thước / độ dày hạt',.5,3,.1,'×'],
-                ] as const).map(([key,label,min,max,step,unit])=><label key={key} className="block text-xs text-white/70">{label} · {p.effectSettings[key]}{unit}<input aria-label={label} type="range" min={min} max={max} step={step} value={p.effectSettings[key]} onChange={e=>p.setEffectSettings({...p.effectSettings,[key]:Number(e.target.value)})} className="mt-2 block w-full accent-sky-300"/></label>)}
-                <button type="button" onClick={()=>p.setEffectSettings({...DEFAULT_EFFECT_SETTINGS})}>Đặt lại hiệu ứng</button>
-              </div>}
-              {id === 'audio' && (
-                <MasteringPanel audio={p.audioUrl} binary={p.audioBinary} title={p.songTitle} value={p.mastering} onChange={p.setMastering} />
-              )}
-              {id === 'trim' && (
-                <div className="sd-trim">
-                  <label>
-                    Start{' '}
-                    <input
-                      type="range"
-                      min="0"
-                      max={Math.max(0, p.duration - 1)}
-                      step=".1"
-                      value={p.trimStart}
-                      onChange={(e) =>
-                        p.setTrimStart(Math.min(+e.target.value, p.trimEnd - 1))
-                      }
-                    />
-                    <span>{fmt(p.trimStart)}</span>
-                  </label>
-                  <label>
-                    End{' '}
-                    <input
-                      type="range"
-                      min="1"
-                      max={p.duration}
-                      step=".1"
-                      value={p.trimEnd}
-                      onChange={(e) =>
-                        p.setTrimEnd(Math.max(+e.target.value, p.trimStart + 1))
-                      }
-                    />
-                    <span>{fmt(p.trimEnd)}</span>
-                  </label>
-                  <p>Output: {fmt(p.trimEnd - p.trimStart)}</p>
-                </div>
-              )}
-          </div>
-        </div>
-      ))}
+                )}
+                {id === 'audio' && (
+                  <MasteringPanel
+                    audio={p.audioUrl}
+                    binary={p.audioBinary}
+                    title={p.songTitle}
+                    value={p.mastering}
+                    onChange={p.setMastering}
+                  />
+                )}
+                {id === 'trim' && (
+                  <div className="sd-trim">
+                    <label>
+                      Start{' '}
+                      <input
+                        type="range"
+                        min="0"
+                        max={Math.max(0, p.duration - 1)}
+                        step=".1"
+                        value={p.trimStart}
+                        onChange={(e) =>
+                          p.setTrimStart(
+                            Math.min(+e.target.value, p.trimEnd - 1),
+                          )
+                        }
+                      />
+                      <span>{fmt(p.trimStart)}</span>
+                    </label>
+                    <label>
+                      End{' '}
+                      <input
+                        type="range"
+                        min="1"
+                        max={p.duration}
+                        step=".1"
+                        value={p.trimEnd}
+                        onChange={(e) =>
+                          p.setTrimEnd(
+                            Math.max(+e.target.value, p.trimStart + 1),
+                          )
+                        }
+                      />
+                      <span>{fmt(p.trimEnd)}</span>
+                    </label>
+                    <p>Output: {fmt(p.trimEnd - p.trimStart)}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ),
+      )}
     </>
   );
 }
@@ -820,27 +1268,33 @@ export default function CreatorStudio({
     [playbackStart, setPlaybackStart] = useState(0),
     [previewTime, setPreviewTime] = useState(0),
     [timelinePauseSignal, setTimelinePauseSignal] = useState(0),
-    [panel, setPanel] = useState('audio'),
+    [panel, setPanel] = useState('presets'),
     [mobileTools, setMobileTools] = useState(false),
     [savingProject, setSavingProject] = useState(false),
     [savedProject, setSavedProject] = useState(false);
   const [draftStatus, setDraftStatus] = useState('');
   const projectSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const activeSource = useRef(url);
-  useEffect(() => { activeSource.current = url; }, [url]);
+  useEffect(() => {
+    activeSource.current = url;
+  }, [url]);
   const restoringProject = useRef(false);
   const [initProgress, setInitProgress] = useState(0);
   const [initTitle, setInitTitle] = useState('Đang khởi tạo bài hát');
   const [initDetail, setInitDetail] = useState('Chuẩn bị dữ liệu mới…');
   const [wave, setWave] = useState<WaveStyle>('mirror-glow'),
-    [waveAppearance, setWaveAppearance] = useState<WaveAppearance>({...DEFAULT_WAVE_APPEARANCE}),
+    [waveAppearance, setWaveAppearance] = useState<WaveAppearance>({
+      ...DEFAULT_WAVE_APPEARANCE,
+    }),
     [template, setTemplate] = useState<VisualTemplate>('cover-motion'),
     [aspect, setAspect] = useState<VideoAspect>('9:16'),
     [lyrics, setLyrics] = useState<LyricsMode>('focus'),
     [motion, setMotion] = useState<MotionIntensity>('medium'),
     [effects, setEffects] = useState<VideoEffect[]>([]),
     [rendering, setRendering] = useState(false),
-    [renderStage, setRenderStage] = useState<'idle' | 'validation' | 'prepare' | 'render' | 'finalize'>('idle'),
+    [renderStage, setRenderStage] = useState<
+      'idle' | 'validation' | 'prepare' | 'render' | 'finalize'
+    >('idle'),
     [lastRenderFailure, setLastRenderFailure] = useState<{
       mode: 'cut' | '30';
       stage: string;
@@ -851,22 +1305,36 @@ export default function CreatorStudio({
     [progress, setProgress] = useState(0),
     [downloading, setDownloading] = useState('');
   const renderAbort = useRef<AbortController | null>(null);
-  useEffect(() => () => { renderAbort.current?.abort(); }, []);
+  useEffect(
+    () => () => {
+      renderAbort.current?.abort();
+    },
+    [],
+  );
   const [renderEta, setRenderEta] = useState<number | null>(null);
   const [renderNotice, setRenderNotice] = useState('');
   const [highlightNotice, setHighlightNotice] = useState('');
   const preferences = useStudioSettings();
   useRenderWakeLock(rendering && preferences.keepAwake);
 
-  const [masteringConfig, setMasteringConfig] = useState<ProductionMasteringConfig>(structuredClone(DEFAULT_PRODUCTION_MASTERING));
-  const [exportConfig, setExportConfig] = useState<ProductionExportConfig>({...DEFAULT_PRODUCTION_EXPORT,aspect:'9:16'});
+  const [masteringConfig, setMasteringConfig] =
+    useState<ProductionMasteringConfig>(
+      structuredClone(DEFAULT_PRODUCTION_MASTERING),
+    );
+  const [exportConfig, setExportConfig] = useState<ProductionExportConfig>({
+    ...DEFAULT_PRODUCTION_EXPORT,
+    aspect: '9:16',
+  });
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [lastPresetId, setLastPresetId] = useState<string | null>(null);
   const [presetModified, setPresetModified] = useState(false);
-  const [presetOverrideFields, setPresetOverrideFields] = useState<Array<keyof StudioPresetConfig>>([]);
+  const [presetOverrideFields, setPresetOverrideFields] = useState<
+    Array<keyof StudioPresetConfig>
+  >([]);
   const [customPresets, setCustomPresets] = useState<StudioPreset[]>([]);
   const [favoritePresetIds, setFavoritePresetIds] = useState<string[]>([]);
   const [presetUndo, setPresetUndo] = useState<{
+    sceneEffects: { key: string; layers: SceneLayer[] } | null;
     config: StudioPresetConfig;
     mastering: ProductionMasteringConfig;
     exportConfig: ProductionExportConfig;
@@ -874,7 +1342,9 @@ export default function CreatorStudio({
     modified: boolean;
     overrideFields: Array<keyof StudioPresetConfig>;
   } | null>(null);
-  const [presetCommit, setPresetCommit] = useState<PresetVisualCommit | null>(null);
+  const [presetCommit, setPresetCommit] = useState<PresetVisualCommit | null>(
+    null,
+  );
 
   const [resultBlob, setResultBlob] = useState<Blob | null>(null),
     [resultUrl, setResultUrl] = useState(''),
@@ -884,8 +1354,12 @@ export default function CreatorStudio({
     title: { font: 'Georgia, serif', color: '#ffffff' },
     creator: { font: 'system-ui, sans-serif', color: '#d1d5db' },
   });
-  const [editingText,setEditingText]=useState<'title'|'creator'|'subtitle'|null>(null);
-  const [effectSettings,setEffectSettings]=useState<EffectSettings>({...DEFAULT_EFFECT_SETTINGS});
+  const [editingText, setEditingText] = useState<
+    'title' | 'creator' | 'subtitle' | null
+  >(null);
+  const [effectSettings, setEffectSettings] = useState<EffectSettings>({
+    ...DEFAULT_EFFECT_SETTINGS,
+  });
   const [background, setBackground] = useState<BackgroundConfig>(
     structuredClone(DEFAULT_BACKGROUND_CONFIG),
   );
@@ -895,13 +1369,17 @@ export default function CreatorStudio({
     activeColor: '#f0abfc',
   });
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeLine[]>([]);
-  const [karaokeSyncStatus, setKaraokeSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'fallback'>('idle');
+  const [karaokeSyncStatus, setKaraokeSyncStatus] = useState<
+    'idle' | 'syncing' | 'synced' | 'fallback'
+  >('idle');
   const [karaokeSyncMessage, setKaraokeSyncMessage] = useState('');
   const [subtitleNotice, setSubtitleNotice] = useState('');
   const [subtitleRegenerating, setSubtitleRegenerating] = useState(false);
   const [subtitleDebugEnabled, setSubtitleDebugEnabled] = useState(false);
   const [subtitleDebugOpen, setSubtitleDebugOpen] = useState(false);
-  const [subtitleDebugLogs, setSubtitleDebugLogs] = useState<SubtitleDebugEntry[]>([]);
+  const [subtitleDebugLogs, setSubtitleDebugLogs] = useState<
+    SubtitleDebugEntry[]
+  >([]);
   const [webSpeechTesting, setWebSpeechTesting] = useState(false);
   const subtitleDebugEnabledRef = useRef(false);
   const subtitleDebugSeq = useRef(0);
@@ -914,22 +1392,36 @@ export default function CreatorStudio({
     subtitle: { hidden: false, muted: false, locked: false },
     effects: { hidden: false, muted: false, locked: false },
   });
+  const [previewExpanded, setPreviewExpanded] = useState(false);
+  const [timelineHeight, setTimelineHeight] = useState(190);
+  const [selectedSceneEffectId, setSelectedSceneEffectId] = useState<string>();
+  const sceneEffectKey = JSON.stringify({ effects, effectSettings });
+  const [sceneEffectEdits, setSceneEffectEdits] = useState<{
+    key: string;
+    layers: SceneLayer[];
+  } | null>(null);
   const studioModel = useMemo(
     () =>
-      createStudioRenderModel({
-        template,
-        wave,
-        waveAppearance,
-        motion,
-        aspect,
-        lyrics,
-        effects,
-        effectSettings,
-        layout,
-        textStyles,
-        subtitleStyle,
-        background,
-      }),
+      createStudioRenderModel(
+        {
+          template,
+          wave,
+          waveAppearance,
+          motion,
+          aspect,
+          lyrics,
+          effects,
+          effectSettings,
+          layout,
+          textStyles,
+          subtitleStyle,
+          background,
+        },
+        Math.max(1, (song?.duration || 30) * 1000),
+        sceneEffectEdits?.key === sceneEffectKey
+          ? sceneEffectEdits.layers
+          : undefined,
+      ),
     [
       template,
       wave,
@@ -943,6 +1435,9 @@ export default function CreatorStudio({
       textStyles,
       subtitleStyle,
       background,
+      song?.duration,
+      sceneEffectEdits,
+      sceneEffectKey,
     ],
   );
   const visualSnapshot = studioModel.visual;
@@ -968,7 +1463,62 @@ export default function CreatorStudio({
   }, []);
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
-  const timelineMediaClips = mediaClips;
+  const projectScene = useMemo(
+    () =>
+      buildStudioScene(
+        studioModel.scene,
+        mediaClips,
+        karaokeTimeline,
+        song?.audio || '',
+        {},
+      ),
+    [studioModel.scene, mediaClips, karaokeTimeline, song?.audio],
+  );
+  const changeProjectScene = (next: SceneDocument) => {
+    invalidateRenderedResult();
+    markPresetField('effects');
+    setSceneEffectEdits({
+      key: sceneEffectKey,
+      layers: next.layers.filter((l) => l.type === 'effect'),
+    });
+    const clips = next.layers
+      .filter((l) => l.params.originClip === true)
+      .flatMap((layer) => {
+        const asset = next.assets.find((a) => a.id === layer.assetId);
+        if (!asset || (asset.type !== 'image' && asset.type !== 'video'))
+          return [];
+        return [
+          {
+            id: layer.id,
+            type: asset.type,
+            url: asset.source,
+            name: layer.name,
+            start: layer.startMs / 1000,
+            end: layer.endMs / 1000,
+            isDefault: layer.role === 'main-video',
+            trimStartMs: Number(layer.params.trimStartMs || 0),
+          } satisfies MediaClip,
+        ];
+      });
+    setMediaClips(clips);
+    const karaoke = next.layers.find((l) => l.type === 'karaoke');
+    if (karaoke && Array.isArray(karaoke.params.cues))
+      setKaraokeTimeline(
+        (
+          karaoke.params.cues as {
+            startMs: number;
+            endMs: number;
+            text: string;
+            words?: KaraokeLine['words'];
+          }[]
+        ).map((c) => ({
+          start: c.startMs / 1000,
+          end: c.endMs / 1000,
+          text: c.text,
+          words: c.words || [],
+        })),
+      );
+  };
   const timer = useRef<number | undefined>(undefined);
   const editedFieldsTracked = useRef(new Set<keyof StudioPresetConfig>());
   const previewPlayTracked = useRef(false);
@@ -1017,7 +1567,9 @@ export default function CreatorStudio({
       time: new Date().toLocaleTimeString('vi-VN', { hour12: false }),
       message: 'debug-enabled',
       data: {
-        uaMobile: nav.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent),
+        uaMobile:
+          nav.userAgentData?.mobile ??
+          /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent),
         touchPoints: nav.maxTouchPoints || 0,
         online: navigator.onLine,
       },
@@ -1051,11 +1603,10 @@ export default function CreatorStudio({
     };
     type BrowserSpeechRecognitionCtor = new () => BrowserSpeechRecognition;
 
-    const SpeechRecognitionCtor =
-      ((window as any).SpeechRecognition ||
-        (window as any).webkitSpeechRecognition) as
-        | BrowserSpeechRecognitionCtor
-        | undefined;
+    const SpeechRecognitionCtor = ((window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition) as
+      | BrowserSpeechRecognitionCtor
+      | undefined;
 
     if (!SpeechRecognitionCtor) {
       pushSubtitleDebug('web-speech-unsupported', {
@@ -1066,9 +1617,11 @@ export default function CreatorStudio({
 
     const AudioCtx =
       window.AudioContext ||
-      (window as typeof window & {
-        webkitAudioContext?: typeof AudioContext;
-      }).webkitAudioContext;
+      (
+        window as typeof window & {
+          webkitAudioContext?: typeof AudioContext;
+        }
+      ).webkitAudioContext;
 
     if (!AudioCtx) {
       pushSubtitleDebug('web-speech-unsupported', {
@@ -1310,7 +1863,9 @@ export default function CreatorStudio({
     setPresetCommit(null);
     if (!selectedPresetId) return;
     setPresetModified(true);
-    setPresetOverrideFields((fields) => fields.includes(field) ? fields : [...fields, field]);
+    setPresetOverrideFields((fields) =>
+      fields.includes(field) ? fields : [...fields, field],
+    );
   };
 
   const applyPreset = (
@@ -1319,6 +1874,7 @@ export default function CreatorStudio({
   ) => {
     const current = currentPresetConfig();
     setPresetUndo({
+      sceneEffects: structuredClone(sceneEffectEdits),
       config: current,
       mastering: structuredClone(masteringConfig),
       exportConfig: structuredClone(exportConfig),
@@ -1336,25 +1892,65 @@ export default function CreatorStudio({
 
     setMasteringConfig(structuredClone(transaction.production.mastering));
     setExportConfig(structuredClone(transaction.production.export));
-    window.dispatchEvent(new CustomEvent('suno-master-preview',{detail:{profile:transaction.production.mastering.profile}}));
-    window.dispatchEvent(new CustomEvent('suno-spatial-change',{detail:transaction.production.mastering.spatial || DEFAULT_PRODUCTION_MASTERING.spatial}));
+    window.dispatchEvent(
+      new CustomEvent('suno-master-preview', {
+        detail: { profile: transaction.production.mastering.profile },
+      }),
+    );
+    window.dispatchEvent(
+      new CustomEvent('suno-spatial-change', {
+        detail:
+          transaction.production.mastering.spatial ||
+          DEFAULT_PRODUCTION_MASTERING.spatial,
+      }),
+    );
 
-    const commit = commitPresetVisualState(transaction.next, {
-      setTemplate,
-      setWave,
-      setWaveAppearance: (value) =>
-        setWaveAppearance({ ...DEFAULT_WAVE_APPEARANCE, ...value }),
-      setMotion,
-      setAspect,
-      setLyrics,
-      setEffects,
-      setEffectSettings,
-      setLayout,
-      setTextStyles,
-      setSubtitleStyle,
-      setBackground,
-    }, presetCommit?.revision || 0);
+    const commit = commitPresetVisualState(
+      transaction.next,
+      {
+        setTemplate,
+        setWave,
+        setWaveAppearance: (value) =>
+          setWaveAppearance({ ...DEFAULT_WAVE_APPEARANCE, ...value }),
+        setMotion,
+        setAspect,
+        setLyrics,
+        setEffects,
+        setEffectSettings,
+        setLayout,
+        setTextStyles,
+        setSubtitleStyle,
+        setBackground,
+      },
+      presetCommit?.revision || 0,
+    );
 
+    if (mode === 'replace-all' || !presetOverrideFields.includes('effects')) {
+      const resolvedScene = preset.sceneTemplate
+        ? instantiateTemplate(
+            preset.sceneTemplate,
+            Math.max(1, (song?.duration || 30) * 1000),
+            karaokeTimeline.map((c) => ({
+              startMs: c.start * 1000,
+              endMs: c.end * 1000,
+              text: c.text,
+            })),
+          )
+        : preset.scene;
+      setSceneEffectEdits(
+        resolvedScene
+          ? {
+              key: JSON.stringify({
+                effects: transaction.next.effects,
+                effectSettings: transaction.next.effectSettings,
+              }),
+              layers: structuredClone(
+                resolvedScene.layers.filter((l) => l.type === 'effect'),
+              ),
+            }
+          : null,
+      );
+    }
     setPresetCommit(commit);
     setSelectedPresetId(preset.id);
     setPresetModified(transaction.modified);
@@ -1364,11 +1960,11 @@ export default function CreatorStudio({
     localStorage.setItem('sunodown-v16-last-preset', preset.id);
     setLastPresetId(preset.id);
     track('production_recipe_applied', {
-      preset_id:preset.id,
-      mastering_profile:transaction.production.mastering.profile,
-      export_quality:transaction.production.export.quality,
-      export_duration_mode:transaction.production.export.durationMode,
-      production_fingerprint:transaction.productionFingerprint,
+      preset_id: preset.id,
+      mastering_profile: transaction.production.mastering.profile,
+      export_quality: transaction.production.export.quality,
+      export_duration_mode: transaction.production.export.durationMode,
+      production_fingerprint: transaction.productionFingerprint,
     });
     track('preset_applied', {
       preset_id: preset.id,
@@ -1395,7 +1991,9 @@ export default function CreatorStudio({
   const openHomeFeaturedPreset = async (preset: StudioPreset) => {
     if (!validSourceInput(url)) {
       setError('Hãy dán liên kết Suno vào ô Phân tích trước khi chọn mẫu.');
-      document.querySelector<HTMLInputElement>('.sd-home-linkbox input')?.focus();
+      document
+        .querySelector<HTMLInputElement>('.sd-home-linkbox input')
+        ?.focus();
       return;
     }
 
@@ -1414,26 +2012,40 @@ export default function CreatorStudio({
 
   const restorePresetSnapshot = () => {
     if (!presetUndo) return;
-    const commit = commitPresetVisualState(presetUndo.config, {
-      setTemplate,
-      setWave,
-      setWaveAppearance: (value) =>
-        setWaveAppearance({ ...DEFAULT_WAVE_APPEARANCE, ...value }),
-      setMotion,
-      setAspect,
-      setLyrics,
-      setEffects,
-      setEffectSettings,
-      setLayout,
-      setTextStyles,
-      setSubtitleStyle,
-      setBackground,
-    }, presetCommit?.revision || 0);
+    const commit = commitPresetVisualState(
+      presetUndo.config,
+      {
+        setTemplate,
+        setWave,
+        setWaveAppearance: (value) =>
+          setWaveAppearance({ ...DEFAULT_WAVE_APPEARANCE, ...value }),
+        setMotion,
+        setAspect,
+        setLyrics,
+        setEffects,
+        setEffectSettings,
+        setLayout,
+        setTextStyles,
+        setSubtitleStyle,
+        setBackground,
+      },
+      presetCommit?.revision || 0,
+    );
     setPresetCommit(commit);
+    setSceneEffectEdits(structuredClone(presetUndo.sceneEffects));
     setMasteringConfig(structuredClone(presetUndo.mastering));
     setExportConfig(structuredClone(presetUndo.exportConfig));
-    window.dispatchEvent(new CustomEvent('suno-master-preview',{detail:{profile:presetUndo.mastering.profile}}));
-    window.dispatchEvent(new CustomEvent('suno-spatial-change',{detail:presetUndo.mastering.spatial || DEFAULT_PRODUCTION_MASTERING.spatial}));
+    window.dispatchEvent(
+      new CustomEvent('suno-master-preview', {
+        detail: { profile: presetUndo.mastering.profile },
+      }),
+    );
+    window.dispatchEvent(
+      new CustomEvent('suno-spatial-change', {
+        detail:
+          presetUndo.mastering.spatial || DEFAULT_PRODUCTION_MASTERING.spatial,
+      }),
+    );
     setSelectedPresetId(presetUndo.selectedId);
     setPresetModified(presetUndo.modified);
     setPresetOverrideFields([...presetUndo.overrideFields]);
@@ -1457,7 +2069,10 @@ export default function CreatorStudio({
     if (!source || !source.width || !source.height) return undefined;
     try {
       const width = 240;
-      const height = Math.max(120, Math.round((source.height / source.width) * width));
+      const height = Math.max(
+        120,
+        Math.round((source.height / source.width) * width),
+      );
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
@@ -1475,7 +2090,8 @@ export default function CreatorStudio({
       schemaVersion: PRESET_SCHEMA_VERSION,
       id: `user-${Date.now()}`,
       name,
-      description: 'Preset cá nhân lưu từ cấu hình hiện tại của Creator Studio.',
+      description:
+        'Preset cá nhân lưu từ cấu hình hiện tại của Creator Studio.',
       category:
         [...BUILTIN_STUDIO_PRESETS, ...customPresets].find(
           (item) => item.id === selectedPresetId,
@@ -1485,6 +2101,12 @@ export default function CreatorStudio({
       secondary: textStyles.title.color || '#ffffff',
       thumbnail: capturePresetThumbnail(),
       builtin: false,
+      scene: createSceneTemplate(projectScene, 'template', 'Template').scene,
+      sceneTemplate: createSceneTemplate(
+        projectScene,
+        `scene-${Date.now()}`,
+        name,
+      ),
       config: currentPresetConfig(),
       mastering: structuredClone(masteringConfig),
       export: { ...exportConfig, aspect },
@@ -1493,7 +2115,9 @@ export default function CreatorStudio({
     setSelectedPresetId(preset.id);
     setPresetModified(false);
     setPresetOverrideFields([]);
-    setPresetCommit(createPresetVisualCommit(preset.config, presetCommit?.revision || 0));
+    setPresetCommit(
+      createPresetVisualCommit(preset.config, presetCommit?.revision || 0),
+    );
   };
 
   const duplicatePreset = (source: StudioPreset) => {
@@ -1507,8 +2131,12 @@ export default function CreatorStudio({
       thumbnail: source.thumbnail || capturePresetThumbnail(),
       builtin: false,
       config: clonePresetConfig(source.config),
-      mastering: source.mastering ? structuredClone(source.mastering) : structuredClone(DEFAULT_PRODUCTION_MASTERING),
-      export: source.export ? structuredClone(source.export) : { ...DEFAULT_PRODUCTION_EXPORT, aspect: source.config.aspect },
+      mastering: source.mastering
+        ? structuredClone(source.mastering)
+        : structuredClone(DEFAULT_PRODUCTION_MASTERING),
+      export: source.export
+        ? structuredClone(source.export)
+        : { ...DEFAULT_PRODUCTION_EXPORT, aspect: source.config.aspect },
     };
     persistCustomPresets([copy, ...customPresets]);
     applyPreset(copy);
@@ -1529,6 +2157,8 @@ export default function CreatorStudio({
       accent: subtitleStyle.activeColor || preset.accent,
       secondary: textStyles.title.color || preset.secondary,
       thumbnail: capturePresetThumbnail() || preset.thumbnail,
+      scene: createSceneTemplate(projectScene, 'template', 'Template').scene,
+      sceneTemplate: createSceneTemplate(projectScene, preset.id, preset.name),
       config: currentPresetConfig(),
       mastering: structuredClone(masteringConfig),
       export: { ...exportConfig, aspect },
@@ -1540,7 +2170,9 @@ export default function CreatorStudio({
     setSelectedPresetId(preset.id);
     setPresetModified(false);
     setPresetOverrideFields([]);
-    setPresetCommit(createPresetVisualCommit(nextPreset.config, presetCommit?.revision || 0));
+    setPresetCommit(
+      createPresetVisualCommit(nextPreset.config, presetCommit?.revision || 0),
+    );
   };
 
   const resetSelectedPreset = (preset: StudioPreset) => {
@@ -1552,7 +2184,10 @@ export default function CreatorStudio({
       ...preset,
       schemaVersion: PRESET_SCHEMA_VERSION,
       config: clonePresetConfig(preset.config),
-      ...normalizeProductionPreset({mastering:preset.mastering,export:preset.export},preset.config.aspect),
+      ...normalizeProductionPreset(
+        { mastering: preset.mastering, export: preset.export },
+        preset.config.aspect,
+      ),
     };
     const filename = `${safeName(preset.name)}.sunodown-preset.json`;
     saveBlob(
@@ -1582,9 +2217,7 @@ export default function CreatorStudio({
       applyPreset(imported, 'replace-all');
       setError('');
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : 'Không thể import preset này.',
-      );
+      setError(e instanceof Error ? e.message : 'Không thể import preset này.');
     }
   };
 
@@ -1616,11 +2249,26 @@ export default function CreatorStudio({
 
   function applyProjectDefaults() {
     const defaults = readSettings();
+    setSceneEffectEdits(null);
     setAspect(defaults.aspect);
     setWave(defaults.wave);
-    setBackground({ ...DEFAULT_BACKGROUND_CONFIG, mode: defaults.background === 'suno' ? 'suno' : 'preset', presetId: defaults.background === 'suno' ? undefined : defaults.background });
-    setMasteringConfig({ profile: defaults.audio, spatial: { enabled: defaults.spatial, mode: 'immersive', amount: 65 } });
-    setExportConfig({ ...DEFAULT_PRODUCTION_EXPORT, aspect: defaults.aspect, quality: defaults.exportQuality, resolution: defaults.resolution, fps: defaults.fps });
+    setBackground({
+      ...DEFAULT_BACKGROUND_CONFIG,
+      mode: defaults.background === 'suno' ? 'suno' : 'preset',
+      presetId:
+        defaults.background === 'suno' ? undefined : defaults.background,
+    });
+    setMasteringConfig({
+      profile: defaults.audio,
+      spatial: { enabled: defaults.spatial, mode: 'immersive', amount: 65 },
+    });
+    setExportConfig({
+      ...DEFAULT_PRODUCTION_EXPORT,
+      aspect: defaults.aspect,
+      quality: defaults.exportQuality,
+      resolution: defaults.resolution,
+      fps: defaults.fps,
+    });
     setAutoPreview(defaults.autoPreview);
     setSelectedPresetId(null);
     setPresetCommit(null);
@@ -1635,7 +2283,14 @@ export default function CreatorStudio({
     syncRun: number,
   ) {
     const subtitlePreferences = readSettings();
-    const setGeneratedTimeline = (lines: KaraokeLine[]) => setKaraokeTimeline(applySubtitleOffset(lines, duration, subtitlePreferences.subtitleOffset));
+    const setGeneratedTimeline = (lines: KaraokeLine[]) =>
+      setKaraokeTimeline(
+        applySubtitleOffset(
+          lines,
+          duration,
+          subtitlePreferences.subtitleOffset,
+        ),
+      );
     setKaraokeSyncStatus('syncing');
     setKaraokeSyncMessage('Đang chuẩn bị subtitle…');
     pushSubtitleDebug('subtitle-run-start', {
@@ -1656,7 +2311,10 @@ export default function CreatorStudio({
           response = await fetch('/api/music/subtitle/generate', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ songId: target.id, language: subtitlePreferences.subtitleLanguage }),
+            body: JSON.stringify({
+              songId: target.id,
+              language: subtitlePreferences.subtitleLanguage,
+            }),
           });
           if (response.status === 202) {
             for (let poll = 0; poll < 8; poll += 1) {
@@ -1683,15 +2341,19 @@ export default function CreatorStudio({
             realigned?: boolean;
           };
           const cloudLines = normalizeKaraokeTimeline(
-            Array.isArray(payload.subtitle?.lines) ? payload.subtitle!.lines! : [],
+            Array.isArray(payload.subtitle?.lines)
+              ? payload.subtitle!.lines!
+              : [],
             duration,
           );
           if (cloudLines.length) {
             if (karaokeSyncRun.current !== syncRun) return;
-            const cloudStatus = payload.subtitle?.status === 'fallback' ? 'fallback' : 'synced';
-            const message = cloudStatus === 'synced'
-              ? 'Subtitle cloud đã sẵn sàng.'
-              : 'Subtitle cloud đã tạo. Nên kiểm tra lại timing.';
+            const cloudStatus =
+              payload.subtitle?.status === 'fallback' ? 'fallback' : 'synced';
+            const message =
+              cloudStatus === 'synced'
+                ? 'Subtitle cloud đã sẵn sàng.'
+                : 'Subtitle cloud đã tạo. Nên kiểm tra lại timing.';
             pushSubtitleDebug('cloud-subtitle-ready', {
               lines: cloudLines.length,
               confidence: payload.subtitle?.confidence ?? null,
@@ -1705,11 +2367,16 @@ export default function CreatorStudio({
             setKaraokeSyncMessage(message);
             setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
             setSubtitleNotice(message);
-            track('karaoke_cloud_ready', { lines: cloudLines.length, cached: Boolean(payload.cached) });
+            track('karaoke_cloud_ready', {
+              lines: cloudLines.length,
+              cached: Boolean(payload.cached),
+            });
             return;
           }
         }
-        pushSubtitleDebug('cloud-subtitle-fallback-local', { status: response.status });
+        pushSubtitleDebug('cloud-subtitle-fallback-local', {
+          status: response.status,
+        });
       } catch (error) {
         pushSubtitleDebug('cloud-subtitle-error', {
           error: error instanceof Error ? error.message : String(error),
@@ -1788,14 +2455,17 @@ export default function CreatorStudio({
             pushSubtitleDebug(message, data);
           },
           onPartialTimeline: (partialTimeline) => {
-            if (karaokeSyncRun.current !== syncRun || !partialTimeline.length) return;
+            if (karaokeSyncRun.current !== syncRun || !partialTimeline.length)
+              return;
             if (partialTimeline.length >= bestPartialTimeline.length) {
               bestPartialTimeline = partialTimeline;
             }
             pushSubtitleDebug('partial-timeline', {
               lines: partialTimeline.length,
-              firstStart: Math.round((partialTimeline[0]?.start || 0) * 100) / 100,
-              lastEnd: Math.round((partialTimeline.at(-1)?.end || 0) * 100) / 100,
+              firstStart:
+                Math.round((partialTimeline[0]?.start || 0) * 100) / 100,
+              lastEnd:
+                Math.round((partialTimeline.at(-1)?.end || 0) * 100) / 100,
             });
             setGeneratedTimeline(partialTimeline);
             setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
@@ -1905,12 +2575,17 @@ export default function CreatorStudio({
     pushSubtitleDebug('cloud-subtitle-force-start', { songId: song.id });
 
     try {
-      const requestGeneration = () => fetch('/api/music/subtitle/generate', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        cache: 'no-store',
-        body: JSON.stringify({ songId: song.id, language: 'vi', force: true }),
-      });
+      const requestGeneration = () =>
+        fetch('/api/music/subtitle/generate', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({
+            songId: song.id,
+            language: 'vi',
+            force: true,
+          }),
+        });
       const response = await requestRegeneratedSubtitle(requestGeneration, {
         isCurrent: () => karaokeSyncRun.current === run,
       });
@@ -1932,9 +2607,7 @@ export default function CreatorStudio({
 
       const duration = song.duration || trimEnd || 30;
       const lines = normalizeKaraokeTimeline(
-        Array.isArray(payload.subtitle?.lines)
-          ? payload.subtitle!.lines!
-          : [],
+        Array.isArray(payload.subtitle?.lines) ? payload.subtitle!.lines! : [],
         duration,
       );
 
@@ -1950,7 +2623,13 @@ export default function CreatorStudio({
           ? `Đã lấy lại subtitle mới · ${lines.length} câu.`
           : `Đã lấy lại subtitle mới · ${lines.length} câu · nên kiểm tra timing.`;
 
-      setKaraokeTimeline(applySubtitleOffset(lines, song.duration || 1, subtitlePreferences.subtitleOffset));
+      setKaraokeTimeline(
+        applySubtitleOffset(
+          lines,
+          song.duration || 1,
+          subtitlePreferences.subtitleOffset,
+        ),
+      );
       cacheMusicSubtitle(song.id, lines);
       setKaraokeSyncStatus(nextStatus);
       setKaraokeSyncMessage(message);
@@ -1985,7 +2664,11 @@ export default function CreatorStudio({
 
   async function resolve(
     value = url,
-    options: { generateSubtitles?: boolean; updateUrl?: boolean; replaceUrl?: boolean } = {},
+    options: {
+      generateSubtitles?: boolean;
+      updateUrl?: boolean;
+      replaceUrl?: boolean;
+    } = {},
   ): Promise<Song | null> {
     const startedAt = performance.now();
     pushSubtitleDebug('resolve-start', {
@@ -2020,7 +2703,7 @@ export default function CreatorStudio({
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ input: value }),
         }),
-        data = await r.json() as Partial<Song> & { error?: string };
+        data = (await r.json()) as Partial<Song> & { error?: string };
       if (!r.ok) throw Error(data.error || 'Không thể tải bài hát này.');
       if (karaokeSyncRun.current !== syncRun) return null;
 
@@ -2052,7 +2735,9 @@ export default function CreatorStudio({
 
       let source = mediaCache.current.get(hydrated.audio) || null;
       if (!source) {
-        const audioResponse = await fetch(hydrated.audio, { cache: 'no-store' });
+        const audioResponse = await fetch(hydrated.audio, {
+          cache: 'no-store',
+        });
         if (!audioResponse.ok) throw new Error('Không tải được binary audio.');
         source = await audioResponse.blob();
         mediaCache.current.set(hydrated.audio, source);
@@ -2077,17 +2762,23 @@ export default function CreatorStudio({
       setKaraokeTimeline([]);
       setKaraokeSyncStatus('syncing');
       setKaraokeSyncMessage('Subtitle sẽ được tìm trong nền…');
-      setMediaClips(hydrated.picture ? [{
-        id: crypto.randomUUID(),
-        type: 'image',
-        url: /^https:\/\//i.test(hydrated.picture)
-          ? `/api/image?source=${encodeURIComponent(hydrated.picture)}`
-          : hydrated.picture,
-        name: hydrated.title || 'Cover',
-        start: 0,
-        end: duration,
-        isDefault: true,
-      }] : []);
+      setMediaClips(
+        hydrated.picture
+          ? [
+              {
+                id: crypto.randomUUID(),
+                type: 'image',
+                url: /^https:\/\//i.test(hydrated.picture)
+                  ? `/api/image?source=${encodeURIComponent(hydrated.picture)}`
+                  : hydrated.picture,
+                name: hydrated.title || 'Cover',
+                start: 0,
+                end: duration,
+                isDefault: true,
+              },
+            ]
+          : [],
+      );
       setQuickMode(true);
       editedFieldsTracked.current.clear();
       previewPlayTracked.current = false;
@@ -2099,7 +2790,8 @@ export default function CreatorStudio({
       setInitDetail('Mọi dữ liệu đã được khởi tạo.');
       applyProjectDefaults();
       setSong(hydrated);
-      if (options.updateUrl !== false) updateEditorUrl(privateSource, false, options.replaceUrl);
+      if (options.updateUrl !== false)
+        updateEditorUrl(privateSource, false, options.replaceUrl);
       if (options.generateSubtitles !== false) {
         void generateSubtitlesInBackground(hydrated, source, duration, syncRun);
       }
@@ -2117,7 +2809,8 @@ export default function CreatorStudio({
       return hydrated;
     } catch (e) {
       if (karaokeSyncRun.current !== syncRun) return null;
-      const message = e instanceof Error ? e.message : 'Không thể tải bài hát này.';
+      const message =
+        e instanceof Error ? e.message : 'Không thể tải bài hát này.';
       setSong(null);
       setKaraokeTimeline([]);
       setAudioBinary(null);
@@ -2172,7 +2865,9 @@ export default function CreatorStudio({
   const triggerQuickRender = (mode: 'cut' | '30') => {
     setError('');
     window.requestAnimationFrame(() => {
-      document.querySelector('.sd-quick-create')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      document
+        .querySelector('.sd-quick-create')
+        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
     void renderVideo(mode);
   };
@@ -2189,7 +2884,11 @@ export default function CreatorStudio({
     setProgress(0);
     setError('');
     setRenderNotice('');
-    setHighlightNotice(mode === '30' ? 'Đang phân tích toàn bài để tìm đoạn cao trào 30 giây…' : '');
+    setHighlightNotice(
+      mode === '30'
+        ? 'Đang phân tích toàn bài để tìm đoạn cao trào 30 giây…'
+        : '',
+    );
     setLastRenderFailure(null);
     track(attempt > 1 ? 'render_retry' : 'render_started', {
       mode,
@@ -2232,8 +2931,7 @@ export default function CreatorStudio({
         (trimEnd || song.duration || 30) - trimStart,
       );
       let startSeconds = trimStart;
-      let previewSeconds =
-        mode === '30' ? Math.min(30, available) : available;
+      let previewSeconds = mode === '30' ? Math.min(30, available) : available;
 
       if (mode === '30' && available > 30.5) {
         try {
@@ -2268,7 +2966,8 @@ export default function CreatorStudio({
             );
             track('smart_30s_highlight_selected', {
               start_seconds: Math.round(startSeconds * 10) / 10,
-              end_seconds: Math.round((startSeconds + previewSeconds) * 10) / 10,
+              end_seconds:
+                Math.round((startSeconds + previewSeconds) * 10) / 10,
               confidence: Math.round(highlight.confidence * 100) / 100,
               score: Math.round(highlight.score * 1000) / 1000,
               reason: highlight.reason,
@@ -2280,7 +2979,10 @@ export default function CreatorStudio({
             );
           }
         } catch (highlightError) {
-          console.warn('[SunoDown highlight analysis fallback]', highlightError);
+          console.warn(
+            '[SunoDown highlight analysis fallback]',
+            highlightError,
+          );
           setHighlightNotice(
             `Không phân tích được cao trào · dùng 30 giây từ ${fmt(trimStart)}.`,
           );
@@ -2319,7 +3021,7 @@ export default function CreatorStudio({
             setProgress(value);
             if (value > 12 && value < 90) {
               const elapsed = (performance.now() - renderStartedAt) / 1000;
-              setRenderEta(Math.ceil(elapsed * (90 - value) / (value - 10)));
+              setRenderEta(Math.ceil((elapsed * (90 - value)) / (value - 10)));
             }
           },
           effects: config,
@@ -2334,7 +3036,9 @@ export default function CreatorStudio({
           timelineTracks,
           productionMastering: masteringConfig,
           onAudioFallback: (reason) => {
-            setRenderNotice('iPhone không giải mã được mastering của nguồn này nên video sẽ dùng audio gốc để đảm bảo xuất thành công.');
+            setRenderNotice(
+              'iPhone không giải mã được mastering của nguồn này nên video sẽ dùng audio gốc để đảm bảo xuất thành công.',
+            );
             track('render_audio_fallback', {
               reason,
               preset_id: selectedPresetId,
@@ -2369,7 +3073,7 @@ export default function CreatorStudio({
         visual_fingerprint: parity.fingerprint,
         mastering_profile: masteringConfig.profile,
         export_quality: exportConfig.quality,
-         export_duration_mode: mode === '30' ? '30s' : exportConfig.durationMode,
+        export_duration_mode: mode === '30' ? '30s' : exportConfig.durationMode,
       });
     } catch (e) {
       if (controller.signal.aborted) {
@@ -2429,7 +3133,13 @@ export default function CreatorStudio({
     setError('');
     try {
       let source = audioBinary || mediaCache.current.get(song.audio);
-      if (!source) { const response = await fetch(song.audio, { cache: 'no-store' }); if (!response.ok) throw Error('Không tải được audio.'); source = await response.blob(); mediaCache.current.set(song.audio, source); setAudioBinary(source); }
+      if (!source) {
+        const response = await fetch(song.audio, { cache: 'no-store' });
+        if (!response.ok) throw Error('Không tải được audio.');
+        source = await response.blob();
+        mediaCache.current.set(song.audio, source);
+        setAudioBinary(source);
+      }
       if (format === 'm4a') saveBlob(source, `${safeName(song.title)}.m4a`);
       else {
         const processed = await renderTikTokLikeAudio(source),
@@ -2452,7 +3162,9 @@ export default function CreatorStudio({
       );
     else {
       if (!karaokeTimeline.length) {
-        setError('Subtitle chưa có timestamp. Hãy chờ đồng bộ hoàn tất trước khi tải SRT.');
+        setError(
+          'Subtitle chưa có timestamp. Hãy chờ đồng bộ hoàn tất trước khi tải SRT.',
+        );
         return;
       }
       saveBlob(
@@ -2494,7 +3206,10 @@ export default function CreatorStudio({
   }, []);
   useEffect(() => {
     void fetch('/api/auth/me', { cache: 'no-store' })
-      .then((response) => response.json() as Promise<{ user?: SignedInUser | null }>)
+      .then(
+        (response) =>
+          response.json() as Promise<{ user?: SignedInUser | null }>,
+      )
       .then((data) => setSignedInUser(data.user || null))
       .catch(() => setSignedInUser(null));
   }, []);
@@ -2525,23 +3240,21 @@ export default function CreatorStudio({
         JSON.stringify(storedPresets),
       );
       setFavoritePresetIds(
-        JSON.parse(localStorage.getItem('sunodown-v16-favorite-presets') || '[]'),
+        JSON.parse(
+          localStorage.getItem('sunodown-v16-favorite-presets') || '[]',
+        ),
       );
       setLastPresetId(localStorage.getItem('sunodown-v16-last-preset'));
-      const allPresets = [
-        ...BUILTIN_STUDIO_PRESETS,
-        ...storedPresets,
-      ];
+      const allPresets = [...BUILTIN_STUDIO_PRESETS, ...storedPresets];
       const presetIssues = auditPresetLibrary(allPresets);
       if (presetIssues.length) {
-        setError(
-          `Preset QA failed: ${presetIssues.slice(0, 4).join(', ')}`,
-        );
+        setError(`Preset QA failed: ${presetIssues.slice(0, 4).join(', ')}`);
       }
     } catch {}
   }, []);
   useEffect(() => {
-    if (initialRouteHandled.current || window.location.pathname !== '/editor') return;
+    if (initialRouteHandled.current || window.location.pathname !== '/editor')
+      return;
     initialRouteHandled.current = true;
     const params = new URLSearchParams(window.location.search);
     const projectId = params.get('project');
@@ -2550,10 +3263,12 @@ export default function CreatorStudio({
       void openProject({ url: projectId, title: 'Dự án đã lưu' });
     } else if (source && validSourceInput(source)) {
       setUrl(source);
-      void loadProjectData(source).then(async (draft) => {
-        if (draft) await openProject({ url: source, title: draft.title });
-        else await resolve(source, { replaceUrl: true });
-      }).catch(() => setError('Không đọc được bản nháp trên thiết bị.'));
+      void loadProjectData(source)
+        .then(async (draft) => {
+          if (draft) await openProject({ url: source, title: draft.title });
+          else await resolve(source, { replaceUrl: true });
+        })
+        .catch(() => setError('Không đọc được bản nháp trên thiết bị.'));
     }
   }, []);
   useEffect(() => {
@@ -2569,100 +3284,118 @@ export default function CreatorStudio({
   }, []);
   async function saveProject(automatic = false) {
     if (!song || !url || restoringProject.current) return;
-    if (!automatic) { setSavingProject(true); setSavedProject(false); }
+    if (!automatic) {
+      setSavingProject(true);
+      setSavedProject(false);
+    }
     setDraftStatus('Đang lưu nháp…');
     const write = async () => {
-    try {
-      const assetBlob = async (assetUrl: string) => {
-        const cached = mediaCache.current.get(assetUrl);
-        if (cached) return cached;
-        const response = await fetch(assetUrl);
-        if (!response.ok) throw new Error('Không lưu được media của dự án.');
-        const blob = await response.blob();
-        mediaCache.current.set(assetUrl, blob);
-        return blob;
-      };
-      const media = await Promise.all(
-        mediaClips.map(async ({ url: clipUrl, ...clip }) => ({
-          ...clip,
-          blob: await assetBlob(clipUrl),
-        })),
-      );
-      const backgroundAsset =
-        background.mode === 'image' && background.imageUrl
-          ? {
-              kind: 'image' as const,
-              blob: await assetBlob(background.imageUrl),
-              fingerprint: background.imageFingerprint,
-            }
-          : background.mode === 'video' && background.videoUrl
+      try {
+        const assetBlob = async (assetUrl: string) => {
+          const cached = mediaCache.current.get(assetUrl);
+          if (cached) return cached;
+          const response = await fetch(assetUrl);
+          if (!response.ok) throw new Error('Không lưu được media của dự án.');
+          const blob = await response.blob();
+          mediaCache.current.set(assetUrl, blob);
+          return blob;
+        };
+        const media = await Promise.all(
+          mediaClips.map(async ({ url: clipUrl, ...clip }) => ({
+            ...clip,
+            blob: await assetBlob(clipUrl),
+          })),
+        );
+        const backgroundAsset =
+          background.mode === 'image' && background.imageUrl
             ? {
-                kind: 'video' as const,
-                blob: await assetBlob(background.videoUrl),
-                fingerprint: background.videoFingerprint,
+                kind: 'image' as const,
+                blob: await assetBlob(background.imageUrl),
+                fingerprint: background.imageFingerprint,
               }
-            : undefined;
-      await saveProjectData({
-        schemaVersion: 3,
-        url,
-        title: song.title,
-        updatedAt: Date.now(),
-        wave,
-        waveAppearance,
-        template,
-        aspect,
-        lyrics,
-        motion,
-        quickMode,
-        activePanel: panel,
-        selectedPresetId,
-        presetModified,
-        presetOverrideFields,
-        effects,
-        effectSettings,
-        layout,
-        textStyles,
-        subtitleStyle,
-        background,
-        backgroundAsset,
-        trimStart,
-        trimEnd,
-        mastering: masteringConfig,
-        exportConfig,
-        timelineTracks,
-        karaokeSyncStatus,
-        karaokeSyncMessage,
-        karaokeTimeline,
-        media,
-        audioAsset:
-          url.startsWith('local-audio:') && audioBinary
-            ? { blob: audioBinary, duration: song.duration || trimEnd, title: song.title,
-                cover: song.picture ? await assetBlob(song.picture) : undefined }
-            : undefined,
-      });
-      const next = [
-        { url, title: song.title },
-        ...readSavedProjectList().filter((x) => x.url !== url),
-      ].slice(0, 30);
-      setProjects((current) => [{ url, title: song.title }, ...current.filter((item) => item.url !== url)].slice(0, 30));
-      localStorage.setItem('sundown-projects', JSON.stringify(next));
-      if (activeSource.current === url) {
-        setDraftStatus('Đã lưu nháp trên thiết bị');
-        if (!automatic) setSavedProject(true);
-        updateEditorUrl(url, true, automatic);
+            : background.mode === 'video' && background.videoUrl
+              ? {
+                  kind: 'video' as const,
+                  blob: await assetBlob(background.videoUrl),
+                  fingerprint: background.videoFingerprint,
+                }
+              : undefined;
+        await saveProjectData({
+          schemaVersion: 4,
+          scene: projectScene,
+          url,
+          title: song.title,
+          updatedAt: Date.now(),
+          wave,
+          waveAppearance,
+          template,
+          aspect,
+          lyrics,
+          motion,
+          quickMode,
+          activePanel: panel,
+          selectedPresetId,
+          presetModified,
+          presetOverrideFields,
+          effects,
+          effectSettings,
+          layout,
+          textStyles,
+          subtitleStyle,
+          background,
+          backgroundAsset,
+          trimStart,
+          trimEnd,
+          mastering: masteringConfig,
+          exportConfig,
+          timelineTracks,
+          karaokeSyncStatus,
+          karaokeSyncMessage,
+          karaokeTimeline,
+          media,
+          audioAsset:
+            url.startsWith('local-audio:') && audioBinary
+              ? {
+                  blob: audioBinary,
+                  duration: song.duration || trimEnd,
+                  title: song.title,
+                  cover: song.picture
+                    ? await assetBlob(song.picture)
+                    : undefined,
+                }
+              : undefined,
+        });
+        const next = [
+          { url, title: song.title },
+          ...readSavedProjectList().filter((x) => x.url !== url),
+        ].slice(0, 30);
+        setProjects((current) =>
+          [
+            { url, title: song.title },
+            ...current.filter((item) => item.url !== url),
+          ].slice(0, 30),
+        );
+        localStorage.setItem('sundown-projects', JSON.stringify(next));
+        if (activeSource.current === url) {
+          setDraftStatus('Đã lưu nháp trên thiết bị');
+          if (!automatic) setSavedProject(true);
+          updateEditorUrl(url, true, automatic);
+        }
+        if (!automatic)
+          track('project_saved', {
+            preset_id: selectedPresetId,
+            template,
+            aspect,
+          });
+        if (!automatic) window.setTimeout(() => setSavedProject(false), 1800);
+      } catch (e) {
+        if (activeSource.current === url)
+          setDraftStatus('Chưa lưu được nháp · hãy thử lưu lại');
+        if (!automatic)
+          setError(e instanceof Error ? e.message : 'Không lưu được dự án.');
+      } finally {
+        if (!automatic) setSavingProject(false);
       }
-      if (!automatic) track('project_saved', {
-        preset_id: selectedPresetId,
-        template,
-        aspect,
-      });
-      if (!automatic) window.setTimeout(() => setSavedProject(false), 1800);
-    } catch (e) {
-      if (activeSource.current === url) setDraftStatus('Chưa lưu được nháp · hãy thử lưu lại');
-      if (!automatic) setError(e instanceof Error ? e.message : 'Không lưu được dự án.');
-    } finally {
-      if (!automatic) setSavingProject(false);
-    }
     };
     projectSaveQueue.current = projectSaveQueue.current.then(write, write);
     await projectSaveQueue.current;
@@ -2678,129 +3411,189 @@ export default function CreatorStudio({
       }
     };
     document.addEventListener('visibilitychange', flush);
-    return () => { window.clearTimeout(pending); document.removeEventListener('visibilitychange', flush); };
-  }, [song, url, busy, studioModel, karaokeTimeline, mediaClips, timelineTracks,
-      trimStart, trimEnd, masteringConfig, exportConfig, selectedPresetId,
-      presetModified, presetOverrideFields, quickMode, panel, audioBinary, karaokeSyncStatus, karaokeSyncMessage]);
+    return () => {
+      window.clearTimeout(pending);
+      document.removeEventListener('visibilitychange', flush);
+    };
+  }, [
+    song,
+    url,
+    busy,
+    studioModel,
+    projectScene,
+    karaokeTimeline,
+    mediaClips,
+    timelineTracks,
+    trimStart,
+    trimEnd,
+    masteringConfig,
+    exportConfig,
+    selectedPresetId,
+    presetModified,
+    presetOverrideFields,
+    quickMode,
+    panel,
+    audioBinary,
+    karaokeSyncStatus,
+    karaokeSyncMessage,
+  ]);
 
   async function openProject(item: { url: string; title: string }) {
     restoringProject.current = true;
     setDraftStatus('Đang khôi phục nháp…');
     try {
-    await projectSaveQueue.current;
-    setView('create');
-    track('project_resumed');
-    setUrl(item.url);
-    const project = await loadProjectData(item.url);
-    if (!project) return;
-    let restoredSong: Song;
-    let restoredAudio: Blob | null = null;
-    if (project.audioAsset) {
-      const audio = URL.createObjectURL(project.audioAsset.blob);
-      const coverAsset = project.audioAsset.cover || project.media.find((clip) => clip.isDefault)?.blob;
-      const picture = coverAsset ? URL.createObjectURL(coverAsset) : undefined;
-      setAudioBinary(project.audioAsset.blob);
-      restoredSong = {
-        title: project.audioAsset.title,
-        creator: 'Local audio',
-        duration: project.audioAsset.duration,
-        audio,
-        picture,
-      };
-      restoredAudio = project.audioAsset.blob;
-      setSong(restoredSong);
-      setPlaybackStart(0);
-      setPreviewTime(0);
-    } else {
-      const resolved = await resolve(item.url, { generateSubtitles: false, updateUrl: false });
-      if (!resolved) return;
-      restoredSong = resolved;
-      restoredAudio = mediaCache.current.get(resolved.audio) || null;
-    }
-    setWave(project.wave);
-    setWaveAppearance({ ...DEFAULT_WAVE_APPEARANCE, ...project.waveAppearance });
-    setTemplate(project.template);
-    setAspect(project.aspect);
-    setLyrics(project.lyrics);
-    setMotion(project.motion || 'medium');
-    setQuickMode(project.quickMode ?? false);
-    setPanel(project.activePanel || 'audio');
-    setSelectedPresetId(project.selectedPresetId || null);
-    setPresetModified(Boolean(project.presetModified));
-    setPresetOverrideFields(project.presetOverrideFields || []);
-    setEffects(project.effects);
-    setEffectSettings(normalizeEffectSettings(project.effectSettings));
-    setLayout(project.layout);
-    if (project.textStyles) setTextStyles(project.textStyles);
-    if (project.subtitleStyle) setSubtitleStyle(project.subtitleStyle);
-    if (project.background) {
-      const restoredBackground = structuredClone(project.background);
-      if (project.backgroundAsset) {
-        const assetUrl = URL.createObjectURL(project.backgroundAsset.blob);
-        if (project.backgroundAsset.kind === 'image') {
-          restoredBackground.mode = 'image';
-          restoredBackground.imageUrl = assetUrl;
-          restoredBackground.videoUrl = undefined;
-          restoredBackground.imageFingerprint =
-            project.backgroundAsset.fingerprint;
-        } else {
-          restoredBackground.mode = 'video';
-          restoredBackground.videoUrl = assetUrl;
-          restoredBackground.imageUrl = undefined;
-          restoredBackground.videoFingerprint =
-            project.backgroundAsset.fingerprint;
-        }
+      await projectSaveQueue.current;
+      setView('create');
+      track('project_resumed');
+      setUrl(item.url);
+      const project = await loadProjectData(item.url);
+      if (!project) return;
+      let restoredSong: Song;
+      let restoredAudio: Blob | null = null;
+      if (project.audioAsset) {
+        const audio = URL.createObjectURL(project.audioAsset.blob);
+        const coverAsset =
+          project.audioAsset.cover ||
+          project.media.find((clip) => clip.isDefault)?.blob;
+        const picture = coverAsset
+          ? URL.createObjectURL(coverAsset)
+          : undefined;
+        setAudioBinary(project.audioAsset.blob);
+        restoredSong = {
+          title: project.audioAsset.title,
+          creator: 'Local audio',
+          duration: project.audioAsset.duration,
+          audio,
+          picture,
+        };
+        restoredAudio = project.audioAsset.blob;
+        setSong(restoredSong);
+        setPlaybackStart(0);
+        setPreviewTime(0);
+      } else {
+        const resolved = await resolve(item.url, {
+          generateSubtitles: false,
+          updateUrl: false,
+        });
+        if (!resolved) return;
+        restoredSong = resolved;
+        restoredAudio = mediaCache.current.get(resolved.audio) || null;
       }
-      setBackground(restoredBackground);
-    } else setBackground(structuredClone(DEFAULT_BACKGROUND_CONFIG));
-    setTrimStart(project.trimStart);
-    setTrimEnd(project.trimEnd);
-    setMasteringConfig(structuredClone(project.mastering || DEFAULT_PRODUCTION_MASTERING));
-    setExportConfig({
-      ...DEFAULT_PRODUCTION_EXPORT,
-      aspect: project.aspect,
-      ...project.exportConfig,
-    });
-    setTimelineTracks(project.timelineTracks || {
-      audio: { hidden: false, muted: false, locked: false },
-      visual: { hidden: false, muted: false, locked: false },
-      subtitle: { hidden: false, muted: false, locked: false },
-      effects: { hidden: false, muted: false, locked: false },
-    });
-    setKaraokeTimeline(project.karaokeTimeline);
-    setKaraokeSyncStatus(
-      project.karaokeTimeline.length
-        ? (project.karaokeSyncStatus === 'fallback' ? 'fallback' : 'synced')
-        : (project.karaokeSyncStatus || 'idle'),
-    );
-    setKaraokeSyncMessage(
-      project.karaokeSyncMessage ||
-        (project.karaokeTimeline.length ? 'Subtitle đã được khôi phục từ dự án.' : ''),
-    );
-    setMediaClips(
-      project.media.map(({ blob, ...clip }) => ({
-        ...clip,
-        url: URL.createObjectURL(blob),
-      })),
-    );
-    setSavedProject(true);
-    updateEditorUrl(item.url, true);
-    if (
-      !project.karaokeTimeline.length &&
-      project.karaokeSyncStatus === 'syncing' &&
-      restoredAudio
-    ) {
-      void generateSubtitlesInBackground(
-        restoredSong,
-        restoredAudio,
-        restoredSong.duration || project.trimEnd || 30,
-        karaokeSyncRun.current,
+      setWave(project.wave);
+      setWaveAppearance({
+        ...DEFAULT_WAVE_APPEARANCE,
+        ...project.waveAppearance,
+      });
+      setTemplate(project.template);
+      setAspect(project.aspect);
+      setLyrics(project.lyrics);
+      setMotion(project.motion || 'medium');
+      setQuickMode(project.quickMode ?? false);
+      setPanel(project.activePanel || 'audio');
+      setSelectedPresetId(project.selectedPresetId || null);
+      setPresetModified(Boolean(project.presetModified));
+      setPresetOverrideFields(project.presetOverrideFields || []);
+      setEffects(project.effects);
+      if (project.scene) {
+        try {
+          validateScene(project.scene);
+          if (
+            project.scene.layers.some((l) => l.type === 'effect' && l.parentId)
+          )
+            throw new Error('Grouped FX require the full scene editor');
+          setSceneEffectEdits({
+            key: JSON.stringify({
+              effects: project.effects,
+              effectSettings: normalizeEffectSettings(project.effectSettings),
+            }),
+            layers: project.scene.layers.filter((l) => l.type === 'effect'),
+          });
+        } catch {
+          setSceneEffectEdits(null);
+        }
+      } else setSceneEffectEdits(null);
+      setEffectSettings(normalizeEffectSettings(project.effectSettings));
+      setLayout(project.layout);
+      if (project.textStyles) setTextStyles(project.textStyles);
+      if (project.subtitleStyle) setSubtitleStyle(project.subtitleStyle);
+      if (project.background) {
+        const restoredBackground = structuredClone(project.background);
+        if (project.backgroundAsset) {
+          const assetUrl = URL.createObjectURL(project.backgroundAsset.blob);
+          if (project.backgroundAsset.kind === 'image') {
+            restoredBackground.mode = 'image';
+            restoredBackground.imageUrl = assetUrl;
+            restoredBackground.videoUrl = undefined;
+            restoredBackground.imageFingerprint =
+              project.backgroundAsset.fingerprint;
+          } else {
+            restoredBackground.mode = 'video';
+            restoredBackground.videoUrl = assetUrl;
+            restoredBackground.imageUrl = undefined;
+            restoredBackground.videoFingerprint =
+              project.backgroundAsset.fingerprint;
+          }
+        }
+        setBackground(restoredBackground);
+      } else setBackground(structuredClone(DEFAULT_BACKGROUND_CONFIG));
+      setTrimStart(project.trimStart);
+      setTrimEnd(project.trimEnd);
+      setMasteringConfig(
+        structuredClone(project.mastering || DEFAULT_PRODUCTION_MASTERING),
       );
-    }
-    setDraftStatus('Đã khôi phục nháp');
+      setExportConfig({
+        ...DEFAULT_PRODUCTION_EXPORT,
+        aspect: project.aspect,
+        ...project.exportConfig,
+      });
+      setTimelineTracks(
+        project.timelineTracks || {
+          audio: { hidden: false, muted: false, locked: false },
+          visual: { hidden: false, muted: false, locked: false },
+          subtitle: { hidden: false, muted: false, locked: false },
+          effects: { hidden: false, muted: false, locked: false },
+        },
+      );
+      setKaraokeTimeline(project.karaokeTimeline);
+      setKaraokeSyncStatus(
+        project.karaokeTimeline.length
+          ? project.karaokeSyncStatus === 'fallback'
+            ? 'fallback'
+            : 'synced'
+          : project.karaokeSyncStatus || 'idle',
+      );
+      setKaraokeSyncMessage(
+        project.karaokeSyncMessage ||
+          (project.karaokeTimeline.length
+            ? 'Subtitle đã được khôi phục từ dự án.'
+            : ''),
+      );
+      setMediaClips(
+        project.media.map(({ blob, ...clip }) => ({
+          ...clip,
+          url: URL.createObjectURL(blob),
+        })),
+      );
+      setSavedProject(true);
+      updateEditorUrl(item.url, true);
+      if (
+        !project.karaokeTimeline.length &&
+        project.karaokeSyncStatus === 'syncing' &&
+        restoredAudio
+      ) {
+        void generateSubtitlesInBackground(
+          restoredSong,
+          restoredAudio,
+          restoredSong.duration || project.trimEnd || 30,
+          karaokeSyncRun.current,
+        );
+      }
+      setDraftStatus('Đã khôi phục nháp');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Không khôi phục được dự án.');
-    } finally { restoringProject.current = false; }
+    } finally {
+      restoringProject.current = false;
+    }
   }
 
   const readAudioDuration = (source: string) =>
@@ -2811,7 +3604,12 @@ export default function CreatorStudio({
         Number.isFinite(player.duration) && player.duration > 0
           ? resolveDuration(player.duration)
           : reject(new Error('Không đọc được thời lượng audio.'));
-      player.onerror = () => reject(new Error('File audio không hợp lệ hoặc không được trình duyệt hỗ trợ.'));
+      player.onerror = () =>
+        reject(
+          new Error(
+            'File audio không hợp lệ hoặc không được trình duyệt hỗ trợ.',
+          ),
+        );
       player.src = source;
     });
 
@@ -2829,7 +3627,9 @@ export default function CreatorStudio({
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, 1200, 1200);
       ctx.fillStyle = 'rgba(255,255,255,.12)';
-      ctx.beginPath(); ctx.arc(920, 220, 280, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(920, 220, 280, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = '#ffffff';
       ctx.font = '700 210px system-ui';
       ctx.textAlign = 'center';
@@ -2840,12 +3640,21 @@ export default function CreatorStudio({
       ctx.fillStyle = 'rgba(255,255,255,.62)';
       ctx.font = '600 25px system-ui';
       ctx.fillText('SUNODOWN · LOCAL AUDIO', 600, 825);
-      canvas.toBlob((blob) => blob ? resolveCover(blob) : reject(new Error('Không thể tạo ảnh bìa.')), 'image/png');
+      canvas.toBlob(
+        (blob) =>
+          blob
+            ? resolveCover(blob)
+            : reject(new Error('Không thể tạo ảnh bìa.')),
+        'image/png',
+      );
     });
 
   async function openAudioFile(file?: File) {
     if (!file) return;
-    if (!file.type.startsWith('audio/') && !/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(file.name)) {
+    if (
+      !file.type.startsWith('audio/') &&
+      !/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(file.name)
+    ) {
       setError('Hãy chọn file audio MP3, WAV, M4A, AAC, OGG hoặc FLAC.');
       return;
     }
@@ -2874,7 +3683,17 @@ export default function CreatorStudio({
       setPlaybackStart(0);
       setPreviewTime(0);
       setLyrics('off');
-      setMediaClips([{ id: crypto.randomUUID(), type: 'image', url: picture, name: title, start: 0, end: duration, isDefault: true }]);
+      setMediaClips([
+        {
+          id: crypto.randomUUID(),
+          type: 'image',
+          url: picture,
+          name: title,
+          start: 0,
+          end: duration,
+          isDefault: true,
+        },
+      ]);
       applyProjectDefaults();
       setSong({ title, creator: 'Local audio', duration, audio, picture });
       updateEditorUrl(projectUrl);
@@ -2886,9 +3705,16 @@ export default function CreatorStudio({
         duration,
         syncRun,
       );
-      track('quick_create_started', { has_lyrics: false, style_hint: 'local_audio' });
+      track('quick_create_started', {
+        has_lyrics: false,
+        style_hint: 'local_audio',
+      });
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : 'Không thể mở file audio.');
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : 'Không thể mở file audio.',
+      );
     } finally {
       setBusy(false);
     }
@@ -2907,17 +3733,37 @@ export default function CreatorStudio({
     change();
   };
 
-  const addPexelsToTimeline: AddPexelsToTimeline = async (file,kind,duration) => {
-    if(rendering)return;
-    const endOfSong=Math.max(.1,song?.duration||trimEnd||30);
-    const start=Math.max(0,Math.min(previewTime,endOfSong-.1));
-    const length=kind==='video'&&typeof duration==='number'&&Number.isFinite(duration)&&duration>0?duration:5;
-    const clip:MediaClip={id:crypto.randomUUID(),type:kind==='video'?'video':'image',url:URL.createObjectURL(file),name:file.name,start,end:Math.min(endOfSong,start+length)};
+  const addPexelsToTimeline: AddPexelsToTimeline = async (
+    file,
+    kind,
+    duration,
+  ) => {
+    if (rendering) return;
+    const endOfSong = Math.max(0.1, song?.duration || trimEnd || 30);
+    const start = Math.max(0, Math.min(previewTime, endOfSong - 0.1));
+    const length =
+      kind === 'video' &&
+      typeof duration === 'number' &&
+      Number.isFinite(duration) &&
+      duration > 0
+        ? duration
+        : 5;
+    const clip: MediaClip = {
+      id: crypto.randomUUID(),
+      type: kind === 'video' ? 'video' : 'image',
+      url: URL.createObjectURL(file),
+      name: file.name,
+      start,
+      end: Math.min(endOfSong, start + length),
+    };
     invalidateRenderedResult();
-    setMediaClips(clips=>[...clips,clip]);
-    setTimelineTracks(tracks=>({...tracks,visual:{...tracks.visual,hidden:false}}));
+    setMediaClips((clips) => [...clips, clip]);
+    setTimelineTracks((tracks) => ({
+      ...tracks,
+      visual: { ...tracks.visual, hidden: false },
+    }));
     setAutoPreview(false);
-    setTimelinePauseSignal(value=>value+1);
+    setTimelinePauseSignal((value) => value + 1);
     setPlaybackStart(start);
     setPreviewTime(start);
     setQuickMode(false);
@@ -2928,29 +3774,65 @@ export default function CreatorStudio({
     panel,
     setPanel,
     wave,
-    setWave: (value) => { markPresetField('wave'); changeVisual(() => setWave(value)); },
+    setWave: (value) => {
+      markPresetField('wave');
+      changeVisual(() => setWave(value));
+    },
     waveAppearance,
-    setWaveAppearance: (value) => { markPresetField('waveAppearance'); changeVisual(() => setWaveAppearance(value)); },
+    setWaveAppearance: (value) => {
+      markPresetField('waveAppearance');
+      changeVisual(() => setWaveAppearance(value));
+    },
     template,
-    setTemplate: (value) => { markPresetField('template'); changeVisual(() => setTemplate(value)); },
+    setTemplate: (value) => {
+      markPresetField('template');
+      changeVisual(() => setTemplate(value));
+    },
     aspect,
-    setAspect: (value) => { markPresetField('aspect'); changeVisual(() => setAspect(value)); },
+    setAspect: (value) => {
+      markPresetField('aspect');
+      changeVisual(() => setAspect(value));
+    },
     lyrics,
-    setLyrics: (value) => { markPresetField('lyrics'); changeVisual(() => setLyrics(value)); },
+    setLyrics: (value) => {
+      markPresetField('lyrics');
+      changeVisual(() => setLyrics(value));
+    },
     motion,
-    setMotion: (value) => { markPresetField('motion'); changeVisual(() => setMotion(value)); },
+    setMotion: (value) => {
+      markPresetField('motion');
+      changeVisual(() => setMotion(value));
+    },
     effectSettings,
-    setEffectSettings:(value)=>{markPresetField('effectSettings');changeVisual(()=>setEffectSettings(value));},
+    setEffectSettings: (value) => {
+      markPresetField('effectSettings');
+      changeVisual(() => setEffectSettings(value));
+    },
     effects,
-    setEffects: (value) => { markPresetField('effects'); changeVisual(() => setEffects(value)); },
+    setEffects: (value) => {
+      markPresetField('effects');
+      changeVisual(() => setEffects(value));
+    },
     layout,
-    setLayout: (value) => { markPresetField('layout'); changeVisual(() => setLayout(value)); },
+    setLayout: (value) => {
+      markPresetField('layout');
+      changeVisual(() => setLayout(value));
+    },
     textStyles,
-    setTextStyles: (value) => { markPresetField('textStyles'); changeVisual(() => setTextStyles(value)); },
+    setTextStyles: (value) => {
+      markPresetField('textStyles');
+      changeVisual(() => setTextStyles(value));
+    },
     subtitleStyle,
-    setSubtitleStyle: (value) => { markPresetField('subtitleStyle'); changeVisual(() => setSubtitleStyle(value)); },
+    setSubtitleStyle: (value) => {
+      markPresetField('subtitleStyle');
+      changeVisual(() => setSubtitleStyle(value));
+    },
     background,
-    setBackground: (value) => { markPresetField('background'); changeVisual(() => setBackground(value)); },
+    setBackground: (value) => {
+      markPresetField('background');
+      changeVisual(() => setBackground(value));
+    },
     onError: setError,
     trimStart,
     trimEnd,
@@ -2981,10 +3863,14 @@ export default function CreatorStudio({
   };
 
   const filteredProjects = projects.filter((project) =>
-    `${project.title} ${project.url}`.toLowerCase().includes(projectQuery.toLowerCase()),
+    `${project.title} ${project.url}`
+      .toLowerCase()
+      .includes(projectQuery.toLowerCase()),
   );
   const filteredLibraryItems = libraryItems.filter((item) =>
-    `${item.title} ${item.creator || ''} ${item.url}`.toLowerCase().includes(libraryQuery.toLowerCase()),
+    `${item.title} ${item.creator || ''} ${item.url}`
+      .toLowerCase()
+      .includes(libraryQuery.toLowerCase()),
   );
   const projectCountLabel = `${projects.length} dự án`;
   const libraryCountLabel = `${libraryItems.length} bài`;
@@ -3031,19 +3917,48 @@ export default function CreatorStudio({
   const navigationMenu = (
     <nav className="sd-profile-menu" aria-label="Điều hướng chính">
       <div className="sd-profile-menu-head">
-        <span className="sd-avatar">{signedInUser?.picture ? <img src={signedInUser.picture} alt="" /> : (signedInUser?.name?.[0] || 'S').toUpperCase()}</span>
-        <span><b>{signedInUser?.name || 'SunoDown'}</b><small>{signedInUser?.email || 'Creator Studio'}</small></span>
+        <span className="sd-avatar">
+          {signedInUser?.picture ? (
+            <img src={signedInUser.picture} alt="" />
+          ) : (
+            (signedInUser?.name?.[0] || 'S').toUpperCase()
+          )}
+        </span>
+        <span>
+          <b>{signedInUser?.name || 'SunoDown'}</b>
+          <small>{signedInUser?.email || 'Creator Studio'}</small>
+        </span>
       </div>
       {navigationItems.map(([Icon, label, href, id]) => (
-        <a key={href} href={href} className={view === id ? 'sd-profile-menu-link active' : 'sd-profile-menu-link'}>
-          <Icon /><span>{label}</span>
+        <a
+          key={href}
+          href={href}
+          className={
+            view === id ? 'sd-profile-menu-link active' : 'sd-profile-menu-link'
+          }
+        >
+          <Icon />
+          <span>{label}</span>
         </a>
       ))}
       <div className="sd-profile-auth">
         {signedInUser ? (
-          <button onClick={() => { void fetch('/api/auth/logout', { method: 'POST' }).then(() => { setSignedInUser(null); setNavigationOpen(false); }); }}><LogOut /><span>Đăng xuất</span></button>
+          <button
+            onClick={() => {
+              void fetch('/api/auth/logout', { method: 'POST' }).then(() => {
+                setSignedInUser(null);
+                setNavigationOpen(false);
+              });
+            }}
+          >
+            <LogOut />
+            <span>Đăng xuất</span>
+          </button>
         ) : (
-          <a href="/api/auth/google"><LogIn /><span>Đăng nhập với Google</span></a>
+          <a href="/api/auth/google">
+            <LogIn />
+            <span>Đăng nhập với Google</span>
+          </a>
         )}
       </div>
     </nav>
@@ -3051,7 +3966,6 @@ export default function CreatorStudio({
 
   return (
     <div className="sd-app">
-
       <header className="sd-header">
         <a className="sd-brand" href="/" aria-label="Về trang chủ SunoDown">
           <span>
@@ -3067,7 +3981,11 @@ export default function CreatorStudio({
             {song.id && song.isPublic !== false && (
               <a
                 className="sd-song-public-link"
-                href={song.handle ? `/music/@${song.handle}/${song.id}` : `/music/${song.id}`}
+                href={
+                  song.handle
+                    ? `/music/@${song.handle}/${song.id}`
+                    : `/music/${song.id}`
+                }
                 target="_blank"
                 rel="noopener"
                 title="Mở trang nghe nhạc public"
@@ -3078,32 +3996,66 @@ export default function CreatorStudio({
           </div>
         ) : (
           <nav className="sd-home-head-nav" aria-label="Điều hướng Home">
-            <a href="/" className={view === 'create' ? 'active' : ''}>Trang chủ</a>
+            <a href="/" className={view === 'create' ? 'active' : ''}>
+              Trang chủ
+            </a>
             <a href="/music">Music</a>
-            <a href="/projects" className={view === 'projects' ? 'active' : ''}>Dự án</a>
-            <a href="/library" className={view === 'library' ? 'active' : ''}>Thư viện</a>
-            <a href="/jobs" className={view === 'jobs' ? 'active' : ''}>Jobs</a>
+            <a href="/projects" className={view === 'projects' ? 'active' : ''}>
+              Dự án
+            </a>
+            <a href="/library" className={view === 'library' ? 'active' : ''}>
+              Thư viện
+            </a>
+            <a href="/jobs" className={view === 'jobs' ? 'active' : ''}>
+              Jobs
+            </a>
           </nav>
         )}
         <div className="sd-head-actions">
           <Bell />
-          <button className="sd-profile-trigger" aria-label="Mở menu tài khoản" aria-expanded={navigationOpen} onClick={() => setNavigationOpen((open) => !open)}>
-            <span className="sd-avatar">{signedInUser?.picture ? <img src={signedInUser.picture} alt="" /> : (signedInUser?.name?.[0] || 'S').toUpperCase()}</span><ChevronDown />
+          <button
+            className="sd-profile-trigger"
+            aria-label="Mở menu tài khoản"
+            aria-expanded={navigationOpen}
+            onClick={() => setNavigationOpen((open) => !open)}
+          >
+            <span className="sd-avatar">
+              {signedInUser?.picture ? (
+                <img src={signedInUser.picture} alt="" />
+              ) : (
+                (signedInUser?.name?.[0] || 'S').toUpperCase()
+              )}
+            </span>
+            <ChevronDown />
           </button>
           {navigationOpen && navigationMenu}
         </div>
       </header>
       {subtitleNotice && (
         <output className="sd-subtitle-notice" aria-live="polite">
-          <span><Sparkles /></span>
+          <span>
+            <Sparkles />
+          </span>
           <div>
             <b>Đã tìm thấy subtitle</b>
             <small>{subtitleNotice}</small>
           </div>
-          <button type="button" aria-label="Đóng thông báo" onClick={() => setSubtitleNotice('')}>×</button>
+          <button
+            type="button"
+            aria-label="Đóng thông báo"
+            onClick={() => setSubtitleNotice('')}
+          >
+            ×
+          </button>
         </output>
       )}
-      {navigationOpen && <button className="sd-nav-backdrop" aria-label="Đóng menu" onClick={() => setNavigationOpen(false)} />}
+      {navigationOpen && (
+        <button
+          className="sd-nav-backdrop"
+          aria-label="Đóng menu"
+          onClick={() => setNavigationOpen(false)}
+        />
+      )}
 
       {subtitleDebugEnabled && (
         <>
@@ -3115,27 +4067,50 @@ export default function CreatorStudio({
             SUB {karaokeTimeline.length} · {karaokeSyncStatus}
           </button>
           {subtitleDebugOpen && (
-            <aside className="sd-sub-debug-panel" aria-label="Subtitle Debug Console">
+            <aside
+              className="sd-sub-debug-panel"
+              aria-label="Subtitle Debug Console"
+            >
               <header>
                 <div>
                   <b>Subtitle Debug</b>
-                  <small>{karaokeSyncStatus} · {karaokeTimeline.length} cues</small>
+                  <small>
+                    {karaokeSyncStatus} · {karaokeTimeline.length} cues
+                  </small>
                 </div>
-                <button type="button" onClick={() => setSubtitleDebugOpen(false)}>×</button>
+                <button
+                  type="button"
+                  onClick={() => setSubtitleDebugOpen(false)}
+                >
+                  ×
+                </button>
               </header>
               <div className="sd-sub-debug-summary">
-                <span><b>Status</b><i>{karaokeSyncStatus}</i></span>
-                <span><b>Cues</b><i>{karaokeTimeline.length}</i></span>
-                <span><b>Message</b><i>{karaokeSyncMessage || '—'}</i></span>
+                <span>
+                  <b>Status</b>
+                  <i>{karaokeSyncStatus}</i>
+                </span>
+                <span>
+                  <b>Cues</b>
+                  <i>{karaokeTimeline.length}</i>
+                </span>
+                <span>
+                  <b>Message</b>
+                  <i>{karaokeSyncMessage || '—'}</i>
+                </span>
               </div>
               <div className="sd-sub-debug-log">
-                {subtitleDebugLogs.length ? subtitleDebugLogs.map((entry) => (
-                  <div key={entry.id}>
-                    <time>{entry.time}</time>
-                    <b>{entry.message}</b>
-                    {entry.data && <code>{JSON.stringify(entry.data)}</code>}
-                  </div>
-                )) : <p>Chưa có log.</p>}
+                {subtitleDebugLogs.length ? (
+                  subtitleDebugLogs.map((entry) => (
+                    <div key={entry.id}>
+                      <time>{entry.time}</time>
+                      <b>{entry.message}</b>
+                      {entry.data && <code>{JSON.stringify(entry.data)}</code>}
+                    </div>
+                  ))
+                ) : (
+                  <p>Chưa có log.</p>
+                )}
               </div>
               <footer>
                 <button
@@ -3143,20 +4118,27 @@ export default function CreatorStudio({
                   disabled={!audioBinary || webSpeechTesting}
                   onClick={() => void testSafariSpeechTrack()}
                 >
-                  {webSpeechTesting ? 'Testing Speech…' : 'Test Safari Speech 20s'}
+                  {webSpeechTesting
+                    ? 'Testing Speech…'
+                    : 'Test Safari Speech 20s'}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     const text = subtitleDebugLogs
-                      .map((entry) => `[${entry.time}] ${entry.message} ${entry.data ? JSON.stringify(entry.data) : ''}`)
+                      .map(
+                        (entry) =>
+                          `[${entry.time}] ${entry.message} ${entry.data ? JSON.stringify(entry.data) : ''}`,
+                      )
                       .join('\n');
                     void navigator.clipboard?.writeText(text);
                   }}
                 >
                   Copy log
                 </button>
-                <button type="button" onClick={() => setSubtitleDebugLogs([])}>Clear</button>
+                <button type="button" onClick={() => setSubtitleDebugLogs([])}>
+                  Clear
+                </button>
               </footer>
             </aside>
           )}
@@ -3180,13 +4162,17 @@ export default function CreatorStudio({
                   ? 'Lưu, mở lại và tiếp tục dựng video từ những phiên gần đây.'
                   : view === 'library'
                     ? 'Tập hợp bài Suno đã mở, tải hoặc render trên thiết bị này.'
-                    : view === 'settings' ? 'Tài khoản, chất lượng xuất, tài nguyên và xử lý sự cố.' : 'Quản lý trạng thái SunoDown.'}
+                    : view === 'settings'
+                      ? 'Tài khoản, chất lượng xuất, tài nguyên và xử lý sự cố.'
+                      : 'Quản lý trạng thái SunoDown.'}
               </p>
             </div>
-            {view !== 'settings' && <button onClick={() => setView('create')}>
-              <Plus />
-              Tạo mới
-            </button>}
+            {view !== 'settings' && (
+              <button onClick={() => setView('create')}>
+                <Plus />
+                Tạo mới
+              </button>
+            )}
           </div>
           {view === 'projects' && (
             <>
@@ -3195,18 +4181,26 @@ export default function CreatorStudio({
                   <small>PROJECT HUB</small>
                   <h2>{projectCountLabel}</h2>
                   <p>
-                    Project lưu toàn bộ preset, subtitle, timeline, media và cấu hình export.
+                    Project lưu toàn bộ preset, subtitle, timeline, media và cấu
+                    hình export.
                   </p>
                 </article>
                 <article>
                   <small>GẦN NHẤT</small>
                   <h2>{latestProject?.title || 'Chưa có'}</h2>
-                  <p>{latestProject?.url || 'Lưu project đầu tiên từ Studio để tiếp tục sau.'}</p>
+                  <p>
+                    {latestProject?.url ||
+                      'Lưu project đầu tiên từ Studio để tiếp tục sau.'}
+                  </p>
                 </article>
                 <article>
                   <small>TRẠNG THÁI</small>
                   <h2>{song ? 'Đang mở bài' : 'Sẵn sàng'}</h2>
-                  <p>{song ? song.title : 'Chọn project hoặc tạo mới từ link Suno/audio.'}</p>
+                  <p>
+                    {song
+                      ? song.title
+                      : 'Chọn project hoặc tạo mới từ link Suno/audio.'}
+                  </p>
                 </article>
               </div>
               <div className="sd-library-toolbar">
@@ -3219,7 +4213,10 @@ export default function CreatorStudio({
                   />
                 </label>
                 {song && (
-                  <button className="primary" onClick={() => void saveProject()}>
+                  <button
+                    className="primary"
+                    onClick={() => void saveProject()}
+                  >
                     <Save />
                     {savingProject ? 'Đang lưu...' : 'Lưu project hiện tại'}
                   </button>
@@ -3229,15 +4226,24 @@ export default function CreatorStudio({
                 {filteredProjects.length ? (
                   filteredProjects.map((project, index) => (
                     <article key={project.url}>
-                      <button className="sd-project-open" onClick={() => void openProject(project)}>
-                        <span><Folder /></span>
+                      <button
+                        className="sd-project-open"
+                        onClick={() => void openProject(project)}
+                      >
+                        <span>
+                          <Folder />
+                        </span>
                         <b>{project.title}</b>
                         <small>{project.url}</small>
                         <i>{index === 0 ? 'Gần nhất' : 'Project'}</i>
                       </button>
                       <div>
-                        <button onClick={() => void openProject(project)}>Mở</button>
-                        <button onClick={() => removeProject(project)}>Ẩn khỏi danh sách</button>
+                        <button onClick={() => void openProject(project)}>
+                          Mở
+                        </button>
+                        <button onClick={() => removeProject(project)}>
+                          Ẩn khỏi danh sách
+                        </button>
                       </div>
                     </article>
                   ))
@@ -3245,8 +4251,12 @@ export default function CreatorStudio({
                   <div className="sd-empty-state">
                     <Folder />
                     <b>Chưa có project phù hợp</b>
-                    <span>Lưu project trong Studio hoặc đổi từ khoá tìm kiếm.</span>
-                    <button onClick={() => setView('create')}>Tạo project mới</button>
+                    <span>
+                      Lưu project trong Studio hoặc đổi từ khoá tìm kiếm.
+                    </span>
+                    <button onClick={() => setView('create')}>
+                      Tạo project mới
+                    </button>
                   </div>
                 )}
               </div>
@@ -3258,12 +4268,18 @@ export default function CreatorStudio({
                 <article>
                   <small>LOCAL LIBRARY</small>
                   <h2>{libraryCountLabel}</h2>
-                  <p>Những bài từng mở, tải audio hoặc render video trên máy này.</p>
+                  <p>
+                    Những bài từng mở, tải audio hoặc render video trên máy này.
+                  </p>
                 </article>
                 <article>
                   <small>GẦN NHẤT</small>
                   <h2>{latestLibraryItem?.title || 'Chưa có'}</h2>
-                  <p>{latestLibraryItem ? `${latestLibraryItem.creator || 'Suno'} · ${shortDate(latestLibraryItem.updatedAt)}` : 'Mở một bài Suno để tự động lưu vào thư viện.'}</p>
+                  <p>
+                    {latestLibraryItem
+                      ? `${latestLibraryItem.creator || 'Suno'} · ${shortDate(latestLibraryItem.updatedAt)}`
+                      : 'Mở một bài Suno để tự động lưu vào thư viện.'}
+                  </p>
                 </article>
                 <article>
                   <small>FAVORITE</small>
@@ -3290,27 +4306,45 @@ export default function CreatorStudio({
                     <article key={item.id || item.url}>
                       <span
                         className={item.picture ? 'has-cover' : ''}
-                        style={item.picture ? { backgroundImage: `url("${item.picture}")` } : undefined}
+                        style={
+                          item.picture
+                            ? { backgroundImage: `url("${item.picture}")` }
+                            : undefined
+                        }
                       >
                         {!item.picture && <Music2 />}
                       </span>
                       <button onClick={() => openLibraryItem(item)}>
                         <b>{item.title || 'Suno song'}</b>
-                        <small>{item.creator || 'Suno'} · {fmt(item.duration || 0)}</small>
+                        <small>
+                          {item.creator || 'Suno'} · {fmt(item.duration || 0)}
+                        </small>
                         <em>
-                          {localLibraryEventLabel[item.lastEvent || 'resolved'] || 'Đã mở'} · {shortDate(item.updatedAt)}
-                          {item.collections?.length ? ` · ${item.collections.join(', ')}` : ''}
+                          {localLibraryEventLabel[
+                            item.lastEvent || 'resolved'
+                          ] || 'Đã mở'}{' '}
+                          · {shortDate(item.updatedAt)}
+                          {item.collections?.length
+                            ? ` · ${item.collections.join(', ')}`
+                            : ''}
                         </em>
                       </button>
-                      <a href={item.url} target="_blank" rel="noreferrer">Suno</a>
+                      <a href={item.url} target="_blank" rel="noreferrer">
+                        Suno
+                      </a>
                     </article>
                   ))
                 ) : (
                   <div className="sd-empty-state">
                     <BookOpen />
                     <b>Thư viện local còn trống</b>
-                    <span>Dán link Suno ở trang chủ, tải audio hoặc render video để lưu lịch sử.</span>
-                    <button onClick={() => setView('create')}>Mở bài mới</button>
+                    <span>
+                      Dán link Suno ở trang chủ, tải audio hoặc render video để
+                      lưu lịch sử.
+                    </span>
+                    <button onClick={() => setView('create')}>
+                      Mở bài mới
+                    </button>
                   </div>
                 )}
               </div>
@@ -3342,769 +4376,1205 @@ export default function CreatorStudio({
           {view === 'settings' && (
             <StudioSettingsPanel
               account={signedInUser?.email || null}
-              onLogout={async () => { const response = await fetch('/api/auth/logout', { method: 'POST' }); if (!response.ok) throw new Error('Logout failed'); setSignedInUser(null); }}
-              onClearProjects={async () => { await clearProjectData(); localStorage.removeItem('sundown-projects'); setProjects([]); }}
+              onLogout={async () => {
+                const response = await fetch('/api/auth/logout', {
+                  method: 'POST',
+                });
+                if (!response.ok) throw new Error('Logout failed');
+                setSignedInUser(null);
+              }}
+              onClearProjects={async () => {
+                await clearProjectData();
+                localStorage.removeItem('sundown-projects');
+                setProjects([]);
+              }}
             />
           )}
         </section>
       )}
-      {view !== 'settings' && (busy ? (
-        <main className="sd-init-screen" aria-live="polite">
-          <div className="sd-init-stage">
-            <div className="sd-init-orbit" aria-hidden="true">
-              <span />
-              <i />
-              <Music2 />
-            </div>
-            <small>CREATOR STUDIO</small>
-            <h1>{initTitle}</h1>
-            <p>{initDetail}</p>
-            <div className="sd-init-progress">
-              <div style={{ width: `${initProgress}%` }} />
-            </div>
-            <div className="sd-init-progress-meta">
-              <b>{Math.round(initProgress)}%</b>
-              <span>
-                {initProgress < 25
-                  ? 'Metadata'
-                  : initProgress < 82
-                    ? 'Audio'
-                    : 'Studio'}
-              </span>
-            </div>
-            <div className="sd-init-steps">
-              <span className={initProgress >= 24 ? 'done' : 'active'}>01 · Bài hát</span>
-              <span className={initProgress >= 82 ? 'done' : initProgress >= 24 ? 'active' : ''}>02 · Audio</span>
-              <span className={initProgress >= 100 ? 'done' : initProgress >= 82 ? 'active' : ''}>03 · Studio</span>
-            </div>
-          </div>
-        </main>
-      ) : !song ? (
-        <main className={`sd-empty sd-home-v23 ${homeSideCollapsed ? 'sd-home-side-collapsed' : ''}`}>
-          <div className="sd-home-ambient" aria-hidden="true">
-            <i className="orb-a" />
-            <i className="orb-b" />
-            <i className="orb-c" />
-          </div>
-
-          <aside className="sd-home-side" aria-label="Điều hướng nhanh">
-            <button
-              type="button"
-              className="sd-home-side-collapse"
-              onClick={toggleHomeSide}
-              aria-label={homeSideCollapsed ? 'Mở rộng menu trái' : 'Thu gọn menu trái'}
-              title={homeSideCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
-            >
-              {homeSideCollapsed ? <ChevronRight /> : <ChevronLeft />}
-              <span>{homeSideCollapsed ? 'Mở menu' : 'Thu gọn'}</span>
-            </button>
-            <button className="primary" disabled={busy} onClick={analyzeHomeSource} aria-label="Tạo mới từ link Suno" title="Tạo mới"><Plus /><span>{busy ? 'Đang phân tích…' : 'Tạo mới'}</span><i>›</i></button>
-            <button onClick={() => setView('create')} aria-label="Từ link Suno" title="Từ link Suno"><Link2 /><span>Từ link Suno</span></button>
-            <label className="sd-home-side-upload" aria-label="Tải audio lên" title="Tải audio lên">
-              <Upload /><span>Tải audio lên</span>
-              <input
-                type="file"
-                accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
-                onChange={(event) => {
-                  void openAudioFile(event.target.files?.[0]);
-                  event.currentTarget.value = '';
-                }}
-              />
-            </label>
-            <a className="sd-home-side-link" href="/music" aria-label="Music Player" title="Music Player"><Music2 /><span>Music Player</span></a>
-            <a className="sd-home-side-link" href="/library" aria-label="Thư viện bài hát" title="Thư viện bài hát"><BookOpen /><span>Thư viện bài hát</span></a>
-            <button aria-label="Preset và Style" title="Preset & Style" onClick={() => document.querySelector('.sd-home-featured')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}><Sparkles /><span>Preset & Style</span></button>
-            <a className="sd-home-side-link" href="/projects" aria-label="Dự án" title="Dự án"><Folder /><span>Dự án</span></a>
-            <a className="sd-home-side-link" href="/jobs" aria-label="Lịch sử render" title="Lịch sử render"><ListMusic /><span>Lịch sử render</span></a>
-
-            <button className="sd-home-side-pro" onClick={() => setView('settings')} aria-label="Nâng cấp Pro" title="Nâng cấp Pro">
-              <span>♛</span>
-              <b>Nâng cấp Pro</b>
-              <small>Không giới hạn, chất lượng cao hơn</small>
-              <i>›</i>
-            </button>
-          </aside>
-
-          <div className="sd-mobile-brand">
-            <a className="sd-brand" href="/" aria-label="Về trang chủ SunoDown">
-              <span><Music2 /></span>
-              <b>SunoDown</b>
-            </a>
-            <button className="sd-mobile-menu-trigger" aria-label="Mở menu" onClick={() => setNavigationOpen((open) => !open)}><Menu /></button>
-            {navigationOpen && navigationMenu}
-          </div>
-
-          <section className="sd-home-shell">
-            <div className="sd-home-hero">
-              <div className="sd-home-copy">
-                <span className="sd-home-kicker"><Sparkles /> CREATOR STUDIO</span>
-                <h1>
-                  Turn your Suno song
-                  <br />
-                  <em>into stunning content</em>
-                </h1>
-                <p>
-                  Biến nhạc Suno thành video lyric, karaoke và social video chuyên nghiệp
-                  chỉ trong vài phút.
-                </p>
-
-                <div className="sd-home-analyze-row">
-                  <div className="sd-home-linkbox">
-                    <Link2 />
-                    <input
-                      value={url}
-                      onChange={(e) => change(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && void resolve()}
-                      placeholder="https://suno.com/s/..."
-                    />
-                    <button type="button" onClick={paste}>Dán</button>
-                  </div>
-                  <button className="sd-home-analyze" disabled={busy} onClick={analyzeHomeSource}>
-                    <Sparkles />
-                    <span>{busy ? 'Đang phân tích…' : 'Phân tích'}</span>
-                    <i>›</i>
-                  </button>
-                </div>
-
-                <div className="sd-home-or"><span>HOẶC</span></div>
-
-                <div className="sd-home-source-grid">
-                  <label
-                    className="sd-home-source-card"
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      void openAudioFile(event.dataTransfer.files[0]);
-                    }}
-                  >
-                    <span className="icon"><Upload /></span>
-                    <span className="copy">
-                      <b>Tải file audio lên</b>
-                      <small>MP3, WAV, M4A, AAC, OGG, FLAC</small>
-                    </span>
-                    <i>›</i>
-                    <input
-                      type="file"
-                      accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
-                      onChange={(event) => {
-                        void openAudioFile(event.target.files?.[0]);
-                        event.currentTarget.value = '';
-                      }}
-                    />
-                  </label>
-
-                  <button className="sd-home-source-card" onClick={() => setView('library')}>
-                    <span className="icon"><Music2 /></span>
-                    <span className="copy">
-                      <b>Thư viện bài hát</b>
-                      <small>Quản lý bài đã lưu và quét theo tài khoản Suno</small>
-                    </span>
-                    <i>›</i>
-                  </button>
-                </div>
-
-                {error && <div className="sd-error">{error}</div>}
-
-                {projects[0] && (
-                  <button className="sd-home-continue" onClick={() => void openProject(projects[0])}>
-                    <Folder />
-                    <span><small>TIẾP TỤC DỰ ÁN</small><b>{projects[0].title}</b></span>
-                    <i>›</i>
-                  </button>
-                )}
+      {view !== 'settings' &&
+        (busy ? (
+          <main className="sd-init-screen" aria-live="polite">
+            <div className="sd-init-stage">
+              <div className="sd-init-orbit" aria-hidden="true">
+                <span />
+                <i />
+                <Music2 />
               </div>
-
-              <div className="sd-home-showcase" aria-label="Ví dụ video SunoDown">
-                <div className="sd-home-showcase-glow" aria-hidden="true" />
-
-                <div className="sd-home-tool-stack" aria-hidden="true">
-                  <span><FileText /><b>Lyrics</b></span>
-                  <span><Music2 /><b>Waveform</b></span>
-                  <span><ImageIcon /><b>Background</b></span>
-                  <span><Sparkles /><b>Preset</b></span>
-                </div>
-
-                <div className="sd-home-phone">
-                  <div className="sd-home-phone-screen">
-                    <img src="/home-cinematic-v23.svg" alt="" />
-                    <span className="ratio">9:16</span>
-                    <div className="lyrics">Có những ngày<br/>chỉ muốn đi thật xa...</div>
-                    <div className="wave" aria-hidden="true" />
-                    <div className="time"><span>00:42</span><span>03:18</span></div>
-                    <div className="controls"><span>‹</span><b><Play /></b><span>›</span></div>
-                  </div>
-                </div>
-
-                <div className="sd-home-control-card" aria-hidden="true">
-                  <div className="thumb"><img src="/home-cinematic-v23.svg" alt="" /></div>
-                  <b>Cinematic</b>
-                  <label><span>Blur</span><i><u style={{width:'32%'}} /></i><small>30%</small></label>
-                  <label><span>Zoom</span><i><u style={{width:'68%'}} /></i><small>100%</small></label>
-                  <label><span>Glow</span><i><u style={{width:'50%'}} /></i><small>50%</small></label>
-                </div>
+              <small>CREATOR STUDIO</small>
+              <h1>{initTitle}</h1>
+              <p>{initDetail}</p>
+              <div className="sd-init-progress">
+                <div style={{ width: `${initProgress}%` }} />
               </div>
-            </div>
-
-            <div className="sd-home-benefits">
-              <span><i>⚡</i><b>Nhanh chóng</b><small>Tạo video trong vài phút</small></span>
-              <span><i>HD</i><b>Chất lượng cao</b><small>Preset và export sắc nét</small></span>
-              <span><i>✦</i><b>Nhiều phong cách</b><small>Lyrics, cinematic, visualizer</small></span>
-              <span><i>9:16</i><b>Tối ưu social</b><small>TikTok, Reels, Shorts</small></span>
-              <span><i>☁</i><b>Không cần cài đặt</b><small>Dùng ngay trên trình duyệt</small></span>
-            </div>
-
-            <section className="sd-home-featured">
-              <header>
-                <div><span>🔥</span><b>Mẫu video nổi bật</b></div>
-                <button onClick={() => setView('create')}>Xem tất cả <i>›</i></button>
-              </header>
-              <div className="sd-home-template-row">
-                {homeFeaturedPresets.map((preset, index) => (
-                  <button
-                    key={preset.id}
-                    className={`sd-home-template preset-${preset.id} ${index === 0 ? 'active' : ''}`}
-                    onClick={() => void openHomeFeaturedPreset(preset)}
-                    title={preset.description}
-                  >
-                    <span
-                      className={`thumb scene-${preset.config.template}`}
-                      style={{
-                        backgroundImage: preset.thumbnail
-                          ? `url(${preset.thumbnail})`
-                          : 'url(/home-cinematic-v23.svg)',
-                      }}
-                    >
-                      <em>{preset.badge || preset.category}</em>
-                    </span>
-                    <b>{preset.name}</b>
-                    <i><Play /></i>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <footer className="sd-home-footer">
-              <nav aria-label="Công cụ SunoDown">
-                <a href="/tai-suno-mp3">Tải Suno MP3</a>
-                <a href="/tai-suno-wav">Tải Suno WAV</a>
-                <a href="/tai-video-suno">Tải & tạo video Suno</a>
-              </nav>
-              <span>
-                MUSIC LIVES FURTHER · {process.env.NEXT_PUBLIC_BUILD_VERSION}
-                {process.env.NEXT_PUBLIC_BUILD_IDENTITY && ` · ${process.env.NEXT_PUBLIC_BUILD_IDENTITY}`}
-              </span>
-            </footer>
-          </section>
-        </main>
-      ) : (
-        <main className={`sd-studio ${rendering ? 'sd-render-locked' : ''} ${quickMode ? 'sd-quick-mode' : ''}`}>
-          <section className="sd-canvas-column">
-            <div className="sd-mobile-title">
-              <button onClick={() => setSong(null)}>‹</button>
-              <img src={song.picture} />
-              <div>
-                <b>{song.title}</b>
-                <span>{fmt(song.duration)} · Suno song</span>
-              </div>
-              <button className="sd-mobile-menu-trigger" aria-label="Mở menu" onClick={() => setNavigationOpen((open) => !open)}><Menu /></button>
-              {navigationOpen && navigationMenu}
-            </div>
-            <div className="sd-stage sd-live-preview">
-              <LivePreview
-                song={renderSong(song)}
-                aspect={studioModel.visual.aspect}
-                template={studioModel.visual.template}
-                wave={studioModel.visual.wave}
-                waveAppearance={studioModel.visual.waveAppearance}
-                motion={studioModel.visual.motion}
-                lyrics={studioModel.visual.lyrics}
-                layout={studioModel.visual.layout}
-                textEditor={editingText&&song&&<PreviewTextEditor target={editingText} title={song.title} creator={song.creator||''} time={previewTime} styles={textStyles} subtitle={subtitleStyle} layout={layout} lines={karaokeTimeline} onStyles={toolControlsProps.setTextStyles} onSubtitle={toolControlsProps.setSubtitleStyle} onLayout={toolControlsProps.setLayout} onLines={lines=>{invalidateRenderedResult();setKaraokeTimeline(lines);}} onDelete={()=>{if(editingText==='subtitle')toolControlsProps.setLyrics('off');else toolControlsProps.setTextStyles({...textStyles,[editingText]:{...textStyles[editingText],text:''}});setEditingText(null);}} onClose={()=>setEditingText(null)}/>}
-                onEditText={rendering?undefined:(key)=>{setAutoPreview(false);setTimelinePauseSignal(value=>value+1);setEditingText(key);}}
-                onLayoutChange={rendering ? undefined : (value) => { markPresetField('layout'); changeVisual(() => setLayout(value)); }}
-                start={trimStart}
-                end={trimEnd || song.duration || undefined}
-                seekTo={playbackStart}
-                pauseSignal={timelinePauseSignal}
-                exporting={rendering}
-                autoPlay={autoPreview}
-                fullPlayback
-                onTimeChange={setPreviewTime}
-                onPreviewPlay={() => {
-                  if (previewPlayTracked.current) return;
-                  previewPlayTracked.current = true;
-                  track('preview_played', {
-                    template,
-                    preset_id: selectedPresetId,
-                    aspect,
-                    time_to_first_preview_ms: resolvedAt.current
-                      ? Math.round(performance.now() - resolvedAt.current)
-                      : undefined,
-                  });
-                }}
-                onPerformance={(sample) => {
-                  const now = Date.now();
-                  if (now - lastPerfTrack.current < 15000) return;
-                  lastPerfTrack.current = now;
-                  track('preview_performance', {
-                    ...sample,
-                    template,
-                    aspect,
-                  });
-                }}
-                karaokeTimeline={karaokeTimeline}
-                mediaClips={mediaClips}
-                timelineTracks={timelineTracks}
-                overlayTextStyles={studioModel.visual.textStyles}
-                subtitleStyle={studioModel.visual.subtitleStyle}
-                effects={effectConfig}
-                background={studioModel.visual.background}
-                audioBinary={audioBinary}
-                resultUrl={resultUrl || undefined}
-              />
-            </div>
-            {karaokeSyncStatus === 'syncing' && (
-              <output
-                className="sd-subtitle-job"
-                aria-live="polite"
-                aria-label="Đang tìm subtitle"
-              >
-                <i aria-hidden="true" />
+              <div className="sd-init-progress-meta">
+                <b>{Math.round(initProgress)}%</b>
                 <span>
-                  <b>{subtitleRegenerating ? 'Đang lấy lại subtitle…' : 'Đang tìm subtitle…'}</b>
-                  <small>
-                    {subtitleRegenerating
-                      ? 'Đang bỏ cache và tạo lại bằng Groq. Subtitle cũ vẫn được giữ cho đến khi bản mới sẵn sàng.'
-                      : 'Bạn vẫn có thể chỉnh sửa trong khi chạy nền.'}
-                  </small>
+                  {initProgress < 25
+                    ? 'Metadata'
+                    : initProgress < 82
+                      ? 'Audio'
+                      : 'Studio'}
                 </span>
-              </output>
-            )}
-            {song.id && (
-              <div className="sd-subtitle-refresh">
-                <button
-                  type="button"
-                  disabled={subtitleRegenerating || karaokeSyncStatus === 'syncing'}
-                  onClick={() => void regenerateSubtitleFromCloud()}
-                  title="Bỏ cache subtitle hiện tại và tạo lại bằng Groq"
+              </div>
+              <div className="sd-init-steps">
+                <span className={initProgress >= 24 ? 'done' : 'active'}>
+                  01 · Bài hát
+                </span>
+                <span
+                  className={
+                    initProgress >= 82
+                      ? 'done'
+                      : initProgress >= 24
+                        ? 'active'
+                        : ''
+                  }
                 >
-                  <Sparkles />
-                  {subtitleRegenerating ? 'Đang lấy lại…' : 'Lấy lại subtitle'}
-                </button>
-                <small>Bỏ cache và tạo subtitle mới từ audio hiện tại.</small>
-              </div>
-            )}
-            <SuggestedBackground
-              key={song.audio}
-              onAddToTimeline={addPexelsToTimeline}
-              songKey={song.audio}
-              text={`${song.title} ${song.style || ''} ${song.tags || ''}`}
-              aspect={aspect}
-              background={background}
-              disabled={rendering}
-              onChange={toolControlsProps.setBackground}
-              onBrowse={() => { setQuickMode(false); setPanel('background'); setMobileTools(true); }}
-            />
-            {quickMode && (
-              <section className="sd-quick-create" aria-label="Quick Create">
-                <div className="sd-quick-create-head">
-                  <div>
-                    <small>QUICK CREATE · V23</small>
-                    <b>Chọn một mẫu, xem preview rồi xuất</b>
-                    <span>Đã gợi ý theo style, lyrics và định dạng phù hợp với bài này.</span>
-                  </div>
-                  <button
-                    className="sd-quick-customize"
-                    disabled={rendering}
-                    onClick={() => {
-                      setQuickMode(false);
-                      track('customize_opened', {
-                        preset_id: selectedPresetId,
-                        template,
-                        aspect,
-                      });
-                    }}
-                  >
-                    <SlidersHorizontal /> Customize
-                  </button>
-                </div>
-                <div className="sd-quick-presets">
-                  {quickPresets.map((preset, index) => (
-                    <button
-                      key={preset.id}
-                      className={selectedPresetId === preset.id ? 'active' : ''}
-                      disabled={rendering}
-                      onClick={() => {
-                        applyPreset(preset, 'replace-all');
-                        track('suggested_preset_selected', {
-                          preset_id: preset.id,
-                          rank: index + 1,
-                          category: preset.category,
-                        });
-                      }}
-                    >
-                      <span
-                        className={`scene-thumb scene-${preset.config.template}`}
-                        style={{
-                          backgroundImage: song.picture
-                            ? `linear-gradient(#080b1299,#080b1299),url("${song.picture}")`
-                            : undefined,
-                        }}
-                      />
-                      <span>
-                        <small>{index === 0 ? 'ĐỀ XUẤT' : preset.badge || preset.category}</small>
-                        <b>{preset.name}</b>
-                        <em>{preset.config.aspect} · {preset.config.lyrics === 'off' ? 'Visualizer' : 'Lyrics'} · {masteringLabel(normalizeProductionPreset({mastering:preset.mastering,export:preset.export},preset.config.aspect).mastering.profile)}</em>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <div className="sd-quick-actions">
-                  <button
-                    type="button"
-                    className="primary"
-                    disabled={rendering}
-                    onClick={() => triggerQuickRender('cut')}
-                  >
-                    <Upload />
-                    {rendering
-                      ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
-                      : 'Create video'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={rendering}
-                    onClick={() => triggerQuickRender('30')}
-                  >
-                    <Play /> Tạo 30s cao trào
-                  </button>
-                </div>
-                {highlightNotice && !error && (
-                  <div className="sd-quick-highlight-status" role="status" aria-live="polite">
-                    <Sparkles />
-                    <span>{highlightNotice}</span>
-                  </div>
-                )}
-                {renderNotice && !error && (
-                  <div className="sd-quick-render-status" role="status" aria-live="polite">
-                    <b>Trạng thái render</b>
-                    <span>{renderNotice}</span>
-                  </div>
-                )}
-                {(rendering || error || lastRenderFailure) && (
-                  <div className={`sd-quick-render-status ${error ? 'error' : ''}`} role="status" aria-live="polite">
-                    {rendering ? (
-                      <>
-                        <b>{renderStage === 'validation' ? 'Đang kiểm tra video…' : renderStage === 'prepare' ? 'Đang chuẩn bị media…' : renderStage === 'finalize' ? 'Đang hoàn tất video…' : 'Đang tạo video…'}</b>
-                        <span>{Math.round(progress)}% · Không đóng trang trong khi đang xử lý.</span>
-                      </>
-                    ) : (
-                      <>
-                        <b>Không thể tạo video</b>
-                        <span>{error || lastRenderFailure?.message || 'Render thất bại. Hãy thử lại.'}</span>
-                        {lastRenderFailure?.retryable && (
-                          <button type="button" onClick={() => triggerQuickRender(lastRenderFailure.mode)}>
-                            Thử lại
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-              </section>
-            )}
-            {lastPresetId && (
-              <button
-                className="sd-last-preset"
-                disabled={rendering}
-                onClick={() => {
-                  const preset = [...BUILTIN_STUDIO_PRESETS, ...customPresets].find(
-                    (item) => item.id === lastPresetId,
-                  );
-                  if (preset) applyPreset(preset, 'replace-all');
-                }}
-              >
-                <Sparkles />
-                <span>
-                  <b>Dùng lại mẫu gần nhất</b>
-                  <small>
-                    {[...BUILTIN_STUDIO_PRESETS, ...customPresets].find(
-                      (item) => item.id === lastPresetId,
-                    )?.name || 'Mẫu đã dùng trước đó'}
-                  </small>
+                  02 · Audio
                 </span>
+                <span
+                  className={
+                    initProgress >= 100
+                      ? 'done'
+                      : initProgress >= 82
+                        ? 'active'
+                        : ''
+                  }
+                >
+                  03 · Studio
+                </span>
+              </div>
+            </div>
+          </main>
+        ) : !song ? (
+          <main
+            className={`sd-empty sd-home-v23 ${homeSideCollapsed ? 'sd-home-side-collapsed' : ''}`}
+          >
+            <div className="sd-home-ambient" aria-hidden="true">
+              <i className="orb-a" />
+              <i className="orb-b" />
+              <i className="orb-c" />
+            </div>
+
+            <aside className="sd-home-side" aria-label="Điều hướng nhanh">
+              <button
+                type="button"
+                className="sd-home-side-collapse"
+                onClick={toggleHomeSide}
+                aria-label={
+                  homeSideCollapsed ? 'Mở rộng menu trái' : 'Thu gọn menu trái'
+                }
+                title={homeSideCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
+              >
+                {homeSideCollapsed ? <ChevronRight /> : <ChevronLeft />}
+                <span>{homeSideCollapsed ? 'Mở menu' : 'Thu gọn'}</span>
               </button>
-            )}
-            {!quickMode && <div className="sd-first-run-flow" aria-label="Quy trình tạo video nhanh">
               <button
                 className="primary"
-                disabled={rendering}
-                onClick={() => {
-                  setPanel('presets');
-                  setMobileTools(true);
-                }}
+                disabled={busy}
+                onClick={analyzeHomeSource}
+                aria-label="Tạo mới từ link Suno"
+                title="Tạo mới"
               >
-                <b>1 · Chọn mẫu</b>
-                Mẫu hoàn chỉnh
+                <Plus />
+                <span>{busy ? 'Đang phân tích…' : 'Tạo mới'}</span>
+                <i>›</i>
               </button>
-              <span>
-                <b>2 · Xem preview</b>
-                Chạm Play để kiểm tra
-              </span>
-              <button disabled={rendering} onClick={() => renderVideo('cut')}>
-                <b>3 · Xuất video</b>
-                {rendering ? `${Math.round(progress)}%` : 'Tạo video'}
-              </button>
-            </div>}
-            {resultUrl && (
-              <div className="sd-result-actions">
-                <div>
-                  <b>Video ready</b>
-                  <span>Play the exported video above or save it now.</span>
-                </div>
-                <button onClick={saveVideo}>
-                  <Download />
-                  <span className="sd-save-desktop">Download video</span>
-                  <span className="sd-save-mobile">Save to Photos</span>
-                </button>
-              </div>
-            )}
-            <output aria-live="polite" className="sd-draft-status">{draftStatus}</output>
-            {rendering && <div role="status">
-              {Math.round(progress)}%{renderEta !== null ? ` · Còn khoảng ${renderEta}s` : ' · Đang chuẩn bị'}
-              <button type="button" onClick={() => renderAbort.current?.abort()}>Hủy render</button>
-            </div>}
-            <EditorTimeline
-              key={song.id || url}
-              duration={song.duration || 1}
-              picture={song.picture}
-              playhead={previewTime}
-              onEditStart={() => {
-                setAutoPreview(false);
-                setTimelinePauseSignal((value) => value + 1);
-              }}
-              onSeek={(time) => {
-                setPlaybackStart(time);
-                setPreviewTime(time);
-              }}
-              onEditEnd={() => setTimelinePauseSignal((value) => value + 1)}
-              subtitles={karaokeTimeline}
-              onSubtitlesChange={(lines) => {
-                markPresetField('lyrics');
-                invalidateRenderedResult();
-                cacheMusicSubtitle(song.id, lines);
-                setKaraokeTimeline(lines);
-              }}
-              clips={timelineMediaClips}
-              onClipsChange={(clips) => { invalidateRenderedResult(); setMediaClips(clips); }}
-              onTrackStateChange={(tracks) => { invalidateRenderedResult(); setTimelineTracks(tracks); }}
-              trackState={timelineTracks}
-              audioBinary={audioBinary}
-              audioUrl={song.audio}
-              visualLabel={`${template} · ${background.mode}`}
-              effectLabels={effects.length ? effects : ['Không có effect']}
-            />
-          </section>
-          <aside className="sd-inspector">
-            <div className="sd-song">
-              <img src={song.picture} />
-              <div>
-                <h2>{song.title}</h2>
-                <p>Created by {song.creator || 'Suno'}</p>
-                <span>{fmt(song.duration)}</span>
-              </div>
-            </div>
-            <button
-              className={`sd-save-project ${savedProject ? 'saved' : ''}`}
-              disabled={savingProject}
-              onClick={() => void saveProject()}
-            >
-              <Save />
-              {savingProject
-                ? 'Đang lưu dự án…'
-                : savedProject
-                  ? 'Đã lưu dự án'
-                  : 'Lưu dự án'}
-            </button>
-            <hr />
-            <ToolControls {...toolControlsProps} presetContent={<PresetGallery
-              presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
-              selectedId={selectedPresetId}
-              picture={song.picture}
-              favoriteIds={favoritePresetIds}
-              canUndo={Boolean(presetUndo)}
-              modified={presetModified}
-              onApply={applyPreset}
-              onToggleFavorite={toggleFavoritePreset}
-              onDuplicate={duplicatePreset}
-              onRename={renameCustomPreset}
-              onDelete={deleteCustomPreset}
-              onSaveCurrent={saveCurrentAsPreset}
-              onUpdateCurrent={updateCurrentPreset}
-              onResetSelected={resetSelectedPreset}
-              onExportPreset={exportPreset}
-              onImportPreset={importPreset}
-              onUndo={restorePresetSnapshot}
-            />} />
-            <div className="sd-visual-sync" title="Preview/render visual fingerprint">
-              <span>Visual sync</span>
-              <b>{visualHash}</b>
-            </div>
-            <div className="sd-actions">
               <button
-                className="sd-export"
-                disabled={rendering}
-                onClick={() => renderVideo('cut')}
+                onClick={() => setView('create')}
+                aria-label="Từ link Suno"
+                title="Từ link Suno"
               >
-                <Upload />{' '}
-                {rendering
-                  ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
-                  : `Export ${fmt(Math.max(0, trimEnd - trimStart))} video`}
+                <Link2 />
+                <span>Từ link Suno</span>
               </button>
-              {rendering && (
-                <div className="sd-progress">
-                  <i style={{ width: `${progress}%` }} />
-                </div>
-              )}
-              {lastRenderFailure && (
-                <div className="sd-render-retry" role="status">
-                  <span>
-                    Lỗi ở bước <b>{lastRenderFailure.stage}</b>
-                    {lastRenderFailure.retryable
-                      ? ' · có thể thử lại'
-                      : ' · cần chỉnh cấu hình trước khi render lại'}
+              <label
+                className="sd-home-side-upload"
+                aria-label="Tải audio lên"
+                title="Tải audio lên"
+              >
+                <Upload />
+                <span>Tải audio lên</span>
+                <input
+                  type="file"
+                  accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+                  onChange={(event) => {
+                    void openAudioFile(event.target.files?.[0]);
+                    event.currentTarget.value = '';
+                  }}
+                />
+              </label>
+              <a
+                className="sd-home-side-link"
+                href="/music"
+                aria-label="Music Player"
+                title="Music Player"
+              >
+                <Music2 />
+                <span>Music Player</span>
+              </a>
+              <a
+                className="sd-home-side-link"
+                href="/library"
+                aria-label="Thư viện bài hát"
+                title="Thư viện bài hát"
+              >
+                <BookOpen />
+                <span>Thư viện bài hát</span>
+              </a>
+              <button
+                aria-label="Preset và Style"
+                title="Preset & Style"
+                onClick={() =>
+                  document
+                    .querySelector('.sd-home-featured')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }
+              >
+                <Sparkles />
+                <span>Preset & Style</span>
+              </button>
+              <a
+                className="sd-home-side-link"
+                href="/projects"
+                aria-label="Dự án"
+                title="Dự án"
+              >
+                <Folder />
+                <span>Dự án</span>
+              </a>
+              <a
+                className="sd-home-side-link"
+                href="/jobs"
+                aria-label="Lịch sử render"
+                title="Lịch sử render"
+              >
+                <ListMusic />
+                <span>Lịch sử render</span>
+              </a>
+
+              <button
+                className="sd-home-side-pro"
+                onClick={() => setView('settings')}
+                aria-label="Nâng cấp Pro"
+                title="Nâng cấp Pro"
+              >
+                <span>♛</span>
+                <b>Nâng cấp Pro</b>
+                <small>Không giới hạn, chất lượng cao hơn</small>
+                <i>›</i>
+              </button>
+            </aside>
+
+            <div className="sd-mobile-brand">
+              <a
+                className="sd-brand"
+                href="/"
+                aria-label="Về trang chủ SunoDown"
+              >
+                <span>
+                  <Music2 />
+                </span>
+                <b>SunoDown</b>
+              </a>
+              <button
+                className="sd-mobile-menu-trigger"
+                aria-label="Mở menu"
+                onClick={() => setNavigationOpen((open) => !open)}
+              >
+                <Menu />
+              </button>
+              {navigationOpen && navigationMenu}
+            </div>
+
+            <section className="sd-home-shell">
+              <div className="sd-home-hero">
+                <div className="sd-home-copy">
+                  <span className="sd-home-kicker">
+                    <Sparkles /> CREATOR STUDIO
                   </span>
-                  {lastRenderFailure.retryable && (
+                  <h1>
+                    Turn your Suno song
+                    <br />
+                    <em>into stunning content</em>
+                  </h1>
+                  <p>
+                    Biến nhạc Suno thành video lyric, karaoke và social video
+                    chuyên nghiệp chỉ trong vài phút.
+                  </p>
+
+                  <div className="sd-home-analyze-row">
+                    <div className="sd-home-linkbox">
+                      <Link2 />
+                      <input
+                        value={url}
+                        onChange={(e) => change(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && void resolve()}
+                        placeholder="https://suno.com/s/..."
+                      />
+                      <button type="button" onClick={paste}>
+                        Dán
+                      </button>
+                    </div>
                     <button
-                      disabled={rendering}
-                      onClick={() =>
-                        renderVideo(
-                          lastRenderFailure.mode,
-                          lastRenderFailure.attempt + 1,
-                        )
-                      }
+                      className="sd-home-analyze"
+                      disabled={busy}
+                      onClick={analyzeHomeSource}
                     >
-                      Thử lại render
+                      <Sparkles />
+                      <span>{busy ? 'Đang phân tích…' : 'Phân tích'}</span>
+                      <i>›</i>
+                    </button>
+                  </div>
+
+                  <div className="sd-home-or">
+                    <span>HOẶC</span>
+                  </div>
+
+                  <div className="sd-home-source-grid">
+                    <label
+                      className="sd-home-source-card"
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        void openAudioFile(event.dataTransfer.files[0]);
+                      }}
+                    >
+                      <span className="icon">
+                        <Upload />
+                      </span>
+                      <span className="copy">
+                        <b>Tải file audio lên</b>
+                        <small>MP3, WAV, M4A, AAC, OGG, FLAC</small>
+                      </span>
+                      <i>›</i>
+                      <input
+                        type="file"
+                        accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+                        onChange={(event) => {
+                          void openAudioFile(event.target.files?.[0]);
+                          event.currentTarget.value = '';
+                        }}
+                      />
+                    </label>
+
+                    <button
+                      className="sd-home-source-card"
+                      onClick={() => setView('library')}
+                    >
+                      <span className="icon">
+                        <Music2 />
+                      </span>
+                      <span className="copy">
+                        <b>Thư viện bài hát</b>
+                        <small>
+                          Quản lý bài đã lưu và quét theo tài khoản Suno
+                        </small>
+                      </span>
+                      <i>›</i>
+                    </button>
+                  </div>
+
+                  {error && <div className="sd-error">{error}</div>}
+
+                  {projects[0] && (
+                    <button
+                      className="sd-home-continue"
+                      onClick={() => void openProject(projects[0])}
+                    >
+                      <Folder />
+                      <span>
+                        <small>TIẾP TỤC DỰ ÁN</small>
+                        <b>{projects[0].title}</b>
+                      </span>
+                      <i>›</i>
                     </button>
                   )}
                 </div>
-              )}
-              <div className="sd-downloads">
-                <button disabled={rendering} onClick={() => renderVideo('30')}>
-                  <Play />
-                  30s cao trào
-                </button>
-                <button
-                  disabled={!!downloading}
-                  onClick={() => downloadAudio('mp3')}
+
+                <div
+                  className="sd-home-showcase"
+                  aria-label="Ví dụ video SunoDown"
                 >
-                  <Download />
-                  {downloading === 'mp3' ? 'Creating…' : 'MP3'}
-                </button>
-                <button
-                  disabled={!!downloading}
-                  onClick={() => downloadAudio('wav')}
-                >
-                  <Download />
-                  {downloading === 'wav' ? 'Creating…' : 'WAV'}
-                </button>
-                <button
-                  disabled={!!downloading}
-                  onClick={() => downloadAudio('m4a')}
-                >
-                  <Music2 />
-                  M4A
-                </button>
-                <button
-                  disabled={!song.lyrics}
-                  onClick={() => downloadLyrics('txt')}
-                >
-                  <FileText />
-                  Lyrics
-                </button>
-                <button
-                  disabled={!song.lyrics}
-                  onClick={() => downloadLyrics('srt')}
-                >
-                  <FileText />
-                  SRT
-                </button>
-                {song.picture && (
-                  <a href={song.picture} download>
-                    <ImageIcon />
-                    Cover
-                  </a>
-                )}
+                  <div className="sd-home-showcase-glow" aria-hidden="true" />
+
+                  <div className="sd-home-tool-stack" aria-hidden="true">
+                    <span>
+                      <FileText />
+                      <b>Lyrics</b>
+                    </span>
+                    <span>
+                      <Music2 />
+                      <b>Waveform</b>
+                    </span>
+                    <span>
+                      <ImageIcon />
+                      <b>Background</b>
+                    </span>
+                    <span>
+                      <Sparkles />
+                      <b>Preset</b>
+                    </span>
+                  </div>
+
+                  <div className="sd-home-phone">
+                    <div className="sd-home-phone-screen">
+                      <img src="/home-cinematic-v23.svg" alt="" />
+                      <span className="ratio">9:16</span>
+                      <div className="lyrics">
+                        Có những ngày
+                        <br />
+                        chỉ muốn đi thật xa...
+                      </div>
+                      <div className="wave" aria-hidden="true" />
+                      <div className="time">
+                        <span>00:42</span>
+                        <span>03:18</span>
+                      </div>
+                      <div className="controls">
+                        <span>‹</span>
+                        <b>
+                          <Play />
+                        </b>
+                        <span>›</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="sd-home-control-card" aria-hidden="true">
+                    <div className="thumb">
+                      <img src="/home-cinematic-v23.svg" alt="" />
+                    </div>
+                    <b>Cinematic</b>
+                    <label>
+                      <span>Blur</span>
+                      <i>
+                        <u style={{ width: '32%' }} />
+                      </i>
+                      <small>30%</small>
+                    </label>
+                    <label>
+                      <span>Zoom</span>
+                      <i>
+                        <u style={{ width: '68%' }} />
+                      </i>
+                      <small>100%</small>
+                    </label>
+                    <label>
+                      <span>Glow</span>
+                      <i>
+                        <u style={{ width: '50%' }} />
+                      </i>
+                      <small>50%</small>
+                    </label>
+                  </div>
+                </div>
               </div>
-            </div>
-          </aside>
-          <div className="sd-mobile-export">
-            <button type="button" disabled={rendering} onClick={() => triggerQuickRender('cut')}>
-              <Upload />
-              {rendering
-                ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
-                : 'Create & export video'}
-            </button>
-            <nav>
-              <button
+
+              <div className="sd-home-benefits">
+                <span>
+                  <i>⚡</i>
+                  <b>Nhanh chóng</b>
+                  <small>Tạo video trong vài phút</small>
+                </span>
+                <span>
+                  <i>HD</i>
+                  <b>Chất lượng cao</b>
+                  <small>Preset và export sắc nét</small>
+                </span>
+                <span>
+                  <i>✦</i>
+                  <b>Nhiều phong cách</b>
+                  <small>Lyrics, cinematic, visualizer</small>
+                </span>
+                <span>
+                  <i>9:16</i>
+                  <b>Tối ưu social</b>
+                  <small>TikTok, Reels, Shorts</small>
+                </span>
+                <span>
+                  <i>☁</i>
+                  <b>Không cần cài đặt</b>
+                  <small>Dùng ngay trên trình duyệt</small>
+                </span>
+              </div>
+
+              <section className="sd-home-featured">
+                <header>
+                  <div>
+                    <span>🔥</span>
+                    <b>Mẫu video nổi bật</b>
+                  </div>
+                  <button onClick={() => setView('create')}>
+                    Xem tất cả <i>›</i>
+                  </button>
+                </header>
+                <div className="sd-home-template-row">
+                  {homeFeaturedPresets.map((preset, index) => (
+                    <button
+                      key={preset.id}
+                      className={`sd-home-template preset-${preset.id} ${index === 0 ? 'active' : ''}`}
+                      onClick={() => void openHomeFeaturedPreset(preset)}
+                      title={preset.description}
+                    >
+                      <span
+                        className={`thumb scene-${preset.config.template}`}
+                        style={{
+                          backgroundImage: preset.thumbnail
+                            ? `url(${preset.thumbnail})`
+                            : 'url(/home-cinematic-v23.svg)',
+                        }}
+                      >
+                        <em>{preset.badge || preset.category}</em>
+                      </span>
+                      <b>{preset.name}</b>
+                      <i>
+                        <Play />
+                      </i>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <footer className="sd-home-footer">
+                <nav aria-label="Công cụ SunoDown">
+                  <a href="/tai-suno-mp3">Tải Suno MP3</a>
+                  <a href="/tai-suno-wav">Tải Suno WAV</a>
+                  <a href="/tai-video-suno">Tải & tạo video Suno</a>
+                </nav>
+                <span>
+                  MUSIC LIVES FURTHER · {process.env.NEXT_PUBLIC_BUILD_VERSION}
+                  {process.env.NEXT_PUBLIC_BUILD_IDENTITY &&
+                    ` · ${process.env.NEXT_PUBLIC_BUILD_IDENTITY}`}
+                </span>
+              </footer>
+            </section>
+          </main>
+        ) : (
+          <main
+            style={{'--timeline-height': `${timelineHeight}px`} as React.CSSProperties}
+            className={`sd-studio sd-scene-workspace ${previewExpanded ? 'sd-preview-expanded' : ''} ${rendering ? 'sd-render-locked' : ''} ${quickMode ? 'sd-quick-mode' : ''}`}
+          >
+            {!quickMode && <header className="sd-workspace-toolbar">
+              <div><b>{song.title}</b><span>{aspect} · {fmt(song.duration)}</span></div>
+              <span className="sd-workspace-status" role="status">{rendering ? `${Math.round(progress)}% · ${renderEta !== null ? `Còn ${renderEta}s` : 'Đang chuẩn bị'}` : draftStatus}</span>
+              {rendering && <button type="button" onClick={()=>renderAbort.current?.abort()}>Hủy xuất</button>}
+              {resultUrl && <button type="button" onClick={saveVideo}><Download />Tải video</button>}
+              <button type="button" aria-pressed={previewExpanded} onClick={()=>setPreviewExpanded(value=>!value)}>{previewExpanded ? 'Trở lại editor' : 'Phóng lớn preview'}</button>
+              <button type="button" disabled={savingProject} onClick={()=>void saveProject()}><Save />{savingProject ? 'Đang lưu…' : 'Lưu dự án'}</button>
+              <button type="button" className="sd-workspace-export" disabled={rendering} onClick={()=>void renderVideo('cut')}><Upload />{rendering ? `Đang xuất ${Math.round(progress)}%` : 'Xuất video'}</button>
+            </header>}
+            <section className="sd-canvas-column">
+              <div className="sd-mobile-title">
+                <button onClick={() => setSong(null)}>‹</button>
+                <img src={song.picture} />
+                <div>
+                  <b>{song.title}</b>
+                  <span>{fmt(song.duration)} · Suno song</span>
+                </div>
+                <button
+                  className="sd-mobile-menu-trigger"
+                  aria-label="Mở menu"
+                  onClick={() => setNavigationOpen((open) => !open)}
+                >
+                  <Menu />
+                </button>
+                {navigationOpen && navigationMenu}
+              </div>
+              <div className="sd-stage sd-live-preview">
+                <LivePreview
+                  song={renderSong(song)}
+                  aspect={studioModel.visual.aspect}
+                  template={studioModel.visual.template}
+                  wave={studioModel.visual.wave}
+                  waveAppearance={studioModel.visual.waveAppearance}
+                  motion={studioModel.visual.motion}
+                  lyrics={studioModel.visual.lyrics}
+                  layout={studioModel.visual.layout}
+                  textEditor={
+                    editingText &&
+                    song && (
+                      <PreviewTextEditor
+                        target={editingText}
+                        title={song.title}
+                        creator={song.creator || ''}
+                        time={previewTime}
+                        styles={textStyles}
+                        subtitle={subtitleStyle}
+                        layout={layout}
+                        lines={karaokeTimeline}
+                        onStyles={toolControlsProps.setTextStyles}
+                        onSubtitle={toolControlsProps.setSubtitleStyle}
+                        onLayout={toolControlsProps.setLayout}
+                        onLines={(lines) => {
+                          invalidateRenderedResult();
+                          setKaraokeTimeline(lines);
+                        }}
+                        onDelete={() => {
+                          if (editingText === 'subtitle')
+                            toolControlsProps.setLyrics('off');
+                          else
+                            toolControlsProps.setTextStyles({
+                              ...textStyles,
+                              [editingText]: {
+                                ...textStyles[editingText],
+                                text: '',
+                              },
+                            });
+                          setEditingText(null);
+                        }}
+                        onClose={() => setEditingText(null)}
+                      />
+                    )
+                  }
+                  onEditText={
+                    rendering
+                      ? undefined
+                      : (key) => {
+                          setAutoPreview(false);
+                          setTimelinePauseSignal((value) => value + 1);
+                          setEditingText(key);
+                        }
+                  }
+                  onLayoutChange={
+                    rendering
+                      ? undefined
+                      : (value) => {
+                          markPresetField('layout');
+                          changeVisual(() => setLayout(value));
+                        }
+                  }
+                  start={trimStart}
+                  end={trimEnd || song.duration || undefined}
+                  seekTo={playbackStart}
+                  pauseSignal={timelinePauseSignal}
+                  exporting={rendering}
+                  autoPlay={autoPreview}
+                  fullPlayback
+                  onTimeChange={setPreviewTime}
+                  onPreviewPlay={() => {
+                    if (previewPlayTracked.current) return;
+                    previewPlayTracked.current = true;
+                    track('preview_played', {
+                      template,
+                      preset_id: selectedPresetId,
+                      aspect,
+                      time_to_first_preview_ms: resolvedAt.current
+                        ? Math.round(performance.now() - resolvedAt.current)
+                        : undefined,
+                    });
+                  }}
+                  onPerformance={(sample) => {
+                    const now = Date.now();
+                    if (now - lastPerfTrack.current < 15000) return;
+                    lastPerfTrack.current = now;
+                    track('preview_performance', {
+                      ...sample,
+                      template,
+                      aspect,
+                    });
+                  }}
+                  karaokeTimeline={karaokeTimeline}
+                  mediaClips={mediaClips}
+                  timelineTracks={timelineTracks}
+                  overlayTextStyles={studioModel.visual.textStyles}
+                  subtitleStyle={studioModel.visual.subtitleStyle}
+                  effects={effectConfig}
+                  background={studioModel.visual.background}
+                  audioBinary={audioBinary}
+                  resultUrl={resultUrl || undefined}
+                />
+              </div>
+              {karaokeSyncStatus === 'syncing' && (
+                <output
+                  className="sd-subtitle-job"
+                  aria-live="polite"
+                  aria-label="Đang tìm subtitle"
+                >
+                  <i aria-hidden="true" />
+                  <span>
+                    <b>
+                      {subtitleRegenerating
+                        ? 'Đang lấy lại subtitle…'
+                        : 'Đang tìm subtitle…'}
+                    </b>
+                    <small>
+                      {subtitleRegenerating
+                        ? 'Đang bỏ cache và tạo lại bằng Groq. Subtitle cũ vẫn được giữ cho đến khi bản mới sẵn sàng.'
+                        : 'Bạn vẫn có thể chỉnh sửa trong khi chạy nền.'}
+                    </small>
+                  </span>
+                </output>
+              )}
+              {song.id && (
+                <div className="sd-subtitle-refresh">
+                  <button
+                    type="button"
+                    disabled={
+                      subtitleRegenerating || karaokeSyncStatus === 'syncing'
+                    }
+                    onClick={() => void regenerateSubtitleFromCloud()}
+                    title="Bỏ cache subtitle hiện tại và tạo lại bằng Groq"
+                  >
+                    <Sparkles />
+                    {subtitleRegenerating
+                      ? 'Đang lấy lại…'
+                      : 'Lấy lại subtitle'}
+                  </button>
+                  <small>Bỏ cache và tạo subtitle mới từ audio hiện tại.</small>
+                </div>
+              )}
+              {quickMode && <>
+              <details className="sd-media-suggestions" open={quickMode || undefined}>
+                <summary>Ảnh / video nền gợi ý</summary>
+              <SuggestedBackground
+                key={song.audio}
+                onAddToTimeline={addPexelsToTimeline}
+                songKey={song.audio}
+                text={`${song.title} ${song.style || ''} ${song.tags || ''}`}
+                aspect={aspect}
+                background={background}
                 disabled={rendering}
-                onClick={() => {
-                  setPanel('presets');
+                onChange={toolControlsProps.setBackground}
+                onBrowse={() => {
+                  setQuickMode(false);
+                  setPanel('background');
                   setMobileTools(true);
                 }}
-              >
-                <Sparkles />
-                Mẫu
-              </button>
-              <button
+              />
+              </details>
+              </>}
+              {quickMode && (
+                <section className="sd-quick-create" aria-label="Quick Create">
+                  <div className="sd-quick-create-head">
+                    <div>
+                      <small>QUICK CREATE · V23</small>
+                      <b>Chọn một mẫu, xem preview rồi xuất</b>
+                      <span>
+                        Đã gợi ý theo style, lyrics và định dạng phù hợp với bài
+                        này.
+                      </span>
+                    </div>
+                    <button
+                      className="sd-quick-customize"
+                      disabled={rendering}
+                      onClick={() => {
+                        setQuickMode(false);
+                        track('customize_opened', {
+                          preset_id: selectedPresetId,
+                          template,
+                          aspect,
+                        });
+                      }}
+                    >
+                      <SlidersHorizontal /> Customize
+                    </button>
+                  </div>
+                  <div className="sd-quick-presets">
+                    {quickPresets.map((preset, index) => (
+                      <button
+                        key={preset.id}
+                        className={
+                          selectedPresetId === preset.id ? 'active' : ''
+                        }
+                        disabled={rendering}
+                        onClick={() => {
+                          applyPreset(preset, 'replace-all');
+                          track('suggested_preset_selected', {
+                            preset_id: preset.id,
+                            rank: index + 1,
+                            category: preset.category,
+                          });
+                        }}
+                      >
+                        <span
+                          className={`scene-thumb scene-${preset.config.template}`}
+                          style={{
+                            backgroundImage: song.picture
+                              ? `linear-gradient(#080b1299,#080b1299),url("${song.picture}")`
+                              : undefined,
+                          }}
+                        />
+                        <span>
+                          <small>
+                            {index === 0
+                              ? 'ĐỀ XUẤT'
+                              : preset.badge || preset.category}
+                          </small>
+                          <b>{preset.name}</b>
+                          <em>
+                            {preset.config.aspect} ·{' '}
+                            {preset.config.lyrics === 'off'
+                              ? 'Visualizer'
+                              : 'Lyrics'}{' '}
+                            ·{' '}
+                            {masteringLabel(
+                              normalizeProductionPreset(
+                                {
+                                  mastering: preset.mastering,
+                                  export: preset.export,
+                                },
+                                preset.config.aspect,
+                              ).mastering.profile,
+                            )}
+                          </em>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="sd-quick-actions">
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={rendering}
+                      onClick={() => triggerQuickRender('cut')}
+                    >
+                      <Upload />
+                      {rendering
+                        ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
+                        : 'Create video'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={rendering}
+                      onClick={() => triggerQuickRender('30')}
+                    >
+                      <Play /> Tạo 30s cao trào
+                    </button>
+                  </div>
+                  {highlightNotice && !error && (
+                    <div
+                      className="sd-quick-highlight-status"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <Sparkles />
+                      <span>{highlightNotice}</span>
+                    </div>
+                  )}
+                  {renderNotice && !error && (
+                    <div
+                      className="sd-quick-render-status"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <b>Trạng thái render</b>
+                      <span>{renderNotice}</span>
+                    </div>
+                  )}
+                  {(rendering || error || lastRenderFailure) && (
+                    <div
+                      className={`sd-quick-render-status ${error ? 'error' : ''}`}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {rendering ? (
+                        <>
+                          <b>
+                            {renderStage === 'validation'
+                              ? 'Đang kiểm tra video…'
+                              : renderStage === 'prepare'
+                                ? 'Đang chuẩn bị media…'
+                                : renderStage === 'finalize'
+                                  ? 'Đang hoàn tất video…'
+                                  : 'Đang tạo video…'}
+                          </b>
+                          <span>
+                            {Math.round(progress)}% · Không đóng trang trong khi
+                            đang xử lý.
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <b>Không thể tạo video</b>
+                          <span>
+                            {error ||
+                              lastRenderFailure?.message ||
+                              'Render thất bại. Hãy thử lại.'}
+                          </span>
+                          {lastRenderFailure?.retryable && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                triggerQuickRender(lastRenderFailure.mode)
+                              }
+                            >
+                              Thử lại
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </section>
+              )}
+              {lastPresetId && (
+                <button
+                  className="sd-last-preset"
+                  disabled={rendering}
+                  onClick={() => {
+                    const preset = [
+                      ...BUILTIN_STUDIO_PRESETS,
+                      ...customPresets,
+                    ].find((item) => item.id === lastPresetId);
+                    if (preset) applyPreset(preset, 'replace-all');
+                  }}
+                >
+                  <Sparkles />
+                  <span>
+                    <b>Dùng lại mẫu gần nhất</b>
+                    <small>
+                      {[...BUILTIN_STUDIO_PRESETS, ...customPresets].find(
+                        (item) => item.id === lastPresetId,
+                      )?.name || 'Mẫu đã dùng trước đó'}
+                    </small>
+                  </span>
+                </button>
+              )}
+              {!quickMode && (
+                <div
+                  className="sd-first-run-flow"
+                  aria-label="Quy trình tạo video nhanh"
+                >
+                  <button
+                    className="primary"
+                    disabled={rendering}
+                    onClick={() => {
+                      setPanel('presets');
+                      setMobileTools(true);
+                    }}
+                  >
+                    <b>1 · Chọn mẫu</b>
+                    Mẫu hoàn chỉnh
+                  </button>
+                  <span>
+                    <b>2 · Xem preview</b>
+                    Chạm Play để kiểm tra
+                  </span>
+                  <button
+                    disabled={rendering}
+                    onClick={() => renderVideo('cut')}
+                  >
+                    <b>3 · Xuất video</b>
+                    {rendering ? `${Math.round(progress)}%` : 'Tạo video'}
+                  </button>
+                </div>
+              )}
+              {resultUrl && (
+                <div className="sd-result-actions">
+                  <div>
+                    <b>Video ready</b>
+                    <span>Play the exported video above or save it now.</span>
+                  </div>
+                  <button onClick={saveVideo}>
+                    <Download />
+                    <span className="sd-save-desktop">Download video</span>
+                    <span className="sd-save-mobile">Save to Photos</span>
+                  </button>
+                </div>
+              )}
+              <output aria-live="polite" className="sd-draft-status">
+                {draftStatus}
+              </output>
+              {rendering && (
+                <div role="status" className="sd-canvas-render-status">
+                  {Math.round(progress)}%
+                  {renderEta !== null
+                    ? ` · Còn khoảng ${renderEta}s`
+                    : ' · Đang chuẩn bị'}
+                  <button
+                    type="button"
+                    onClick={() => renderAbort.current?.abort()}
+                  >
+                    Hủy render
+                  </button>
+                </div>
+              )}
+
+            </section>
+            <aside className={`sd-inspector ${studioModel.scene.layers.some(l=>l.id===selectedSceneEffectId && l.type==='effect') ? 'sd-inspector-layer-selected' : ''}`}>
+              {studioModel.scene.layers.some(l=>l.id===selectedSceneEffectId && l.type==='effect') && <button type="button" className="sd-inspector-back" onClick={()=>setSelectedSceneEffectId(undefined)}>← Công cụ dự án</button>}
+              <div className="sd-simple-tools">
+                <nav aria-label="Công cụ chính">{[['presets','Mẫu'],['background','Media'],['text','Chữ'],['audio','Âm thanh']].map(([id,label])=><button type="button" key={id} aria-pressed={panel===id} onClick={()=>{setSelectedSceneEffectId(undefined);setPanel(id);}}>{label}</button>)}</nav>
+                <details className="sd-more-tools"><summary>Công cụ khác</summary><div>{[['layer-effects','Thêm hiệu ứng'],['wave','Sóng nhạc'],['lyrics','Lời bài hát'],['style','Bố cục & phong cách'],['format','Tỉ lệ video'],['trim','Cắt thời lượng'],['effects','Hiệu ứng chung']].map(([id,label])=><button type="button" key={id} aria-pressed={panel===id} onClick={()=>{setSelectedSceneEffectId(undefined);setPanel(id);}}>{label}</button>)}</div></details>
+              </div>
+              {panel==='background' && <details className="sd-media-suggestions"><summary>Gợi ý ảnh / video</summary><SuggestedBackground key={song.audio} onAddToTimeline={addPexelsToTimeline} songKey={song.audio} text={`${song.title} ${song.style || ''} ${song.tags || ''}`} aspect={aspect} background={background} disabled={rendering} onChange={toolControlsProps.setBackground} onBrowse={()=>setPanel('background')}/></details>}
+              {(panel==='layer-effects' || studioModel.scene.layers.some(l=>l.id===selectedSceneEffectId && l.type==='effect')) &&
+              <EffectLayerPanel
+                key={`${url}-${sceneEffectKey}`}
+                scene={projectScene}
+                timeMs={previewTime * 1000}
+                selectedId={selectedSceneEffectId}
+                onSelect={setSelectedSceneEffectId}
                 disabled={rendering}
-                onClick={() => {
-                  setPanel('style');
-                  setMobileTools(true);
+                onChange={(layers) => {
+                  invalidateRenderedResult();
+                  markPresetField('effects');
+                  setSceneEffectEdits({ key: sceneEffectKey, layers });
                 }}
-              >
-                <SlidersHorizontal />
-                Tùy chỉnh
-              </button>
+              />}
+              <div className="sd-song">
+                <img src={song.picture} />
+                <div>
+                  <h2>{song.title}</h2>
+                  <p>Created by {song.creator || 'Suno'}</p>
+                  <span>{fmt(song.duration)}</span>
+                </div>
+              </div>
               <button
-                disabled={rendering}
-                onClick={() => {
-                  setPanel('lyrics');
-                  setMobileTools(true);
-                }}
+                className={`sd-save-project ${savedProject ? 'saved' : ''}`}
+                disabled={savingProject}
+                onClick={() => void saveProject()}
               >
-                <FileText />
-                Lời
+                <Save />
+                {savingProject
+                  ? 'Đang lưu dự án…'
+                  : savedProject
+                    ? 'Đã lưu dự án'
+                    : 'Lưu dự án'}
               </button>
-              <button type="button" disabled={rendering} onClick={() => triggerQuickRender('cut')}>
+              <hr />
+              <div className="sd-inspector-tools">
+              <ToolControls
+                {...toolControlsProps}
+                presetContent={
+                  <PresetGallery
+                    presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
+                    selectedId={selectedPresetId}
+                    picture={song.picture}
+                    favoriteIds={favoritePresetIds}
+                    canUndo={Boolean(presetUndo)}
+                    modified={presetModified}
+                    onApply={applyPreset}
+                    onToggleFavorite={toggleFavoritePreset}
+                    onDuplicate={duplicatePreset}
+                    onRename={renameCustomPreset}
+                    onDelete={deleteCustomPreset}
+                    onSaveCurrent={saveCurrentAsPreset}
+                    onUpdateCurrent={updateCurrentPreset}
+                    onResetSelected={resetSelectedPreset}
+                    onExportPreset={exportPreset}
+                    onImportPreset={importPreset}
+                    onUndo={restorePresetSnapshot}
+                  />
+                }
+              />
+              </div>
+              <div
+                className="sd-visual-sync"
+                title="Preview/render visual fingerprint"
+              >
+                <span>Visual sync</span>
+                <b>{visualHash}</b>
+              </div>
+              <details className="sd-export-options"><summary>Tải âm thanh / phụ đề</summary><div className="sd-actions">
+                <button
+                  className="sd-export"
+                  disabled={rendering}
+                  onClick={() => renderVideo('cut')}
+                >
+                  <Upload />{' '}
+                  {rendering
+                    ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
+                    : `Export ${fmt(Math.max(0, trimEnd - trimStart))} video`}
+                </button>
+                {rendering && (
+                  <div className="sd-progress">
+                    <i style={{ width: `${progress}%` }} />
+                  </div>
+                )}
+                {lastRenderFailure && (
+                  <div className="sd-render-retry" role="status">
+                    <span>
+                      Lỗi ở bước <b>{lastRenderFailure.stage}</b>
+                      {lastRenderFailure.retryable
+                        ? ' · có thể thử lại'
+                        : ' · cần chỉnh cấu hình trước khi render lại'}
+                    </span>
+                    {lastRenderFailure.retryable && (
+                      <button
+                        disabled={rendering}
+                        onClick={() =>
+                          renderVideo(
+                            lastRenderFailure.mode,
+                            lastRenderFailure.attempt + 1,
+                          )
+                        }
+                      >
+                        Thử lại render
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div className="sd-downloads">
+                  <button
+                    disabled={rendering}
+                    onClick={() => renderVideo('30')}
+                  >
+                    <Play />
+                    30s cao trào
+                  </button>
+                  <button
+                    disabled={!!downloading}
+                    onClick={() => downloadAudio('mp3')}
+                  >
+                    <Download />
+                    {downloading === 'mp3' ? 'Creating…' : 'MP3'}
+                  </button>
+                  <button
+                    disabled={!!downloading}
+                    onClick={() => downloadAudio('wav')}
+                  >
+                    <Download />
+                    {downloading === 'wav' ? 'Creating…' : 'WAV'}
+                  </button>
+                  <button
+                    disabled={!!downloading}
+                    onClick={() => downloadAudio('m4a')}
+                  >
+                    <Music2 />
+                    M4A
+                  </button>
+                  <button
+                    disabled={!song.lyrics}
+                    onClick={() => downloadLyrics('txt')}
+                  >
+                    <FileText />
+                    Lyrics
+                  </button>
+                  <button
+                    disabled={!song.lyrics}
+                    onClick={() => downloadLyrics('srt')}
+                  >
+                    <FileText />
+                    SRT
+                  </button>
+                  {song.picture && (
+                    <a href={song.picture} download>
+                      <ImageIcon />
+                      Cover
+                    </a>
+                  )}
+                </div>
+              </div>
+              </details>
+            </aside>
+              {!quickMode && <details className="sd-workspace-divider"><summary>Điều chỉnh vùng làm việc</summary><label>Chiều cao timeline <input aria-label="Chiều cao timeline" type="range" min="100" max="400" step="10" value={timelineHeight} onChange={e=>setTimelineHeight(Number(e.target.value))}/></label></details>}
+              <SceneTimeline
+                key={song.id || url}
+                scene={projectScene}
+                playheadMs={previewTime * 1000}
+                selectedId={selectedSceneEffectId}
+                onSelect={(id) => {
+                  setSelectedSceneEffectId(id);
+                  const layer=projectScene.layers.find(item=>item.id===id);
+                  const target=layer?.type==='effect'?'layer-effects':id==='wave'?'wave':id==='subtitle'?'lyrics':id==='title'||id==='creator'?'text':layer?.type==='audio'?'audio':'background';
+                  setPanel(target);
+                  setEditingText(null);
+                }}
+                onChange={changeProjectScene}
+                onSeek={(ms) => {
+                  setPlaybackStart(ms / 1000);
+                  setPreviewTime(ms / 1000);
+                }}
+                onEditStart={() => {
+                  setAutoPreview(false);
+                  setTimelinePauseSignal((value) => value + 1);
+                }}
+                onAddMedia={(files) => {
+                  for (const file of Array.from(files || []))
+                    void addPexelsToTimeline(
+                      file,
+                      file.type.startsWith('video/') ? 'video' : 'photo',
+                    );
+                }}
+                disabled={rendering}
+                audioBinary={audioBinary}
+              />
+            <div className="sd-mobile-export">
+              <button
+                type="button"
+                disabled={rendering}
+                onClick={() => triggerQuickRender('cut')}
+              >
                 <Upload />
-                Xuất
+                {rendering
+                  ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
+                  : 'Create & export video'}
               </button>
-            </nav>
-          </div>
-        </main>
-      ))}
+              <nav>
+                <button
+                  disabled={rendering}
+                  onClick={() => {
+                    setPanel('presets');
+                    setMobileTools(true);
+                  }}
+                >
+                  <Sparkles />
+                  Mẫu
+                </button>
+                <button
+                  disabled={rendering}
+                  onClick={() => {
+                    setPanel('style');
+                    setMobileTools(true);
+                  }}
+                >
+                  <SlidersHorizontal />
+                  Tùy chỉnh
+                </button>
+                <button
+                  disabled={rendering}
+                  onClick={() => {
+                    setPanel('lyrics');
+                    setMobileTools(true);
+                  }}
+                >
+                  <FileText />
+                  Lời
+                </button>
+                <button
+                  type="button"
+                  disabled={rendering}
+                  onClick={() => triggerQuickRender('cut')}
+                >
+                  <Upload />
+                  Xuất
+                </button>
+              </nav>
+            </div>
+          </main>
+        ))}
       {song && view !== 'settings' && mobileTools && (
-        <StudioSheet title="Điều khiển video" onClose={() => setMobileTools(false)} className="sd-tool-sheet">
-          <ToolControls {...toolControlsProps} presetContent={<PresetGallery
-              presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
-              selectedId={selectedPresetId}
-              picture={song.picture}
-              favoriteIds={favoritePresetIds}
-              canUndo={Boolean(presetUndo)}
-              modified={presetModified}
-              onApply={applyPreset}
-              onToggleFavorite={toggleFavoritePreset}
-              onDuplicate={duplicatePreset}
-              onRename={renameCustomPreset}
-              onDelete={deleteCustomPreset}
-              onSaveCurrent={saveCurrentAsPreset}
-              onUpdateCurrent={updateCurrentPreset}
-              onResetSelected={resetSelectedPreset}
-              onExportPreset={exportPreset}
-              onImportPreset={importPreset}
-              onUndo={restorePresetSnapshot}
-            />} />
+        <StudioSheet
+          title="Điều khiển video"
+          onClose={() => setMobileTools(false)}
+          className="sd-tool-sheet"
+        >
+          <ToolControls
+            {...toolControlsProps}
+            presetContent={
+              <PresetGallery
+                presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}
+                selectedId={selectedPresetId}
+                picture={song.picture}
+                favoriteIds={favoritePresetIds}
+                canUndo={Boolean(presetUndo)}
+                modified={presetModified}
+                onApply={applyPreset}
+                onToggleFavorite={toggleFavoritePreset}
+                onDuplicate={duplicatePreset}
+                onRename={renameCustomPreset}
+                onDelete={deleteCustomPreset}
+                onSaveCurrent={saveCurrentAsPreset}
+                onUpdateCurrent={updateCurrentPreset}
+                onResetSelected={resetSelectedPreset}
+                onExportPreset={exportPreset}
+                onImportPreset={importPreset}
+                onUndo={restorePresetSnapshot}
+              />
+            }
+          />
         </StudioSheet>
       )}
       {!song && <MobileAppNav />}

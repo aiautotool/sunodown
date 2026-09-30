@@ -171,7 +171,7 @@ export function PresetGallery({
             {modified && selectedId ? ' · Đã chỉnh tay' : ''}
           </b>
         </div>
-        <div className="sd-preset-head-actions">
+        <details className="sd-preset-management"><summary>Quản lý mẫu</summary><div className="sd-preset-head-actions">
           {modified && selectedPreset && (
             <button
               onClick={() => {
@@ -214,7 +214,7 @@ export function PresetGallery({
             />
           </label>
           <button onClick={() => setSaving(true)}><Save /> Lưu mẫu mới</button>
-        </div>
+        </div></details>
       </div>
 
       <p className="sd-preset-explainer">
@@ -244,7 +244,7 @@ export function PresetGallery({
             <div className="sd-preset-save-copy">
               <small>MẪU CỦA TÔI</small>
               <b>Lưu cấu hình hiện tại</b>
-              <span>Lưu toàn bộ cấu hình để lần sau áp dụng lại chỉ với một chạm.</span>
+              <span>Lưu style và timing FX để dùng cho bài khác. Không lưu audio hoặc lyrics hiện tại.</span>
             </div>
             <input
               autoFocus
@@ -406,7 +406,7 @@ export function PresetGallery({
                   style={preset.thumbnail || picture ? { backgroundImage: `url("${preset.thumbnail || picture}")` } : undefined}
                 >
                   <em>{preset.category}</em>
-                  {preset.badge && <strong>{preset.badge}</strong>}
+                  <strong>{preset.sceneTemplate ? 'Style + FX timing' : 'Style Preset'}</strong>
                   {selected && (
                     <span className={`sd-preset-state ${modified ? 'modified' : 'applied'}`}>
                       {modified ? 'Đã chỉnh' : 'Đã áp dụng'}
