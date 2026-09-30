@@ -1,6 +1,7 @@
 import { cloneElement, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { Download, Menu, Music2, Pause, Play, Save, SlidersHorizontal, Sparkles, Subtitles, Upload, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { KaraokeLine, MediaClip, RenderJob, SavedVisualPreset, Song, StudioSnapshot, TimelineTrackState } from './types';
@@ -15,6 +16,7 @@ import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendP
 import { UniversalEditorTimeline } from './UniversalEditorTimeline';
 import { storage } from './storage';
 import { backgroundPresetColors } from './background-presets';
+import { parseSubtitleText, toSrt } from './subtitle-files';
 
 type Tool=StudioPanel|null;
 
@@ -238,14 +240,23 @@ export function StudioScreen({
     }
   };
 
-  const exportSrtText=()=>timeline.map((line,index)=>{
-    const stamp=(seconds:number)=>{
-      const ms=Math.max(0,Math.round(seconds*1000));
-      const h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000),s=Math.floor(ms%60000/1000),x=ms%1000;
-      return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+','+String(x).padStart(3,'0');
-    };
-    return String(index+1)+'\n'+stamp(line.start)+' --> '+stamp(line.end)+'\n'+line.text+'\n';
-  }).join('\n');
+  const exportSrtText=()=>toSrt(timeline);
+
+  const importSubtitles=async()=>{
+    try{
+      const result=await DocumentPicker.getDocumentAsync({type:['application/x-subrip','text/vtt','text/plain'],multiple:false,copyToCacheDirectory:true});
+      if(result.canceled)return;
+      const asset=result.assets[0];if(!asset?.uri)return;
+      const response=await fetch(asset.uri);
+      const text=await response.text();
+      const lines=parseSubtitleText(text);
+      if(!lines.length)throw new Error('File không có cue SRT/VTT hợp lệ.');
+      setTimeline(lines);
+      setRenderMessage('Đã nhập '+lines.length+' cue subtitle.');
+    }catch(e){
+      setRenderMessage(e instanceof Error?e.message:'Không nhập được subtitle.');
+    }
+  };
 
   const downloadText=async(format:'txt'|'srt')=>{
     try{
@@ -316,6 +327,8 @@ export function StudioScreen({
     onChange={setConfig}
     timeline={timeline}
     onTimelineChange={setTimeline}
+    onImportSubtitles={()=>void importSubtitles()}
+    onExportSubtitles={()=>void downloadText('srt')}
     subtitleLoading={subLoading}
     subtitleError={subError}
     onReget={()=>void reget()}
