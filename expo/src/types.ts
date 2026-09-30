@@ -62,6 +62,10 @@ export type StudioVisualConfig = {
   waveOpacity: number;
   waveDensity: number;
   waveRotation: number;
+  waveScale?: number;
+  backgroundBlur?: number;
+  backgroundDim?: number;
+  backgroundOverlayOpacity?: number;
   titleScale: number;
   creatorScale: number;
   subtitleScale: number;
