@@ -274,7 +274,7 @@ export function StudioScreen({
       <ScrollView style={styles.mobileScroll} contentContainerStyle={styles.mobileContent}>
         <View style={styles.mobileTitleBar}>
           <Pressable onPress={onBack} style={styles.mobileBack}><Text style={styles.mobileBackText}>‹</Text></Pressable>
-          {song.picture?<Image source={{uri:song.picture}} style={styles.mobileCover}/>:<View style={[styles.mobileCover,styles.coverEmpty]}><Music2 color={colors.violet}/></View>}
+          {song.picture?<Image source={{uri:song.picture}} style={styles.mobileCover}/>:<LocalAudioCover title={song.title} style={styles.mobileCover}/>} 
           <View style={styles.mobileTitleCopy}><Text numberOfLines={1} style={styles.mobileTitle}>{song.title}</Text><Text style={styles.mobileMeta}>{fmt(playback.duration||song.duration)} · Suno song</Text></View>
           <View style={styles.mobileMenu}><Menu size={20} color="#d7dde6"/></View>
         </View>
@@ -366,7 +366,7 @@ export function StudioScreen({
       ? <View style={styles.quickDesktopSpacer}/>
       : <ScrollView style={styles.inspector} contentContainerStyle={styles.inspectorContent}>
           <View style={styles.song}>
-            {song.picture?<Image source={{uri:song.picture}} style={styles.cover}/>:<View style={[styles.cover,styles.coverEmpty]}><Music2 size={34} color={colors.violet}/></View>}
+            {song.picture?<Image source={{uri:song.picture}} style={styles.cover}/>:<LocalAudioCover title={song.title} style={styles.cover}/>} 
             <View style={styles.songCopy}>
               <Text numberOfLines={2} style={styles.songTitle}>{song.title}</Text>
               <Text style={styles.songMeta}>Created by {song.creator||'Suno'}</Text>
@@ -398,6 +398,15 @@ export function StudioScreen({
         <Pressable style={styles.downloadBtn} onPress={()=>void downloadText('srt')}><Subtitles size={15} color="#cfc5ff"/><Text style={styles.downloadText}>SRT</Text></Pressable>
       </View>
     </View>}
+  </View>;
+}
+
+function LocalAudioCover({title,style}:{title:string;style:any}){
+  return <View style={[style,styles.localCoverWrap]}>
+    <LinearGradient colors={['#17112d','#5234b8','#111827']} locations={[0,.52,1]} style={StyleSheet.absoluteFill}/>
+    <View style={styles.localCoverOrb}/>
+    <Music2 size={24} color="#f5f1ff"/>
+    <Text numberOfLines={1} style={styles.localCoverTitle}>{title}</Text>
   </View>;
 }
 
@@ -626,6 +635,9 @@ const styles=StyleSheet.create({
   song:{flexDirection:'row',gap:20,alignItems:'center'},
   cover:{width:125,height:125,borderWidth:1,borderColor:'#394352',borderRadius:9,backgroundColor:'#151c26'},
   coverEmpty:{alignItems:'center',justifyContent:'center'},
+  localCoverWrap:{position:'relative',overflow:'hidden',alignItems:'center',justifyContent:'center'},
+  localCoverOrb:{position:'absolute',right:-11,top:-10,width:46,height:46,borderRadius:23,backgroundColor:'rgba(255,255,255,.12)'},
+  localCoverTitle:{position:'absolute',left:5,right:5,bottom:5,color:'rgba(255,255,255,.78)',fontSize:6,fontWeight:'800',textAlign:'center'},
   songCopy:{flex:1,minWidth:0},
   songTitle:{color:'#f5f7fb',fontSize:25,fontWeight:'700',marginBottom:5},
   songMeta:{color:'#9ba5b5',fontSize:12,marginTop:8},
