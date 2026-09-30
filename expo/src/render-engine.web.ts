@@ -1,6 +1,7 @@
 import type { Song, StudioAspect } from './types';
 import { publicAudioUrl } from './api';
 import type { ExportAsset, VisualizerExportOptions } from './render-engine';
+import { backgroundPresetColors } from './background-presets';
 
 function safe(value:string){
   return (value||'sunodown').replace(/[\\/:*?"<>|\r\n]+/g,'-').replace(/\s+/g,' ').trim().slice(0,80)||'sunodown';
@@ -146,7 +147,8 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
   const AudioCtx=window.AudioContext||(window as typeof window&{webkitAudioContext?:typeof AudioContext}).webkitAudioContext;
   if(!AudioCtx)throw new Error('Trình duyệt không hỗ trợ Web Audio.');
   const audioContext=new AudioCtx();
-  const background=options.visualVisible===false?null:await loadBackground(options.backgroundUri||song.picture);
+  const backgroundSource=options.backgroundMode==='suno'?song.picture:options.backgroundMode==='preset'?undefined:(options.backgroundUri||song.picture);
+  const background=options.visualVisible===false?null:await loadBackground(backgroundSource);
   const clipImages=options.visualVisible===false?new Map<string,ImageBitmap>():await loadClipImages(options.mediaClips);
   try{
     const decoded=await audioContext.decodeAudioData(bytes.slice(0));
@@ -173,7 +175,10 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
       if(currentBackground){cover(ctx,currentBackground,width,height);ctx.fillStyle='rgba(4,7,12,.48)';ctx.fillRect(0,0,width,height)}
       else{
         const gradient=ctx.createLinearGradient(0,0,width,height);
-        gradient.addColorStop(0,options.presetId.includes('neon')?'#171231':'#161124');gradient.addColorStop(.55,'#080c12');gradient.addColorStop(1,'#05070b');
+        const preset=options.backgroundMode==='preset'?backgroundPresetColors(options.backgroundPreset||'dark-film'):null;
+        gradient.addColorStop(0,preset?.[0]||(options.presetId.includes('neon')?'#171231':'#161124'));
+        gradient.addColorStop(.55,preset?.[1]||'#080c12');
+        gradient.addColorStop(1,preset?.[2]||'#05070b');
         ctx.fillStyle=gradient;ctx.fillRect(0,0,width,height);
       }
       const glow=ctx.createRadialGradient(width*.76,height*.24,0,width*.76,height*.24,Math.max(width,height)*.42);
