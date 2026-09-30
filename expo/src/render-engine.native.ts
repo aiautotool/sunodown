@@ -131,7 +131,7 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
     ? `showspectrum=s=${waveW}x${waveH}:mode=combined:color=intensity:slide=scroll:scale=log,format=rgba,colorchannelmixer=aa=${opacity}`
     : `showwaves=s=${waveW}x${waveH}:mode=cline:rate=30:colors=${c1}|${c2},format=rgba,colorchannelmixer=aa=${opacity}`;
   const waveX=Math.max(0,Math.min(width-waveW,Math.round(width*((options.waveX??50)/100)-waveW/2)));
-  const y=Math.max(0,Math.min(height-waveH,Math.round(height*((options.waveY??82)/100)-waveH/2)));
+  const y=Math.max(0,Math.min(height-waveH,Math.round(height*((options.waveY??86)/100)-waveH/2)));
   const filters:string[]=[];
 
   let audioLabel='';
