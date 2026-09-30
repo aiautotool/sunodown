@@ -886,6 +886,7 @@ export default function CreatorStudio({
   const [karaokeSyncStatus, setKaraokeSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'fallback'>('idle');
   const [karaokeSyncMessage, setKaraokeSyncMessage] = useState('');
   const [subtitleNotice, setSubtitleNotice] = useState('');
+  const [subtitleRegenerating, setSubtitleRegenerating] = useState(false);
   const [subtitleDebugEnabled, setSubtitleDebugEnabled] = useState(false);
   const [subtitleDebugOpen, setSubtitleDebugOpen] = useState(false);
   const [subtitleDebugLogs, setSubtitleDebugLogs] = useState<SubtitleDebugEntry[]>([]);
@@ -1871,6 +1872,121 @@ export default function CreatorStudio({
     track('karaoke_auto_sync_failed', {
       attempts: delays.length,
     });
+  }
+
+  async function regenerateSubtitleFromCloud() {
+    if (!song?.id) {
+      setError('Bài này chưa có songId để lấy lại subtitle từ cloud.');
+      return;
+    }
+
+    const previousTimeline = karaokeTimeline;
+    const previousStatus = karaokeSyncStatus;
+    const previousMessage = karaokeSyncMessage;
+    const run = ++karaokeSyncRun.current;
+
+    setSubtitleRegenerating(true);
+    setKaraokeSyncStatus('syncing');
+    setKaraokeSyncMessage('Đang bỏ cache và lấy lại subtitle mới…');
+    setSubtitleNotice('');
+    pushSubtitleDebug('cloud-subtitle-force-start', { songId: song.id });
+
+    try {
+      let response = await fetch('/api/music/subtitle/generate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          songId: song.id,
+          language: 'vi',
+          force: true,
+        }),
+      });
+
+      if (response.status === 202) {
+        const endpoint = `/api/music/subtitle?songId=${encodeURIComponent(song.id)}&language=vi&refresh=${Date.now()}`;
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          if (karaokeSyncRun.current !== run) return;
+          await new Promise<void>((resolvePoll) =>
+            window.setTimeout(resolvePoll, 1500),
+          );
+          response = await fetch(endpoint, {
+            cache: 'no-store',
+            headers: {
+              'cache-control': 'no-cache',
+              pragma: 'no-cache',
+            },
+          });
+          if (response.ok) break;
+          if (response.status !== 404) break;
+        }
+      }
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        subtitle?: {
+          lines?: KaraokeLine[];
+          status?: 'synced' | 'fallback' | 'manual';
+          confidence?: number;
+          engine?: string;
+          generatedAt?: number;
+        };
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Không lấy lại được subtitle.');
+      }
+
+      const duration = song.duration || trimEnd || 30;
+      const lines = normalizeKaraokeTimeline(
+        Array.isArray(payload.subtitle?.lines)
+          ? payload.subtitle!.lines!
+          : [],
+        duration,
+      );
+
+      if (!lines.length) {
+        throw new Error('Subtitle mới không có cue hợp lệ.');
+      }
+      if (karaokeSyncRun.current !== run) return;
+
+      const nextStatus =
+        payload.subtitle?.status === 'fallback' ? 'fallback' : 'synced';
+      const message =
+        nextStatus === 'synced'
+          ? `Đã lấy lại subtitle mới · ${lines.length} câu.`
+          : `Đã lấy lại subtitle mới · ${lines.length} câu · nên kiểm tra timing.`;
+
+      setKaraokeTimeline(lines);
+      cacheMusicSubtitle(song.id, lines);
+      setKaraokeSyncStatus(nextStatus);
+      setKaraokeSyncMessage(message);
+      setSubtitleNotice(message);
+      setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
+      invalidateRenderedResult();
+      pushSubtitleDebug('cloud-subtitle-force-ready', {
+        lines: lines.length,
+        confidence: payload.subtitle?.confidence ?? null,
+        engine: payload.subtitle?.engine || 'unknown',
+        generatedAt: payload.subtitle?.generatedAt ?? null,
+      });
+      track('karaoke_cloud_regenerated', {
+        lines: lines.length,
+        confidence: payload.subtitle?.confidence ?? null,
+      });
+    } catch (error) {
+      if (karaokeSyncRun.current !== run) return;
+      const message =
+        error instanceof Error ? error.message : 'Không lấy lại được subtitle.';
+      setKaraokeTimeline(previousTimeline);
+      setKaraokeSyncStatus(previousStatus);
+      setKaraokeSyncMessage(previousMessage || message);
+      setSubtitleNotice(`Lấy lại subtitle lỗi · vẫn giữ bản cũ. ${message}`);
+      pushSubtitleDebug('cloud-subtitle-force-error', { error: message });
+    } finally {
+      if (karaokeSyncRun.current === run) {
+        setSubtitleRegenerating(false);
+      }
+    }
   }
 
   async function resolve(
@@ -3511,10 +3627,28 @@ export default function CreatorStudio({
               >
                 <i aria-hidden="true" />
                 <span>
-                  <b>Đang tìm subtitle…</b>
-                  <small>Bạn vẫn có thể chỉnh sửa trong khi chạy nền.</small>
+                  <b>{subtitleRegenerating ? 'Đang lấy lại subtitle…' : 'Đang tìm subtitle…'}</b>
+                  <small>
+                    {subtitleRegenerating
+                      ? 'Đang bỏ cache và tạo lại bằng Groq. Subtitle cũ vẫn được giữ cho đến khi bản mới sẵn sàng.'
+                      : 'Bạn vẫn có thể chỉnh sửa trong khi chạy nền.'}
+                  </small>
                 </span>
               </output>
+            )}
+            {song.id && (
+              <div className="sd-subtitle-refresh">
+                <button
+                  type="button"
+                  disabled={subtitleRegenerating || karaokeSyncStatus === 'syncing'}
+                  onClick={() => void regenerateSubtitleFromCloud()}
+                  title="Bỏ cache subtitle hiện tại và tạo lại bằng Groq"
+                >
+                  <Sparkles />
+                  {subtitleRegenerating ? 'Đang lấy lại…' : 'Lấy lại subtitle'}
+                </button>
+                <small>Bỏ cache và tạo subtitle mới từ audio hiện tại.</small>
+              </div>
             )}
             <SuggestedBackground
               key={song.audio}
