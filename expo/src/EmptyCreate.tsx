@@ -146,10 +146,10 @@ export function EmptyCreate({
         <View style={styles.copy}>
           <View style={styles.kicker}><Sparkles size={13} color="#a27dff"/><Text style={styles.kickerText}>CREATOR STUDIO</Text></View>
           <Text style={[styles.headline,{fontSize:headlineSize,lineHeight:headlineSize*.98},mobile&&styles.headlineMobile]}>Turn your Suno song{String.fromCharCode(10)}<Text style={styles.headlineAccent}>into stunning content</Text></Text>
-          <Text style={styles.description}>Biến nhạc Suno thành video lyric, karaoke và social video chuyên nghiệp chỉ trong vài phút.</Text>
+          <Text style={[styles.description,mobile&&styles.descriptionMobile]}>Biến nhạc Suno thành video lyric, karaoke và social video chuyên nghiệp chỉ trong vài phút.</Text>
 
           <View style={[styles.analyzeRow,stacked&&styles.analyzeRowStack]}>
-            <View style={styles.linkbox}>
+            <View style={[styles.linkbox,mobile&&styles.linkboxMobile]}>
               <Link2 size={18} color="#c7d0dd"/>
               <TextInput
                 value={input}
@@ -163,7 +163,7 @@ export function EmptyCreate({
               <Pressable onPress={paste} style={styles.paste}><Text style={styles.pasteText}>Dán</Text></Pressable>
             </View>
             <Pressable disabled={loading} onPress={analyze} style={[styles.analyzeButton,stacked&&styles.analyzeButtonStack]}>
-              <LinearGradient colors={['#9560ff','#745cf2']} start={{x:0,y:0}} end={{x:1,y:1}} style={styles.analyze}>
+              <LinearGradient colors={['#9560ff','#745cf2']} start={{x:0,y:0}} end={{x:1,y:1}} style={[styles.analyze,mobile&&styles.analyzeMobile]}>
                 {loading?<ActivityIndicator color="#fff"/>:<><Sparkles size={16} color="#fff"/><Text style={styles.analyzeText}>Phân tích</Text><Text style={styles.analyzeArrow}>›</Text></>}
               </LinearGradient>
             </Pressable>
@@ -172,12 +172,12 @@ export function EmptyCreate({
           <View style={styles.orRow}><View style={styles.orLine}/><Text style={styles.orText}>HOẶC</Text><View style={styles.orLine}/></View>
 
           <View style={[styles.sourceGrid,mobile&&styles.sourceGridMobile]}>
-            <Pressable style={styles.sourceCard} onPress={()=>void pickAudio()}>
+            <Pressable style={[styles.sourceCard,mobile&&styles.sourceCardMobile]} onPress={()=>void pickAudio()}>
               <View style={styles.sourceIcon}><Upload size={20} color="#a97eff"/></View>
               <View style={styles.sourceCopy}><Text style={styles.sourceTitle}>Tải file audio lên</Text><Text style={styles.sourceSub}>MP3, WAV, M4A, AAC, OGG, FLAC</Text></View>
               <Text style={styles.sourceArrow}>›</Text>
             </Pressable>
-            <Pressable style={styles.sourceCard} onPress={()=>onNavigate('library')}>
+            <Pressable style={[styles.sourceCard,mobile&&styles.sourceCardMobile]} onPress={()=>onNavigate('library')}>
               <View style={styles.sourceIcon}><Music2 size={20} color="#a97eff"/></View>
               <View style={styles.sourceCopy}><Text style={styles.sourceTitle}>Thư viện bài hát</Text><Text style={styles.sourceSub}>Quản lý bài đã lưu và quét theo tài khoản Suno</Text></View>
               <Text style={styles.sourceArrow}>›</Text>
@@ -278,24 +278,27 @@ const styles=StyleSheet.create({
   proTitle:{color:'#f3f5f8',fontSize:12,fontWeight:'700'},proSub:{color:'#717e92',fontSize:8,marginTop:4},proArrow:{color:'#8e9bb0',fontSize:22},
 
   scroll:{flex:1},shell:{paddingTop:26,paddingHorizontal:28,paddingBottom:22},shellMid:{paddingTop:22,paddingHorizontal:20,paddingBottom:22},shellStacked:{paddingTop:18,paddingHorizontal:18,paddingBottom:90},shellMobile:{paddingTop:12,paddingHorizontal:16,paddingBottom:92},
-  mobileBrand:{height:52,flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:4,marginBottom:8},
+  mobileBrand:{height:52,flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginHorizontal:-16,paddingLeft:16,paddingRight:4,marginBottom:8},
   mobileBrandLeft:{flexDirection:'row',alignItems:'center',gap:10},mobileBrandText:{color:'#f5f7fb',fontSize:21,fontWeight:'700'},mobileMenu:{width:38,height:38,borderWidth:1,borderColor:'#343d4b',borderRadius:11,backgroundColor:'#111722',alignItems:'center',justifyContent:'center'},
   hero:{minHeight:520,flexDirection:'row',gap:18,alignItems:'center'},heroStack:{flexDirection:'column',alignItems:'stretch',paddingTop:18},
-  copy:{flex:1,maxWidth:720},kicker:{alignSelf:'flex-start',height:34,borderWidth:1,borderColor:'rgba(145,164,194,.13)',borderRadius:999,backgroundColor:'rgba(23,32,49,.72)',paddingHorizontal:14,flexDirection:'row',alignItems:'center',gap:8},
+  copy:{flexGrow:1.05,flexShrink:1,flexBasis:500,maxWidth:720},kicker:{alignSelf:'flex-start',height:34,borderWidth:1,borderColor:'rgba(145,164,194,.13)',borderRadius:999,backgroundColor:'rgba(23,32,49,.72)',paddingHorizontal:14,flexDirection:'row',alignItems:'center',gap:8},
   kickerText:{color:'#b9c3d4',fontSize:9,fontWeight:'800',letterSpacing:1.8},
-  headline:{color:'#f5f7fb',fontWeight:'900',letterSpacing:-3,marginTop:17,marginBottom:14},headlineMobile:{fontSize:39,lineHeight:39.4,letterSpacing:-1.7},
-  headlineAccent:{color:'#8d66ff'},description:{maxWidth:650,color:'#aeb9cb',fontSize:14,lineHeight:23,marginBottom:24},
+  headline:{color:'#f5f7fb',fontWeight:'900',letterSpacing:-3,marginTop:17,marginBottom:14},headlineMobile:{fontSize:39,lineHeight:39.4,letterSpacing:-2.35},
+  headlineAccent:{color:'#8d66ff'},description:{maxWidth:650,color:'#aeb9cb',fontSize:14,lineHeight:23,marginBottom:24},descriptionMobile:{fontSize:12,lineHeight:20,marginBottom:18},
   analyzeRow:{flexDirection:'row',gap:9},analyzeRowStack:{flexDirection:'column'},analyzeButton:{width:174,flexBasis:174,flexShrink:0},analyzeButtonStack:{width:'100%',flexBasis:'auto' as any},
   linkbox:{flex:1,minHeight:62,borderWidth:1,borderColor:'rgba(143,106,255,.72)',borderRadius:14,backgroundColor:'#0e1622',paddingLeft:15,paddingRight:11,flexDirection:'row',alignItems:'center',gap:10},
+  linkboxMobile:{minHeight:58},
   input:{flex:1,color:'#f8faff',fontSize:13,paddingVertical:0},paste:{borderRadius:8,backgroundColor:'rgba(255,255,255,.05)',paddingHorizontal:9,paddingVertical:7},pasteText:{color:'#9aa6b9',fontSize:9},
   analyze:{minHeight:62,borderRadius:14,alignItems:'center',justifyContent:'center',flexDirection:'row',gap:9,paddingHorizontal:14},analyzeText:{color:'#fff',fontSize:13,fontWeight:'800'},analyzeArrow:{color:'#fff',fontSize:22},
+  analyzeMobile:{minHeight:54},
   orRow:{flexDirection:'row',alignItems:'center',gap:12,marginVertical:15},orLine:{height:1,flex:1,backgroundColor:'rgba(137,153,179,.13)'},orText:{color:'#5f6b7e',fontSize:8,fontWeight:'800',letterSpacing:1.6},
   sourceGrid:{flexDirection:'row',gap:10},sourceGridMobile:{flexDirection:'column'},sourceCard:{flex:1,minHeight:78,borderWidth:1,borderColor:'rgba(132,148,174,.15)',borderRadius:14,backgroundColor:'#0f1722',paddingHorizontal:13,paddingVertical:11,flexDirection:'row',alignItems:'center',gap:12},
+  sourceCardMobile:{minHeight:72},
   sourceIcon:{width:44,height:44,borderRadius:13,backgroundColor:'rgba(133,82,255,.20)',alignItems:'center',justifyContent:'center'},sourceCopy:{flex:1},sourceTitle:{color:'#e9edf4',fontSize:11,fontWeight:'700'},sourceSub:{color:'#778397',fontSize:8,marginTop:4},sourceArrow:{color:'#8996aa',fontSize:20},
   error:{color:'#ff9da5',fontSize:12,marginTop:10},continueCard:{marginTop:10,minHeight:54,borderWidth:1,borderColor:'rgba(105,122,149,.12)',borderRadius:11,backgroundColor:'rgba(10,16,25,.65)',paddingHorizontal:12,flexDirection:'row',alignItems:'center',gap:10},continueKicker:{color:'#7666c9',fontSize:7,letterSpacing:1},continueTitle:{color:'#dbe1ea',fontSize:9,fontWeight:'700',marginTop:2},
 
-  showcase:{flex:0.95,minHeight:520,alignItems:'center',justifyContent:'center',position:'relative'},showcaseStack:{width:'100%',minHeight:520},
-  showcaseGlow:{position:'absolute',width:590,height:520,borderRadius:295,backgroundColor:'rgba(139,75,255,.13)',transform:[{rotate:'-8deg'}]},
+  showcase:{flexGrow:.95,flexShrink:1,flexBasis:430,minHeight:520,alignItems:'center',justifyContent:'center',position:'relative'},showcaseStack:{width:'100%',minHeight:520},
+  showcaseGlow:{position:'absolute',width:590,height:520,borderRadius:295,backgroundColor:'rgba(139,75,255,.035)',shadowColor:'#bc54ff',shadowOpacity:.12,shadowRadius:70,transform:[{rotate:'-8deg'}]},
   toolStack:{position:'absolute',left:'5%',top:'23%',zIndex:5,width:100,borderWidth:1,borderColor:'rgba(182,166,231,.2)',borderRadius:21,overflow:'hidden',backgroundColor:'rgba(20,21,38,.90)',transform:[{rotate:'8deg'}]},
   toolStackMid:{left:0,width:100},miniTool:{height:76,alignItems:'center',justifyContent:'center',borderBottomWidth:1,borderColor:'rgba(255,255,255,.045)'},miniToolText:{color:'#bec7d7',fontSize:7,marginTop:8},
   phone:{zIndex:4,width:280,aspectRatio:9/16,borderWidth:1,borderColor:'rgba(210,218,239,.22)',borderRadius:38,backgroundColor:'#111a26',padding:10,transform:[{rotate:'7deg'},{rotateY:'-8deg'}]},
