@@ -44,3 +44,27 @@ export async function shareTextFile(contents:string,filename:string,mimeType='te
   await FileSystem.writeAsStringAsync(target,contents,{encoding:FileSystem.EncodingType.UTF8});
   if(await Sharing.isAvailableAsync())await Sharing.shareAsync(target,{mimeType,dialogTitle:'Lưu '+name});
 }
+
+
+export async function saveExportedAsset(asset:{uri:string;filename:string;mimeType:string;cleanup?:()=>void}){
+  try{
+    if(Platform.OS==='web'){
+      if(typeof document==='undefined')return;
+      const anchor=document.createElement('a');
+      anchor.href=asset.uri;
+      anchor.download=asset.filename;
+      anchor.rel='noopener';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      return;
+    }
+    if(await Sharing.isAvailableAsync()){
+      await Sharing.shareAsync(asset.uri,{mimeType:asset.mimeType,dialogTitle:'Lưu '+asset.filename});
+    }else{
+      await Linking.openURL(asset.uri);
+    }
+  }finally{
+    if(asset.cleanup)setTimeout(asset.cleanup,1200);
+  }
+}
