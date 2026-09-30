@@ -42,7 +42,7 @@ export function StartupScreen() {
   );
 }
 const styles=StyleSheet.create({
-  overlay:{...StyleSheet.absoluteFillObject,zIndex:999,alignItems:'center',justifyContent:'center',paddingHorizontal:28},
+  overlay:{...StyleSheet.absoluteFill,zIndex:999,alignItems:'center',justifyContent:'center',paddingHorizontal:28},
   markWrap:{marginBottom:26},mark:{width:66,height:66,borderRadius:20,alignItems:'center',justifyContent:'center'},
   kicker:{color:'#9a86ec',fontSize:10,fontWeight:'800',letterSpacing:3.2,marginBottom:14},
   title:{color:'#fff',fontSize:54,fontWeight:'800',letterSpacing:-2.5},
