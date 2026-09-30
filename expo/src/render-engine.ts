@@ -22,6 +22,8 @@ export type VisualizerExportOptions = {
   waveDensity?: number;
   waveRotation?: number;
   backgroundUri?: string;
+  backgroundMode?: 'suno'|'preset'|'image'|'video';
+  backgroundPreset?: string;
   lyricsMode?: StudioLyricsMode;
   timeline?: KaraokeLine[];
   titleColor?: string;
