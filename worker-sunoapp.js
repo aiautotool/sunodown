@@ -79,10 +79,10 @@ async function dispatchRenderJob(env,id){
 
 export default {
   async fetch(request,env,ctx){
-    const url=new URL(request.url);
-    if((request.method==='GET'||request.method==='HEAD')&&!url.pathname.startsWith('/api/')){
-      return env.ASSETS.fetch(request);
-    }
+    // Web parity: the v24react branch keeps the original v24 Vinext UI
+    // in app/** and components/**. Delegate every request to the v24
+    // worker so pages, server rendering, assets and APIs use the exact
+    // same HTML/CSS/JS behavior as v24 instead of the Expo Web shell.
     return baseWorker.fetch(request,env,ctx);
   },
   async queue(batch,env){
