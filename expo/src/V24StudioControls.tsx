@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { FileText, Image as ImageIcon, Music2, SlidersHorizontal, Sparkles } from 'lucide-react-native';
 import type { KaraokeLine, Song, StudioAspect, StudioLyricsMode as LyricsMode, StudioMotion as Motion, StudioVisualConfig } from './types';
+export type { StudioVisualConfig } from './types';
 
 export const DEFAULT_VISUAL_CONFIG:StudioVisualConfig={
   presetId:'signature-mirror-glow',
