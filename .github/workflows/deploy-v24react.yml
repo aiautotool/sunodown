@@ -66,6 +66,8 @@ jobs:
 
       - name: Export universal Expo Web
         working-directory: expo
+        env:
+          EXPO_PUBLIC_BUILD_SHA: ${{ github.sha }}
         run: npm run build:web
 
       - name: Merge universal Expo UI with isolated API Worker
