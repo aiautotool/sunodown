@@ -67,13 +67,20 @@ function UniversalApp(){
   };
 
   const goCreate=()=>setView('create');
+  const upsertJob=(job:RenderJob)=>{
+    setJobs(prev=>{
+      const updated=[job,...prev.filter(item=>item.id!==job.id)].slice(0,100);
+      void storage.setJobs(updated);
+      return updated;
+    });
+  };
 
   const body=useMemo(()=>{
     if(view==='create'){
       if(!song) return <EmptyCreate onResolved={resolveDone} onNavigate={setView} projects={projects}/>;
       return compact
-        ? <MobileStudioScreen song={song} onSave={saveProject} onBack={()=>setSong(null)}/>
-        : <StudioScreen song={song} onSave={saveProject}/>;
+        ? <MobileStudioScreen song={song} onSave={saveProject} onBack={()=>setSong(null)} onRenderJob={upsertJob}/>
+        : <StudioScreen song={song} onSave={saveProject} onRenderJob={upsertJob}/>;
     }
     if(view==='library') return <LibraryScreen items={library} onPlay={setPlayingSong} onOpen={openLibraryItem} onCreate={goCreate}/>;
     if(view==='projects') return <ProjectsScreen projects={projects} onOpen={openProject} onCreate={goCreate}/>;
