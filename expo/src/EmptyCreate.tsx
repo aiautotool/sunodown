@@ -10,12 +10,12 @@ import { resolveSuno } from './api';
 const DEFAULT='https://suno.com/s/tszo0jGdVUua4rT4';
 const previewUri=Platform.OS==='web'?'/home-cinematic-v23.svg':'https://sunoapp.aiautotool.com/home-cinematic-v23.svg';
 const featured=[
-  ['Cinematic','cinematic',['#281c44','#875dff']],
-  ['Minimal','minimal',['#121821','#384454']],
-  ['Neon','neon',['#151337','#b844ff']],
-  ['Vintage','vintage',['#30231b','#a27148']],
-  ['Aesthetic','aesthetic',['#2a1f36','#d67bc2']],
-  ['Visualizer','visualizer',['#10132b','#6e62ff']],
+  ['Sad Lyrics Cinema','cinematic','Locked',['#281c44','#875dff']],
+  ['Karaoke Pop','karaoke','Karaoke',['#121821','#384454']],
+  ['Neon Pulse','neon','EDM',['#151337','#b844ff']],
+  ['Cinema Story','story','Premium',['#30231b','#a27148']],
+  ['Romantic Letter','romantic','Love',['#2a1f36','#d67bc2']],
+  ['Midnight Drive','midnight','Night',['#10132b','#6e62ff']],
 ] as const;
 
 export function EmptyCreate({
@@ -95,7 +95,7 @@ export function EmptyCreate({
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.shell,mid&&styles.shellMid,stacked&&styles.shellStacked,mobile&&styles.shellMobile]}>
       {mobile&&<View style={styles.mobileBrand}>
         <View style={styles.mobileBrandLeft}><Music2 size={27} color={colors.violet}/><Text style={styles.mobileBrandText}>SunoDown</Text></View>
-        <Menu size={20} color="#c9d0dc"/>
+        <View style={styles.mobileMenu}><Menu size={20} color="#c9d0dc"/></View>
       </View>}
 
       <View style={[styles.hero,stacked&&styles.heroStack]}>
@@ -118,7 +118,7 @@ export function EmptyCreate({
               />
               <Pressable onPress={paste} style={styles.paste}><Text style={styles.pasteText}>Dán</Text></Pressable>
             </View>
-            <Pressable disabled={loading} onPress={analyze} style={{flex:stacked?undefined:0,width:stacked?'100%':174}}>
+            <Pressable disabled={loading} onPress={analyze} style={[styles.analyzeButton,stacked&&styles.analyzeButtonStack]}>
               <LinearGradient colors={['#9560ff','#745cf2']} start={{x:0,y:0}} end={{x:1,y:1}} style={styles.analyze}>
                 {loading?<ActivityIndicator color="#fff"/>:<><Sparkles size={16} color="#fff"/><Text style={styles.analyzeText}>Phân tích</Text><Text style={styles.analyzeArrow}>›</Text></>}
               </LinearGradient>
@@ -191,9 +191,9 @@ export function EmptyCreate({
       <View style={styles.featured}>
         <View style={styles.featuredHead}><View style={styles.featuredTitleRow}><Text>🔥</Text><Text style={styles.featuredTitle}>Mẫu video nổi bật</Text></View><Text style={styles.featuredLink}>Xem tất cả  ›</Text></View>
         {stacked?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
-          {featured.map(([name,id,gradient],index)=><TemplateCard key={id} name={name} gradient={gradient} index={index}/>)}
+          {featured.map(([name,id,badge,gradient],index)=><TemplateCard key={id} name={name} badge={badge} gradient={gradient} index={index}/>)}
         </ScrollView>:<View style={styles.featuredGrid}>
-          {featured.map(([name,id,gradient],index)=><TemplateCard key={id} name={name} gradient={gradient} index={index} mid={mid}/>)}
+          {featured.map(([name,id,badge,gradient],index)=><TemplateCard key={id} name={name} badge={badge} gradient={gradient} index={index} mid={mid}/>)}
         </View>}
       </View>
 
@@ -208,11 +208,11 @@ export function EmptyCreate({
 function MiniTool({icon,label}:{icon:React.ReactNode;label:string}){return <View style={styles.miniTool}>{icon}<Text style={styles.miniToolText}>{label}</Text></View>}
 function SliderFake({label,value,text}:{label:string;value:number;text:string}){return <View style={styles.sliderRow}><Text style={styles.sliderLabel}>{label}</Text><View style={styles.sliderTrack}><LinearGradient colors={['#9c6aff','#7768ff']} style={[styles.sliderFill,{width:`${value}%`}]}/></View><Text style={styles.sliderValue}>{text}</Text></View>}
 function Benefit({icon,title,sub}:{icon:string;title:string;sub:string}){return <View style={styles.benefit}><View style={styles.benefitIcon}><Text style={styles.benefitIconText}>{icon}</Text></View><View style={{flex:1}}><Text style={styles.benefitTitle}>{title}</Text><Text style={styles.benefitSub}>{sub}</Text></View></View>}
-function TemplateCard({name,gradient,index,mid=false}:{name:string;gradient:readonly [string,string];index:number;mid?:boolean}){return <Pressable style={[styles.template,mid&&styles.templateMid,index===0&&styles.templateActive]}>
+function TemplateCard({name,badge,gradient,index,mid=false}:{name:string;badge:string;gradient:readonly [string,string];index:number;mid?:boolean}){return <Pressable style={[styles.template,mid&&styles.templateMid,index===0&&styles.templateActive]}>
   <LinearGradient colors={gradient as any} style={styles.templateThumb}>
     <Image source={{uri:previewUri}} style={StyleSheet.absoluteFill} resizeMode="cover"/>
     <LinearGradient colors={['transparent','rgba(5,8,13,.68)']} style={StyleSheet.absoluteFill}/>
-    <View style={styles.templateBadge}><Text style={styles.templateBadgeText}>{index===0?'HOT':'STYLE'}</Text></View>
+    <View style={styles.templateBadge}><Text style={styles.templateBadgeText}>{badge}</Text></View>
   </LinearGradient>
   <Text numberOfLines={1} style={styles.templateName}>{name}</Text>
   <View style={styles.templatePlay}><Play size={9} color="#fff" fill="#fff"/></View>
@@ -235,13 +235,13 @@ const styles=StyleSheet.create({
 
   scroll:{flex:1},shell:{paddingTop:26,paddingHorizontal:28,paddingBottom:22},shellMid:{paddingTop:22,paddingHorizontal:20,paddingBottom:22},shellStacked:{paddingTop:18,paddingHorizontal:18,paddingBottom:90},shellMobile:{paddingTop:12,paddingHorizontal:16,paddingBottom:92},
   mobileBrand:{height:52,flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:4,marginBottom:8},
-  mobileBrandLeft:{flexDirection:'row',alignItems:'center',gap:10},mobileBrandText:{color:'#f5f7fb',fontSize:21,fontWeight:'700'},
+  mobileBrandLeft:{flexDirection:'row',alignItems:'center',gap:10},mobileBrandText:{color:'#f5f7fb',fontSize:21,fontWeight:'700'},mobileMenu:{width:38,height:38,borderWidth:1,borderColor:'#343d4b',borderRadius:11,backgroundColor:'#111722',alignItems:'center',justifyContent:'center'},
   hero:{minHeight:520,flexDirection:'row',gap:18,alignItems:'center'},heroStack:{flexDirection:'column',alignItems:'stretch',paddingTop:18},
   copy:{flex:1,maxWidth:720},kicker:{alignSelf:'flex-start',height:34,borderWidth:1,borderColor:'rgba(145,164,194,.13)',borderRadius:999,backgroundColor:'rgba(23,32,49,.72)',paddingHorizontal:14,flexDirection:'row',alignItems:'center',gap:8},
   kickerText:{color:'#b9c3d4',fontSize:9,fontWeight:'800',letterSpacing:1.8},
   headline:{color:'#f5f7fb',fontWeight:'900',letterSpacing:-3,marginTop:17,marginBottom:14},headlineMobile:{fontSize:39,lineHeight:39.4,letterSpacing:-1.7},
   headlineAccent:{color:'#8d66ff'},description:{maxWidth:650,color:'#aeb9cb',fontSize:14,lineHeight:23,marginBottom:24},
-  analyzeRow:{flexDirection:'row',gap:9},analyzeRowStack:{flexDirection:'column'},
+  analyzeRow:{flexDirection:'row',gap:9},analyzeRowStack:{flexDirection:'column'},analyzeButton:{width:174,flexBasis:174,flexShrink:0},analyzeButtonStack:{width:'100%',flexBasis:'auto' as any},
   linkbox:{flex:1,minHeight:62,borderWidth:1,borderColor:'rgba(143,106,255,.72)',borderRadius:14,backgroundColor:'#0e1622',paddingLeft:15,paddingRight:11,flexDirection:'row',alignItems:'center',gap:10},
   input:{flex:1,color:'#f8faff',fontSize:13,paddingVertical:0},paste:{borderRadius:8,backgroundColor:'rgba(255,255,255,.05)',paddingHorizontal:9,paddingVertical:7},pasteText:{color:'#9aa6b9',fontSize:9},
   analyze:{minHeight:62,borderRadius:14,alignItems:'center',justifyContent:'center',flexDirection:'row',gap:9,paddingHorizontal:14},analyzeText:{color:'#fff',fontSize:13,fontWeight:'800'},analyzeArrow:{color:'#fff',fontSize:22},
