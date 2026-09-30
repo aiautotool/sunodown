@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FileText, Image as ImageIcon, Music2, SlidersHorizontal, Sparkles } from 'lucide-react-native';
 import type { KaraokeLine, SavedVisualPreset, Song, StudioAspect, StudioLyricsMode as LyricsMode, StudioMotion as Motion, StudioVisualConfig } from './types';
 export type { StudioVisualConfig } from './types';
@@ -102,11 +102,11 @@ export function applyPresetConfig(current:StudioVisualConfig,preset:Preset,durat
 }
 
 export function V24StudioControls({
-  song,config,onChange,timeline,subtitleLoading,subtitleError,onReget,onPickBackground,
+  song,config,onChange,timeline,onTimelineChange,subtitleLoading,subtitleError,onReget,onPickBackground,
   customPresets=[],onSavePreset,onDeletePreset,
   panel:controlledPanel,onPanelChange,
 }:{
-  song:Song;config:StudioVisualConfig;onChange:(next:StudioVisualConfig)=>void;timeline:KaraokeLine[];
+  song:Song;config:StudioVisualConfig;onChange:(next:StudioVisualConfig)=>void;timeline:KaraokeLine[];onTimelineChange?:(lines:KaraokeLine[])=>void;
   subtitleLoading:boolean;subtitleError:string;onReget:()=>void;onPickBackground:()=>void;
   customPresets?:SavedVisualPreset[];onSavePreset?:()=>void;onDeletePreset?:(id:string)=>void;
   panel?:StudioPanel;onPanelChange?:(panel:StudioPanel)=>void;
@@ -118,6 +118,23 @@ export function V24StudioControls({
   const categories=['Nổi bật','Social','Lyrics','Cinematic','Album','Visualizer'];
   const presets=useMemo(()=>category==='Nổi bật'?V24_PRESETS:V24_PRESETS.filter(p=>p.category===category),[category]);
   const set=<K extends keyof StudioVisualConfig>(key:K,value:StudioVisualConfig[K])=>onChange({...config,[key]:value});
+  const updateCue=(index:number,patch:Partial<KaraokeLine>)=>{
+    if(!onTimelineChange)return;
+    onTimelineChange(timeline.map((line,i)=>i===index?{...line,...patch,words:patch.text!==undefined?undefined:line.words}:line));
+  };
+  const shiftCue=(index:number,delta:number)=>{
+    const line=timeline[index];if(!line||!onTimelineChange)return;
+    const length=Math.max(.12,line.end-line.start);
+    const start=Math.max(0,line.start+delta);
+    onTimelineChange(timeline.map((item,i)=>i===index?{...item,start,end:start+length,words:item.words?.map(word=>({...word,start:word.start+delta,end:word.end+delta}))}:item));
+  };
+  const deleteCue=(index:number)=>onTimelineChange?.(timeline.filter((_,i)=>i!==index));
+  const addCue=()=>{
+    if(!onTimelineChange)return;
+    const start=Math.min(song.duration||Infinity,(timeline.at(-1)?.end||0)+.1);
+    const end=Math.min(song.duration||start+3,start+3);
+    onTimelineChange([...timeline,{text:'Subtitle mới',start,end}]);
+  };
 
   return <View style={styles.root}>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
@@ -169,7 +186,18 @@ export function V24StudioControls({
         <Stepper label="Kích thước subtitle" value={config.subtitleScale??100} min={40} max={220} suffix="%" step={5} onChange={v=>set('subtitleScale',v)}/>
         <View style={styles.regetRow}><Pressable onPress={onReget} style={styles.primaryBtn}><Text style={styles.primaryText}>{subtitleLoading?'Đang lấy lại…':'Lấy subtitle mới'}</Text></Pressable><Text style={styles.help}>{timeline.length} cue</Text></View>
         {!!subtitleError&&<Text style={styles.error}>{subtitleError}</Text>}
-        {timeline.slice(0,5).map((line,i)=><View key={i} style={styles.cue}><Text style={styles.cueTime}>{Math.floor(line.start/60)}:{String(Math.floor(line.start%60)).padStart(2,'0')}</Text><Text numberOfLines={1} style={styles.cueText}>{line.text}</Text></View>)}
+        <View style={styles.cueActions}><Pressable onPress={addCue} style={styles.cueAdd}><Text style={styles.cueAddText}>+ Thêm cue</Text></Pressable><Text style={styles.help}>{timeline.length} cue tổng cộng</Text></View>
+        {timeline.slice(0,20).map((line,i)=><View key={i+'-'+line.start} style={styles.cueEditor}>
+          <View style={styles.cueTop}><Text style={styles.cueTime}>{Math.floor(line.start/60)}:{String(Math.floor(line.start%60)).padStart(2,'0')}.{Math.floor((line.start%1)*10)}</Text><Text style={styles.cueDuration}>{Math.max(.1,line.end-line.start).toFixed(1)}s</Text></View>
+          <TextInput value={line.text} onChangeText={text=>updateCue(i,{text})} multiline style={styles.cueInput} placeholder="Subtitle" placeholderTextColor="#5d6878"/>
+          <View style={styles.cueButtons}>
+            <Pressable onPress={()=>shiftCue(i,-.1)} style={styles.cueButton}><Text style={styles.cueButtonText}>−0.1s</Text></Pressable>
+            <Pressable onPress={()=>shiftCue(i,.1)} style={styles.cueButton}><Text style={styles.cueButtonText}>+0.1s</Text></Pressable>
+            <Pressable onPress={()=>updateCue(i,{end:Math.max(line.start+.12,line.end-.1)})} style={styles.cueButton}><Text style={styles.cueButtonText}>End −</Text></Pressable>
+            <Pressable onPress={()=>updateCue(i,{end:Math.min(song.duration||line.end+.1,line.end+.1)})} style={styles.cueButton}><Text style={styles.cueButtonText}>End +</Text></Pressable>
+            <Pressable onPress={()=>deleteCue(i)} style={[styles.cueButton,styles.cueDelete]}><Text style={styles.cueDeleteText}>Xóa</Text></Pressable>
+          </View>
+        </View>)}
       </View>}
       {panel==='format'&&<View style={styles.stack}>
         <FieldTitle title="Tỷ lệ"/><ChipGrid values={['9:16','16:9','1:1','4:5','4:3']} value={config.aspect} onChange={v=>set('aspect',v as StudioAspect)}/>
@@ -241,7 +269,9 @@ const styles=StyleSheet.create({
   presetGrid:{flexDirection:'row',flexWrap:'wrap',gap:9},presetCard:{width:'48.5%',overflow:'hidden',borderWidth:1,borderColor:'#29313d',borderRadius:12,backgroundColor:'#0b1017'},presetArt:{height:82,position:'relative',alignItems:'center',justifyContent:'center',overflow:'hidden'},presetShade:{...StyleSheet.absoluteFill,backgroundColor:'rgba(7,10,16,.42)'},presetBadge:{position:'absolute',left:7,top:7,zIndex:2,color:'#dce3ef',fontSize:7,fontWeight:'800'},disc:{width:48,height:48,borderWidth:1,borderRadius:24,alignItems:'center',justifyContent:'center'},discCore:{width:12,height:12,borderRadius:6},presetCopy:{minHeight:62,padding:9},presetName:{color:'#f5f7fb',fontSize:10,fontWeight:'800'},presetDesc:{color:'#778396',fontSize:8,lineHeight:12,marginTop:4},
   chips:{flexDirection:'row',flexWrap:'wrap',gap:7},chip:{minHeight:34,borderWidth:1,borderColor:'#303947',borderRadius:8,backgroundColor:'#151c27',paddingHorizontal:9,alignItems:'center',justifyContent:'center'},chipActive:{borderColor:'#8a67ff',backgroundColor:'rgba(125,91,255,.18)'},chipText:{color:'#aeb8c7',fontSize:9,fontWeight:'700'},chipTextActive:{color:'#fff'},
   colorGrid:{flexDirection:'row',flexWrap:'wrap',gap:8},color:{width:28,height:28,borderRadius:7,borderWidth:2,borderColor:'#252d39'},colorActive:{borderColor:'#8b5cf6',transform:[{scale:1.08}]},
-  regetRow:{flexDirection:'row',alignItems:'center',gap:10},primaryBtn:{minHeight:38,borderRadius:8,backgroundColor:'#7658e9',paddingHorizontal:12,alignItems:'center',justifyContent:'center'},primaryText:{color:'#fff',fontSize:10,fontWeight:'800'},error:{color:'#ff9da5',fontSize:9},cue:{minHeight:34,flexDirection:'row',alignItems:'center',gap:8,borderBottomWidth:1,borderColor:'#1f2631'},cueTime:{width:36,color:'#9478ff',fontSize:8},cueText:{flex:1,color:'#b9c1cd',fontSize:9},
+  regetRow:{flexDirection:'row',alignItems:'center',gap:10},primaryBtn:{minHeight:38,borderRadius:8,backgroundColor:'#7658e9',paddingHorizontal:12,alignItems:'center',justifyContent:'center'},primaryText:{color:'#fff',fontSize:10,fontWeight:'800'},error:{color:'#ff9da5',fontSize:9},
+  cueActions:{flexDirection:'row',alignItems:'center',gap:9},cueAdd:{minHeight:32,borderWidth:1,borderColor:'#5945a7',borderRadius:8,backgroundColor:'rgba(118,88,237,.12)',paddingHorizontal:10,alignItems:'center',justifyContent:'center'},cueAddText:{color:'#cfc5ff',fontSize:9,fontWeight:'800'},
+  cueEditor:{borderWidth:1,borderColor:'#252e3a',borderRadius:9,backgroundColor:'#0d131c',padding:8,gap:6},cueTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'},cueTime:{color:'#9478ff',fontSize:8,fontWeight:'800'},cueDuration:{color:'#69768a',fontSize:8},cueInput:{minHeight:38,borderWidth:1,borderColor:'#293441',borderRadius:7,backgroundColor:'#101720',paddingHorizontal:8,paddingVertical:6,color:'#e6ebf3',fontSize:9,textAlignVertical:'top'},cueButtons:{flexDirection:'row',flexWrap:'wrap',gap:5},cueButton:{minHeight:28,borderWidth:1,borderColor:'#303947',borderRadius:7,backgroundColor:'#151c27',paddingHorizontal:7,alignItems:'center',justifyContent:'center'},cueButtonText:{color:'#aeb8c7',fontSize:8,fontWeight:'700'},cueDelete:{borderColor:'#553038',backgroundColor:'#201318'},cueDeleteText:{color:'#ffadb4',fontSize:8,fontWeight:'800'},
   upload:{minHeight:58,borderWidth:1,borderStyle:'dashed',borderColor:'#49576c',borderRadius:10,backgroundColor:'#111823',padding:10,flexDirection:'row',alignItems:'center',gap:10},uploadTitle:{color:'#e5eaf2',fontSize:10,fontWeight:'700'},uploadSub:{color:'#788496',fontSize:8,marginTop:4},
   audioList:{borderTopWidth:1,borderColor:'#252b34'},audioRow:{height:43,flexDirection:'row',alignItems:'center',borderBottomWidth:1,borderColor:'#1e2630'},radio:{width:14,height:14,borderRadius:7,borderWidth:1,borderColor:'#6d7787'},radioActive:{borderWidth:4,borderColor:'#8b6cff'},audioName:{flex:1,color:'#dce0e7',fontSize:10,marginLeft:10},audioDb:{color:'#727e8f',fontSize:8},eqRow:{gap:6},
   stepper:{minHeight:38,borderRadius:8,backgroundColor:'#0c1119',paddingHorizontal:8,flexDirection:'row',alignItems:'center',gap:7},stepLabel:{flex:1,color:'#aab4c2',fontSize:9},stepButton:{width:28,height:26,borderWidth:1,borderColor:'#303947',borderRadius:6,backgroundColor:'#151c27',alignItems:'center',justifyContent:'center'},stepButtonText:{color:'#d7deea',fontSize:16},stepValue:{minWidth:44,color:'#dbe3ee',fontSize:9,textAlign:'center'},
