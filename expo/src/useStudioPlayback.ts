@@ -11,7 +11,8 @@ export function useStudioPlayback(song:Song){
   useEffect(()=>{
     player.replace(musicAudioUrl(song));
     try{player.setActiveForLockScreen(true,{title:song.title,artist:song.creator||'Suno',artworkUrl:song.picture})}catch{}
-    return()=>{try{player.pause()}catch{}};
+    const timer=setTimeout(()=>{try{player.play()}catch{}},120);
+    return()=>{clearTimeout(timer);try{player.pause()}catch{}};
   },[song.id,song.audio]);
 
   const duration=status.duration||song.duration||0;
