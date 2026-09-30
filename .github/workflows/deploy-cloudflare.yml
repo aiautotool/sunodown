@@ -2,7 +2,7 @@ name: Deploy SunoDown to picai.online
 
 on:
   push:
-    branches: [v23]
+    branches: [v23, v24]
   workflow_dispatch:
 
 permissions:
@@ -18,13 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout v23
+      - name: Checkout deployment branch
         uses: actions/checkout@v4
 
       - name: Mark deploy pending
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context=sunodown/picai-deploy -f description="Building v23 for picai.online"
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context=sunodown/picai-deploy -f description="Building ${GITHUB_REF_NAME} for picai.online"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,7 +40,7 @@ jobs:
 
       - name: Build production bundle
         env:
-          BUILD_VERSION: v23
+          BUILD_VERSION: ${{ github.ref_name }}
         run: npm run build
 
       - name: Verify Worker entrypoint
@@ -94,11 +94,45 @@ jobs:
           test "$status" = "400"
           grep -Eq '"error"[[:space:]]*:[[:space:]]*"Thiếu audio' /tmp/groq-post.json
 
+      - name: Verify v24 SubtitleStore binding
+        if: github.ref_name == 'v24'
+        run: |
+          status="$(curl --silent --show-error -o /tmp/subtitle-store.json -w '%{http_code}' 'https://picai.online/api/music/subtitle?songId=00000000-0000-4000-8000-000000000000&language=vi')"
+          cat /tmp/subtitle-store.json
+          test "$status" = "404"
+          grep -Eq '"status"[[:space:]]*:[[:space:]]*"missing"' /tmp/subtitle-store.json
+
+      - name: Verify v24 subtitle cloud E2E
+        if: github.ref_name == 'v24'
+        run: |
+          resolved="$(curl --fail --silent --show-error --max-time 45 \
+            -X POST 'https://picai.online/api/resolve' \
+            -H 'content-type: application/json' \
+            --data '{"input":"https://suno.com/s/tszo0jGdVUua4rT4","metadataOnly":true}')"
+          song_id="$(printf '%s' "$resolved" | jq -r '.id // empty')"
+          test -n "$song_id"
+          echo "Resolved song: $song_id"
+
+          first="$(curl --fail --silent --show-error --max-time 210 \
+            -X POST 'https://picai.online/api/music/subtitle/generate' \
+            -H 'content-type: application/json' \
+            --data "{\"songId\":\"$song_id\",\"language\":\"vi\"}")"
+          printf '%s' "$first" | jq -e '.status == "ready"' >/dev/null
+          printf '%s' "$first" | jq -e '.subtitle.lines | length > 0' >/dev/null
+          printf '%s' "$first" | jq -e '.subtitle.rawWords | length > 0' >/dev/null
+
+          second="$(curl --fail --silent --show-error --max-time 60 \
+            -X POST 'https://picai.online/api/music/subtitle/generate' \
+            -H 'content-type: application/json' \
+            --data "{\"songId\":\"$song_id\",\"language\":\"vi\"}")"
+          printf '%s' "$second" | jq -e '.status == "ready"' >/dev/null
+          printf '%s' "$second" | jq -e '.cached == true' >/dev/null
+
       - name: Mark deploy success
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context=sunodown/picai-deploy -f description="v23 deployed to picai.online"
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context=sunodown/picai-deploy -f description="${GITHUB_REF_NAME} deployed to picai.online"
 
       - name: Mark deploy failure
         if: failure()
