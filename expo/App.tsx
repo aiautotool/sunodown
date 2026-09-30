@@ -124,6 +124,7 @@ function Header({song,view,onNavigate}:{song:Song|null;view:AppView;onNavigate:(
         ? <View style={styles.loaded}><Text style={styles.loadedCheck}>✓</Text><Text style={styles.loadedText}>Suno song loaded</Text></View>
         : <View style={styles.homeNav}>
             <Pressable style={[styles.homeNavButton,view==='create'&&styles.homeNavButtonActive]} onPress={()=>onNavigate('create')}><Text style={[styles.homeNavText,view==='create'&&styles.homeNavActive]}>Trang chủ</Text></Pressable>
+            <Pressable style={styles.homeNavButton} onPress={()=>onNavigate('library')}><Text style={styles.homeNavText}>Music</Text></Pressable>
             <Pressable style={[styles.homeNavButton,view==='projects'&&styles.homeNavButtonActive]} onPress={()=>onNavigate('projects')}><Text style={[styles.homeNavText,view==='projects'&&styles.homeNavActive]}>Dự án</Text></Pressable>
             <Pressable style={[styles.homeNavButton,view==='library'&&styles.homeNavButtonActive]} onPress={()=>onNavigate('library')}><Text style={[styles.homeNavText,view==='library'&&styles.homeNavActive]}>Thư viện</Text></Pressable>
             <Pressable style={[styles.homeNavButton,view==='jobs'&&styles.homeNavButtonActive]} onPress={()=>onNavigate('jobs')}><Text style={[styles.homeNavText,view==='jobs'&&styles.homeNavActive]}>Jobs</Text></Pressable>
