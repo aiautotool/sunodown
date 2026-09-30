@@ -70,7 +70,7 @@ export function UniversalEditorTimeline({
   const [trackHeight,setTrackHeight]=useState(1);
   const [viewportWidth,setViewportWidth]=useState(320);
   const [scrollX,setScrollX]=useState(0);
-  const [clipboard,setClipboard]=useState<ClipboardItem|null>(null);
+  const clipboard=useRef<ClipboardItem|null>(null);
   const tracks=trackState||defaultTracks;
   const safeDuration=Math.max(1,duration||1);
   const width=Math.max(viewportWidth,Math.max(900,safeDuration*22*zoom));
@@ -174,28 +174,28 @@ export function UniversalEditorTimeline({
     if(!selected)return;
     if(selected.startsWith('sub-')){
       const value=subtitles[Number(selected.slice(4))];
-      if(value)setClipboard({kind:'subtitle',value:cloneLines([value])[0]!});
+      if(value)clipboard.current={kind:'subtitle',value:cloneLines([value])[0]!};
     }else{
       const value=clips.find(clip=>clip.id===selected);
-      if(value)setClipboard({kind:'clip',value:{...value}});
+      if(value)clipboard.current={kind:'clip',value:{...value}};
     }
   };
   const paste=()=>{
-    if(!clipboard)return;
+    const copied=clipboard.current;if(!copied)return;
     pushHistory();
-    if(clipboard.kind==='clip'){
-      const source=clipboard.value,length=source.end-source.start;
+    if(copied.kind==='clip'){
+      const source=copied.value,length=source.end-source.start;
       const start=clamp(playhead,0,Math.max(0,safeDuration-length));
       const value={...source,id:'clip-'+Date.now().toString(36),start,end:start+length,name:source.name+' · copy'};
       onClipsChange([...clips,value]);setSelected(value.id);
     }else{
-      const source=clipboard.value,length=source.end-source.start;
+      const source=copied.value,length=source.end-source.start;
       const start=clamp(playhead,0,Math.max(0,safeDuration-length)),delta=start-source.start;
       const value={...source,start:source.start+delta,end:source.end+delta,words:source.words?.map(word=>({...word,start:word.start+delta,end:word.end+delta}))};
       onSubtitlesChange([...subtitles,value].sort((a,b)=>a.start-b.start));
     }
   };
-  const duplicateSelected=()=>{copySelected();setTimeout(paste,0)};
+  const duplicateSelected=()=>{copySelected();paste()};
 
   useEffect(()=>{
     if(Platform.OS!=='web')return;
