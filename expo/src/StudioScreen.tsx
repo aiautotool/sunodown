@@ -389,12 +389,15 @@ export function StudioScreen({
         </View>
 
         {preview}
-        {!quickMode&&<View
+        {subtitleBlock}
+        {backgroundBlock}
+        {quickMode&&quickBlock}
+        {<View
           onLayout={event=>{
             if(!focusTimeline)return;
             mobileScrollRef.current?.scrollTo({y:Math.max(0,event.nativeEvent.layout.y-10),animated:true});
             setFocusTimeline(false);
-          }}
+          }
         >
           <UniversalEditorTimeline
             compact
@@ -415,9 +418,6 @@ export function StudioScreen({
             onTrimChange={(trimStart,trimEnd)=>setConfig(prev=>({...prev,trimStart,trimEnd}))}
           />
         </View>}
-        {subtitleBlock}
-        {backgroundBlock}
-        {quickMode&&quickBlock}
         <Pressable onPress={save} style={[styles.mobileSave,saved&&styles.saveDone]}>
           <Save size={16} color={saved?'#8ff0bd':'#c8baff'}/>
           <Text style={[styles.mobileSaveText,saved&&styles.saveTextDone]}>{saved?'Đã lưu dự án':'Lưu dự án'}</Text>
@@ -481,7 +481,7 @@ export function StudioScreen({
           onHighlight={()=>void exportVideo(30)}
           onCustomize={()=>setQuickMode(false)}
         />}
-        {!quickMode&&<UniversalEditorTimeline
+        <UniversalEditorTimeline
           duration={playback.duration||song.duration||0}
           playhead={playback.current}
           onSeek={value=>{playback.pause();playback.seekTo(value)}}
@@ -497,7 +497,7 @@ export function StudioScreen({
           trimStart={config.trimStart}
           trimEnd={config.trimEnd||playback.duration||song.duration||0}
           onTrimChange={(trimStart,trimEnd)=>setConfig(prev=>({...prev,trimStart,trimEnd}))}
-        />}
+        />
       </ScrollView>
     </View>
 
