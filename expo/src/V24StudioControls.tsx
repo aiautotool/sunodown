@@ -23,6 +23,22 @@ export const DEFAULT_VISUAL_CONFIG:StudioVisualConfig={
   waveGlow:96,
   waveHeight:108,
   waveSmoothing:88,
+  waveColor:'#d946ef',
+  waveColor2:'#60a5fa',
+  waveThickness:46,
+  waveOpacity:92,
+  waveDensity:72,
+  waveRotation:0,
+  titleScale:100,
+  creatorScale:100,
+  subtitleScale:100,
+  effectSpeed:1,
+  effectAngle:0,
+  effectDensity:1,
+  effectSize:1,
+  eqBass:0,
+  eqVocal:0,
+  eqTreble:0,
   trimStart:0,
   trimEnd:0,
   audioPreset:'Original',
@@ -107,7 +123,7 @@ export function V24StudioControls({
     </ScrollView>
 
     <View style={styles.panel}>
-      {panel==='audio'&&<AudioPanel value={config.audioPreset} onChange={v=>set('audioPreset',v)}/>}
+      {panel==='audio'&&<AudioPanel config={config} onChange={onChange}/>} 
       {panel==='presets'&&<View>
         <View style={styles.presetHead}><View><Text style={styles.kicker}>PRESET SYSTEM</Text><Text style={styles.panelTitle}>Mẫu video</Text></View><Pressable style={styles.smallButton}><Text style={styles.smallButtonText}>Lưu mẫu</Text></Pressable></View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categories}>{categories.map(x=><Pressable key={x} onPress={()=>setCategory(x)} style={[styles.category,category===x&&styles.categoryActive]}><Text style={[styles.categoryText,category===x&&styles.categoryTextActive]}>{x}</Text></Pressable>)}</ScrollView>
@@ -120,17 +136,26 @@ export function V24StudioControls({
       {panel==='text'&&<View style={styles.stack}>
         <FieldTitle title="Font tiêu đề"/><ChipGrid values={['Dancing Script','Tangerine','Bebas Neue','Orbitron','Special Elite','Georgia']} value={config.titleFont} onChange={v=>set('titleFont',v)}/>
         <FieldTitle title="Màu tiêu đề"/><ColorGrid value={config.titleColor} onChange={v=>set('titleColor',v)}/>
+        <Stepper label="Kích thước tiêu đề" value={config.titleScale??100} min={40} max={220} suffix="%" step={5} onChange={v=>set('titleScale',v)}/>
         <FieldTitle title="Màu tác giả"/><ColorGrid value={config.creatorColor} onChange={v=>set('creatorColor',v)}/>
+        <Stepper label="Kích thước tác giả" value={config.creatorScale??100} min={40} max={180} suffix="%" step={5} onChange={v=>set('creatorScale',v)}/>
       </View>}
       {panel==='wave'&&<View style={styles.stack}>
         <FieldTitle title="Kiểu sóng"/><ChipGrid values={['mirror-glow','rounded-spectrum','circular-pulse','ribbon-wave','line','thin-bars','circle-bars','orbit-dots','mountain','center-line']} value={config.wave} onChange={v=>set('wave',v)}/>
+        <FieldTitle title="Màu chính"/><ColorGrid value={config.waveColor??'#d946ef'} onChange={v=>set('waveColor',v)}/>
+        <FieldTitle title="Màu phụ"/><ColorGrid value={config.waveColor2??'#60a5fa'} onChange={v=>set('waveColor2',v)}/>
         <Stepper label="Glow" value={config.waveGlow} min={0} max={100} onChange={v=>set('waveGlow',v)}/>
         <Stepper label="Height" value={config.waveHeight} min={20} max={160} onChange={v=>set('waveHeight',v)}/>
+        <Stepper label="Thickness" value={config.waveThickness??46} min={10} max={100} onChange={v=>set('waveThickness',v)}/>
         <Stepper label="Smoothing" value={config.waveSmoothing} min={0} max={100} onChange={v=>set('waveSmoothing',v)}/>
+        <Stepper label="Opacity" value={config.waveOpacity??92} min={10} max={100} suffix="%" onChange={v=>set('waveOpacity',v)}/>
+        <Stepper label="Density" value={config.waveDensity??72} min={20} max={100} suffix="%" onChange={v=>set('waveDensity',v)}/>
+        <Stepper label="Rotation" value={config.waveRotation??0} min={-180} max={180} suffix="°" step={5} onChange={v=>set('waveRotation',v)}/>
       </View>}
       {panel==='lyrics'&&<View style={styles.stack}>
         <FieldTitle title="Chế độ lời"/><ChipGrid values={['off','scroll','focus']} value={config.lyrics} onChange={v=>set('lyrics',v as LyricsMode)}/>
         <FieldTitle title="Font subtitle"/><ChipGrid values={['system','rounded','serif','impact']} value={config.subtitleFont} onChange={v=>set('subtitleFont',v)}/>
+        <Stepper label="Kích thước subtitle" value={config.subtitleScale??100} min={40} max={220} suffix="%" step={5} onChange={v=>set('subtitleScale',v)}/>
         <View style={styles.regetRow}><Pressable onPress={onReget} style={styles.primaryBtn}><Text style={styles.primaryText}>{subtitleLoading?'Đang lấy lại…':'Lấy subtitle mới'}</Text></Pressable><Text style={styles.help}>{timeline.length} cue</Text></View>
         {!!subtitleError&&<Text style={styles.error}>{subtitleError}</Text>}
         {timeline.slice(0,5).map((line,i)=><View key={i} style={styles.cue}><Text style={styles.cueTime}>{Math.floor(line.start/60)}:{String(Math.floor(line.start%60)).padStart(2,'0')}</Text><Text numberOfLines={1} style={styles.cueText}>{line.text}</Text></View>)}
@@ -146,6 +171,10 @@ export function V24StudioControls({
       </View>}
       {panel==='effects'&&<View style={styles.stack}>
         <FieldTitle title="Video effects"/><ToggleGrid values={['sparkles','vignette','film','dust','bokeh','stars','lightleak','glitch']} selected={config.effects} onChange={effects=>set('effects',effects)}/>
+        <Stepper label="Speed" value={Math.round((config.effectSpeed??1)*10)} min={2} max={30} suffix=" /10" onChange={v=>set('effectSpeed',v/10)}/>
+        <Stepper label="Angle" value={config.effectAngle??0} min={-60} max={60} suffix="°" step={5} onChange={v=>set('effectAngle',v)}/>
+        <Stepper label="Density" value={Math.round((config.effectDensity??1)*10)} min={2} max={30} suffix=" /10" onChange={v=>set('effectDensity',v/10)}/>
+        <Stepper label="Size" value={Math.round((config.effectSize??1)*10)} min={5} max={30} suffix=" /10" onChange={v=>set('effectSize',v/10)}/>
       </View>}
       {panel==='trim'&&<View style={styles.stack}>
         <Stepper label="Bắt đầu" value={Math.round(config.trimStart)} min={0} max={Math.max(0,Math.round(song.duration||0)-1)} suffix="s" step={5} onChange={v=>set('trimStart',Math.min(v,config.trimEnd||song.duration||v+1))}/>
@@ -156,9 +185,27 @@ export function V24StudioControls({
   </View>
 }
 
-function AudioPanel({value,onChange}:{value:string;onChange:(v:string)=>void}){
+function AudioPanel({config,onChange}:{config:StudioVisualConfig;onChange:(next:StudioVisualConfig)=>void}){
   const presets=['Original','Clean','Vocal','Punchy','Bass+','Wide','Immersive'];
-  return <View style={styles.stack}><Text style={styles.sectionKicker}>AUDIO WORKSPACE</Text><Text style={styles.help}>Preset nghe live · giữ cấu trúc Audio v24.</Text><View style={styles.audioList}>{presets.map((p,i)=><Pressable key={p} onPress={()=>onChange(p)} style={styles.audioRow}><View style={[styles.radio,value===p&&styles.radioActive]}/><Text style={styles.audioName}>{p}</Text><Text style={styles.audioDb}>{i===0?'0 dB':'+1.2 dB'}</Text></Pressable>)}</View><FieldTitle title="Quick EQ"/><View style={styles.eqRow}><Stepper label="Bass" value={0} min={-6} max={6} suffix=" dB" onChange={()=>{}}/><Stepper label="Vocal" value={0} min={-6} max={6} suffix=" dB" onChange={()=>{}}/><Stepper label="Treble" value={0} min={-6} max={6} suffix=" dB" onChange={()=>{}}/></View></View>
+  const setPreset=(preset:string)=>{
+    const presetEq:Record<string,[number,number,number]>={
+      Original:[0,0,0],Clean:[-1,1,2],Vocal:[-2,3,1],Punchy:[2,1,2],'Bass+':[4,-1,0],Wide:[1,1,2],Immersive:[2,1,3],
+    };
+    const [eqBass,eqVocal,eqTreble]=presetEq[preset]||[0,0,0];
+    onChange({...config,audioPreset:preset,eqBass,eqVocal,eqTreble});
+  };
+  const set=(key:'eqBass'|'eqVocal'|'eqTreble',value:number)=>onChange({...config,[key]:value,audioPreset:'Custom'});
+  return <View style={styles.stack}>
+    <Text style={styles.sectionKicker}>AUDIO WORKSPACE</Text>
+    <Text style={styles.help}>Preset + Quick EQ được lưu cùng project và áp dụng khi export.</Text>
+    <View style={styles.audioList}>{presets.map((p,i)=><Pressable key={p} onPress={()=>setPreset(p)} style={styles.audioRow}><View style={[styles.radio,config.audioPreset===p&&styles.radioActive]}/><Text style={styles.audioName}>{p}</Text><Text style={styles.audioDb}>{i===0?'0 dB':'+1.2 dB'}</Text></Pressable>)}</View>
+    <FieldTitle title="Quick EQ"/>
+    <View style={styles.eqRow}>
+      <Stepper label="Bass" value={config.eqBass??0} min={-6} max={6} suffix=" dB" onChange={v=>set('eqBass',v)}/>
+      <Stepper label="Vocal" value={config.eqVocal??0} min={-6} max={6} suffix=" dB" onChange={v=>set('eqVocal',v)}/>
+      <Stepper label="Treble" value={config.eqTreble??0} min={-6} max={6} suffix=" dB" onChange={v=>set('eqTreble',v)}/>
+    </View>
+  </View>
 }
 
 function PresetCard({preset,picture,active,onPress}:{preset:Preset;picture?:string;active:boolean;onPress:()=>void}){
