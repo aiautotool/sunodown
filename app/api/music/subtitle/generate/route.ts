@@ -55,12 +55,18 @@ function artifactResponse(
 }
 
 export async function POST(request: NextRequest) {
-  let body: { songId?: string; language?: string; force?: boolean };
+  let body: {
+    songId?: string;
+    language?: string;
+    force?: boolean;
+    __serverGroqKey?: string;
+  };
   try {
     body = (await request.json()) as {
       songId?: string;
       language?: string;
       force?: boolean;
+      __serverGroqKey?: string;
     };
   } catch {
     return NextResponse.json(
@@ -224,7 +230,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const credentials = await getGroqCredentials();
-    if (!credentials.key) {
+    const injectedKey =
+      typeof body.__serverGroqKey === 'string'
+        ? body.__serverGroqKey.trim()
+        : '';
+    const apiKey = injectedKey || credentials.key;
+
+    if (!apiKey) {
       return NextResponse.json(
         {
           error: 'groq_not_configured',
@@ -236,7 +248,7 @@ export async function POST(request: NextRequest) {
 
     const extension = extensionFromMime(audioType) || 'mp3';
     const result = await generateGroqSubtitle({
-      apiKey: credentials.key,
+      apiKey,
       audio: new Blob([audioBuffer], { type: audioType }),
       filename: `song-${songId}.${extension}`,
       lyrics: cleanedLyrics,
