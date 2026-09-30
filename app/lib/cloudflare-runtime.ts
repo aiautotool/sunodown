@@ -1,3 +1,5 @@
+import { env as cloudflareEnv } from 'cloudflare:workers';
+
 type GroqEnv = {
   GROQ_API_KEY?: string;
 };
@@ -19,6 +21,11 @@ declare global {
 }
 
 export async function getGroqCredentials() {
+  const direct = (cloudflareEnv as unknown as GroqEnv).GROQ_API_KEY?.trim() || '';
+  if (direct) {
+    return { key: direct, source: 'cloudflare-env' as const };
+  }
+
   const bridged =
     typeof globalThis.__SUNODOWN_GROQ_API_KEY === 'string'
       ? globalThis.__SUNODOWN_GROQ_API_KEY.trim()
@@ -27,26 +34,19 @@ export async function getGroqCredentials() {
     return { key: bridged, source: 'worker-isolate' as const };
   }
 
-  try {
-    const mod = await import('cloudflare:workers');
-    const env = ((mod as any).env || {}) as GroqEnv;
-    const key = env.GROQ_API_KEY?.trim() || '';
-    return {
-      key,
-      source: key ? ('cloudflare-env' as const) : ('none' as const),
-    };
-  } catch {
-    const key =
-      typeof process !== 'undefined'
-        ? process.env.GROQ_API_KEY?.trim() || ''
-        : '';
-    return {
-      key,
-      source: key ? ('process-env' as const) : ('none' as const),
-    };
-  }
+  const key =
+    typeof process !== 'undefined'
+      ? process.env.GROQ_API_KEY?.trim() || ''
+      : '';
+  return {
+    key,
+    source: key ? ('process-env' as const) : ('none' as const),
+  };
 }
 
 export function getSubtitleStoreNamespace() {
-  return globalThis.__SUNODOWN_SUBTITLE_STORE || null;
+  const direct = (
+    cloudflareEnv as unknown as { SUBTITLE_STORE?: SubtitleStoreNamespace }
+  ).SUBTITLE_STORE;
+  return direct || globalThis.__SUNODOWN_SUBTITLE_STORE || null;
 }
