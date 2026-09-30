@@ -8,6 +8,7 @@ export function useStudioPlayback(song:Song,muted=false){
   const status=useAudioPlayerStatus(player);
 
   useEffect(()=>{void setAudioModeAsync({playsInSilentMode:true,shouldPlayInBackground:true,interruptionMode:'doNotMix'});},[]);
+  useEffect(()=>{player.muted=muted;},[player,muted]);
   useEffect(()=>{
     player.replace(musicAudioUrl(song));
     try{player.setActiveForLockScreen(true,{title:song.title,artist:song.creator||'Suno',artworkUrl:song.picture})}catch{}
