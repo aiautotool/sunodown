@@ -13,7 +13,7 @@ permissions:
 jobs:
   compare:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -26,18 +26,18 @@ jobs:
           npm install --no-save playwright@1.56.1 pixelmatch@7.1.0 pngjs@7.0.0
           npx playwright install --with-deps chromium
 
-      - name: Wait for current v24react UI deployment
+      - name: Wait for latest v24react UI deployment
         run: |
           node --input-type=module <<'NODE'
           import { chromium } from 'playwright';
-          const browser = await chromium.launch({headless:true});
-          const page = await browser.newPage({viewport:{width:1440,height:1100}});
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:1440,height:1100}});
           let ready=false;
-          for(let attempt=0;attempt<30;attempt++){
+          for(let attempt=0;attempt<40;attempt++){
             try{
               await page.goto('https://sunoapp.aiautotool.com/',{waitUntil:'domcontentloaded',timeout:30000});
-              await page.waitForTimeout(2300);
-              ready=await page.getByText('Turn your Suno song',{exact:false}).isVisible().catch(()=>false);
+              await page.waitForTimeout(2400);
+              ready=await page.getByText('Sad Lyrics Cinema',{exact:true}).isVisible().catch(()=>false);
               if(ready)break;
             }catch{}
             await page.waitForTimeout(3000);
@@ -46,7 +46,7 @@ jobs:
           if(!ready)process.exit(1);
           NODE
 
-      - name: Capture v24 and v24react reference views
+      - name: Capture parity matrix
         run: |
           mkdir -p visual-parity
           node --input-type=module <<'NODE'
@@ -58,21 +58,65 @@ jobs:
           const OLD='https://sunodown-picai-v24.long-wind-7153.workers.dev';
           const NEW='https://sunoapp.aiautotool.com';
 
-          async function shot(browser,url,name,viewport){
-            const page=await browser.newPage({viewport});
-            await page.goto(url,{waitUntil:'networkidle',timeout:60000}).catch(async()=>{
-              await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
-            });
-            await page.waitForTimeout(2600);
+          async function load(page,url){
+            await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
+            await page.waitForTimeout(2700);
+          }
+          async function shot(page,name){
             await page.screenshot({path:'visual-parity/'+name+'.png',fullPage:false});
-            await page.close();
+          }
+          async function clickText(page,text){
+            const target=page.getByText(text,{exact:true}).first();
+            await target.waitFor({state:'visible',timeout:15000});
+            await target.click();
+            await page.waitForTimeout(1000);
+          }
+          async function home(browser,url,prefix,viewport){
+            const page=await browser.newPage({viewport});
+            await load(page,url);
+            await shot(page,prefix+'-home');
+            return page;
           }
 
           const browser=await chromium.launch({headless:true});
-          await shot(browser,OLD,'v24-desktop',{width:1440,height:1100});
-          await shot(browser,NEW,'v24react-desktop',{width:1440,height:1100});
-          await shot(browser,OLD,'v24-mobile',{width:390,height:844});
-          await shot(browser,NEW,'v24react-mobile',{width:390,height:844});
+
+          // Desktop home + routed sections.
+          for(const [url,prefix] of [[OLD,'v24-desktop'],[NEW,'v24react-desktop']]){
+            const page=await home(browser,url,prefix,{width:1440,height:1100});
+            await clickText(page,'Thư viện');
+            await shot(page,prefix+'-library');
+            await clickText(page,'Dự án');
+            await shot(page,prefix+'-projects');
+            await clickText(page,'Jobs');
+            await shot(page,prefix+'-jobs');
+            await page.close();
+          }
+
+          // Desktop Studio from the same default Suno link.
+          for(const [url,prefix] of [[OLD,'v24-desktop'],[NEW,'v24react-desktop']]){
+            const page=await browser.newPage({viewport:{width:1440,height:1100}});
+            await load(page,url);
+            await clickText(page,'Phân tích');
+            await page.waitForTimeout(6500);
+            await shot(page,prefix+'-studio');
+            await page.close();
+          }
+
+          // Mobile Home + Library + Studio.
+          for(const [url,prefix] of [[OLD,'v24-mobile'],[NEW,'v24react-mobile']]){
+            const page=await home(browser,url,prefix,{width:390,height:844});
+            await clickText(page,'Library');
+            await shot(page,prefix+'-library');
+            await page.close();
+
+            const studio=await browser.newPage({viewport:{width:390,height:844}});
+            await load(studio,url);
+            await clickText(studio,'Phân tích');
+            await studio.waitForTimeout(6500);
+            await shot(studio,prefix+'-studio');
+            await studio.close();
+          }
+
           await browser.close();
 
           function compare(aPath,bPath,outPath){
@@ -82,15 +126,25 @@ jobs:
             const diff=new PNG({width:a.width,height:a.height});
             const pixels=pixelmatch(a.data,b.data,diff.data,a.width,a.height,{threshold:.16,includeAA:false});
             fs.writeFileSync(outPath,PNG.sync.write(diff));
-            return pixels/(a.width*a.height);
+            return Number((pixels/(a.width*a.height)*100).toFixed(2));
           }
 
-          const desktop=compare('visual-parity/v24-desktop.png','visual-parity/v24react-desktop.png','visual-parity/diff-desktop.png');
-          const mobile=compare('visual-parity/v24-mobile.png','visual-parity/v24react-mobile.png','visual-parity/diff-mobile.png');
-          const report={desktopDiff:Number((desktop*100).toFixed(2)),mobileDiff:Number((mobile*100).toFixed(2))};
+          const pairs=[
+            ['desktopHome','v24-desktop-home.png','v24react-desktop-home.png'],
+            ['desktopLibrary','v24-desktop-library.png','v24react-desktop-library.png'],
+            ['desktopProjects','v24-desktop-projects.png','v24react-desktop-projects.png'],
+            ['desktopJobs','v24-desktop-jobs.png','v24react-desktop-jobs.png'],
+            ['desktopStudio','v24-desktop-studio.png','v24react-desktop-studio.png'],
+            ['mobileHome','v24-mobile-home.png','v24react-mobile-home.png'],
+            ['mobileLibrary','v24-mobile-library.png','v24react-mobile-library.png'],
+            ['mobileStudio','v24-mobile-studio.png','v24react-mobile-studio.png'],
+          ];
+          const report={};
+          for(const [key,a,b] of pairs){
+            report[key]=compare('visual-parity/'+a,'visual-parity/'+b,'visual-parity/diff-'+key+'.png');
+            console.log(key+' pixel diff: '+report[key]+'%');
+          }
           fs.writeFileSync('visual-parity/report.json',JSON.stringify(report,null,2));
-          console.log('Desktop pixel diff: '+report.desktopDiff+'%');
-          console.log('Mobile pixel diff: '+report.mobileDiff+'%');
           NODE
 
       - name: Upload parity screenshots
