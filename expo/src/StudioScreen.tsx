@@ -625,9 +625,16 @@ function PreviewStage({
     >
       <View style={[styles.visualFrame,{width:innerW,height:innerH}]}>
         {activeVisual
-          ? <ImageBackground source={{uri:activeVisual}} resizeMode="cover" style={StyleSheet.absoluteFill} imageStyle={{opacity:config.template==='cover-motion'?.96:config.template==='lyrics-focus'?.42:.56}}/>
+          ? <ImageBackground
+              source={{uri:activeVisual}}
+              resizeMode="cover"
+              blurRadius={Math.max(0,config.backgroundBlur??0)}
+              style={StyleSheet.absoluteFill}
+              imageStyle={{opacity:config.template==='cover-motion'?.96:config.template==='lyrics-focus'?.42:.56}}
+            />
           : <LinearGradient colors={trackState.visual.hidden?['#080c12','#080c12']:(frameColors as any)} style={StyleSheet.absoluteFill}/>}
-        <View style={[StyleSheet.absoluteFill,{backgroundColor:config.template==='cover-motion'?'rgba(3,4,12,.15)':config.template==='editorial'?'rgba(7,8,14,.50)':'rgba(3,4,12,.43)'}]}/>
+        <View style={[StyleSheet.absoluteFill,{backgroundColor:`rgba(0,0,0,${Math.max(0,Math.min(70,config.backgroundDim??0))/100})`}]}/>
+        <View style={[StyleSheet.absoluteFill,{backgroundColor:config.template==='cover-motion'?'rgba(3,4,12,.15)':config.template==='editorial'?'rgba(7,8,14,.50)':'rgba(3,4,12,.43)',opacity:1-Math.max(0,Math.min(60,config.backgroundOverlayOpacity??0))/180}]}/>
 
         {!trackState.visual.hidden&&<V23TemplateLayer template={config.template} visual={activeVisual||song.picture} song={song} currentTime={currentTime} accent={selectedPreset.accent} secondary={selectedPreset.secondary}/>}
 
@@ -674,6 +681,7 @@ function PreviewStage({
             transform:[
               {translateX:(waveX-50)*innerW/100},
               {translateY:-Math.max(24,innerH*.075)},
+              {scale:(config.waveScale??100)/100},
               {rotate:(config.waveRotation??0)+'deg'},
             ],
           }]}
