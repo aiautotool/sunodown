@@ -8,6 +8,10 @@ import type { ExportAsset, VisualizerExportOptions } from './render-engine';
 function safe(value:string){
   return (value||'sunodown').replace(/[\\/:*?"<>|\r\n]+/g,'-').replace(/\s+/g,' ').trim().slice(0,80)||'sunodown';
 }
+function ffColor(value:string|undefined,fallback:string){
+  const raw=(value||fallback).replace('#','');
+  return /^([0-9a-f]{6})$/i.test(raw)?'0x'+raw:'0x'+fallback.replace('#','');
+}
 function aspectSize(aspect:StudioAspect='9:16'){
   const sizes:Record<StudioAspect,[number,number]>={'9:16':[720,1280],'16:9':[1280,720],'1:1':[1080,1080],'4:5':[864,1080],'4:3':[960,720]};
   return sizes[aspect];
@@ -66,14 +70,33 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
     }catch{}
   }
 
+  const bass=options.eqBass??0,vocal=options.eqVocal??0,treble=options.eqTreble??0;
+  const eq=`equalizer=f=120:t=q:w=1:g=${bass},equalizer=f=2500:t=q:w=.9:g=${vocal},equalizer=f=8000:t=q:w=1:g=${treble}`;
   const spectrum=/spectrum|circle|ring|circular|neon/.test(options.wave||'');
   const waveH=Math.max(110,Math.round(height*Math.max(.08,Math.min(.25,(options.waveHeight||100)/650))));
-  const waveW=Math.max(360,width-120);
+  const density=Math.max(.35,Math.min(1.6,(options.waveDensity??72)/72));
+  const waveW=Math.max(360,Math.round((width-120)*density));
+  const c1=ffColor(options.waveColor,'#d946ef'),c2=ffColor(options.waveColor2,'#60a5fa');
+  const opacity=Math.max(.1,Math.min(1,(options.waveOpacity??92)/100));
   const viz=spectrum
-    ? `showspectrum=s=${waveW}x${waveH}:mode=combined:color=intensity:slide=scroll:scale=log`
-    : `showwaves=s=${waveW}x${waveH}:mode=cline:rate=30:colors=0xb9a7ff`;
+    ? `showspectrum=s=${waveW}x${waveH}:mode=combined:color=intensity:slide=scroll:scale=log,format=rgba,colorchannelmixer=aa=${opacity}`
+    : `showwaves=s=${waveW}x${waveH}:mode=cline:rate=30:colors=${c1}|${c2},format=rgba,colorchannelmixer=aa=${opacity}`;
   const y=Math.max(30,Math.round(height*.78-waveH/2));
   const filters:string[]=[];
+
+  let audioLabel='';
+  if(options.visualVisible!==false&&!options.audioMuted){
+    filters.push(`[0:a]${eq},asplit=2[aout][aviz]`);
+    filters.push(`[aviz]${viz}[viz]`);
+    audioLabel='aout';
+  }else if(options.visualVisible!==false){
+    filters.push(`[0:a]${eq}[aviz]`);
+    filters.push(`[aviz]${viz}[viz]`);
+  }else if(!options.audioMuted){
+    filters.push(`[0:a]${eq}[aout]`);
+    audioLabel='aout';
+  }
+
   if(options.visualVisible===false){
     filters.push(`color=c=0x080c12:s=${width}x${height}:r=30:d=${duration}[base0]`);
   }else if(bg){
@@ -88,14 +111,22 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
     filters.push(`[${baseLabel}][${clipLabel}]overlay=0:0:enable='between(t,${clip.start},${clip.end})'[${nextBase}]`);
     baseLabel=nextBase;
   });
+
+  let compositeLabel=baseLabel;
   if(options.visualVisible!==false){
-    filters.push(`[0:a]${viz},format=rgba[viz]`);
-    filters.push(`[${baseLabel}][viz]overlay=(W-w)/2:${y}:shortest=1,format=${pix}[v]`);
-  }else{
-    filters.push(`[${baseLabel}]format=${pix}[v]`);
+    filters.push(`[${baseLabel}][viz]overlay=(W-w)/2:${y}:shortest=1[composite]`);
+    compositeLabel='composite';
   }
+  const enabledEffects=options.effectsVisible===false?[]:(options.effects||[]);
+  const videoFilters:string[]=[];
+  if(enabledEffects.includes('vignette'))videoFilters.push('vignette=PI/5');
+  if(enabledEffects.includes('film'))videoFilters.push(`noise=alls=${Math.max(2,Math.round(5*(options.effectDensity??1)))}:allf=t`);
+  if(enabledEffects.includes('lightleak'))videoFilters.push('eq=saturation=1.08:contrast=1.03');
+  if(videoFilters.length)filters.push(`[${compositeLabel}]${videoFilters.join(',')},format=${pix}[v]`);
+  else filters.push(`[${compositeLabel}]format=${pix}[v]`);
+
   args.push('-filter_complex',filters.join(';'),'-map','[v]');
-  if(options.audioMuted!==true)args.push('-map','0:a:0','-c:a','aac','-b:a','192k');
+  if(!options.audioMuted&&audioLabel)args.push('-map','['+audioLabel+']','-c:a','aac','-b:a','192k');
   else args.push('-an');
   args.push('-c:v',encoder,'-b:v',options.quality==='balanced'?'2800k':'4500k','-t',String(duration),'-movflags','+faststart',output);
   const result=await execute(args,undefined,(timeMs)=>{
