@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FileText, Image as ImageIcon, Music2, SlidersHorizontal, Sparkles } from 'lucide-react-native';
 import type { KaraokeLine, SavedVisualPreset, Song, StudioAspect, StudioEqBand, StudioLyricsMode as LyricsMode, StudioMasterProfile, StudioMotion as Motion, StudioSpatialMode, StudioVisualConfig } from './types';
+import { V23SceneThumb } from './V23SceneThumb';
 export type { StudioVisualConfig } from './types';
 
 const DEFAULT_MASTER_EQ:StudioEqBand[]=[
@@ -391,7 +392,9 @@ function AudioPanel({config,onChange}:{config:StudioVisualConfig;onChange:(next:
 
 function PresetCard({preset,picture,active,onPress}:{preset:Preset;picture?:string;active:boolean;onPress:()=>void}){
   return <Pressable onPress={onPress} style={[styles.presetCard,active&&{borderColor:preset.accent}]}>
-    <View style={[styles.presetArt,{backgroundColor:preset.accent+'22'}]}>{picture&&<Image source={{uri:picture}} style={StyleSheet.absoluteFill} resizeMode="cover"/>}<View style={styles.presetShade}/><Text style={styles.presetBadge}>{preset.badge}</Text><View style={[styles.disc,{borderColor:preset.secondary}]}><View style={[styles.discCore,{backgroundColor:preset.accent}]}/></View></View>
+    <View style={styles.presetArt}>
+      <V23SceneThumb template={preset.template} picture={picture} accent={preset.accent} secondary={preset.secondary} badge={preset.badge}/>
+    </View>
     <View style={styles.presetCopy}><Text numberOfLines={1} style={styles.presetName}>{preset.name}</Text><Text numberOfLines={2} style={styles.presetDesc}>{preset.description}</Text></View>
   </Pressable>
 }
