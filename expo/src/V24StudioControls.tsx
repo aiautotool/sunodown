@@ -102,11 +102,12 @@ export function applyPresetConfig(current:StudioVisualConfig,preset:Preset,durat
 }
 
 export function V24StudioControls({
-  song,config,onChange,timeline,onTimelineChange,subtitleLoading,subtitleError,onReget,onPickBackground,
+  song,config,onChange,timeline,onTimelineChange,onImportSubtitles,onExportSubtitles,subtitleLoading,subtitleError,onReget,onPickBackground,
   customPresets=[],onSavePreset,onDeletePreset,
   panel:controlledPanel,onPanelChange,
 }:{
   song:Song;config:StudioVisualConfig;onChange:(next:StudioVisualConfig)=>void;timeline:KaraokeLine[];onTimelineChange?:(lines:KaraokeLine[])=>void;
+  onImportSubtitles?:()=>void;onExportSubtitles?:()=>void;
   subtitleLoading:boolean;subtitleError:string;onReget:()=>void;onPickBackground:()=>void;
   customPresets?:SavedVisualPreset[];onSavePreset?:()=>void;onDeletePreset?:(id:string)=>void;
   panel?:StudioPanel;onPanelChange?:(panel:StudioPanel)=>void;
@@ -185,6 +186,10 @@ export function V24StudioControls({
         <FieldTitle title="Font subtitle"/><ChipGrid values={['system','rounded','serif','impact']} value={config.subtitleFont} onChange={v=>set('subtitleFont',v)}/>
         <Stepper label="Kích thước subtitle" value={config.subtitleScale??100} min={40} max={220} suffix="%" step={5} onChange={v=>set('subtitleScale',v)}/>
         <View style={styles.regetRow}><Pressable onPress={onReget} style={styles.primaryBtn}><Text style={styles.primaryText}>{subtitleLoading?'Đang lấy lại…':'Lấy subtitle mới'}</Text></Pressable><Text style={styles.help}>{timeline.length} cue</Text></View>
+        <View style={styles.subtitleFileRow}>
+          <Pressable onPress={onImportSubtitles} style={styles.fileBtn}><Text style={styles.fileBtnText}>Import SRT / VTT</Text></Pressable>
+          <Pressable onPress={onExportSubtitles} style={styles.fileBtn}><Text style={styles.fileBtnText}>Export SRT</Text></Pressable>
+        </View>
         {!!subtitleError&&<Text style={styles.error}>{subtitleError}</Text>}
         <View style={styles.cueActions}><Pressable onPress={addCue} style={styles.cueAdd}><Text style={styles.cueAddText}>+ Thêm cue</Text></Pressable><Text style={styles.help}>{timeline.length} cue tổng cộng</Text></View>
         {timeline.slice(0,20).map((line,i)=><View key={i+'-'+line.start} style={styles.cueEditor}>
@@ -270,6 +275,7 @@ const styles=StyleSheet.create({
   chips:{flexDirection:'row',flexWrap:'wrap',gap:7},chip:{minHeight:34,borderWidth:1,borderColor:'#303947',borderRadius:8,backgroundColor:'#151c27',paddingHorizontal:9,alignItems:'center',justifyContent:'center'},chipActive:{borderColor:'#8a67ff',backgroundColor:'rgba(125,91,255,.18)'},chipText:{color:'#aeb8c7',fontSize:9,fontWeight:'700'},chipTextActive:{color:'#fff'},
   colorGrid:{flexDirection:'row',flexWrap:'wrap',gap:8},color:{width:28,height:28,borderRadius:7,borderWidth:2,borderColor:'#252d39'},colorActive:{borderColor:'#8b5cf6',transform:[{scale:1.08}]},
   regetRow:{flexDirection:'row',alignItems:'center',gap:10},primaryBtn:{minHeight:38,borderRadius:8,backgroundColor:'#7658e9',paddingHorizontal:12,alignItems:'center',justifyContent:'center'},primaryText:{color:'#fff',fontSize:10,fontWeight:'800'},error:{color:'#ff9da5',fontSize:9},
+  subtitleFileRow:{flexDirection:'row',gap:7},fileBtn:{flex:1,minHeight:34,borderWidth:1,borderColor:'#344152',borderRadius:8,backgroundColor:'#111925',alignItems:'center',justifyContent:'center'},fileBtnText:{color:'#b8c5d7',fontSize:8,fontWeight:'800'},
   cueActions:{flexDirection:'row',alignItems:'center',gap:9},cueAdd:{minHeight:32,borderWidth:1,borderColor:'#5945a7',borderRadius:8,backgroundColor:'rgba(118,88,237,.12)',paddingHorizontal:10,alignItems:'center',justifyContent:'center'},cueAddText:{color:'#cfc5ff',fontSize:9,fontWeight:'800'},
   cueEditor:{borderWidth:1,borderColor:'#252e3a',borderRadius:9,backgroundColor:'#0d131c',padding:8,gap:6},cueTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'},cueTime:{color:'#9478ff',fontSize:8,fontWeight:'800'},cueDuration:{color:'#69768a',fontSize:8},cueInput:{minHeight:38,borderWidth:1,borderColor:'#293441',borderRadius:7,backgroundColor:'#101720',paddingHorizontal:8,paddingVertical:6,color:'#e6ebf3',fontSize:9,textAlignVertical:'top'},cueButtons:{flexDirection:'row',flexWrap:'wrap',gap:5},cueButton:{minHeight:28,borderWidth:1,borderColor:'#303947',borderRadius:7,backgroundColor:'#151c27',paddingHorizontal:7,alignItems:'center',justifyContent:'center'},cueButtonText:{color:'#aeb8c7',fontSize:8,fontWeight:'700'},cueDelete:{borderColor:'#553038',backgroundColor:'#201318'},cueDeleteText:{color:'#ffadb4',fontSize:8,fontWeight:'800'},
   upload:{minHeight:58,borderWidth:1,borderStyle:'dashed',borderColor:'#49576c',borderRadius:10,backgroundColor:'#111823',padding:10,flexDirection:'row',alignItems:'center',gap:10},uploadTitle:{color:'#e5eaf2',fontSize:10,fontWeight:'700'},uploadSub:{color:'#788496',fontSize:8,marginTop:4},
