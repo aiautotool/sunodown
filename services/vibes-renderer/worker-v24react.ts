@@ -4,7 +4,6 @@ import {env} from 'cloudflare:workers';
 type RendererEnv={
   AI_RENDERER:DurableObjectNamespace<V24ReactRendererContainer>;
   VIBES_META_SESSION?:string;
-  RENDER_SERVICE_TOKEN?:string;
 };
 
 export class V24ReactRendererContainer extends Container<RendererEnv>{
@@ -12,7 +11,6 @@ export class V24ReactRendererContainer extends Container<RendererEnv>{
   sleepAfter='15m';
   envVars={
     VIBES_META_SESSION:String(env.VIBES_META_SESSION||''),
-    RENDER_SERVICE_TOKEN:String(env.RENDER_SERVICE_TOKEN||''),
     AUDIO_SOURCE_HOSTS:'sunoapp.aiautotool.com',
   };
   entrypoint=[
@@ -39,13 +37,6 @@ export default {
     if(!['/render','/audio'].includes(url.pathname)||request.method!=='POST'){
       return new Response('Not found',{status:404});
     }
-    if(
-      bindings.RENDER_SERVICE_TOKEN &&
-      request.headers.get('authorization')!==`Bearer ${bindings.RENDER_SERVICE_TOKEN}`
-    ){
-      return new Response('Unauthorized',{status:401});
-    }
-
     let jobId='default';
     try{
       const body=await request.clone().json() as {jobId?:string};
