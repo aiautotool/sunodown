@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Download, Menu, Music2, Pause, Play, Save, SlidersHorizontal, Sparkles, Subtitles, Upload, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import type { KaraokeLine, MediaClip, RenderJob, SavedVisualPreset, Song, StudioSnapshot, TimelineTrackState } from './types';
 import { colors, v24 } from './theme';
 import { safeFilename, saveExportedAsset, shareTextFile } from './file-actions';
@@ -632,7 +632,9 @@ function PreviewStage({
               style={StyleSheet.absoluteFill}
               imageStyle={{opacity:config.template==='cover-motion'?.96:config.template==='lyrics-focus'?.42:.56}}
             />
-          : <LinearGradient colors={trackState.visual.hidden?['#080c12','#080c12']:(frameColors as any)} style={StyleSheet.absoluteFill}/>}
+          : song.creator==='Local audio'
+            ? <V23LocalAudioCover title={song.title}/>
+            : <LinearGradient colors={trackState.visual.hidden?['#080c12','#080c12']:(frameColors as any)} style={StyleSheet.absoluteFill}/>}
         <View style={[StyleSheet.absoluteFill,{backgroundColor:`rgba(0,0,0,${Math.max(0,Math.min(70,config.backgroundDim??0))/100})`}]}/>
         <View style={[StyleSheet.absoluteFill,{backgroundColor:config.template==='cover-motion'?'rgba(3,4,12,.15)':config.template==='editorial'?'rgba(7,8,14,.50)':'rgba(3,4,12,.43)',opacity:1-Math.max(0,Math.min(60,config.backgroundOverlayOpacity??0))/180}]}/>
 
@@ -723,6 +725,24 @@ function PreviewStage({
     </View>
     <Text style={styles.previewHint}>Preview dùng audio thật làm clock. Nắm trực tiếp sóng hoặc subtitle trên video để kéo tới vị trí mong muốn.</Text>
   </View>;
+}
+
+function V23LocalAudioCover({title}:{title:string}){
+  const label=title.length>28?title.slice(0,27)+'…':title;
+  return <Svg viewBox="0 0 1200 1200" preserveAspectRatio="xMidYMid slice" width="100%" height="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Defs>
+      <SvgLinearGradient id="v23-local-cover" x1="0" y1="0" x2="1" y2="1">
+        <Stop offset="0" stopColor="#17112d"/>
+        <Stop offset=".52" stopColor="#5234b8"/>
+        <Stop offset="1" stopColor="#111827"/>
+      </SvgLinearGradient>
+    </Defs>
+    <Rect x="0" y="0" width="1200" height="1200" fill="url(#v23-local-cover)"/>
+    <Circle cx="920" cy="220" r="280" fill="rgba(255,255,255,.12)"/>
+    <SvgText x="600" y="570" fill="#ffffff" fontSize="210" fontWeight="700" textAnchor="middle">♫</SvgText>
+    <SvgText x="600" y="760" fill="#ffffff" fontSize="58" fontWeight="700" textAnchor="middle">{label}</SvgText>
+    <SvgText x="600" y="825" fill="rgba(255,255,255,.62)" fontSize="25" fontWeight="600" textAnchor="middle">SUNODOWN · LOCAL AUDIO</SvgText>
+  </Svg>;
 }
 
 function V23TemplateLayer({template,visual,song,currentTime,accent,secondary}:{template:string;visual?:string;song:Song;currentTime:number;accent:string;secondary:string}){
