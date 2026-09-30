@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
-import { BookOpen, ChevronLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Link2, ListMusic, Menu, Music2, Play, Plus, Settings, Sparkles, Upload, X } from 'lucide-react-native';
+import { BookOpen, ChevronLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Link2, ListMusic, Menu, Music2, Play, Plus, Settings, Sparkles, Upload, X, type LucideIcon } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, v24 } from './theme';
 import type { AppView, Project, Song } from './types';
@@ -153,14 +153,14 @@ export function EmptyCreate({
             <View style={styles.mobileNavAvatar}><Text style={styles.mobileNavAvatarText}>S</Text></View>
             <View><Text style={styles.mobileNavName}>SunoDown</Text><Text style={styles.mobileNavSub}>Creator Studio</Text></View>
           </View>
-          {[
+          {([
             ['create','Create',Plus],
             ['music','Music',Music2],
             ['projects','Projects',Folder],
             ['library','Library',BookOpen],
             ['jobs','Jobs',ListMusic],
             ['settings','Settings',Settings],
-          ].map(([id,label,Icon])=><Pressable key={String(id)} style={styles.mobileNavEntry} onPress={()=>{setMobileMenuOpen(false);onNavigate(id as AppView)}}>
+          ] as Array<[AppView,string,LucideIcon]>).map(([id,label,Icon])=><Pressable key={String(id)} style={styles.mobileNavEntry} onPress={()=>{setMobileMenuOpen(false);onNavigate(id as AppView)}}>
             <Icon size={17} color="#a9b4c4"/><Text style={styles.mobileNavEntryText}>{String(label)}</Text>
           </Pressable>)}
         </View>}
