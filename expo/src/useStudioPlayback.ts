@@ -23,6 +23,8 @@ export function useStudioPlayback(song:Song,muted=false){
   return {
     current,duration,playing:Boolean(status.playing),
     toggle:()=>status.playing?player.pause():player.play(),
+    pause:()=>player.pause(),
+    play:()=>player.play(),
     seekTo:(value:number)=>void player.seekTo(Math.max(0,Math.min(duration||value,value))),
     seekBy:(delta:number)=>void player.seekTo(Math.max(0,Math.min(duration||current+delta,current+delta))),
   };
