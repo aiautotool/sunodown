@@ -1,0 +1,32 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "sunodown-v24react-renderer",
+  "main": "worker-v24react.ts",
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "containers": [
+    {
+      "class_name": "V24ReactRendererContainer",
+      "image": "./Dockerfile",
+      "max_instances": 3
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AI_RENDERER",
+        "class_name": "V24ReactRendererContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v24react-renderer-v1",
+      "new_sqlite_classes": ["V24ReactRendererContainer"]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
