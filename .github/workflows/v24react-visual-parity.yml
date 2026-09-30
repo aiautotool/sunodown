@@ -1,0 +1,101 @@
+name: v24react visual parity
+
+on:
+  push:
+    branches: [v24react]
+    paths:
+      - '.github/workflows/v24react-visual-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+
+      - name: Install visual test tools
+        run: |
+          npm install --no-save playwright@1.56.1 pixelmatch@7.1.0 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+
+      - name: Wait for current v24react UI deployment
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser = await chromium.launch({headless:true});
+          const page = await browser.newPage({viewport:{width:1440,height:1100}});
+          let ready=false;
+          for(let attempt=0;attempt<30;attempt++){
+            try{
+              await page.goto('https://sunoapp.aiautotool.com/',{waitUntil:'domcontentloaded',timeout:30000});
+              await page.waitForTimeout(2300);
+              ready=await page.getByText('Turn your Suno song',{exact:false}).isVisible().catch(()=>false);
+              if(ready)break;
+            }catch{}
+            await page.waitForTimeout(3000);
+          }
+          await browser.close();
+          if(!ready)process.exit(1);
+          NODE
+
+      - name: Capture v24 and v24react reference views
+        run: |
+          mkdir -p visual-parity
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          import fs from 'node:fs';
+          import pixelmatch from 'pixelmatch';
+          import { PNG } from 'pngjs';
+
+          const OLD='https://sunodown-picai-v24.long-wind-7153.workers.dev';
+          const NEW='https://sunoapp.aiautotool.com';
+
+          async function shot(browser,url,name,viewport){
+            const page=await browser.newPage({viewport});
+            await page.goto(url,{waitUntil:'networkidle',timeout:60000}).catch(async()=>{
+              await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
+            });
+            await page.waitForTimeout(2600);
+            await page.screenshot({path:'visual-parity/'+name+'.png',fullPage:false});
+            await page.close();
+          }
+
+          const browser=await chromium.launch({headless:true});
+          await shot(browser,OLD,'v24-desktop',{width:1440,height:1100});
+          await shot(browser,NEW,'v24react-desktop',{width:1440,height:1100});
+          await shot(browser,OLD,'v24-mobile',{width:390,height:844});
+          await shot(browser,NEW,'v24react-mobile',{width:390,height:844});
+          await browser.close();
+
+          function compare(aPath,bPath,outPath){
+            const a=PNG.sync.read(fs.readFileSync(aPath));
+            const b=PNG.sync.read(fs.readFileSync(bPath));
+            if(a.width!==b.width||a.height!==b.height)throw new Error('Screenshot dimensions differ');
+            const diff=new PNG({width:a.width,height:a.height});
+            const pixels=pixelmatch(a.data,b.data,diff.data,a.width,a.height,{threshold:.16,includeAA:false});
+            fs.writeFileSync(outPath,PNG.sync.write(diff));
+            return pixels/(a.width*a.height);
+          }
+
+          const desktop=compare('visual-parity/v24-desktop.png','visual-parity/v24react-desktop.png','visual-parity/diff-desktop.png');
+          const mobile=compare('visual-parity/v24-mobile.png','visual-parity/v24react-mobile.png','visual-parity/diff-mobile.png');
+          const report={desktopDiff:Number((desktop*100).toFixed(2)),mobileDiff:Number((mobile*100).toFixed(2))};
+          fs.writeFileSync('visual-parity/report.json',JSON.stringify(report,null,2));
+          console.log('Desktop pixel diff: '+report.desktopDiff+'%');
+          console.log('Mobile pixel diff: '+report.mobileDiff+'%');
+          NODE
+
+      - name: Upload parity screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: v24react-visual-parity
+          path: visual-parity/
+          retention-days: 7
