@@ -3,7 +3,7 @@ import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-au
 import type { Song } from './types';
 import { musicAudioUrl } from './api';
 
-export function useStudioPlayback(song:Song){
+export function useStudioPlayback(song:Song,muted=false){
   const player=useAudioPlayer(null,{updateInterval:250});
   const status=useAudioPlayerStatus(player);
 
@@ -14,6 +14,8 @@ export function useStudioPlayback(song:Song){
     const timer=setTimeout(()=>{try{player.play()}catch{}},120);
     return()=>{clearTimeout(timer);try{player.pause()}catch{}};
   },[song.id,song.audio]);
+
+  useEffect(()=>{player.muted=muted},[muted,player]);
 
   const duration=status.duration||song.duration||0;
   const current=status.currentTime||0;
