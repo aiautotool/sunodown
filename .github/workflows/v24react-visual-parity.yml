@@ -1,9 +1,11 @@
 name: v24react visual parity
 
 on:
-  workflow_run:
-    workflows: ["Deploy v24react universal Expo"]
-    types: [completed]
+  push:
+    branches: [v24react]
+    paths:
+      - 'expo/**'
+      - '.github/workflows/v24react-visual-parity.yml'
   workflow_dispatch:
 
 concurrency:
@@ -53,7 +55,7 @@ jobs:
 
       - name: Wait for latest v24react UI deployment
         env:
-          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
           node --input-type=module <<'NODE'
           import { chromium } from 'playwright';
