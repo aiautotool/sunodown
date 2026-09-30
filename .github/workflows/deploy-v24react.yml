@@ -36,6 +36,13 @@ jobs:
       - name: Checkout v24react
         uses: actions/checkout@v4
 
+      - name: Assert v24 HTML CSS JS parity
+        shell: bash
+        run: |
+          git fetch origin v24 --depth=1
+          git diff --exit-code origin/v24 -- app components ':(exclude)app/api/audio/export/route.ts'
+          echo "app/** and components/** are byte-for-byte v24 UI source."
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
