@@ -1,9 +1,9 @@
 import '@expo/metro-runtime';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Bell, ChevronDown, Music2 } from 'lucide-react-native';
+import { Bell, ChevronDown, Home, Library as LibraryIcon, Music2, PlusCircle, UserRound } from 'lucide-react-native';
 import { colors, v24 } from './src/theme';
 import type { AppView, LocalLibraryItem, Project, RenderJob, Song } from './src/types';
 import { EmptyCreate } from './src/EmptyCreate';
@@ -30,6 +30,17 @@ function UniversalApp(){
     const [l,p,j]=await Promise.all([storage.getLibrary(),storage.getProjects(),storage.getJobs()]);
     setLibrary(l); setProjects(p); setJobs(j);
   })()},[]);
+
+  useEffect(()=>{
+    if(Platform.OS!=='web')return;
+    const doc=(globalThis as any).document;
+    if(!doc||doc.getElementById('v24-font-parity'))return;
+    const style=doc.createElement('style');
+    style.id='v24-font-parity';
+    style.textContent="@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap');#root *{font-family:'Be Vietnam Pro',Arial,Helvetica,sans-serif}html,body,#root{margin:0;min-height:100%;background:#080c12}";
+    doc.head.appendChild(style);
+    return()=>style.remove();
+  },[]);
 
   const resolveDone=(next:Song,input:string)=>{
     setSong(next); setSourceUrl(input);
@@ -78,10 +89,27 @@ function UniversalApp(){
     <View style={styles.app}>
       {showHeader&&<Header song={song} view={view} onNavigate={setView}/>}
       <View style={styles.content}>{body}</View>
+      {compact&&!song&&<MobileAppNav active={view} onNavigate={setView}/>}
       {showGlobalPlayer&&<MusicPlayer song={playingSong}/>}
     </View>
     <StartupScreen/>
   </SafeAreaView>
+}
+
+function MobileAppNav({active,onNavigate}:{active:AppView;onNavigate:(view:AppView)=>void}){
+  const items=[
+    {id:'create' as const,label:'Home',Icon:Home,primary:false,active:active==='create'},
+    {id:'library' as const,label:'Music',Icon:Music2,primary:false,active:false},
+    {id:'create' as const,label:'Create',Icon:PlusCircle,primary:true,active:false},
+    {id:'library' as const,label:'Library',Icon:LibraryIcon,primary:false,active:active==='library'},
+    {id:'settings' as const,label:'Me',Icon:UserRound,primary:false,active:active==='settings'},
+  ];
+  return <View style={styles.mobileNav}>
+    {items.map(({id,label,Icon,primary,active:isActive},index)=><Pressable key={label+index} onPress={()=>onNavigate(id)} style={[styles.mobileNavItem,isActive&&styles.mobileNavActive]}>
+      <View style={[styles.mobileNavIcon,primary&&styles.mobileNavPrimary]}><Icon size={primary?20:18} color={primary?'#fff':isActive?'#c6baff':'#778397'}/></View>
+      <Text style={[styles.mobileNavLabel,isActive&&styles.mobileNavLabelActive,primary&&styles.mobileNavPrimaryLabel]}>{label}</Text>
+    </Pressable>)}
+  </View>
 }
 
 function Header({song,view,onNavigate}:{song:Song|null;view:AppView;onNavigate:(v:AppView)=>void}){
@@ -118,6 +146,14 @@ const styles=StyleSheet.create({
   safe:{flex:1,backgroundColor:colors.bg},
   app:{flex:1,backgroundColor:colors.bg},
   content:{flex:1,backgroundColor:colors.bg},
+  mobileNav:{position:'absolute',zIndex:70,left:0,right:0,bottom:0,height:64,paddingHorizontal:6,paddingTop:4,paddingBottom:4,borderTopWidth:1,borderColor:'rgba(148,163,184,.14)',backgroundColor:'rgba(8,11,18,.97)',flexDirection:'row'},
+  mobileNavItem:{flex:1,minHeight:52,borderRadius:12,alignItems:'center',justifyContent:'center',gap:3},
+  mobileNavActive:{backgroundColor:'rgba(116,88,225,.08)'},
+  mobileNavIcon:{width:28,height:25,alignItems:'center',justifyContent:'center'},
+  mobileNavPrimary:{width:38,height:38,marginTop:-19,borderWidth:1,borderColor:'rgba(255,255,255,.25)',borderRadius:19,backgroundColor:'#765cf0'},
+  mobileNavLabel:{color:'#778397',fontSize:8,fontWeight:'700'},
+  mobileNavLabelActive:{color:'#c6baff'},
+  mobileNavPrimaryLabel:{marginTop:-1,color:'#b7abc9'},
   header:{
     position:'absolute',left:0,right:0,top:0,zIndex:30,height:v24.headerHeight,
     flexDirection:'row',alignItems:'center',borderBottomWidth:1,borderColor:'#202630',
