@@ -21,7 +21,7 @@ export function StartupScreen() {
 
   if(!visible)return null;
   return <Animated.View style={[styles.overlay,{opacity}]}>
-    <LinearGradient colors={['#0d0a17','#070a10','#070a10']} style={StyleSheet.absoluteFillObject}/>
+    <LinearGradient colors={['#0d0a17','#070a10','#070a10']} style={StyleSheet.absoluteFill}/>
     <View style={styles.glowA}/>
     <View style={styles.glowB}/>
 
@@ -42,7 +42,7 @@ export function StartupScreen() {
       <Text style={styles.copy}>Biến âm nhạc thành nội dung.</Text>
 
       <View style={styles.loader}>
-        <View style={styles.track}><LinearGradient colors={['#5d43d6','#9e7cff','#69a5ff']} style={[styles.fill,{width:progress+'%'}]}/></View>
+        <View style={styles.track}><LinearGradient colors={['#5d43d6','#9e7cff','#69a5ff']} style={[styles.fill,{width:(progress+'%') as any}]}/></View>
         <View style={styles.loaderMeta}><Text style={styles.loaderText}>ĐANG KHỞI TẠO STUDIO</Text><Text style={styles.loaderValue}>{String(progress).padStart(2,'0')}%</Text></View>
       </View>
     </View>
