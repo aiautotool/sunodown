@@ -8,12 +8,13 @@ const fmt=(n=0)=>Math.floor(n/60)+':'+String(Math.floor(n%60)).padStart(2,'0');
 const shortDate=(n:number)=>new Date(n).toLocaleDateString('vi-VN');
 
 export function LibraryScreen({
-  items,onPlay,onOpen,onCreate,
+  items,onPlay,onOpen,onCreate,onClear,
 }:{
   items:LocalLibraryItem[];
   onPlay:(song:Song)=>void;
   onOpen:(item:LocalLibraryItem)=>void;
   onCreate:()=>void;
+  onClear:()=>void;
 }){
   const {width}=useWindowDimensions();
   const compact=width<=900;
@@ -43,7 +44,7 @@ export function LibraryScreen({
 
     <View style={[styles.toolbar,compact&&styles.toolbarCompact]}>
       <View style={styles.searchWrap}><Text style={styles.searchLabel}>TÌM BÀI HÁT</Text><View style={styles.searchBox}><Search size={16} color="#718096"/><TextInput value={query} onChangeText={setQuery} placeholder="Tên bài, nghệ sĩ hoặc link Suno..." placeholderTextColor="#596679" style={styles.searchInput}/></View></View>
-      {items.length>0&&<Pressable style={styles.clear}><Text style={styles.clearText}>Xóa lịch sử local</Text></Pressable>}
+      {items.length>0&&<Pressable style={styles.clear} onPress={onClear}><Text style={styles.clearText}>Xóa lịch sử local</Text></Pressable>}
     </View>
 
     <View style={styles.grid}>
