@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   PanResponder, Pressable, ScrollView, StyleSheet, Text, View,
   type LayoutChangeEvent,
@@ -11,6 +11,7 @@ import {
 import type {
   KaraokeLine, MediaClip, TimelineTrackName, TimelineTrackState,
 } from './types';
+import { extractWaveform } from './waveform-engine';
 
 type Tool='select'|'razor';
 type Snapshot={subtitles:KaraokeLine[];clips:MediaClip[]};
@@ -41,7 +42,7 @@ const defaultTracks:TimelineTrackState={
 export function UniversalEditorTimeline({
   compact=false,duration,playhead,onSeek,subtitles,onSubtitlesChange,
   clips,onClipsChange,effects,trackState,onTrackStateChange,onAddMedia,
-  trimStart=0,trimEnd,onTrimChange,
+  audioSource,trimStart=0,trimEnd,onTrimChange,
 }:{
   compact?:boolean;
   duration:number;
@@ -55,6 +56,7 @@ export function UniversalEditorTimeline({
   trackState?:TimelineTrackState;
   onTrackStateChange:(state:TimelineTrackState)=>void;
   onAddMedia:()=>void;
+  audioSource?:string;
   trimStart?:number;
   trimEnd?:number;
   onTrimChange?:(start:number,end:number)=>void;
@@ -64,6 +66,7 @@ export function UniversalEditorTimeline({
   const [snapping,setSnapping]=useState(true);
   const [selected,setSelected]=useState<string|null>(null);
   const [viewportWidth,setViewportWidth]=useState(320);
+  const [waveform,setWaveform]=useState<number[]>([]);
   const [undoStack,setUndoStack]=useState<Snapshot[]>([]);
   const [redoStack,setRedoStack]=useState<Snapshot[]>([]);
   const [clipboard,setClipboard]=useState<ClipboardItem|null>(null);
@@ -78,6 +81,13 @@ export function UniversalEditorTimeline({
   const canvasWidth=Math.max(viewportWidth,Math.max(900,safeDuration*22)*zoom);
   const px=canvasWidth/safeDuration;
   const scrollRef=useRef<ScrollView>(null);
+
+  useEffect(()=>{
+    let cancelled=false;
+    if(!audioSource){setWaveform([]);return}
+    void extractWaveform(audioSource,320).then(peaks=>{if(!cancelled)setWaveform(peaks)}).catch(()=>{if(!cancelled)setWaveform([])});
+    return()=>{cancelled=true};
+  },[audioSource]);
 
   const snapshot=():Snapshot=>({subtitles:cloneLines(subtitles),clips:cloneClips(clips)});
   const pushHistory=()=>{
@@ -323,7 +333,13 @@ export function UniversalEditorTimeline({
 
           <TrackHeader name="audio" label="Audio" icon={<Waves size={14}/>} state={tracks.audio} onUpdate={patch=>updateTrack('audio',patch)}/>
           {!tracks.audio.hidden&&<View style={[styles.audioLane,{top:62,width:canvasWidth}]}>
-            <View style={styles.waveBars}>{Array.from({length:180}).map((_,index)=><View key={index} style={[styles.waveBar,{height:9+((index*37)%43)}]}/>)}</View>
+            <View style={[styles.waveBars,{width:Math.max(1,canvasWidth-58)}]}>
+              {(waveform.length?waveform:Array.from({length:180},(_,index)=>(9+((index*37)%43))/52)).map((value,index)=>{
+                const count=waveform.length||180;
+                const barWidth=Math.max(1,(canvasWidth-58)/count-1);
+                return <View key={index} style={[styles.waveBar,{width:barWidth,height:Math.max(3,Math.round(5+value*43))}]}/>;
+              })}
+            </View>
           </View>}
 
           <TrackHeader name="visual" label="Visual" icon={<Video size={14}/>} state={tracks.visual} onUpdate={patch=>updateTrack('visual',patch)} top={126}/>
@@ -479,7 +495,7 @@ const styles=StyleSheet.create({
   trimRegion:{position:'absolute',zIndex:4,top:30,bottom:0,borderLeftWidth:1,borderRightWidth:1,borderColor:'rgba(139,108,255,.6)',backgroundColor:'rgba(123,91,255,.045)'},trimRegionText:{position:'absolute',top:4,left:5,color:'#9f8cf4',fontSize:7,fontWeight:'800',letterSpacing:.4},
   trimHandle:{position:'absolute',zIndex:40,top:20,bottom:0,width:14,marginLeft:-7,alignItems:'center'},trimHandleStart:{},trimHandleEnd:{},trimHandleGrip:{width:9,height:24,borderWidth:1,borderColor:'#cabdff',borderRadius:4,backgroundColor:'#7258e8',shadowColor:'#7c5cff',shadowOpacity:.45,shadowRadius:6,elevation:4},
   trackHeader:{position:'absolute',left:6,width:120,height:25,zIndex:10,borderRadius:6,backgroundColor:'rgba(17,23,34,.94)',paddingHorizontal:6,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},trackLabel:{flex:1,flexDirection:'row',alignItems:'center',gap:4},trackText:{flex:1,color:'#818da1',fontSize:8,fontWeight:'700'},trackActions:{flexDirection:'row',alignItems:'center',gap:5},cc:{color:'#aa97ff',fontSize:7,fontWeight:'900'},
-  audioLane:{position:'absolute',left:0,height:58,borderBottomWidth:1,borderColor:'#171d27',justifyContent:'center',paddingLeft:58},waveBars:{height:46,flexDirection:'row',alignItems:'center',gap:2,overflow:'hidden'},waveBar:{width:2,borderRadius:2,backgroundColor:'#765cec',opacity:.75},
+  audioLane:{position:'absolute',left:0,height:58,borderBottomWidth:1,borderColor:'#171d27',justifyContent:'center',paddingLeft:58},waveBars:{height:46,flexDirection:'row',alignItems:'center',overflow:'hidden'},waveBar:{borderRadius:2,backgroundColor:'#765cec',opacity:.78},
   clip:{position:'absolute',height:44,borderWidth:1,borderRadius:5,overflow:'hidden',justifyContent:'center',paddingHorizontal:12},clipText:{color:'#e9edf5',fontSize:8,fontWeight:'700'},edge:{position:'absolute',zIndex:6,left:0,top:0,bottom:0,width:8,backgroundColor:'#9d7bff',opacity:.38},edgeRight:{left:undefined,right:0},edgeActive:{opacity:.95},
   effects:{position:'absolute',height:38,borderWidth:1,borderColor:'#40516b',borderRadius:5,backgroundColor:'#172335',justifyContent:'center',paddingHorizontal:10},effectText:{color:'#9cb0cc',fontSize:8},
   playhead:{position:'absolute',zIndex:30,top:18,bottom:0,width:1,backgroundColor:'#fff'},playheadDot:{width:9,height:9,marginLeft:-4,borderRadius:5,backgroundColor:'#fff'},playheadText:{position:'absolute',left:5,top:-4,width:48,color:'#fff',fontSize:7},
