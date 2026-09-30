@@ -106,7 +106,7 @@ function Empty({icon,title,description,action,onAction}:{icon:React.ReactNode;ti
 
 const styles=StyleSheet.create({
   root:{flex:1,backgroundColor:'#090d14'},
-  content:{minHeight:'100%',marginLeft:v24.railWidth,paddingTop:v24.headerHeight+42,paddingHorizontal:42,paddingBottom:120},
+  content:{minHeight:'100%',marginLeft:0,paddingTop:v24.headerHeight+42,paddingHorizontal:42,paddingBottom:120},
   contentCompact:{marginLeft:0,paddingTop:0,paddingHorizontal:18,paddingBottom:100},
   head:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:20,borderBottomWidth:1,borderColor:'#242b35',paddingBottom:24},
   headCompact:{flexDirection:'column',alignItems:'stretch',paddingTop:0},
