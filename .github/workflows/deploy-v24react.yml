@@ -171,12 +171,20 @@ jobs:
           grep -Eq '"status"[[:space:]]*:[[:space:]]*"missing"' /tmp/subtitle.json
 
       - name: Verify isolated Groq endpoint
+        shell: bash
         run: |
-          response="$(curl --fail --silent --show-error --max-time 30 "$APP_URL/api/karaoke/groq")"
-          echo "$response"
-          if [ -n "$GROQ_API_KEY" ]; then
-            echo "$response" | grep -Eq '"available"[[:space:]]*:[[:space:]]*true'
-          fi
+          for attempt in 1 2 3 4 5 6 7 8; do
+            response="$(curl --fail --silent --show-error --max-time 30 "$APP_URL/api/karaoke/groq")"
+            echo "$response"
+            if [ -z "$GROQ_API_KEY" ]; then
+              exit 0
+            fi
+            if echo "$response" | grep -Eq '"available"[[:space:]]*:[[:space:]]*true'; then
+              exit 0
+            fi
+            sleep 4
+          done
+          exit 1
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
 
