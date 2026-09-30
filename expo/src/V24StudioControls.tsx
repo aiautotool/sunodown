@@ -1,8 +1,27 @@
 import { useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FileText, Image as ImageIcon, Music2, SlidersHorizontal, Sparkles } from 'lucide-react-native';
-import type { KaraokeLine, SavedVisualPreset, Song, StudioAspect, StudioLyricsMode as LyricsMode, StudioMotion as Motion, StudioVisualConfig } from './types';
+import type { KaraokeLine, SavedVisualPreset, Song, StudioAspect, StudioEqBand, StudioLyricsMode as LyricsMode, StudioMasterProfile, StudioMotion as Motion, StudioSpatialMode, StudioVisualConfig } from './types';
 export type { StudioVisualConfig } from './types';
+
+const DEFAULT_MASTER_EQ:StudioEqBand[]=[
+  {enabled:true,frequency:60,gain:0,q:.7,type:'lowshelf'},
+  {enabled:true,frequency:120,gain:0,q:1,type:'peaking'},
+  {enabled:true,frequency:250,gain:0,q:1,type:'peaking'},
+  {enabled:true,frequency:500,gain:0,q:1,type:'peaking'},
+  {enabled:true,frequency:1000,gain:0,q:1,type:'peaking'},
+  {enabled:true,frequency:2500,gain:0,q:1,type:'peaking'},
+  {enabled:true,frequency:6000,gain:0,q:1,type:'peaking'},
+  {enabled:true,frequency:12000,gain:0,q:.7,type:'highshelf'},
+];
+
+const MASTER_PROFILES:Record<StudioMasterProfile,{label:string;description:string;target:number;ceiling:number;threshold:number;ratio:number;attack:number;release:number;drive:number}>={
+  original:{label:'Original',description:'Giữ dynamic gốc, không loudness normalize.',target:-14,ceiling:-1,threshold:-18,ratio:1,attack:10,release:120,drive:0},
+  clean:{label:'Clean',description:'Sạch, cân bằng và giữ vocal tự nhiên.',target:-14,ceiling:-1,threshold:-15,ratio:2,attack:9,release:120,drive:.02},
+  'tiktok-loud':{label:'TikTok',description:'Loudness rõ cho social video, vẫn có headroom.',target:-9,ceiling:-1,threshold:-17,ratio:3.2,attack:8,release:100,drive:.08},
+  punchy:{label:'Punchy',description:'Transient rõ hơn, hợp pop/EDM và hook nhanh.',target:-11,ceiling:-.8,threshold:-16,ratio:2.6,attack:18,release:110,drive:.06},
+  'max-loud':{label:'Max Loud',description:'Mức loud cao nhất; phù hợp preview/short-form.',target:-7.5,ceiling:-.8,threshold:-20,ratio:4.2,attack:6,release:90,drive:.14},
+};
 
 export const DEFAULT_VISUAL_CONFIG:StudioVisualConfig={
   presetId:'signature-mirror-glow',
@@ -39,6 +58,18 @@ export const DEFAULT_VISUAL_CONFIG:StudioVisualConfig={
   eqBass:0,
   eqVocal:0,
   eqTreble:0,
+  masteringProfile:'original',
+  masterTargetLufs:-14,
+  masterCeilingDb:-1,
+  masterThresholdDb:-18,
+  masterRatio:1,
+  masterAttackMs:10,
+  masterReleaseMs:120,
+  masterDrive:0,
+  masterEqBands:DEFAULT_MASTER_EQ.map(b=>({...b})),
+  spatialEnabled:false,
+  spatialMode:'immersive',
+  spatialAmount:65,
   trimStart:0,
   trimEnd:0,
   audioPreset:'Original',
@@ -230,6 +261,9 @@ export function V24StudioControls({
 }
 
 function AudioPanel({config,onChange}:{config:StudioVisualConfig;onChange:(next:StudioVisualConfig)=>void}){
+  const [section,setSection]=useState<'master'|'eq'|'5d'>('master');
+  const [advancedOpen,setAdvancedOpen]=useState(false);
+  const [eqOpen,setEqOpen]=useState(false);
   const presets=['Original','Clean','Vocal','Punchy','Bass+','Wide','Immersive'];
   const setPreset=(preset:string)=>{
     const presetEq:Record<string,[number,number,number]>={
@@ -238,17 +272,112 @@ function AudioPanel({config,onChange}:{config:StudioVisualConfig;onChange:(next:
     const [eqBass,eqVocal,eqTreble]=presetEq[preset]||[0,0,0];
     onChange({...config,audioPreset:preset,eqBass,eqVocal,eqTreble});
   };
-  const set=(key:'eqBass'|'eqVocal'|'eqTreble',value:number)=>onChange({...config,[key]:value,audioPreset:'Custom'});
+  const setEq=(key:'eqBass'|'eqVocal'|'eqTreble',value:number)=>onChange({...config,[key]:value,audioPreset:'Custom'});
+  const bands=(config.masterEqBands?.length?config.masterEqBands:DEFAULT_MASTER_EQ).map(b=>({...b}));
+  const applyProfile=(profile:StudioMasterProfile)=>{
+    const value=MASTER_PROFILES[profile];
+    onChange({...config,masteringProfile:profile,masterTargetLufs:value.target,masterCeilingDb:value.ceiling,masterThresholdDb:value.threshold,masterRatio:value.ratio,masterAttackMs:value.attack,masterReleaseMs:value.release,masterDrive:value.drive});
+  };
+  const changeBand=(index:number,patch:Partial<StudioEqBand>)=>{
+    const next=bands.map((band,i)=>i===index?{...band,...patch}:band);
+    onChange({...config,masterEqBands:next});
+  };
+  const resetMaster=()=>{
+    const profile=config.masteringProfile||'original';
+    const value=MASTER_PROFILES[profile];
+    onChange({...config,masterTargetLufs:value.target,masterCeilingDb:value.ceiling,masterThresholdDb:value.threshold,masterRatio:value.ratio,masterAttackMs:value.attack,masterReleaseMs:value.release,masterDrive:value.drive});
+  };
+  const resetEq=()=>onChange({...config,masterEqBands:DEFAULT_MASTER_EQ.map(b=>({...b}))});
+  const spatialMode=config.spatialMode||'immersive';
+  const profile=config.masteringProfile||'original';
+
   return <View style={styles.stack}>
     <Text style={styles.sectionKicker}>AUDIO WORKSPACE</Text>
-    <Text style={styles.help}>Preset + Quick EQ được lưu cùng project và áp dụng khi export.</Text>
-    <View style={styles.audioList}>{presets.map((p,i)=><Pressable key={p} onPress={()=>setPreset(p)} style={styles.audioRow}><View style={[styles.radio,config.audioPreset===p&&styles.radioActive]}/><Text style={styles.audioName}>{p}</Text><Text style={styles.audioDb}>{i===0?'0 dB':'+1.2 dB'}</Text></Pressable>)}</View>
-    <FieldTitle title="Quick EQ"/>
-    <View style={styles.eqRow}>
-      <Stepper label="Bass" value={config.eqBass??0} min={-6} max={6} suffix=" dB" onChange={v=>set('eqBass',v)}/>
-      <Stepper label="Vocal" value={config.eqVocal??0} min={-6} max={6} suffix=" dB" onChange={v=>set('eqVocal',v)}/>
-      <Stepper label="Treble" value={config.eqTreble??0} min={-6} max={6} suffix=" dB" onChange={v=>set('eqTreble',v)}/>
+    <Text style={styles.help}>Quick Sound + Mastering + Channel EQ + 5D dùng chung config project trên Web, Android và iOS.</Text>
+
+    <View style={styles.audioSubnav}>
+      <Pressable onPress={()=>setSection('master')} style={[styles.audioSubnavBtn,section==='master'&&styles.audioSubnavActive]}><Text style={[styles.audioSubnavText,section==='master'&&styles.audioSubnavTextActive]}>Mastering</Text></Pressable>
+      <Pressable onPress={()=>{setSection('eq');setEqOpen(true)}} style={[styles.audioSubnavBtn,section==='eq'&&styles.audioSubnavActive]}><Text style={[styles.audioSubnavText,section==='eq'&&styles.audioSubnavTextActive]}>EQ</Text></Pressable>
+      <Pressable onPress={()=>setSection('5d')} style={[styles.audioSubnavBtn,section==='5d'&&styles.audioSubnavActive]}><Text style={[styles.audioSubnavText,section==='5d'&&styles.audioSubnavTextActive]}>5D</Text></Pressable>
     </View>
+
+    {section==='master'&&<>
+      <FieldTitle title="Sound preset"/>
+      <View style={styles.audioList}>{presets.map((p,i)=><Pressable key={p} onPress={()=>setPreset(p)} style={styles.audioRow}><View style={[styles.radio,config.audioPreset===p&&styles.radioActive]}/><Text style={styles.audioName}>{p}</Text><Text style={styles.audioDb}>{i===0?'0 dB':'+1.2 dB'}</Text></Pressable>)}</View>
+      <FieldTitle title="Quick EQ"/>
+      <View style={styles.eqRow}>
+        <Stepper label="Bass" value={config.eqBass??0} min={-6} max={6} suffix=" dB" onChange={v=>setEq('eqBass',v)}/>
+        <Stepper label="Vocal" value={config.eqVocal??0} min={-6} max={6} suffix=" dB" onChange={v=>setEq('eqVocal',v)}/>
+        <Stepper label="Treble" value={config.eqTreble??0} min={-6} max={6} suffix=" dB" onChange={v=>setEq('eqTreble',v)}/>
+      </View>
+
+      <FieldTitle title="Master profile"/>
+      <View style={styles.masterProfiles}>{(Object.keys(MASTER_PROFILES) as StudioMasterProfile[]).map(id=><Pressable key={id} onPress={()=>applyProfile(id)} style={[styles.masterProfile,profile===id&&styles.masterProfileActive]}><Text style={[styles.masterProfileText,profile===id&&styles.masterProfileTextActive]}>{MASTER_PROFILES[id].label}</Text></Pressable>)}</View>
+      <Text style={styles.masterDesc}>{MASTER_PROFILES[profile].description}</Text>
+      <View style={styles.masterSummary}>
+        <View><Text style={styles.masterSummaryValue}>{config.masterTargetLufs??MASTER_PROFILES[profile].target}</Text><Text style={styles.masterSummaryLabel}>LUFS</Text></View>
+        <View><Text style={styles.masterSummaryValue}>{config.masterCeilingDb??MASTER_PROFILES[profile].ceiling}</Text><Text style={styles.masterSummaryLabel}>PEAK dB</Text></View>
+        <View><Text style={styles.masterSummaryValue}>{(config.masterRatio??MASTER_PROFILES[profile].ratio).toFixed(1)}:1</Text><Text style={styles.masterSummaryLabel}>RATIO</Text></View>
+      </View>
+      <Pressable style={styles.advancedButton} onPress={()=>setAdvancedOpen(true)}><SlidersHorizontal size={17} color="#b7a7ff"/><View style={{flex:1}}><Text style={styles.advancedTitle}>Tinh chỉnh Audio nâng cao</Text><Text style={styles.advancedSub}>Loudness · limiter · compressor · attack/release · drive</Text></View><Text style={styles.advancedArrow}>›</Text></Pressable>
+    </>}
+
+    {section==='eq'&&<View style={styles.audioSectionCard}>
+      <Text style={styles.audioSectionTitle}>8-Band Parametric EQ</Text>
+      <Text style={styles.help}>Precision EQ · ±12 dB · Frequency / Gain / Q. Mở full màn hình để chỉnh dễ hơn.</Text>
+      <Pressable style={styles.primaryBtn} onPress={()=>setEqOpen(true)}><Text style={styles.primaryText}>Mở Channel EQ</Text></Pressable>
+    </View>}
+
+    {section==='5d'&&<View style={styles.audioSectionCard}>
+      <View style={styles.toggleRow}><View style={{flex:1}}><Text style={styles.audioSectionTitle}>Âm thanh 5D</Text><Text style={styles.help}>{config.spatialEnabled?'Đang bật · áp dụng khi render/export':'Stereo gốc · không spatial'}</Text></View><Pressable onPress={()=>onChange({...config,spatialEnabled:!config.spatialEnabled})} style={[styles.switchTrack,config.spatialEnabled&&styles.switchTrackOn]}><View style={[styles.switchKnob,config.spatialEnabled&&styles.switchKnobOn]}/></Pressable></View>
+      {config.spatialEnabled&&<>
+        <FieldTitle title="Chế độ"/><ChipGrid values={['wide','immersive','orbit']} value={spatialMode} onChange={v=>onChange({...config,spatialMode:v as StudioSpatialMode})}/>
+        <Text style={styles.help}>{spatialMode==='orbit'?'Qua tai: chuyển động trái ↔ phải rõ hơn, nên dùng tai nghe.':spatialMode==='wide'?'Rộng: mở stereo tự nhiên, ít thay đổi vị trí nhạc cụ.':'Bao quanh: sân khấu sâu và rộng hơn cho ballad/ambient.'}</Text>
+        <Stepper label={spatialMode==='orbit'?'Mức chuyển động':'Độ rộng'} value={config.spatialAmount??65} min={20} max={100} suffix="%" step={5} onChange={v=>onChange({...config,spatialAmount:v})}/>
+      </>}
+    </View>}
+
+    <Modal visible={advancedOpen} animationType="slide" onRequestClose={()=>setAdvancedOpen(false)}>
+      <View style={styles.audioModal}>
+        <View style={styles.audioModalHead}><View style={{flex:1}}><Text style={styles.audioModalKicker}>ADVANCED MASTERING</Text><Text style={styles.audioModalTitle}>Tinh chỉnh Audio nâng cao</Text></View><Pressable style={styles.audioModalClose} onPress={()=>setAdvancedOpen(false)}><Text style={styles.audioModalCloseText}>×</Text></Pressable></View>
+        <ScrollView contentContainerStyle={styles.audioModalBody}>
+          <Text style={styles.masterDesc}>Mặc định vẫn theo profile. Thay đổi bên dưới sẽ lưu cùng project và được gửi vào render engine.</Text>
+          <View style={styles.advancedGrid}>
+            <Stepper label="Target loudness" value={config.masterTargetLufs??-14} min={-18} max={-6} suffix=" LUFS" step={.5} onChange={v=>onChange({...config,masterTargetLufs:v})}/>
+            <Stepper label="Peak ceiling" value={config.masterCeilingDb??-1} min={-3} max={-.5} suffix=" dB" step={.1} onChange={v=>onChange({...config,masterCeilingDb:Number(v.toFixed(1))})}/>
+            <Stepper label="Threshold" value={config.masterThresholdDb??-18} min={-30} max={-6} suffix=" dB" onChange={v=>onChange({...config,masterThresholdDb:v})}/>
+            <Stepper label="Ratio" value={config.masterRatio??2} min={1} max={6} suffix=":1" step={.1} onChange={v=>onChange({...config,masterRatio:Number(v.toFixed(1))})}/>
+            <Stepper label="Attack" value={config.masterAttackMs??10} min={1} max={80} suffix=" ms" onChange={v=>onChange({...config,masterAttackMs:v})}/>
+            <Stepper label="Release" value={config.masterReleaseMs??120} min={40} max={500} suffix=" ms" step={5} onChange={v=>onChange({...config,masterReleaseMs:v})}/>
+            <Stepper label="Drive" value={Math.round((config.masterDrive??0)*100)} min={0} max={40} suffix="%" onChange={v=>onChange({...config,masterDrive:v/100})}/>
+          </View>
+        </ScrollView>
+        <View style={styles.audioModalFooter}><Pressable style={styles.modalSecondary} onPress={resetMaster}><Text style={styles.modalSecondaryText}>Reset preset</Text></Pressable><Pressable style={styles.modalPrimary} onPress={()=>setAdvancedOpen(false)}><Text style={styles.modalPrimaryText}>Xong</Text></Pressable></View>
+      </View>
+    </Modal>
+
+    <Modal visible={eqOpen} animationType="slide" onRequestClose={()=>setEqOpen(false)}>
+      <View style={styles.audioModal}>
+        <View style={styles.audioModalHead}><View style={{flex:1}}><Text style={styles.audioModalKicker}>CHANNEL EQ</Text><Text style={styles.audioModalTitle}>8-Band Parametric EQ</Text></View><Pressable style={styles.audioModalClose} onPress={()=>setEqOpen(false)}><Text style={styles.audioModalCloseText}>×</Text></Pressable></View>
+        <ScrollView contentContainerStyle={styles.audioModalBody}>
+          <View style={styles.eqCurve}>
+            <View style={styles.eqZero}/>
+            {bands.map((band,index)=>{
+              const left=Math.max(2,Math.min(96,((Math.log10(Math.max(20,band.frequency)/20)/Math.log10(1000))*92)+4));
+              const top=Math.max(6,Math.min(92,50-(band.enabled?band.gain:0)*3.1));
+              return <View key={index} style={[styles.eqNode,{left:(left+'%') as any,top:(top+'%') as any},!band.enabled&&styles.eqNodeOff]}><Text style={styles.eqNodeText}>{index+1}</Text></View>;
+            })}
+          </View>
+          <View style={styles.eqBands}>{bands.map((band,index)=><View key={index} style={[styles.eqBand,!band.enabled&&styles.eqBandOff]}>
+            <View style={styles.eqBandHead}><Pressable style={[styles.eqBandToggle,band.enabled&&styles.eqBandToggleOn]} onPress={()=>changeBand(index,{enabled:!band.enabled})}><Text style={styles.eqBandToggleText}>{band.enabled?'ON':'OFF'}</Text></Pressable><Text style={styles.eqBandTitle}>Band {index+1}</Text><Text style={styles.eqBandFreq}>{band.frequency>=1000?(band.frequency/1000).toFixed(band.frequency%1000?1:0)+'k':Math.round(band.frequency)} Hz</Text></View>
+            <Stepper label="Gain" value={band.gain} min={-12} max={12} suffix=" dB" step={.5} onChange={v=>changeBand(index,{gain:v})}/>
+            <Stepper label="Frequency" value={band.frequency} min={20} max={20000} suffix=" Hz" step={band.frequency<500?10:band.frequency<3000?50:250} onChange={v=>changeBand(index,{frequency:v})}/>
+            <Stepper label="Q" value={band.q} min={.3} max={8} step={.1} onChange={v=>changeBand(index,{q:Number(v.toFixed(1))})}/>
+          </View>)}</View>
+        </ScrollView>
+        <View style={styles.audioModalFooter}><Pressable style={styles.modalSecondary} onPress={resetEq}><Text style={styles.modalSecondaryText}>Reset EQ</Text></Pressable><Pressable style={styles.modalPrimary} onPress={()=>setEqOpen(false)}><Text style={styles.modalPrimaryText}>Xong</Text></Pressable></View>
+      </View>
+    </Modal>
   </View>
 }
 
@@ -280,5 +409,13 @@ const styles=StyleSheet.create({
   cueEditor:{borderWidth:1,borderColor:'#252e3a',borderRadius:9,backgroundColor:'#0d131c',padding:8,gap:6},cueTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'},cueTime:{color:'#9478ff',fontSize:8,fontWeight:'800'},cueDuration:{color:'#69768a',fontSize:8},cueInput:{minHeight:38,borderWidth:1,borderColor:'#293441',borderRadius:7,backgroundColor:'#101720',paddingHorizontal:8,paddingVertical:6,color:'#e6ebf3',fontSize:9,textAlignVertical:'top'},cueButtons:{flexDirection:'row',flexWrap:'wrap',gap:5},cueButton:{minHeight:28,borderWidth:1,borderColor:'#303947',borderRadius:7,backgroundColor:'#151c27',paddingHorizontal:7,alignItems:'center',justifyContent:'center'},cueButtonText:{color:'#aeb8c7',fontSize:8,fontWeight:'700'},cueDelete:{borderColor:'#553038',backgroundColor:'#201318'},cueDeleteText:{color:'#ffadb4',fontSize:8,fontWeight:'800'},
   upload:{minHeight:58,borderWidth:1,borderStyle:'dashed',borderColor:'#49576c',borderRadius:10,backgroundColor:'#111823',padding:10,flexDirection:'row',alignItems:'center',gap:10},uploadTitle:{color:'#e5eaf2',fontSize:10,fontWeight:'700'},uploadSub:{color:'#788496',fontSize:8,marginTop:4},
   audioList:{borderTopWidth:1,borderColor:'#252b34'},audioRow:{height:43,flexDirection:'row',alignItems:'center',borderBottomWidth:1,borderColor:'#1e2630'},radio:{width:14,height:14,borderRadius:7,borderWidth:1,borderColor:'#6d7787'},radioActive:{borderWidth:4,borderColor:'#8b6cff'},audioName:{flex:1,color:'#dce0e7',fontSize:10,marginLeft:10},audioDb:{color:'#727e8f',fontSize:8},eqRow:{gap:6},
-  stepper:{minHeight:38,borderRadius:8,backgroundColor:'#0c1119',paddingHorizontal:8,flexDirection:'row',alignItems:'center',gap:7},stepLabel:{flex:1,color:'#aab4c2',fontSize:9},stepButton:{width:28,height:26,borderWidth:1,borderColor:'#303947',borderRadius:6,backgroundColor:'#151c27',alignItems:'center',justifyContent:'center'},stepButtonText:{color:'#d7deea',fontSize:16},stepValue:{minWidth:44,color:'#dbe3ee',fontSize:9,textAlign:'center'},
+  stepper:{minHeight:38,borderRadius:8,backgroundColor:'#0c1119',paddingHorizontal:8,flexDirection:'row',alignItems:'center',gap:7},stepLabel:{flex:1,color:'#aab4c2',fontSize:9},stepButton:{width:28,height:26,borderWidth:1,borderColor:'#303947',borderRadius:6,backgroundColor:'#151c27',alignItems:'center',justifyContent:'center'},stepButtonText:{color:'#d7deea',fontSize:16},stepValue:{minWidth:44,color:'#dbe3ee',fontSize:9,textAlign:'center'},,
+  audioSubnav:{height:38,borderWidth:1,borderColor:'#26303b',borderRadius:9,backgroundColor:'#0b1119',padding:3,flexDirection:'row',gap:3},audioSubnavBtn:{flex:1,borderRadius:6,alignItems:'center',justifyContent:'center'},audioSubnavActive:{backgroundColor:'#211c3b'},audioSubnavText:{color:'#7f8a9b',fontSize:9,fontWeight:'800'},audioSubnavTextActive:{color:'#efeaff'},
+  masterProfiles:{flexDirection:'row',flexWrap:'wrap',gap:6},masterProfile:{minHeight:34,borderWidth:1,borderColor:'#303947',borderRadius:8,backgroundColor:'#151c27',paddingHorizontal:10,alignItems:'center',justifyContent:'center'},masterProfileActive:{borderColor:'#8a67ff',backgroundColor:'rgba(125,91,255,.18)'},masterProfileText:{color:'#9da8b7',fontSize:9,fontWeight:'800'},masterProfileTextActive:{color:'#fff'},masterDesc:{color:'#8793a5',fontSize:10,lineHeight:16},
+  masterSummary:{minHeight:70,borderWidth:1,borderColor:'#252e3a',borderRadius:11,backgroundColor:'#0d131c',padding:10,flexDirection:'row',alignItems:'center',justifyContent:'space-around'},masterSummaryValue:{color:'#f3f6fb',fontSize:17,fontWeight:'800',textAlign:'center'},masterSummaryLabel:{color:'#687589',fontSize:7,fontWeight:'900',letterSpacing:.8,textAlign:'center',marginTop:3},
+  advancedButton:{minHeight:62,borderWidth:1,borderColor:'#3b315f',borderRadius:11,backgroundColor:'#141125',paddingHorizontal:12,flexDirection:'row',alignItems:'center',gap:10},advancedTitle:{color:'#eee9ff',fontSize:10,fontWeight:'800'},advancedSub:{color:'#8176a8',fontSize:8,lineHeight:12,marginTop:3},advancedArrow:{color:'#a999f1',fontSize:23},
+  audioSectionCard:{borderWidth:1,borderColor:'#29313d',borderRadius:11,backgroundColor:'#0d141d',padding:12,gap:10},audioSectionTitle:{color:'#f0f3f8',fontSize:12,fontWeight:'800'},toggleRow:{flexDirection:'row',alignItems:'center',gap:12},switchTrack:{width:44,height:24,borderRadius:12,backgroundColor:'#29313d',padding:3},switchTrackOn:{backgroundColor:'#7458e8'},switchKnob:{width:18,height:18,borderRadius:9,backgroundColor:'#d8deea'},switchKnobOn:{alignSelf:'flex-end',backgroundColor:'#fff'},
+  audioModal:{flex:1,backgroundColor:'#080c12'},audioModalHead:{minHeight:74,borderBottomWidth:1,borderColor:'#242d38',paddingHorizontal:18,paddingTop:14,paddingBottom:12,flexDirection:'row',alignItems:'center',gap:12},audioModalKicker:{color:'#8f7bff',fontSize:8,fontWeight:'900',letterSpacing:1.5},audioModalTitle:{color:'#f4f7fb',fontSize:20,fontWeight:'800',marginTop:4},audioModalClose:{width:38,height:38,borderWidth:1,borderColor:'#303a48',borderRadius:10,backgroundColor:'#111821',alignItems:'center',justifyContent:'center'},audioModalCloseText:{color:'#d8deea',fontSize:24,lineHeight:24},audioModalBody:{padding:16,paddingBottom:120,gap:12},advancedGrid:{gap:7},audioModalFooter:{position:'absolute',left:0,right:0,bottom:0,minHeight:70,borderTopWidth:1,borderColor:'#242d38',backgroundColor:'#0a0f16',paddingHorizontal:16,paddingVertical:11,flexDirection:'row',gap:9},modalSecondary:{flex:1,minHeight:44,borderWidth:1,borderColor:'#303a48',borderRadius:10,backgroundColor:'#111821',alignItems:'center',justifyContent:'center'},modalSecondaryText:{color:'#aeb8c7',fontSize:10,fontWeight:'800'},modalPrimary:{flex:1,minHeight:44,borderRadius:10,backgroundColor:'#7658e9',alignItems:'center',justifyContent:'center'},modalPrimaryText:{color:'#fff',fontSize:10,fontWeight:'800'},
+  eqCurve:{height:170,borderWidth:1,borderColor:'#29313d',borderRadius:12,backgroundColor:'#0c121b',position:'relative',overflow:'hidden'},eqZero:{position:'absolute',left:0,right:0,top:'50%',height:1,backgroundColor:'#313a47'},eqNode:{position:'absolute',width:24,height:24,borderRadius:12,marginLeft:-12,marginTop:-12,borderWidth:2,borderColor:'#a68cff',backgroundColor:'#6650cf',alignItems:'center',justifyContent:'center'},eqNodeOff:{opacity:.35},eqNodeText:{color:'#fff',fontSize:8,fontWeight:'900'},eqBands:{gap:9},eqBand:{borderWidth:1,borderColor:'#29313d',borderRadius:11,backgroundColor:'#0d141d',padding:10,gap:6},eqBandOff:{opacity:.55},eqBandHead:{flexDirection:'row',alignItems:'center',gap:8},eqBandToggle:{width:36,height:25,borderWidth:1,borderColor:'#3b4655',borderRadius:7,alignItems:'center',justifyContent:'center'},eqBandToggleOn:{borderColor:'#7059e4',backgroundColor:'#211c3b'},eqBandToggleText:{color:'#c6cfdb',fontSize:8,fontWeight:'900'},eqBandTitle:{flex:1,color:'#e5eaf1',fontSize:10,fontWeight:'800'},eqBandFreq:{color:'#8072cc',fontSize:9,fontWeight:'800'}
+
 });
