@@ -158,6 +158,8 @@ jobs:
             await load(page,url);
             await openLocalAudio(page);
             await shot(page,prefix+'-studio');
+            await clickText(page,'Customize');
+            await shot(page,prefix+'-timeline');
             await page.close();
           }
 
@@ -172,6 +174,8 @@ jobs:
             await load(studio,url);
             await openLocalAudio(studio);
             await shot(studio,prefix+'-studio');
+            await clickText(studio,'Customize');
+            await shot(studio,prefix+'-timeline');
             await studio.close();
           }
 
@@ -193,9 +197,11 @@ jobs:
             ['desktopProjects','v24-desktop-projects.png','v24react-desktop-projects.png'],
             ['desktopJobs','v24-desktop-jobs.png','v24react-desktop-jobs.png'],
             ['desktopStudio','v24-desktop-studio.png','v24react-desktop-studio.png'],
+            ['desktopTimeline','v24-desktop-timeline.png','v24react-desktop-timeline.png'],
             ['mobileHome','v24-mobile-home.png','v24react-mobile-home.png'],
             ['mobileLibrary','v24-mobile-library.png','v24react-mobile-library.png'],
             ['mobileStudio','v24-mobile-studio.png','v24react-mobile-studio.png'],
+            ['mobileTimeline','v24-mobile-timeline.png','v24react-mobile-timeline.png'],
           ];
           const report={};
           for(const [key,a,b] of pairs){
