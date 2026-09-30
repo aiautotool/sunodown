@@ -4,6 +4,7 @@ import { execute, getMediaDuration, getMediaInformation, pickEncoder } from 'mun
 import type { Song, StudioAspect } from './types';
 import { publicAudioUrl } from './api';
 import type { ExportAsset, VisualizerExportOptions } from './render-engine';
+import { backgroundPresetColors } from './background-presets';
 
 function safe(value:string){
   return (value||'sunodown').replace(/[\\/:*?"<>|\r\n]+/g,'-').replace(/\s+/g,' ').trim().slice(0,80)||'sunodown';
@@ -52,7 +53,8 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
   const encoder=await pickEncoder(['h264_videotoolbox','h264_mediacodec','libopenh264']);
   if(!encoder)throw new Error('Thiết bị không có H.264 encoder phù hợp.');
   const pix=Platform.OS==='android'&&encoder==='h264_mediacodec'?'nv12':'yuv420p';
-  const bg=options.visualVisible===false?null:await backgroundFor(options.backgroundUri||song.picture);
+  const backgroundSource=options.backgroundMode==='suno'?song.picture:options.backgroundMode==='preset'?undefined:(options.backgroundUri||song.picture);
+  const bg=options.visualVisible===false?null:await backgroundFor(backgroundSource);
   const activeClips=options.visualVisible===false?[]:(options.mediaClips||[]).filter(clip=>clip.end>start&&clip.start<start+duration);
   const clipInputs:Array<{index:number;uri:string;video:boolean;start:number;end:number}>=[];
   const args=['-y','-ss',String(start),'-i',input];
@@ -102,7 +104,9 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
   }else if(bg){
     filters.push(`[1:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},format=rgba,colorchannelmixer=aa=.72[base0]`);
   }else{
-    filters.push(`color=c=0x080c12:s=${width}x${height}:r=30:d=${duration}[base0]`);
+    const preset=backgroundPresetColors(options.backgroundPreset||'dark-film');
+    const baseColor=options.backgroundMode==='preset'?ffColor(preset[0],'#080c12'):'0x080c12';
+    filters.push(`color=c=${baseColor}:s=${width}x${height}:r=30:d=${duration}[base0]`);
   }
   let baseLabel='base0';
   clipInputs.forEach((clip,index)=>{
