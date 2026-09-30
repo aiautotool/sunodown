@@ -23,6 +23,42 @@ export type KaraokeLine = {
   words?: KaraokeWord[];
 };
 
+export type StudioAspect = '9:16' | '16:9' | '1:1' | '4:5' | '4:3';
+export type StudioLyricsMode = 'off' | 'scroll' | 'focus';
+export type StudioMotion = 'low' | 'medium' | 'high';
+
+export type StudioVisualConfig = {
+  presetId: string;
+  template: string;
+  wave: string;
+  motion: StudioMotion;
+  aspect: StudioAspect;
+  lyrics: StudioLyricsMode;
+  effects: string[];
+  titleFont: string;
+  titleColor: string;
+  creatorColor: string;
+  subtitleFont: string;
+  subtitleColor: string;
+  subtitleActiveColor: string;
+  backgroundMode: 'suno' | 'preset' | 'image' | 'video';
+  backgroundPreset: string;
+  waveGlow: number;
+  waveHeight: number;
+  waveSmoothing: number;
+  trimStart: number;
+  trimEnd: number;
+  audioPreset: string;
+  quality: 'balanced' | 'high';
+};
+
+export type StudioSnapshot = {
+  schemaVersion: 1;
+  config: StudioVisualConfig;
+  timeline: KaraokeLine[];
+  background?: string;
+};
+
 export type StudioPreset = {
   id: string;
   name: string;
@@ -49,6 +85,7 @@ export type Project = {
   sourceUrl: string;
   updatedAt: number;
   song?: Song;
+  studio?: StudioSnapshot;
 };
 
 export type RenderJob = {
