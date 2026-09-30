@@ -175,9 +175,10 @@ export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>voi
 }
 
 function EditorTimeline({song,background,config,timeline,currentTime,onSeek}:{song:Song;background?:string;config:StudioVisualConfig;timeline:KaraokeLine[];currentTime:number;onSeek:(value:number)=>void}){
+  const [width,setWidth]=useState(1);
   return <View style={styles.editorTimeline}>
     <View style={styles.timelineHead}><Text style={styles.timelineHeadTitle}>Timeline</Text><Text style={styles.timelineHeadSub}>Video · Subtitle · Audio</Text><Pressable style={styles.timelineIcon}><SlidersHorizontal size={15} color="#d8deea"/></Pressable></View>
-    <Pressable style={styles.timelineCanvas} onPress={(event)=>{const width=(event.nativeEvent as any)?.target?.clientWidth||0;const x=(event.nativeEvent as any)?.locationX||0;if(width>0)onSeek((x/width)*(song.duration||0))}}>
+    <Pressable style={styles.timelineCanvas} onLayout={event=>setWidth(Math.max(1,event.nativeEvent.layout.width))} onPress={event=>{const x=(event.nativeEvent as any)?.locationX||0;onSeek((x/width)*(song.duration||0))}}>
       <View style={styles.ruler}>{['00:00','00:15','00:30','00:45','01:00'].map((x,i)=><View key={x} style={{flex:1}}><Text style={styles.rulerText}>{x}</Text><View style={styles.rulerTick}/></View>)}</View>
       <View style={styles.trackRow}><Text style={styles.trackLabel}>VIDEO</Text><View style={styles.videoClip}>{Array.from({length:6}).map((_,i)=><View key={i} style={styles.clipThumb}>{background?<Image source={{uri:background}} style={StyleSheet.absoluteFill}/>:<LinearGradient colors={['#241d3d','#8b6cff']} style={StyleSheet.absoluteFill}/>}</View>)}<Text numberOfLines={1} style={styles.clipTitle}>{config.presetId} · {config.backgroundMode}</Text></View></View>
       <View style={styles.trackRow}><Text style={styles.trackLabel}>SUB</Text><View style={styles.subClip}><Text numberOfLines={1} style={styles.subClipText}>{timeline[0]?.text||song.lyrics?.split(/\n/)[0]||'Subtitle track'}</Text></View></View>
