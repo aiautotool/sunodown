@@ -109,6 +109,11 @@ function UniversalApp(){
     <View style={styles.app}>
       <View nativeID="v24react-build" accessibilityLabel={BUILD_SHA} style={styles.buildMarker}/>
       {showHeader&&<Header song={song} view={view} onNavigate={setView}/>}
+      {compact&&view!=='create'&&<MobileSectionHeader
+        open={mobileMenuOpen}
+        onToggle={()=>setMobileMenuOpen(value=>!value)}
+        onNavigate={nextView=>{setMobileMenuOpen(false);setView(nextView)}}
+      />}
       <View style={styles.content}>{songInit.visible?<SongInitScreen state={songInit}/>:body}</View>
       {compact&&!song&&<MobileAppNav active={view} onNavigate={setView}/>}
       {showGlobalPlayer&&<MusicPlayer song={playingSong}/>}
