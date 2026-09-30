@@ -296,7 +296,7 @@ export function StudioScreen({
     seekPercent={seekPercent}
     playing={playback.playing}
     onToggle={playback.toggle}
-    onSeek={playback.seekTo}
+    onSeek={value=>{playback.pause();playback.seekTo(value)}}
     desktopHeight={stageHeight}
   />;
 
@@ -368,7 +368,7 @@ export function StudioScreen({
           compact
           duration={playback.duration||song.duration||0}
           playhead={playback.current}
-          onSeek={playback.seekTo}
+          onSeek={value=>{playback.pause();playback.seekTo(value)}}
           subtitles={timeline}
           onSubtitlesChange={setTimeline}
           clips={clips}
@@ -451,7 +451,7 @@ export function StudioScreen({
         {!quickMode&&<UniversalEditorTimeline
           duration={playback.duration||song.duration||0}
           playhead={playback.current}
-          onSeek={playback.seekTo}
+          onSeek={value=>{playback.pause();playback.seekTo(value)}}
           subtitles={timeline}
           onSubtitlesChange={setTimeline}
           clips={clips}
