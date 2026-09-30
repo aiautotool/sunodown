@@ -238,16 +238,6 @@ export function StudioScreen({
         {backgroundBlock}
         {quickBlock}
 
-        <EditorTimeline
-          compact
-          song={song}
-          background={background}
-          config={config}
-          timeline={timeline}
-          currentTime={playback.current}
-          onSeek={playback.seekTo}
-        />
-
         <Pressable onPress={save} style={[styles.mobileSave,saved&&styles.saveDone]}>
           <Save size={16} color={saved?'#8ff0bd':'#c8baff'}/>
           <Text style={[styles.mobileSaveText,saved&&styles.saveTextDone]}>{saved?'Đã lưu dự án':'Lưu dự án'}</Text>
@@ -356,9 +346,9 @@ function PreviewStage({
       {background?<ImageBackground source={{uri:background}} resizeMode="cover" style={StyleSheet.absoluteFill}/>:<LinearGradient colors={[selectedPreset.accent,selectedPreset.secondary]} style={StyleSheet.absoluteFill}/>}
       <LinearGradient colors={compact?['rgba(4,7,11,0)','rgba(4,7,11,.72)']:['rgba(4,7,11,0)','rgba(4,7,11,.08)','rgba(4,7,11,.72)']} locations={compact?undefined:[0,.62,1]} style={StyleSheet.absoluteFill}/>
       <View style={styles.stageRatio}><Text style={styles.stageRatioText}>{config.aspect}</Text></View>
-      {config.lyrics!=='off'&&<View style={[styles.karaoke,compact&&styles.karaokeCompact]}>
+      {!compact&&config.lyrics!=='off'&&<View style={styles.karaoke}>
         <Text style={[styles.karaokeMain,compact&&styles.karaokeMainCompact,{color:config.subtitleActiveColor}]}>{timeline.find(line=>currentTime>=line.start&&currentTime<line.end)?.text||lyricLines[0]||song.title}</Text>
-        {!compact&&<Text style={[styles.karaokeNext,{color:config.subtitleColor}]}>{timeline.find(line=>line.start>currentTime)?.text||lyricLines[1]||'SunoDown Creator Studio'}</Text>}
+        <Text style={[styles.karaokeNext,{color:config.subtitleColor}]}>{timeline.find(line=>line.start>currentTime)?.text||lyricLines[1]||'SunoDown Creator Studio'}</Text>
       </View>}
       <View style={[styles.wave,compact&&styles.waveCompact]}>
         {Array.from({length:compact?38:54}).map((_,i)=><View key={i} style={[styles.bar,{height:(compact?6:8)+((i*(compact?13:17))%(compact?31:48))}]}/>)}
