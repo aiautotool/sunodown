@@ -1,6 +1,6 @@
 export const runtime='edge';
 
-type Env={RENDER_DB:D1Database;RENDER_QUEUE:Queue;RENDER_SERVICE_URL?:string};
+type Env={RENDER_DB:D1Database;RENDER_QUEUE:Queue;RENDERER?:Fetcher};
 async function env():Promise<Env>{const mod=await import('cloudflare:workers');return (mod as any).env as Env}
 
 export async function POST(request:Request){
@@ -15,7 +15,7 @@ export async function POST(request:Request){
    try{const source=new URL(audio),origin=new URL(request.url).origin;if(source.origin!==origin)return Response.json({error:'Nguồn audio không hợp lệ.'},{status:400})}catch{return Response.json({error:'Nguồn audio không hợp lệ.'},{status:400})}
   }
   const e=await env();
-  if(input.mode==='visualizer'&&!e.RENDER_SERVICE_URL)return Response.json({error:'Visualizer nền chưa được cấu hình trên máy chủ. Hãy dùng AI Music Video.'},{status:503});
+  if(input.mode==='visualizer'&&!e.RENDERER)return Response.json({error:'Visualizer nền chưa được cấu hình trên máy chủ. Hãy dùng AI Music Video.'},{status:503});
   const id=crypto.randomUUID(),now=Date.now(),expires=now+7*24*60*60*1000,title=typeof input.title==='string'?input.title:'Suno video';
   await e.RENDER_DB.prepare('INSERT INTO render_jobs (id,installation_id,status,progress,title,input_json,created_at,updated_at,expires_at) VALUES (?,?,?,?,?,?,?,?,?)').bind(id,installationId,'queued',0,title,JSON.stringify(input),now,now,expires).run();
   await e.RENDER_QUEUE.send({jobId:id});
