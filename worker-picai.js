@@ -577,6 +577,474 @@ export class SubtitleStore {
   }
 }
 
+
+const SUBTITLE_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function safeSubtitleLanguage(value) {
+  const language = String(value || 'vi').trim().toLowerCase();
+  return /^[a-z]{2,8}(?:-[a-z0-9]{2,8})?$/.test(language) ? language : 'vi';
+}
+
+function subtitleStoreStub(env, songId) {
+  const namespace = env.SUBTITLE_STORE;
+  if (!namespace) return null;
+  return namespace.get(namespace.idFromName(songId));
+}
+
+async function subtitleArtifactFromStore(env, songId, language) {
+  const stub = subtitleStoreStub(env, songId);
+  if (!stub) return { unavailable: true, subtitle: null };
+  const url = new URL('https://subtitle.internal/artifact');
+  url.searchParams.set('language', safeSubtitleLanguage(language));
+  const response = await stub.fetch(url);
+  if (response.status === 404) return { unavailable: false, subtitle: null };
+  if (!response.ok) throw new Error('Subtitle store GET ' + response.status);
+  const payload = await response.json();
+  return { unavailable: false, subtitle: payload && payload.subtitle ? payload.subtitle : null };
+}
+
+async function putSubtitleArtifactDirect(env, artifact) {
+  const stub = subtitleStoreStub(env, artifact.songId);
+  if (!stub) throw new Error('Subtitle store unavailable');
+  const url = new URL('https://subtitle.internal/artifact');
+  url.searchParams.set('language', safeSubtitleLanguage(artifact.language));
+  const response = await stub.fetch(url, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ subtitle: artifact }),
+  });
+  if (!response.ok) throw new Error('Subtitle store PUT ' + response.status);
+}
+
+async function claimSubtitleDirect(env, songId, language, fingerprint) {
+  const stub = subtitleStoreStub(env, songId);
+  if (!stub) return { claimed: false, unavailable: true };
+  const url = new URL('https://subtitle.internal/claim');
+  url.searchParams.set('language', safeSubtitleLanguage(language));
+  const response = await stub.fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ fingerprint }),
+  });
+  if (response.status === 409) {
+    const payload = await response.json().catch(() => ({}));
+    return {
+      claimed: false,
+      unavailable: false,
+      startedAt: payload && payload.startedAt ? payload.startedAt : null,
+    };
+  }
+  if (!response.ok) throw new Error('Subtitle store claim ' + response.status);
+  return { claimed: true, unavailable: false };
+}
+
+async function releaseSubtitleDirect(env, songId, language) {
+  const stub = subtitleStoreStub(env, songId);
+  if (!stub) return;
+  const url = new URL('https://subtitle.internal/claim');
+  url.searchParams.set('language', safeSubtitleLanguage(language));
+  await stub.fetch(url, { method: 'DELETE' }).catch(() => {});
+}
+
+async function sha256HexDirect(value) {
+  const bytes =
+    typeof value === 'string'
+      ? new TextEncoder().encode(value)
+      : value instanceof Uint8Array
+        ? value
+        : new Uint8Array(value);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function firstSubtitleString() {
+  for (const value of arguments) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+}
+
+function subtitleMediaSource(mediaUrls, format) {
+  const match = mediaUrls.find((media) => {
+    if (!media || typeof media.url !== 'string') return false;
+    const type = String(media.content_type || '').toLowerCase();
+    let pathname = '';
+    try {
+      pathname = new URL(media.url).pathname.toLowerCase();
+    } catch {}
+    return format === 'mp3'
+      ? type.includes('mp3') || type.includes('mpeg') || pathname.endsWith('.mp3')
+      : type.includes('m4a') || pathname.endsWith('.m4a');
+  });
+  return match && typeof match.url === 'string' ? match.url : '';
+}
+
+async function fetchSubtitleSong(songId) {
+  const response = await fetch(
+    'https://studio-api-prod.suno.com/api/clip/' + encodeURIComponent(songId),
+    {
+      headers: {
+        accept: 'application/json',
+        'user-agent': 'SunoDown/24 (+https://picai.online)',
+      },
+      cache: 'no-store',
+    },
+  );
+  if (!response.ok) return null;
+  const clip = await response.json();
+  const metadata =
+    clip && clip.metadata && typeof clip.metadata === 'object' ? clip.metadata : {};
+  const mediaUrls = Array.isArray(clip && clip.media_urls) ? clip.media_urls : [];
+  const audioUrl =
+    subtitleMediaSource(mediaUrls, 'mp3') ||
+    firstSubtitleString(clip && clip.audio_url) ||
+    subtitleMediaSource(mediaUrls, 'm4a');
+  return {
+    id: songId,
+    lyrics: firstSubtitleString(
+      metadata.prompt,
+      metadata.lyrics,
+      clip && clip.lyrics,
+      clip && clip.prompt,
+    ),
+    duration:
+      typeof metadata.duration === 'number'
+        ? metadata.duration
+        : typeof (clip && clip.duration) === 'number'
+          ? clip.duration
+          : 0,
+    audioUrl,
+  };
+}
+
+function subtitleFromBase64(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function subtitleAesGcmDecrypt(value, aad, keyBytes) {
+  const raw = subtitleFromBase64(value);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    { name: 'AES-GCM' },
+    false,
+    ['decrypt'],
+  );
+  return new Uint8Array(
+    await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: raw.subarray(0, 12),
+        additionalData: new TextEncoder().encode(aad),
+        tagLength: 128,
+      },
+      key,
+      raw.subarray(12),
+    ),
+  );
+}
+
+async function fetchSubtitleAudio(source, songId) {
+  const url = new URL(source);
+  const encrypted =
+    url.hostname.endsWith('.cloudfront.net') &&
+    url.pathname.toLowerCase().endsWith('.m4a');
+
+  if (encrypted) {
+    const [rightsResponse, encryptedResponse] = await Promise.all([
+      fetch('https://studio-api-prod.suno.com/api/mango/rights', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          content_params: { content_id: songId, content_type: 'clip' },
+        }),
+      }),
+      fetch(url.toString(), { cache: 'no-store' }),
+    ]);
+    if (!rightsResponse.ok || !encryptedResponse.ok) {
+      throw new Error('Suno encrypted audio fetch failed');
+    }
+    const rights = await rightsResponse.json();
+    if (!rights || !rights.key || !rights.iv || !rights.glt) {
+      throw new Error('Invalid Suno media rights');
+    }
+    const gltKey = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(rights.glt),
+    );
+    const [counterKey, counterIv] = await Promise.all([
+      subtitleAesGcmDecrypt(rights.key, songId, gltKey),
+      subtitleAesGcmDecrypt(rights.iv, songId, gltKey),
+    ]);
+    const key = await crypto.subtle.importKey(
+      'raw',
+      counterKey,
+      { name: 'AES-CTR' },
+      false,
+      ['decrypt'],
+    );
+    const clear = new Uint8Array(
+      await crypto.subtle.decrypt(
+        {
+          name: 'AES-CTR',
+          counter: counterIv.subarray(0, 16),
+          length: 128,
+        },
+        key,
+        await encryptedResponse.arrayBuffer(),
+      ),
+    );
+    return { bytes: clear, type: 'audio/mp4', extension: 'mp4' };
+  }
+
+  const response = await fetch(url.toString(), { cache: 'no-store' });
+  if (!response.ok) throw new Error('Suno audio HTTP ' + response.status);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const type = response.headers.get('content-type') || 'audio/mpeg';
+  const lower = type.toLowerCase();
+  const extension = lower.includes('mp4')
+    ? 'mp4'
+    : lower.includes('wav')
+      ? 'wav'
+      : lower.includes('webm')
+        ? 'webm'
+        : lower.includes('ogg')
+          ? 'ogg'
+          : 'mp3';
+  return { bytes, type, extension };
+}
+
+async function callInternalGroq(appRequestUrl, env, ctx, form) {
+  form.set(
+    '__server_groq_key',
+    typeof env.GROQ_API_KEY === 'string' ? env.GROQ_API_KEY : '',
+  );
+  const internalRequest = new Request(
+    new URL('/api/karaoke/groq', appRequestUrl),
+    { method: 'POST', body: form },
+  );
+  return app.fetch(internalRequest, env, ctx);
+}
+
+async function callInternalAlign(appRequestUrl, env, ctx, payload) {
+  const internalRequest = new Request(
+    new URL('/api/karaoke/groq', appRequestUrl),
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(Object.assign({ mode: 'align' }, payload)),
+    },
+  );
+  return app.fetch(internalRequest, env, ctx);
+}
+
+async function handleSubtitleCloudGet(request, env) {
+  const url = new URL(request.url);
+  const songId = url.searchParams.get('songId') || '';
+  const language = safeSubtitleLanguage(url.searchParams.get('language'));
+  if (!SUBTITLE_UUID_RE.test(songId)) return json({ error: 'invalid_song_id' }, 400);
+  try {
+    const stored = await subtitleArtifactFromStore(env, songId, language);
+    if (stored.unavailable) return json({ error: 'subtitle_store_unavailable' }, 503);
+    if (!stored.subtitle) return json({ status: 'missing', songId, language }, 404);
+    return json({ status: 'ready', cached: true, subtitle: stored.subtitle });
+  } catch (error) {
+    return json(
+      {
+        error: 'subtitle_store_failed',
+        detail: error instanceof Error ? error.message : String(error),
+      },
+      502,
+    );
+  }
+}
+
+async function handleSubtitleCloudGenerate(request, env, ctx) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'invalid_json' }, 400);
+  }
+  const songId = String((body && body.songId) || '');
+  const language = safeSubtitleLanguage(body && body.language);
+  const force = body && body.force === true;
+  if (!SUBTITLE_UUID_RE.test(songId)) return json({ error: 'invalid_song_id' }, 400);
+  if (!env.SUBTITLE_STORE) return json({ error: 'subtitle_store_unavailable' }, 503);
+  if (typeof env.GROQ_API_KEY !== 'string' || !env.GROQ_API_KEY.trim()) {
+    return json({ error: 'groq_not_configured' }, 503);
+  }
+
+  const song = await fetchSubtitleSong(songId);
+  if (!song) return json({ error: 'song_not_found' }, 404);
+  if (!song.audioUrl) return json({ error: 'audio_unavailable' }, 502);
+
+  let audio;
+  try {
+    audio = await fetchSubtitleAudio(song.audioUrl, songId);
+  } catch (error) {
+    return json(
+      {
+        error: 'audio_fetch_failed',
+        detail: error instanceof Error ? error.message : String(error),
+      },
+      502,
+    );
+  }
+  if (!audio.bytes.byteLength) return json({ error: 'audio_empty' }, 502);
+  if (audio.bytes.byteLength > 24 * 1024 * 1024) {
+    return json({ error: 'audio_too_large' }, 413);
+  }
+
+  const [audioHash, lyricsHash] = await Promise.all([
+    sha256HexDirect(audio.bytes),
+    sha256HexDirect(song.lyrics || ''),
+  ]);
+  const fingerprint = [audioHash, lyricsHash, language, '1'].join(':');
+  const stored = await subtitleArtifactFromStore(env, songId, language);
+  if (stored.unavailable) return json({ error: 'subtitle_store_unavailable' }, 503);
+  const existing = stored.subtitle;
+
+  if (
+    !force &&
+    existing &&
+    existing.audioHash === audioHash &&
+    existing.lyricsHash === lyricsHash &&
+    existing.pipelineVersion === 1 &&
+    Array.isArray(existing.lines) &&
+    existing.lines.length
+  ) {
+    return json({
+      status: 'ready',
+      cached: true,
+      realigned: false,
+      subtitle: existing,
+    });
+  }
+
+  if (
+    !force &&
+    existing &&
+    existing.audioHash === audioHash &&
+    existing.pipelineVersion === 1 &&
+    Array.isArray(existing.rawWords) &&
+    existing.rawWords.length &&
+    existing.lyricsHash !== lyricsHash &&
+    song.lyrics
+  ) {
+    const alignResponse = await callInternalAlign(request.url, env, ctx, {
+      lyrics: song.lyrics,
+      words: existing.rawWords,
+      duration: song.duration || existing.duration || 0,
+    });
+    if (alignResponse.ok) {
+      const aligned = await alignResponse.json();
+      if (Array.isArray(aligned && aligned.lines) && aligned.lines.length) {
+        const updated = Object.assign({}, existing, {
+          lyricsHash,
+          lines: aligned.lines,
+          updatedAt: Date.now(),
+        });
+        await putSubtitleArtifactDirect(env, updated);
+        return json({
+          status: 'ready',
+          cached: true,
+          realigned: true,
+          subtitle: updated,
+        });
+      }
+    }
+  }
+
+  const claim = await claimSubtitleDirect(env, songId, language, fingerprint);
+  if (claim.unavailable) return json({ error: 'subtitle_store_unavailable' }, 503);
+  if (!claim.claimed) {
+    return json(
+      {
+        status: 'generating',
+        songId,
+        language,
+        startedAt: claim.startedAt || null,
+      },
+      202,
+    );
+  }
+
+  try {
+    const form = new FormData();
+    form.set(
+      'audio',
+      new File(
+        [audio.bytes],
+        'song-' + songId + '.' + audio.extension,
+        { type: audio.type },
+      ),
+    );
+    form.set('duration', String(song.duration || 0));
+    form.set('language', language);
+    if (song.lyrics) form.set('lyrics', song.lyrics);
+
+    const groqResponse = await callInternalGroq(request.url, env, ctx, form);
+    const groq = await groqResponse.json().catch(() => ({}));
+    if (!groqResponse.ok) {
+      return json(
+        {
+          error: (groq && groq.error) || 'subtitle_generation_failed',
+          code: (groq && groq.code) || 'GROQ_REQUEST_FAILED',
+        },
+        groqResponse.status || 502,
+      );
+    }
+    if (!Array.isArray(groq && groq.lines) || !groq.lines.length) {
+      return json({ error: 'subtitle_generation_empty' }, 422);
+    }
+
+    const now = Date.now();
+    const subtitle = {
+      version: 1,
+      pipelineVersion: 1,
+      songId,
+      language,
+      engine:
+        (groq && groq.meta && groq.meta.engine) ||
+        'groq-whisper-large-v3-turbo',
+      status: 'fallback',
+      confidence: 30,
+      duration:
+        Number(groq && groq.meta && groq.meta.duration) ||
+        song.duration ||
+        0,
+      audioHash,
+      lyricsHash,
+      lines: groq.lines,
+      rawWords: Array.isArray(groq && groq.words) ? groq.words : [],
+      generatedAt: now,
+      updatedAt: now,
+    };
+    await putSubtitleArtifactDirect(env, subtitle);
+    return json({
+      status: 'ready',
+      cached: false,
+      realigned: false,
+      subtitle,
+    });
+  } catch (error) {
+    return json(
+      {
+        error: 'subtitle_generation_failed',
+        detail: error instanceof Error ? error.message : String(error),
+      },
+      502,
+    );
+  } finally {
+    await releaseSubtitleDirect(env, songId, language);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
