@@ -31,6 +31,7 @@ function UniversalApp(){
   const [jobs,setJobs]=useState<RenderJob[]>([]);
   const [songInit,setSongInit]=useState<SongInitState>({visible:false,progress:0,title:'Đang khởi tạo bài hát',detail:'Chuẩn bị dữ liệu mới…'});
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
+  const [profileMenuOpen,setProfileMenuOpen]=useState(false);
 
   useEffect(()=>{void (async()=>{
     const [l,p,j]=await Promise.all([storage.getLibrary(),storage.getProjects(),storage.getJobs()]);
@@ -164,7 +165,7 @@ function MobileAppNav({active,onNavigate}:{active:AppView;onNavigate:(view:AppVi
   </View>
 }
 
-function Header({song,view,onNavigate}:{song:Song|null;view:AppView;onNavigate:(v:AppView)=>void}){
+function Header({song,view,open,onToggle,onNavigate}:{song:Song|null;view:AppView;open:boolean;onToggle:()=>void;onNavigate:(v:AppView)=>void}){
   return <View style={styles.header}>
     <Pressable style={styles.brand} onPress={()=>onNavigate('create')}>
       <View style={styles.brandMark}><Music2 color={colors.violet} size={27}/></View>
@@ -185,10 +186,26 @@ function Header({song,view,onNavigate}:{song:Song|null;view:AppView;onNavigate:(
 
     <View style={styles.headerActions}>
       <Bell size={19} color="#9ca6b7"/>
-      <Pressable style={styles.profile}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Mở menu tài khoản" style={styles.profile} onPress={onToggle}>
         <View style={styles.avatar}><Text style={styles.avatarText}>S</Text></View>
         <ChevronDown size={15} color="#788394"/>
       </Pressable>
+      {open&&<View style={styles.profileMenu}>
+        <View style={styles.profileMenuHead}>
+          <View style={styles.avatar}><Text style={styles.avatarText}>S</Text></View>
+          <View><Text style={styles.profileMenuName}>SunoDown</Text><Text style={styles.profileMenuSub}>Creator Studio</Text></View>
+        </View>
+        {[
+          ['create','Create',PlusCircle],
+          ['music','Music',Music2],
+          ['projects','Projects',Folder],
+          ['library','Library',BookOpen],
+          ['jobs','Jobs',ListMusic],
+          ['settings','Settings',Settings],
+        ].map(([id,label,Icon])=><Pressable key={String(id)} style={[styles.profileMenuLink,view===id&&styles.profileMenuLinkActive]} onPress={()=>onNavigate(id as AppView)}>
+          <Icon size={17} color={view===id?'#b6a4ff':'#a9b4c4'}/><Text style={[styles.profileMenuLinkText,view===id&&styles.profileMenuLinkTextActive]}>{String(label)}</Text>
+        </Pressable>)}
+      </View>}
     </View>
   </View>
 }
@@ -200,6 +217,7 @@ const styles=StyleSheet.create({
   app:{flex:1,backgroundColor:colors.bg},
   buildMarker:{position:'absolute',left:-2,top:-2,width:1,height:1,opacity:0},
   content:{flex:1,backgroundColor:colors.bg},
+  navBackdrop:{position:'absolute',zIndex:25,left:0,right:0,top:v24.headerHeight,bottom:0,backgroundColor:'rgba(0,0,0,.18)'},
   mobileSectionHeaderWrap:{position:'absolute',zIndex:95,left:0,right:0,top:0,pointerEvents:'box-none'},
   mobileSectionHeader:{height:58,flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingLeft:16,paddingRight:4},
   mobileSectionBrandButton:{height:52,flexDirection:'row',alignItems:'center',gap:10},
@@ -238,8 +256,13 @@ const styles=StyleSheet.create({
   homeNavButtonActive:{borderColor:'rgba(144,117,255,.20)',backgroundColor:'rgba(104,86,229,.22)'},
   homeNavText:{color:'#aeb8c8',fontSize:12,fontWeight:'700'},
   homeNavActive:{color:'#fff'},
-  headerActions:{height:'100%',flexDirection:'row',alignItems:'center',gap:24,paddingRight:28},
+  headerActions:{position:'relative',height:'100%',flexDirection:'row',alignItems:'center',gap:24,paddingRight:28},
   profile:{flexDirection:'row',alignItems:'center',gap:5},
+  profileMenu:{position:'absolute',zIndex:120,right:20,top:58,width:232,borderWidth:1,borderColor:'#2b3442',borderRadius:14,backgroundColor:'#0d131d',padding:9,shadowColor:'#000',shadowOpacity:.42,shadowRadius:30,elevation:24},
+  profileMenuHead:{minHeight:54,borderBottomWidth:1,borderColor:'#202834',paddingHorizontal:8,paddingBottom:9,flexDirection:'row',alignItems:'center',gap:9},
+  profileMenuName:{color:'#eef2f7',fontSize:11,fontWeight:'800'},profileMenuSub:{color:'#728094',fontSize:8,marginTop:2},
+  profileMenuLink:{height:39,borderRadius:9,paddingHorizontal:9,flexDirection:'row',alignItems:'center',gap:9},profileMenuLinkActive:{backgroundColor:'rgba(104,86,229,.20)'},
+  profileMenuLinkText:{color:'#c2cad5',fontSize:10,fontWeight:'700'},profileMenuLinkTextActive:{color:'#b6a4ff'},
   avatar:{width:34,height:34,borderWidth:2,borderColor:'#39414d',borderRadius:17,backgroundColor:'#7569a4',alignItems:'center',justifyContent:'center'},
   avatarText:{color:'#fff',fontWeight:'800'},
 });
