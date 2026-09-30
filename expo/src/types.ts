@@ -52,11 +52,26 @@ export type StudioVisualConfig = {
   quality: 'balanced' | 'high';
 };
 
+export type MediaClip = {
+  id: string;
+  type: 'image' | 'video';
+  uri: string;
+  name: string;
+  start: number;
+  end: number;
+  isDefault?: boolean;
+};
+
+export type TimelineTrackName = 'audio' | 'visual' | 'subtitle' | 'effects';
+export type TimelineTrackState = Record<TimelineTrackName,{hidden:boolean;muted:boolean;locked:boolean}>;
+
 export type StudioSnapshot = {
   schemaVersion: 1;
   config: StudioVisualConfig;
   timeline: KaraokeLine[];
   background?: string;
+  clips?: MediaClip[];
+  trackState?: TimelineTrackState;
 };
 
 export type StudioPreset = {
