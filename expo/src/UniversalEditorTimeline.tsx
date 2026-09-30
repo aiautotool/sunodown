@@ -279,18 +279,13 @@ export function UniversalEditorTimeline({
         <Tool active={tool==='select'} onPress={()=>setTool('select')} icon={<MousePointer2 size={14}/>} label="V"/>
         <Tool active={tool==='razor'} onPress={()=>setTool('razor')} icon={<Scissors size={14}/>} label="B"/>
         <Tool active={snapping} onPress={()=>setSnapping(value=>!value)} icon={<Magnet size={14}/>} label="Snap"/>
-        <Tool active={followPlayhead} onPress={()=>setFollowPlayhead(value=>!value)} icon={<Focus size={14}/>} label="Follow"/>
+        <View style={styles.toolDivider}/>
         <Tool disabled={!selected} onPress={splitSelected} icon={<Scissors size={14}/>} label="Split"/>
-        <Tool disabled={!selected} onPress={copySelected} icon={<Copy size={14}/>} label="Copy"/>
-        <Tool disabled={!clipboard} onPress={pasteClipboard} icon={<Copy size={14}/>} label="Paste"/>
         <Tool disabled={!selected} onPress={duplicateSelected} icon={<Copy size={14}/>} label="Duplicate"/>
         <Tool disabled={!selected} onPress={deleteSelected} icon={<Trash2 size={14}/>} label="Delete"/>
         <Tool disabled={!undoStack.length} onPress={undo} icon={<Undo2 size={14}/>} label="Undo"/>
         <Tool disabled={!redoStack.length} onPress={redo} icon={<Redo2 size={14}/>} label="Redo"/>
         <Tool onPress={onAddMedia} icon={<ImagePlus size={14}/>} label="Media"/>
-        <Tool onPress={()=>setTrim(Math.min(playhead,safeTrimEnd-.1),safeTrimEnd)} icon={<Scissors size={14}/>} label="Set IN"/>
-        <Tool onPress={()=>setTrim(safeTrimStart,Math.max(playhead,safeTrimStart+.1))} icon={<Scissors size={14}/>} label="Set OUT"/>
-        <Tool onPress={()=>setTrim(0,safeDuration)} icon={<Focus size={14}/>} label="Full"/>
       </ScrollView>
       <View style={styles.zoom}>
         <Pressable disabled={zoom<=MIN_ZOOM} onPress={()=>setZoom(value=>clamp(value-.25,MIN_ZOOM,MAX_ZOOM))} style={styles.zoomBtn}><Minus size={13} color="#cdd4df"/></Pressable>
@@ -329,7 +324,7 @@ export function UniversalEditorTimeline({
     <View onLayout={onCanvasLayout}>
       <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator scrollEventThrottle={32} onScroll={event=>setScrollX(event.nativeEvent.contentOffset.x)} contentContainerStyle={{width:canvasWidth}}>
         <Pressable
-          style={[styles.canvas,{width:canvasWidth,height:compact?340:370}]}
+          style={[styles.canvas,{width:canvasWidth,height:compact?220:322}]}
           onPress={event=>{
             const x=(event.nativeEvent as any).locationX||0;
             const value=snap(x/px);
@@ -359,12 +354,12 @@ export function UniversalEditorTimeline({
             </View>
           </View>}
 
-          <TrackHeader name="visual" label="Visual" icon={<Video size={14}/>} state={tracks.visual} onUpdate={patch=>updateTrack('visual',patch)} top={126}/>
+          <TrackHeader name="visual" label="Visual" icon={<Video size={14}/>} state={tracks.visual} onUpdate={patch=>updateTrack('visual',patch)} top={106}/>
           {!tracks.visual.hidden&&clips.map((clip,index)=><MovableClip
             key={clip.id}
             id={clip.id}
             selected={selected===clip.id}
-            top={151}
+            top={131}
             start={clip.start}
             end={clip.end}
             px={px}
@@ -381,12 +376,12 @@ export function UniversalEditorTimeline({
             onMove={(start,end)=>onClipsChange(clips.map((item,i)=>i===index?{...item,start,end}:item))}
           />)}
 
-          <TrackHeader name="subtitle" label={'CC Subtitle · '+subtitles.length} icon={<Text style={styles.cc}>CC</Text>} state={tracks.subtitle} onUpdate={patch=>updateTrack('subtitle',patch)} top={204}/>
+          <TrackHeader name="subtitle" label={'CC Subtitle · '+subtitles.length} icon={<Text style={styles.cc}>CC</Text>} state={tracks.subtitle} onUpdate={patch=>updateTrack('subtitle',patch)} top={174}/>
           {!tracks.subtitle.hidden&&subtitles.map((line,index)=><MovableClip
             key={'sub-'+index+'-'+line.start}
             id={'sub-'+index}
             selected={selected==='sub-'+index}
-            top={230}
+            top={200}
             start={line.start}
             end={line.end}
             px={px}
@@ -404,8 +399,8 @@ export function UniversalEditorTimeline({
             onMove={(start,end)=>onSubtitlesChange(subtitles.map((item,i)=>i===index?retimeSubtitle(item,start,end):item))}
           />)}
 
-          <TrackHeader name="effects" label="Effects" icon={<Sparkles size={14}/>} state={tracks.effects} onUpdate={patch=>updateTrack('effects',patch)} top={282}/>
-          {!tracks.effects.hidden&&<View style={[styles.effects,{left:58,top:307,width:Math.max(120,canvasWidth-70)}]}><Text numberOfLines={1} style={styles.effectText}>{effects.length?effects.join(' · '):'Không có effect'}</Text></View>}
+          <TrackHeader name="effects" label="Effects" icon={<Sparkles size={14}/>} state={tracks.effects} onUpdate={patch=>updateTrack('effects',patch)} top={242}/>
+          {!tracks.effects.hidden&&<View style={[styles.effects,{left:58,top:267,width:Math.max(120,canvasWidth-70)}]}><Text numberOfLines={1} style={styles.effectText}>{effects.length?effects.join(' · '):'Không có effect'}</Text></View>}
 
           <View pointerEvents="none" style={[styles.playhead,{left:playhead*px}]}><View style={styles.playheadDot}/><Text style={styles.playheadText}>{stamp(playhead)}</Text></View>
         </Pressable>
@@ -504,7 +499,7 @@ const styles=StyleSheet.create({
   headerCompact:{paddingHorizontal:8},
   headerTitle:{flexDirection:'row',alignItems:'center',gap:9},
   title:{color:'#f4f6fb',fontSize:11,fontWeight:'800'},time:{color:'#727d90',fontSize:9},
-  tools:{gap:5,alignItems:'center'},tool:{height:31,borderWidth:1,borderColor:'#313a49',borderRadius:8,backgroundColor:'#111722',paddingHorizontal:8,flexDirection:'row',alignItems:'center',gap:5},
+  tools:{gap:5,alignItems:'center'},toolDivider:{width:1,height:20,backgroundColor:'#2a3341',marginHorizontal:2},tool:{height:31,borderWidth:1,borderColor:'#313a49',borderRadius:8,backgroundColor:'#111722',paddingHorizontal:8,flexDirection:'row',alignItems:'center',gap:5},
   toolActive:{borderColor:'#725be1',backgroundColor:'#211a3c'},toolText:{color:'#aab4c3',fontSize:8,fontWeight:'700'},toolTextActive:{color:'#fff'},disabled:{opacity:.35},
   zoom:{flexDirection:'row',alignItems:'center',gap:6},zoomBtn:{width:29,height:29,borderWidth:1,borderColor:'#313a49',borderRadius:8,backgroundColor:'#111722',alignItems:'center',justifyContent:'center'},zoomBound:{color:'#616e81',fontSize:7},zoomValue:{minWidth:37,color:'#d6deea',fontSize:8,textAlign:'center',fontWeight:'800'},
   nudge:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:6,padding:8,borderBottomWidth:1,borderColor:'rgba(217,70,239,.12)',backgroundColor:'rgba(217,70,239,.04)'},nudgeLabel:{color:'#d8dce5',fontSize:9,fontWeight:'800',marginRight:4},nudgeBtn:{minHeight:29,borderWidth:1,borderColor:'#3a3248',borderRadius:7,backgroundColor:'#121019',paddingHorizontal:8,alignItems:'center',justifyContent:'center'},nudgeText:{color:'#c5bed0',fontSize:8},
