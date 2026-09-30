@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { LocalLibraryItem, Project, RenderJob } from './types';
+import type { LocalLibraryItem, Project, RenderJob, SavedVisualPreset } from './types';
 
 const KEYS = {
   library: 'sunodown:v24react:library',
   projects: 'sunodown:v24react:projects',
   jobs: 'sunodown:v24react:jobs',
   preset: 'sunodown:v24react:preset',
+  visualPresets: 'sunodown:v24react:visual-presets',
 };
 
 async function read<T>(key: string, fallback: T): Promise<T> {
@@ -30,4 +31,6 @@ export const storage = {
   setJobs: (value: RenderJob[]) => write(KEYS.jobs, value),
   getPreset: () => read<string>(KEYS.preset, 'cinematic'),
   setPreset: (value: string) => write(KEYS.preset, value),
+  getVisualPresets: () => read<SavedVisualPreset[]>(KEYS.visualPresets, []),
+  setVisualPresets: (value: SavedVisualPreset[]) => write(KEYS.visualPresets, value),
 };
