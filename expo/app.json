@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "SunoDown",
+    "slug": "sunodown",
+    "version": "24.0.0",
+    "orientation": "default",
+    "scheme": "sunodown",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.aiautotool.sunodown",
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"]
+      }
+    },
+    "android": {
+      "package": "com.aiautotool.sunodown",
+      "adaptiveIcon": {
+        "backgroundColor": "#080c12"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "name": "SunoDown"
+    },
+    "plugins": [
+      ["expo-audio", { "enableBackgroundPlayback": true }],
+      ["expo-image-picker", { "photosPermission": "Cho phép SunoDown chọn ảnh/video làm background." }]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
