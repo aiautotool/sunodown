@@ -11,10 +11,10 @@ import { useStudioPlayback } from './useStudioPlayback';
 import { useSubtitleSync } from './useSubtitleSync';
 import { SuggestedBackground } from './SuggestedBackground';
 import { findHighlight } from './highlight-engine';
-import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendPresets, V24_PRESETS, type StudioVisualConfig } from './V24StudioControls';
+import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendPresets, V24_PRESETS, type StudioPanel, type StudioVisualConfig } from './V24StudioControls';
 import { UniversalEditorTimeline } from './UniversalEditorTimeline';
 
-type Tool='presets'|'style'|'lyrics'|null;
+type Tool=StudioPanel|null;
 
 const fmt=(n=0)=>`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const aspectValue=(value:StudioVisualConfig['aspect'])=>{
@@ -267,6 +267,8 @@ export function StudioScreen({
     subtitleError={subError}
     onReget={()=>void reget()}
     onPickBackground={()=>void pickBackground()}
+    panel={compact&&tool?tool:undefined}
+    onPanelChange={panel=>{if(compact)setTool(panel)}}
   />;
 
   if(compact){
