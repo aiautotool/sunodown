@@ -118,6 +118,7 @@ jobs:
           curl --fail --silent --show-error --retry 6 --retry-delay 3 --max-time 30 "$APP_URL/" -o /tmp/sunoapp.html
           grep -qi '<html' /tmp/sunoapp.html
           grep -qi 'SunoDown' /tmp/sunoapp.html
+          grep -qi '_expo' /tmp/sunoapp.html
 
       - name: Verify API resolves directly on SunoApp
         run: |
