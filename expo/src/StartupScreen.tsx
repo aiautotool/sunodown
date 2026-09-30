@@ -25,7 +25,7 @@ export function StartupScreen() {
       Animated.timing(pulse,{toValue:0,duration:1200,useNativeDriver:true}),
     ]));
     const waveMotions=waveValues.map((value,index)=>Animated.loop(Animated.sequence([
-      Animated.delay(BAR_DELAYS[index]),
+      Animated.delay(BAR_DELAYS[index]??0),
       Animated.timing(value,{toValue:1,duration:400,useNativeDriver:true}),
       Animated.timing(value,{toValue:0,duration:400,useNativeDriver:true}),
     ])));
@@ -99,7 +99,8 @@ export function StartupScreen() {
           <Music2 size={31} color="#fff" strokeWidth={2.25}/>
         </LinearGradient>
         {BAR_HEIGHTS.map((height,index)=>{
-          const scaleY=waveValues[index].interpolate({inputRange:[0,1],outputRange:[1,14/height]});
+          const waveValue=waveValues[index]??waveValues[0]!;
+          const scaleY=waveValue.interpolate({inputRange:[0,1],outputRange:[1,14/height]});
           return <Animated.View
             key={index}
             style={[
