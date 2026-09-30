@@ -1,4 +1,4 @@
-import type { KaraokeLine, Song, StudioAspect, StudioLyricsMode } from './types';
+import type { KaraokeLine, MediaClip, Song, StudioAspect, StudioLyricsMode } from './types';
 
 export type ExportAsset = {
   uri: string;
@@ -22,6 +22,12 @@ export type VisualizerExportOptions = {
   subtitleColor?: string;
   subtitleActiveColor?: string;
   quality?: 'balanced'|'high';
+  mediaClips?: MediaClip[];
+  visualVisible?: boolean;
+  subtitleVisible?: boolean;
+  effectsVisible?: boolean;
+  effects?: string[];
+  audioMuted?: boolean;
 };
 
 export async function exportVisualizer(
