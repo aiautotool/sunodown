@@ -1,35 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { FileText, Image as ImageIcon, Music2, SlidersHorizontal, Sparkles } from 'lucide-react-native';
-import type { KaraokeLine, Song } from './types';
-
-export type StudioAspect='9:16'|'16:9'|'1:1'|'4:5'|'4:3';
-export type LyricsMode='off'|'scroll'|'focus';
-export type Motion='low'|'medium'|'high';
-export type StudioVisualConfig={
-  presetId:string;
-  template:string;
-  wave:string;
-  motion:Motion;
-  aspect:StudioAspect;
-  lyrics:LyricsMode;
-  effects:string[];
-  titleFont:string;
-  titleColor:string;
-  creatorColor:string;
-  subtitleFont:string;
-  subtitleColor:string;
-  subtitleActiveColor:string;
-  backgroundMode:'suno'|'preset'|'image'|'video';
-  backgroundPreset:string;
-  waveGlow:number;
-  waveHeight:number;
-  waveSmoothing:number;
-  trimStart:number;
-  trimEnd:number;
-  audioPreset:string;
-  quality:'balanced'|'high';
-};
+import type { KaraokeLine, Song, StudioAspect, StudioLyricsMode as LyricsMode, StudioMotion as Motion, StudioVisualConfig } from './types';
 
 export const DEFAULT_VISUAL_CONFIG:StudioVisualConfig={
   presetId:'signature-mirror-glow',
