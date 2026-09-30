@@ -39,7 +39,7 @@ function UniversalApp(){
     if(!doc||doc.getElementById('v24-font-parity'))return;
     const style=doc.createElement('style');
     style.id='v24-font-parity';
-    style.textContent="@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap');#root *{font-family:'Be Vietnam Pro',Arial,Helvetica,sans-serif}html,body,#root{margin:0;min-height:100%;background:#080c12}";
+    style.textContent="@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap');#root *{font-family:'Be Vietnam Pro',Arial,Helvetica,sans-serif}html,body,#root{margin:0;min-height:100%;background:#080c12}";
     doc.head.appendChild(style);
     return()=>style.remove();
   },[]);
