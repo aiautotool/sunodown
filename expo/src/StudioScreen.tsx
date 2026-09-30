@@ -17,6 +17,7 @@ import { UniversalEditorTimeline } from './UniversalEditorTimeline';
 import { storage } from './storage';
 import { backgroundPresetColors } from './background-presets';
 import { parseSubtitleText, toSrt } from './subtitle-files';
+import { musicAudioUrl } from './api';
 
 type Tool=StudioPanel|null;
 
@@ -429,6 +430,7 @@ export function StudioScreen({
           trackState={trackState}
           onTrackStateChange={setTrackState}
           onAddMedia={()=>void addTimelineMedia()}
+          audioSource={musicAudioUrl(song)}
           trimStart={config.trimStart}
           trimEnd={config.trimEnd||playback.duration||song.duration||0}
           onTrimChange={(trimStart,trimEnd)=>setConfig(prev=>({...prev,trimStart,trimEnd}))}
