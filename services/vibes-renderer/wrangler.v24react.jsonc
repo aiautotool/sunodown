@@ -8,7 +8,7 @@
   "containers": [
     {
       "class_name": "V24ReactRendererContainer",
-      "image": "./Dockerfile",
+      "image": "docker.io/amitkma/python-ffmpeg:3.12-slim",
       "max_instances": 3
     }
   ],
