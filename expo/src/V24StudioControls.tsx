@@ -137,8 +137,67 @@ export function recommendPresets(song:Song){
   return [...V24_PRESETS].sort((a,b)=>score(b)-score(a)).slice(0,3);
 }
 
+type V23PresetState=Partial<StudioVisualConfig>;
+const v23State=(
+  waveY:number,waveScale:number,subtitleY:number,subtitleScale:number,titleX:number,titleY:number,titleScale:number,creatorX:number,creatorY:number,creatorScale:number,
+  titleFont:string,titleColor:string,creatorColor:string,subtitleFont:string,subtitleColor:string,subtitleActiveColor:string,
+  backgroundMode:StudioVisualConfig['backgroundMode'],backgroundPreset:string,backgroundBlur:number,backgroundDim:number,backgroundOverlayOpacity:number,
+  waveAppearance:Partial<Pick<StudioVisualConfig,'waveColor'|'waveColor2'|'waveGlow'|'waveOpacity'|'waveDensity'|'waveSmoothing'|'waveHeight'|'waveThickness'>>={},
+):V23PresetState=>({
+  waveX:50,waveY,waveScale,subtitleX:50,subtitleY,subtitleScale,titleX,titleY,titleScale,creatorX,creatorY,creatorScale,
+  titleFont,titleColor,creatorColor,subtitleFont,subtitleColor,subtitleActiveColor,
+  backgroundMode,backgroundPreset,backgroundBlur,backgroundDim,backgroundOverlayOpacity,
+  waveColor:'#8b5cf6',waveColor2:'#22d3ee',waveGlow:72,waveOpacity:94,waveDensity:72,waveSmoothing:58,waveHeight:78,waveThickness:54,waveRotation:0,
+  ...waveAppearance,
+});
+const V23_PRESET_STATE:Record<string,V23PresetState>={
+  'social-hook':v23State(83,118,61,125,50,18,116,50,26,100,"Bebas Neue",'#ffffff','#d1d5db','rounded','#ffffff','#c4b5fd','preset','neon-blur',0,12,18),
+  'sad-lyrics':v23State(86,92,58,112,50,22,96,50,30,100,"Dancing Script",'#f8fafc','#cbd5e1','serif','#f8fafc','#a5b4fc','preset','dark-film',0,30,8),
+  'cinematic-story':v23State(88,86,72,90,50,20,110,50,29,100,"Tangerine",'#fff7ed','#fed7aa','serif','#fff7ed','#fbbf24','preset','concert-light',0,20,10),
+  'album-motion':v23State(72,112,81,90,50,14,104,50,22,100,"Special Elite",'#ffffff','#d1d5db','system','#ffffff','#86efac','suno','dark-film',8,18,8),
+  'neon-pulse':v23State(67,132,80,90,50,15,110,50,23,100,"Orbitron",'#ecfeff','#67e8f9','impact','#ecfeff','#e879f9','preset','neon-blur',0,8,28),
+  'minimal-clean':v23State(88,82,76,90,50,68,92,50,76,100,"system-ui",'#ffffff','#cbd5e1','system','#ffffff','#cbd5e1','preset','soft-light',0,10,3),
+  'karaoke-pop':v23State(84,100,56,132,50,17,104,50,25,100,"Bebas Neue",'#ffffff','#d1d5db','rounded','#ffffff','#fb7185','preset','romantic-glow',0,18,18),
+  'gold-premiere':v23State(87,86,73,90,50,20,106,50,29,100,"Tangerine",'#fef3c7','#fde68a','serif','#fff7ed','#fbbf24','preset','bokeh-night',0,26,10),
+  'reels-velocity':v23State(79,124,59,118,50,16,108,50,24,100,"Bebas Neue",'#ecfeff','#a5f3fc','rounded','#ffffff','#22d3ee','preset','dreamy-blue',0,14,20),
+  'story-confession':v23State(89,84,55,108,50,19,94,50,27,100,"Special Elite",'#faf5ff','#cbd5e1','serif','#f8fafc','#d8b4fe','preset','dark-film',0,34,12),
+  'midnight-drive':v23State(82,108,74,90,50,18,102,50,27,100,"Orbitron",'#e0f2fe','#bae6fd','system','#ffffff','#38bdf8','preset','dreamy-blue',0,22,20),
+  'acoustic-room':v23State(87,88,70,94,50,17,98,50,25,100,"Special Elite",'#fff7ed','#e7e5e4','serif','#fff7ed','#fbbf24','preset','soft-light',0,18,5),
+  'festival-energy':v23State(66,138,78,90,50,15,112,50,23,100,"Orbitron",'#fdf4ff','#a5f3fc','impact','#ffffff','#f472b6','preset','concert-light',0,10,24),
+  'romantic-letter':v23State(89,82,63,110,50,18,106,50,27,100,"Dancing Script",'#fff1f2','#fecdd3','serif','#fff1f2','#fb7185','preset','romantic-glow',0,24,14),
+  'golden-floating-title':v23State(88,82,70,106,68,39,148,68,49,96,"Tangerine",'#f8d88b','#ead9b8','serif','#fff8e7','#f6c968','suno','dark-film',0,22,12),
+  'silver-moon-script':v23State(88,78,72,104,52,31,142,52,41,92,"Dancing Script",'#e7eef7','#b8c3d1','serif','#eef4fb','#cbd5e1','suno','dark-film',0,32,18),
+  'neon-heartbeat-title':v23State(73,118,83,90,50,20,132,50,29,94,"Orbitron",'#fff1fb','#f0abfc','rounded','#ffffff','#f472d0','suno','dark-film',6,38,26),
+  'vintage-love-letter':v23State(90,72,68,98,48,26,138,48,36,92,"Dancing Script",'#f4dfc2','#ddc2aa','serif','#f8ead7','#d6b38b','suno','dark-film',0,28,14),
+  'midnight-blue-glow':v23State(86,90,69,102,67,25,136,67,34,92,"Tangerine",'#dff5ff','#a5c7f7','serif','#edf8ff','#7dd3fc','suno','dark-film',4,36,20),
+  'podcast-wave':v23State(80,106,67,92,50,18,100,50,27,100,"system-ui",'#f8fafc','#cbd5e1','system','#ffffff','#34d399','preset','dark-film',0,24,4),
+  'retro-vinyl':v23State(73,116,82,90,50,15,102,50,23,100,"Special Elite",'#fef3c7','#fde68a','serif','#fff7ed','#fbbf24','preset','bokeh-night',0,30,8),
+  'signature-mirror-glow':v23State(70,122,78,92,50,35,154,50,46,90,"Dancing Script",'#ffd8f4','#e9d5ff','serif','#ffffff','#f0abfc','suno','dark-film',0,24,16,{waveColor:'#ff4fd8',waveColor2:'#62b7ff',waveGlow:96,waveOpacity:98,waveDensity:78,waveSmoothing:88,waveHeight:108,waveThickness:62}),
+  'signature-rounded-spectrum':v23State(73,118,83,90,50,37,142,50,47,88,"Bebas Neue",'#ffffff','#a5f3fc','impact','#ffffff','#f472d0','suno','dark-film',1,22,18,{waveColor:'#49cfff',waveColor2:'#ff4fd8',waveGlow:92,waveOpacity:100,waveDensity:64,waveSmoothing:74,waveHeight:118,waveThickness:76}),
+  'signature-circular-pulse':v23State(67,128,84,88,50,23,138,50,34,88,"Tangerine",'#fff7e6','#fde7bd','serif','#fffaf0','#fbbf24','suno','dark-film',0,18,10,{waveColor:'#fff2c7',waveColor2:'#ff9f55',waveGlow:82,waveOpacity:100,waveDensity:82,waveSmoothing:68,waveHeight:125,waveThickness:58}),
+  'signature-ribbon-wave':v23State(72,130,84,90,50,37,150,50,48,88,"Dancing Script",'#e7f5ff','#f0d5ff','rounded','#ffffff','#c4b5fd','suno','dark-film',0,24,14,{waveColor:'#b586ff',waveColor2:'#5fc4ff',waveGlow:100,waveOpacity:96,waveDensity:84,waveSmoothing:92,waveHeight:132,waveThickness:84}),
+};
+const V23_PRESET_WAVE:Record<string,string>={
+  'social-hook':'pulse','sad-lyrics':'line','cinematic-story':'thin-bars','album-motion':'circle-bars','neon-pulse':'neon-ring','minimal-clean':'center-line',
+  'karaoke-pop':'mirror','gold-premiere':'dots','reels-velocity':'wave-bars','story-confession':'ribbon','midnight-drive':'mountain','acoustic-room':'line',
+  'festival-energy':'spectrum-rings','romantic-letter':'thin-bars','golden-floating-title':'thin-bars','silver-moon-script':'line','neon-heartbeat-title':'neon-ring',
+  'vintage-love-letter':'thin-bars','midnight-blue-glow':'mountain','podcast-wave':'center-line','retro-vinyl':'orbit-dots',
+  'signature-mirror-glow':'mirror-glow','signature-rounded-spectrum':'rounded-spectrum','signature-circular-pulse':'circular-pulse','signature-ribbon-wave':'ribbon-wave',
+};
+
 export function applyPresetConfig(current:StudioVisualConfig,preset:Preset,duration:number):StudioVisualConfig{
-  return {...current,presetId:preset.id,template:preset.template,wave:preset.wave,motion:preset.motion,aspect:preset.aspect,lyrics:preset.lyrics,effects:[...preset.effects],trimEnd:current.trimEnd||duration};
+  return {
+    ...current,
+    ...V23_PRESET_STATE[preset.id],
+    presetId:preset.id,
+    template:preset.template,
+    wave:V23_PRESET_WAVE[preset.id]||preset.wave,
+    motion:preset.motion,
+    aspect:preset.aspect,
+    lyrics:preset.lyrics,
+    effects:[...preset.effects],
+    trimEnd:current.trimEnd||duration,
+  };
 }
 
 export function V24StudioControls({
