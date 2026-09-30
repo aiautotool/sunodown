@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Bell, ChevronDown, Home, Library as LibraryIcon, Music2, PlusCircle, UserRound } from 'lucide-react-native';
 import { colors, v24 } from './src/theme';
-import type { AppView, LocalLibraryItem, Project, RenderJob, Song } from './src/types';
+import type { AppView, LocalLibraryItem, Project, RenderJob, Song, StudioSnapshot } from './src/types';
 import { EmptyCreate } from './src/EmptyCreate';
 import { StudioScreen } from './src/StudioScreen';
 import { MobileStudioScreen } from './src/MobileStudioScreen';
@@ -22,6 +22,7 @@ function UniversalApp(){
   const [view,setView]=useState<AppView>('create');
   const [song,setSong]=useState<Song|null>(null);
   const [sourceUrl,setSourceUrl]=useState('');
+  const [initialStudio,setInitialStudio]=useState<StudioSnapshot|undefined>(undefined);
   const [playingSong,setPlayingSong]=useState<Song|null>(null);
   const [library,setLibrary]=useState<LocalLibraryItem[]>([]);
   const [projects,setProjects]=useState<Project[]>([]);
@@ -45,24 +46,27 @@ function UniversalApp(){
   },[]);
 
   const resolveDone=(next:Song,input:string)=>{
+    setInitialStudio(undefined);
     setSong(next); setSourceUrl(input);
     const id=next.id||input;
     const item:LocalLibraryItem={id,url:input,title:next.title,creator:next.creator,picture:next.picture,duration:next.duration,updatedAt:Date.now()};
     setLibrary(prev=>{const updated=[item,...prev.filter(x=>x.id!==id)].slice(0,200);void storage.setLibrary(updated);return updated});
   };
 
-  const saveProject=()=>{
+  const saveProject=(studio:StudioSnapshot)=>{
     if(!song)return;
-    const p:Project={id:`${song.id||'local'}-${Date.now()}`,title:song.title,sourceUrl,updatedAt:Date.now(),song};
+    const p:Project={id:`${song.id||'local'}-${Date.now()}`,title:song.title,sourceUrl,updatedAt:Date.now(),song,studio};
     setProjects(prev=>{const updated=[p,...prev].slice(0,100);void storage.setProjects(updated);return updated});
   };
 
   const openLibraryItem=(item:LocalLibraryItem)=>{
     const next:Song={id:item.id,title:item.title,creator:item.creator,picture:item.picture,duration:item.duration,audio:item.url};
+    setInitialStudio(undefined);
     setSong(next); setSourceUrl(item.url); setView('create');
   };
 
   const openProject=(project:Project)=>{
+    setInitialStudio(project.studio);
     if(project.song) setSong(project.song);
     setSourceUrl(project.sourceUrl);
     setView('create');
@@ -81,14 +85,14 @@ function UniversalApp(){
     if(view==='create'){
       if(!song) return <EmptyCreate onResolved={resolveDone} onNavigate={setView} projects={projects} onOpenProject={openProject} onInitChange={setSongInit}/>;
       return compact
-        ? <MobileStudioScreen song={song} onSave={saveProject} onBack={()=>setSong(null)} onRenderJob={upsertJob}/>
-        : <StudioScreen song={song} onSave={saveProject} onRenderJob={upsertJob}/>;
+        ? <MobileStudioScreen song={song} initialStudio={initialStudio} onSave={saveProject} onBack={()=>{setSong(null);setInitialStudio(undefined)}} onRenderJob={upsertJob}/>
+        : <StudioScreen song={song} initialStudio={initialStudio} onSave={saveProject} onRenderJob={upsertJob}/>;
     }
     if(view==='library') return <LibraryScreen items={library} onPlay={setPlayingSong} onOpen={openLibraryItem} onCreate={goCreate}/>;
     if(view==='projects') return <ProjectsScreen projects={projects} onOpen={openProject} onCreate={goCreate}/>;
     if(view==='jobs') return <JobsScreen jobs={jobs} onCreate={goCreate}/>;
     return <SettingsScreen onCreate={goCreate}/>;
-  },[view,song,library,projects,jobs,sourceUrl,compact]);
+  },[view,song,library,projects,jobs,sourceUrl,compact,initialStudio]);
 
   const showHeader=!compact;
   const showGlobalPlayer=Boolean(playingSong) && view==='library';
