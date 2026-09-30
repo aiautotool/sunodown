@@ -47,6 +47,18 @@ export type VisualizerExportOptions = {
   eqBass?: number;
   eqVocal?: number;
   eqTreble?: number;
+  masteringProfile?: import('./types').StudioMasterProfile;
+  masterTargetLufs?: number;
+  masterCeilingDb?: number;
+  masterThresholdDb?: number;
+  masterRatio?: number;
+  masterAttackMs?: number;
+  masterReleaseMs?: number;
+  masterDrive?: number;
+  masterEqBands?: import('./types').StudioEqBand[];
+  spatialEnabled?: boolean;
+  spatialMode?: import('./types').StudioSpatialMode;
+  spatialAmount?: number;
 };
 
 export async function exportVisualizer(
