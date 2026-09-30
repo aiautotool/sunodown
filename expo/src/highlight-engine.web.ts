@@ -28,6 +28,6 @@ export async function findHighlight(song:Song,timeline:KaraokeLine[],minStart=0,
   for(let start=searchStart;start<=searchEnd+.001;start+=.75){const end=start+clipWindow,w=all.filter(x=>x.time>=start&&x.time<end);if(!w.length)continue;const es=w.map(x=>x.energy),ps=w.map(x=>x.peak),os=w.map(x=>x.onset),center=((start+end)/2)/Math.max(1,safeEnd),placement=clamp(1-Math.abs(center-.62)*.45,.84,1);const score=(normalize(mean(es),eLow,eHigh)*.5+normalize(mean(os),oLow,oHigh)*.2+normalize(percentile(ps,.84),pLow,pHigh)*.12+normalize(stdev(es),0,Math.max(.015,eHigh-eLow))*.08+lyricActivity(start,end,timeline)*.1)*placement;candidates.push({start,score})}
   if(!candidates.length)throw new Error('No highlight candidates found.');
   candidates.sort((a,b)=>b.score-a.score);const best=candidates[0]!,runner=candidates[Math.min(4,candidates.length-1)]||best,start=clamp(align(best.start,from,lastStart,timeline),from,lastStart),separation=Math.max(0,best.score-runner.score),confidence=clamp(.55+best.score*.3+separation*.7,.55,.98);
-  return{startSeconds:start,endSeconds:Math.min(safeEnd,start+window),confidence,score:best.score,reason:'audio-energy'};
+  return{startSeconds:start,endSeconds:Math.min(safeEnd,start+clipWindow),confidence,score:best.score,reason:'audio-energy'};
  }finally{void ctx.close().catch(()=>undefined)}
 }
