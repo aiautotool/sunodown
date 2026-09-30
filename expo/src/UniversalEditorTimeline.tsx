@@ -265,6 +265,31 @@ export function UniversalEditorTimeline({
     onPanResponderTerminate:()=>setSnapHint(null),
   }),[px,onSeek,snapping,zoom,snapPoints]);
 
+  const toolbar=<ScrollView
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    style={[styles.toolsScroll,compact&&styles.toolsScrollCompact]}
+    contentContainerStyle={[styles.tools,compact&&styles.toolsCompact]}
+  >
+    <Tool active={tool==='select'} onPress={()=>setTool('select')} icon={<MousePointer2 size={14}/>} />
+    <Tool active={tool==='razor'} onPress={()=>setTool('razor')} icon={<Scissors size={14}/>} />
+    <Tool active={snapping} onPress={()=>setSnapping(value=>!value)} icon={<Magnet size={14}/>} />
+    <View style={styles.toolDivider}/>
+    <Tool disabled={!selected} onPress={()=>splitSelected()} icon={<Scissors size={14}/>} />
+    <Tool disabled={!selected} onPress={duplicateSelected} icon={<Copy size={14}/>} />
+    <Tool disabled={!selected} onPress={deleteSelected} icon={<Trash2 size={14}/>} />
+  </ScrollView>;
+
+  const zoomControls=<View style={[styles.zoom,compact&&styles.zoomCompact]}>
+    <Pressable disabled={zoom<=MIN_ZOOM} onPress={()=>setZoom(z=>Math.max(MIN_ZOOM,z-.25))} style={[styles.zoomBtn,zoom<=MIN_ZOOM&&styles.disabled]}><Minus size={13} color="#cdd4df"/></Pressable>
+    <Text style={styles.zoomBound}>MIN {MIN_ZOOM}×</Text>
+    <View style={styles.zoomTrack}><View style={[styles.zoomFill,{width:(((zoom-MIN_ZOOM)/(MAX_ZOOM-MIN_ZOOM)*100)+'%') as any}]}/></View>
+    <Text style={styles.zoomValue}>{zoom.toFixed(zoom%1===0?0:2)}×</Text>
+    <Text style={styles.zoomBound}>MAX {MAX_ZOOM}×</Text>
+    <Pressable disabled={zoom>=MAX_ZOOM} onPress={()=>setZoom(z=>Math.min(MAX_ZOOM,z+.25))} style={[styles.zoomBtn,zoom>=MAX_ZOOM&&styles.disabled]}><Plus size={13} color="#cdd4df"/></Pressable>
+    <Pressable onPress={()=>setZoom(clamp(viewportWidth/Math.max(900,safeDuration*22),MIN_ZOOM,MAX_ZOOM))} style={styles.zoomBtn}><Focus size={13} color="#cdd4df"/></Pressable>
+  </View>;
+
   return <View style={[styles.root,compact&&styles.rootCompact]}>
     <View style={[styles.header,compact&&styles.headerCompact]}>
       <View style={[styles.timelineTitle,compact&&styles.timelineTitleCompact]}>
@@ -272,20 +297,7 @@ export function UniversalEditorTimeline({
         <Text style={styles.time}>{stamp(playhead)} / {stamp(safeDuration)}</Text>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={[styles.toolsScroll,compact&&styles.toolsScrollCompact]}
-        contentContainerStyle={[styles.tools,compact&&styles.toolsCompact]}
-      >
-        <Tool active={tool==='select'} onPress={()=>setTool('select')} icon={<MousePointer2 size={14}/>} />
-        <Tool active={tool==='razor'} onPress={()=>setTool('razor')} icon={<Scissors size={14}/>} />
-        <Tool active={snapping} onPress={()=>setSnapping(value=>!value)} icon={<Magnet size={14}/>} />
-        <View style={styles.toolDivider}/>
-        <Tool disabled={!selected} onPress={()=>splitSelected()} icon={<Scissors size={14}/>} />
-        <Tool disabled={!selected} onPress={duplicateSelected} icon={<Copy size={14}/>} />
-        <Tool disabled={!selected} onPress={deleteSelected} icon={<Trash2 size={14}/>} />
-      </ScrollView>
+      {!compact&&toolbar}
 
       <View style={styles.history}>
         <Tool icon={<Undo2 size={14}/>} disabled={!undoStack.length} onPress={undo}/>
@@ -297,15 +309,8 @@ export function UniversalEditorTimeline({
         {!compact&&<Text style={styles.addMediaText}>Thêm ảnh/video</Text>}
       </Pressable>
 
-      <View style={[styles.zoom,compact&&styles.zoomCompact]}>
-        <Pressable disabled={zoom<=MIN_ZOOM} onPress={()=>setZoom(z=>Math.max(MIN_ZOOM,z-.25))} style={[styles.zoomBtn,zoom<=MIN_ZOOM&&styles.disabled]}><Minus size={13} color="#cdd4df"/></Pressable>
-        <Text style={styles.zoomBound}>MIN {MIN_ZOOM}×</Text>
-        <View style={styles.zoomTrack}><View style={[styles.zoomFill,{width:(((zoom-MIN_ZOOM)/(MAX_ZOOM-MIN_ZOOM)*100)+'%') as any}]}/></View>
-        <Text style={styles.zoomValue}>{zoom.toFixed(zoom%1===0?0:2)}×</Text>
-        <Text style={styles.zoomBound}>MAX {MAX_ZOOM}×</Text>
-        <Pressable disabled={zoom>=MAX_ZOOM} onPress={()=>setZoom(z=>Math.min(MAX_ZOOM,z+.25))} style={[styles.zoomBtn,zoom>=MAX_ZOOM&&styles.disabled]}><Plus size={13} color="#cdd4df"/></Pressable>
-        <Pressable onPress={()=>setZoom(clamp(viewportWidth/Math.max(900,safeDuration*22),MIN_ZOOM,MAX_ZOOM))} style={styles.zoomBtn}><Focus size={13} color="#cdd4df"/></Pressable>
-      </View>
+      {zoomControls}
+      {compact&&toolbar}
     </View>
 
     {selectedSubtitleIndex>=0&&subtitles[selectedSubtitleIndex]&&<View style={styles.nudge}>
@@ -513,7 +518,7 @@ const styles=StyleSheet.create({
   time:{color:'#8d99aa',fontSize:9},
   history:{flexDirection:'row',gap:5},
   toolsScroll:{flexGrow:0,flexShrink:1},
-  toolsScrollCompact:{width:'100%',order:5},
+  toolsScrollCompact:{width:'100%'},
   tools:{gap:4,alignItems:'center'},
   toolsCompact:{width:'100%',justifyContent:'center',paddingTop:1,paddingBottom:1},
   toolDivider:{width:1,height:20,backgroundColor:'#2a3341',marginHorizontal:2},
