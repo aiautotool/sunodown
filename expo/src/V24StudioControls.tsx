@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { FileText, Image as ImageIcon, Music2, SlidersHorizontal, Sparkles } from 'lucide-react-native';
-import type { KaraokeLine, Song, StudioAspect, StudioLyricsMode as LyricsMode, StudioMotion as Motion, StudioVisualConfig } from './types';
+import type { KaraokeLine, SavedVisualPreset, Song, StudioAspect, StudioLyricsMode as LyricsMode, StudioMotion as Motion, StudioVisualConfig } from './types';
 export type { StudioVisualConfig } from './types';
 
 export const DEFAULT_VISUAL_CONFIG:StudioVisualConfig={
@@ -103,10 +103,12 @@ export function applyPresetConfig(current:StudioVisualConfig,preset:Preset,durat
 
 export function V24StudioControls({
   song,config,onChange,timeline,subtitleLoading,subtitleError,onReget,onPickBackground,
+  customPresets=[],onSavePreset,onDeletePreset,
   panel:controlledPanel,onPanelChange,
 }:{
   song:Song;config:StudioVisualConfig;onChange:(next:StudioVisualConfig)=>void;timeline:KaraokeLine[];
   subtitleLoading:boolean;subtitleError:string;onReget:()=>void;onPickBackground:()=>void;
+  customPresets?:SavedVisualPreset[];onSavePreset?:()=>void;onDeletePreset?:(id:string)=>void;
   panel?:StudioPanel;onPanelChange?:(panel:StudioPanel)=>void;
 }){
   const [internalPanel,setInternalPanel]=useState<StudioPanel>('audio');
@@ -125,7 +127,16 @@ export function V24StudioControls({
     <View style={styles.panel}>
       {panel==='audio'&&<AudioPanel config={config} onChange={onChange}/>} 
       {panel==='presets'&&<View>
-        <View style={styles.presetHead}><View><Text style={styles.kicker}>PRESET SYSTEM</Text><Text style={styles.panelTitle}>Mẫu video</Text></View><Pressable style={styles.smallButton}><Text style={styles.smallButtonText}>Lưu mẫu</Text></Pressable></View>
+        <View style={styles.presetHead}><View><Text style={styles.kicker}>PRESET SYSTEM</Text><Text style={styles.panelTitle}>Mẫu video</Text></View><Pressable onPress={onSavePreset} style={styles.smallButton}><Text style={styles.smallButtonText}>Lưu mẫu</Text></Pressable></View>
+        {!!customPresets.length&&<View style={styles.savedPresetBox}>
+          <Text style={styles.savedPresetTitle}>MẪU CỦA TÔI · {customPresets.length}</Text>
+          <View style={styles.savedPresetList}>
+            {customPresets.map(saved=><View key={saved.id} style={styles.savedPresetRow}>
+              <Pressable style={styles.savedPresetApply} onPress={()=>onChange({...saved.config,presetId:saved.id})}><Text numberOfLines={1} style={styles.savedPresetName}>{saved.name}</Text><Text style={styles.savedPresetMeta}>{saved.config.aspect} · {saved.config.template}</Text></Pressable>
+              <Pressable onPress={()=>onDeletePreset?.(saved.id)} style={styles.savedPresetDelete}><Text style={styles.savedPresetDeleteText}>×</Text></Pressable>
+            </View>)}
+          </View>
+        </View>}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categories}>{categories.map(x=><Pressable key={x} onPress={()=>setCategory(x)} style={[styles.category,category===x&&styles.categoryActive]}><Text style={[styles.categoryText,category===x&&styles.categoryTextActive]}>{x}</Text></Pressable>)}</ScrollView>
         <View style={styles.presetGrid}>{presets.map(p=><PresetCard key={p.id} preset={p} picture={song.picture} active={config.presetId===p.id} onPress={()=>onChange(applyPresetConfig(config,p,song.duration||0))}/>)}</View>
       </View>}
@@ -225,6 +236,7 @@ const styles=StyleSheet.create({
   root:{width:'100%'},tabs:{gap:6,paddingTop:4,paddingBottom:10},tab:{width:78,height:52,borderWidth:1,borderColor:'#29313d',borderRadius:10,backgroundColor:'#111720',alignItems:'center',justifyContent:'center',gap:3},tabActive:{borderColor:'#7059e4',backgroundColor:'#211c3b'},tabText:{color:'#8e99aa',fontSize:8,fontWeight:'800'},tabTextActive:{color:'#fff'},
   panel:{borderTopWidth:1,borderColor:'#29313d',paddingTop:10},stack:{gap:10},sectionKicker:{color:'#8e7cf0',fontSize:8,fontWeight:'900',letterSpacing:1.2},help:{color:'#8793a5',fontSize:9,lineHeight:14},fieldTitle:{color:'#cdd4df',fontSize:10,fontWeight:'800',marginTop:2},
   presetHead:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:8},kicker:{color:'#a78bfa',fontSize:9,fontWeight:'800',letterSpacing:1.3},panelTitle:{color:'#f4f6fb',fontSize:13,fontWeight:'800',marginTop:4},smallButton:{height:31,borderWidth:1,borderColor:'#303a48',borderRadius:8,backgroundColor:'#151c26',paddingHorizontal:9,justifyContent:'center'},smallButtonText:{color:'#aeb8c7',fontSize:10},
+  savedPresetBox:{marginTop:10,borderWidth:1,borderColor:'#29313d',borderRadius:10,backgroundColor:'#0d131c',padding:9},savedPresetTitle:{color:'#8d72ff',fontSize:8,fontWeight:'900',letterSpacing:1.1,marginBottom:7},savedPresetList:{gap:6},savedPresetRow:{minHeight:42,flexDirection:'row',alignItems:'stretch',borderWidth:1,borderColor:'#26303d',borderRadius:8,backgroundColor:'#101720',overflow:'hidden'},savedPresetApply:{flex:1,paddingHorizontal:9,justifyContent:'center'},savedPresetName:{color:'#e8edf4',fontSize:9,fontWeight:'800'},savedPresetMeta:{color:'#788496',fontSize:7,marginTop:2},savedPresetDelete:{width:34,alignItems:'center',justifyContent:'center',borderLeftWidth:1,borderColor:'#26303d'},savedPresetDeleteText:{color:'#ff9da5',fontSize:18,lineHeight:18},
   categories:{gap:6,paddingVertical:10},category:{height:29,borderWidth:1,borderColor:'#2d3542',borderRadius:999,backgroundColor:'#111722',paddingHorizontal:10,justifyContent:'center'},categoryActive:{borderColor:'#7c5ce8',backgroundColor:'rgba(124,92,232,.16)'},categoryText:{color:'#8f99aa',fontSize:9,fontWeight:'700'},categoryTextActive:{color:'#eee9ff'},
   presetGrid:{flexDirection:'row',flexWrap:'wrap',gap:9},presetCard:{width:'48.5%',overflow:'hidden',borderWidth:1,borderColor:'#29313d',borderRadius:12,backgroundColor:'#0b1017'},presetArt:{height:82,position:'relative',alignItems:'center',justifyContent:'center',overflow:'hidden'},presetShade:{...StyleSheet.absoluteFill,backgroundColor:'rgba(7,10,16,.42)'},presetBadge:{position:'absolute',left:7,top:7,zIndex:2,color:'#dce3ef',fontSize:7,fontWeight:'800'},disc:{width:48,height:48,borderWidth:1,borderRadius:24,alignItems:'center',justifyContent:'center'},discCore:{width:12,height:12,borderRadius:6},presetCopy:{minHeight:62,padding:9},presetName:{color:'#f5f7fb',fontSize:10,fontWeight:'800'},presetDesc:{color:'#778396',fontSize:8,lineHeight:12,marginTop:4},
   chips:{flexDirection:'row',flexWrap:'wrap',gap:7},chip:{minHeight:34,borderWidth:1,borderColor:'#303947',borderRadius:8,backgroundColor:'#151c27',paddingHorizontal:9,alignItems:'center',justifyContent:'center'},chipActive:{borderColor:'#8a67ff',backgroundColor:'rgba(125,91,255,.18)'},chipText:{color:'#aeb8c7',fontSize:9,fontWeight:'700'},chipTextActive:{color:'#fff'},
