@@ -42,8 +42,8 @@ export function MobileStudioScreen({song,onSave,onBack}:{song:Song;onSave:()=>vo
       </View>
 
       <View style={styles.stage}>
-        {background?<ImageBackground source={{uri:background}} style={StyleSheet.absoluteFillObject} resizeMode="cover"/>:<LinearGradient colors={['#211838','#7758ef']} style={StyleSheet.absoluteFillObject}/>}
-        <LinearGradient colors={['rgba(4,7,11,0)','rgba(4,7,11,.72)']} style={StyleSheet.absoluteFillObject}/>
+        {background?<ImageBackground source={{uri:background}} style={StyleSheet.absoluteFill} resizeMode="cover"/>:<LinearGradient colors={['#211838','#7758ef']} style={StyleSheet.absoluteFill}/>}
+        <LinearGradient colors={['rgba(4,7,11,0)','rgba(4,7,11,.72)']} style={StyleSheet.absoluteFill}/>
         <View style={styles.ratio}><Text style={styles.ratioText}>9:16</Text></View>
         <View style={styles.wave}>{Array.from({length:38}).map((_,i)=><View key={i} style={[styles.bar,{height:6+((i*13)%31)}]}/>)}</View>
         <Pressable style={styles.centerPlay}><Play size={24} color="#fff" fill="#fff"/></Pressable>
@@ -89,8 +89,8 @@ export function MobileStudioScreen({song,onSave,onBack}:{song:Song;onSave:()=>vo
         {tool==='presets'&&<View style={styles.presetGrid}>
           {['Cinematic','Minimal','Neon','Vintage','Aesthetic','Visualizer'].map((name,i)=><Pressable key={name} style={[styles.preset,i===0&&styles.presetActive]}>
             <LinearGradient colors={i===0?['#271d42','#8b6cff']:i===1?['#111820','#455162']:i===2?['#171231','#ad43fa']:i===3?['#30231b','#9f7048']:i===4?['#2c1f35','#cf7cc0']:['#0d1228','#655bf0']} style={styles.presetThumb}>
-              {song.picture&&<Image source={{uri:song.picture}} style={StyleSheet.absoluteFillObject}/>}
-              <LinearGradient colors={['transparent','rgba(5,8,13,.72)']} style={StyleSheet.absoluteFillObject}/>
+              {song.picture&&<Image source={{uri:song.picture}} style={StyleSheet.absoluteFill}/>}
+              <LinearGradient colors={['transparent','rgba(5,8,13,.72)']} style={StyleSheet.absoluteFill}/>
             </LinearGradient>
             <Text style={styles.presetName}>{name}</Text>
           </Pressable>)}
