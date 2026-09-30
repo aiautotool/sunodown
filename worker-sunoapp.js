@@ -79,6 +79,10 @@ async function dispatchRenderJob(env,id){
 
 export default {
   async fetch(request,env,ctx){
+    const url=new URL(request.url);
+    if((request.method==='GET'||request.method==='HEAD')&&!url.pathname.startsWith('/api/')){
+      return env.ASSETS.fetch(request);
+    }
     return baseWorker.fetch(request,env,ctx);
   },
   async queue(batch,env){
