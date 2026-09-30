@@ -1,10 +1,19 @@
-name: Deploy v24react Expo Web
+name: Deploy isolated v24react
 
 on:
   push:
     branches: [v24react]
     paths:
+      - 'app/**'
+      - 'components/**'
+      - 'services/**'
+      - 'scripts/**'
+      - 'migrations/**'
       - 'expo/**'
+      - 'worker-picai.js'
+      - 'worker-sunoapp.js'
+      - 'package.json'
+      - 'package-lock.json'
       - 'wrangler.v24react.json'
       - '.github/workflows/deploy-v24react.yml'
   workflow_dispatch:
@@ -13,13 +22,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: sunodown-v24react-production
+  group: sunodown-v24react-isolated
   cancel-in-progress: true
 
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    env:
+      APP_URL: https://sunoapp.aiautotool.com
+      RENDERER_URL: https://sunodown-v24react-renderer.long-wind-7153.workers.dev
 
     steps:
       - name: Checkout v24react
@@ -29,6 +41,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22.13.0'
+          cache: npm
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Run backend regression tests
+        run: npm run test:karaoke
+
+      - name: Build v24 backend
+        env:
+          BUILD_VERSION: v24react
+        run: npm run build
 
       - name: Install Expo dependencies
         working-directory: expo
@@ -40,29 +64,116 @@ jobs:
         working-directory: expo
         run: npm run typecheck
 
-      - name: Export Expo web
+      - name: Export Expo Web with same-origin API
         working-directory: expo
-        env:
-          EXPO_PUBLIC_API_BASE: https://picai.online
         run: npm run build:web
 
-      - name: Verify web export
+      - name: Merge Expo UI with v24 API worker
         run: |
+          test -f dist/server/index.js
           test -f expo/dist/index.html
-          test -d expo/dist/_expo
+          rm -rf dist/client
+          mkdir -p dist/client
+          cp -R expo/dist/. dist/client/
+          cp worker-picai.js dist/server/worker-picai.js
+          cp worker-sunoapp.js dist/server/worker-sunoapp.js
+          test -f dist/client/index.html
+          test -f dist/server/worker-sunoapp.js
 
-      - name: Deploy to Cloudflare Worker custom domain
-        run: npx wrangler@4.92.0 deploy --config wrangler.v24react.json
+      - name: Provision isolated D1 R2 and Queue
+        run: node scripts/provision-v24react-cloudflare.mjs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Smoke check production domain
+      - name: Create private renderer service token
+        shell: bash
         run: |
-          for attempt in 1 2 3 4 5 6; do
-            if curl --fail --silent --show-error --max-time 20 https://sunoapp.aiautotool.com/ -o /tmp/sunoapp.html; then
-              grep -qi '<html' /tmp/sunoapp.html
-              exit 0
-            fi
-            sleep 5
-          done
-          exit 1
+          TOKEN="$(openssl rand -hex 32)"
+          echo "::add-mask::$TOKEN"
+          echo "V24REACT_RENDER_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Deploy isolated renderer Worker and Container
+        run: npx wrangler deploy --config services/vibes-renderer/wrangler.v24react.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Configure isolated renderer secrets
+        shell: bash
+        run: |
+          printf '%s' "$V24REACT_RENDER_TOKEN" | npx wrangler secret put RENDER_SERVICE_TOKEN --config services/vibes-renderer/wrangler.v24react.jsonc
+          if [ -n "$VIBES_META_SESSION" ]; then
+            printf '%s' "$VIBES_META_SESSION" | npx wrangler secret put VIBES_META_SESSION --config services/vibes-renderer/wrangler.v24react.jsonc
+          else
+            echo "::warning::VIBES_META_SESSION is not configured; AI Music Video provider will be unavailable until this secret is added."
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          VIBES_META_SESSION: ${{ secrets.VIBES_META_SESSION }}
+
+      - name: Deploy isolated SunoApp full-stack Worker
+        run: npx wrangler deploy --config wrangler.v24react.generated.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Configure SunoApp private secrets
+        shell: bash
+        run: |
+          printf '%s' "$RENDERER_URL/render" | npx wrangler secret put AI_RENDER_SERVICE_URL --config wrangler.v24react.generated.json
+          printf '%s' "$V24REACT_RENDER_TOKEN" | npx wrangler secret put RENDER_SERVICE_TOKEN --config wrangler.v24react.generated.json
+
+          if [ -n "$GROQ_API_KEY" ]; then
+            printf '%s' "$GROQ_API_KEY" | npx wrangler secret put GROQ_API_KEY --config wrangler.v24react.generated.json
+          else
+            echo "::warning::GROQ_API_KEY is not configured."
+          fi
+
+          if [ -n "$MEDIA_TOKEN_SECRET" ]; then
+            printf '%s' "$MEDIA_TOKEN_SECRET" | npx wrangler secret put MEDIA_TOKEN_SECRET --config wrangler.v24react.generated.json
+          else
+            MEDIA_SECRET="$(openssl rand -hex 32)"
+            echo "::add-mask::$MEDIA_SECRET"
+            printf '%s' "$MEDIA_SECRET" | npx wrangler secret put MEDIA_TOKEN_SECRET --config wrangler.v24react.generated.json
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          MEDIA_TOKEN_SECRET: ${{ secrets.MEDIA_TOKEN_SECRET }}
+
+      - name: Smoke check isolated frontend
+        run: |
+          curl --fail --silent --show-error --retry 6 --retry-delay 3 --max-time 30 "$APP_URL/" -o /tmp/sunoapp.html
+          grep -qi '<html' /tmp/sunoapp.html
+
+      - name: Verify API resolves directly on SunoApp
+        run: |
+          resolved="$(curl --fail --silent --show-error --max-time 60 \
+            -X POST "$APP_URL/api/resolve" \
+            -H 'content-type: application/json' \
+            --data '{"input":"https://suno.com/s/tszo0jGdVUua4rT4","metadataOnly":true}')"
+          echo "$resolved" | jq -e '.id != null' >/dev/null
+
+      - name: Verify isolated subtitle store
+        run: |
+          status="$(curl --silent --show-error \
+            -H 'Cache-Control: no-cache' \
+            -o /tmp/subtitle.json -w '%{http_code}' \
+            "$APP_URL/api/music/subtitle?songId=00000000-0000-4000-8000-000000000000&language=vi&deploy=$GITHUB_SHA")"
+          cat /tmp/subtitle.json
+          test "$status" = "404"
+          grep -Eq '"status"[[:space:]]*:[[:space:]]*"missing"' /tmp/subtitle.json
+
+      - name: Verify isolated Groq endpoint
+        run: |
+          response="$(curl --fail --silent --show-error --max-time 30 "$APP_URL/api/karaoke/groq")"
+          echo "$response"
+          if [ -n "$GROQ_API_KEY" ]; then
+            echo "$response" | grep -Eq '"available"[[:space:]]*:[[:space:]]*true'
+          fi
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+
+      - name: Verify isolated renderer
+        run: |
+          health="$(curl --fail --silent --show-error --retry 5 --retry-delay 4 --max-time 60 "$RENDERER_URL/health")"
+          echo "$health"
+          echo "$health" | jq -e '.ok == true' >/dev/null
