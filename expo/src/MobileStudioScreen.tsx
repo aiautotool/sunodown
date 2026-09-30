@@ -5,10 +5,10 @@ import { ChevronDown, Image as ImageIcon, Menu, Music2, Play, RefreshCw, Save, S
 import { LinearGradient } from 'expo-linear-gradient';
 import type { KaraokeLine, RenderJob, Song } from './types';
 import { colors } from './theme';
-import { regenerateSubtitle } from './api';
 import { saveExportedAsset } from './file-actions';
 import { exportAudio, exportVisualizer } from './render-engine';
 import { useStudioPlayback } from './useStudioPlayback';
+import { useSubtitleSync } from './useSubtitleSync';
 import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendPresets, V24_PRESETS, type StudioVisualConfig } from './V24StudioControls';
 
 type Tool='presets'|'style'|'lyrics'|null;
@@ -16,10 +16,8 @@ const fmt=(n=0)=>`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')
 
 export function MobileStudioScreen({song,onSave,onBack,onRenderJob}:{song:Song;onSave:()=>void;onBack:()=>void;onRenderJob:(job:RenderJob)=>void}) {
   const [background,setBackground]=useState<string|undefined>(song.picture);
-  const [timeline,setTimeline]=useState<KaraokeLine[]>([]);
+  const {timeline,setTimeline,status:subtitleStatus,message:subtitleMessage,error,regenerating:busy,reget}=useSubtitleSync(song);
   const [tool,setTool]=useState<Tool>(null);
-  const [busy,setBusy]=useState(false);
-  const [error,setError]=useState('');
   const [saved,setSaved]=useState(false);
   const [config,setConfig]=useState<StudioVisualConfig>({...DEFAULT_VISUAL_CONFIG,trimEnd:song.duration||0});
   const [rendering,setRendering]=useState(false);
@@ -36,13 +34,7 @@ export function MobileStudioScreen({song,onSave,onBack,onRenderJob}:{song:Song;o
     const r=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images','videos'],quality:.9});
     if(!r.canceled)setBackground(r.assets[0]?.uri);
   };
-  const reget=async()=>{
-    if(!song.id){setError('Bài hát chưa có songId.');return}
-    setBusy(true);setError('');
-    try{setTimeline(await regenerateSubtitle(song))}
-    catch(e){setError(e instanceof Error?e.message:'Không lấy được subtitle')}
-    finally{setBusy(false)}
-  };
+
   const save=()=>{onSave();setSaved(true);setTimeout(()=>setSaved(false),1400)};
 
   const exportVideo=async(durationSeconds?:number)=>{
@@ -104,8 +96,12 @@ export function MobileStudioScreen({song,onSave,onBack,onRenderJob}:{song:Song;o
         <Music2 size={18} color="#fff"/>
       </View>
 
+      {subtitleStatus!=='idle'&&<View style={[styles.subtitleJob,subtitleStatus==='synced'&&styles.subtitleJobSynced,subtitleStatus==='fallback'&&styles.subtitleJobFallback]}>
+        {subtitleStatus==='syncing'?<ActivityIndicator size="small" color="#22d3ee"/>:<View style={[styles.subtitleDot,subtitleStatus==='synced'&&styles.subtitleDotSynced]}/>}
+        <View style={{flex:1}}><Text style={styles.subtitleJobTitle}>{subtitleStatus==='syncing'?(busy?'Đang lấy lại subtitle…':'Đang tìm subtitle…'):subtitleStatus==='synced'?'Subtitle đã sẵn sàng':'Subtitle cần kiểm tra timing'}</Text><Text style={styles.subtitleJobText}>{subtitleStatus==='syncing'&&!busy?'Bạn vẫn có thể chỉnh sửa trong khi chạy nền.':subtitleMessage}</Text></View>
+      </View>}
       {song.id&&<View style={styles.subtitleRefresh}>
-        <Pressable onPress={reget} disabled={busy} style={styles.subtitleBtn}>
+        <Pressable onPress={()=>void reget()} disabled={busy||subtitleStatus==='syncing'} style={styles.subtitleBtn}>
           {busy?<ActivityIndicator size="small" color="#fff"/>:<Sparkles size={15} color="#d8ccff"/>}
           <Text style={styles.subtitleBtnText}>{busy?'Đang lấy lại…':'Lấy lại subtitle'}</Text>
         </Pressable>
@@ -164,7 +160,8 @@ const styles=StyleSheet.create({
   wave:{position:'absolute',zIndex:3,left:18,right:18,bottom:58,height:28,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},bar:{width:3,borderRadius:3,backgroundColor:'#b17cff'},
   centerPlay:{position:'absolute',zIndex:5,left:'50%',top:'50%',marginLeft:-28,marginTop:-28,width:56,height:56,borderWidth:1,borderColor:'rgba(255,255,255,.45)',borderRadius:28,backgroundColor:'rgba(8,11,18,.72)',alignItems:'center',justifyContent:'center'},
   playerOverlay:{height:50,marginTop:-64,marginHorizontal:13,zIndex:6,flexDirection:'row',alignItems:'center',gap:10,paddingHorizontal:4},seek:{height:4,flex:1,borderRadius:99,backgroundColor:'rgba(255,255,255,.22)',position:'relative'},seekFill:{width:'24%',height:4,borderRadius:99,backgroundColor:'#8b6cff'},knob:{position:'absolute',left:'24%',top:-4,width:12,height:12,borderRadius:6,backgroundColor:'#fff'},time:{width:67,color:'#fff',fontSize:9},
-  subtitleRefresh:{marginTop:18,flexDirection:'row',alignItems:'center',gap:9,flexWrap:'wrap'},subtitleBtn:{height:36,borderWidth:1,borderColor:'#5c458e',borderRadius:8,backgroundColor:'#211a3b',paddingHorizontal:10,flexDirection:'row',alignItems:'center',gap:7},subtitleBtnText:{color:'#d8ccff',fontSize:10,fontWeight:'700'},subtitleHint:{color:'#7d8899',fontSize:9,flexShrink:1},
+  subtitleJob:{minHeight:48,marginTop:18,borderWidth:1,borderColor:'rgba(34,211,238,.2)',borderRadius:12,backgroundColor:'rgba(8,18,27,.92)',paddingHorizontal:12,paddingVertical:9,flexDirection:'row',alignItems:'center',gap:10},subtitleJobSynced:{borderColor:'rgba(74,222,128,.2)',backgroundColor:'rgba(10,28,21,.82)'},subtitleJobFallback:{borderColor:'rgba(245,158,11,.24)',backgroundColor:'rgba(35,24,8,.76)'},subtitleDot:{width:20,height:20,borderRadius:10,borderWidth:2,borderColor:'#f59e0b'},subtitleDotSynced:{borderWidth:0,backgroundColor:'#22c55e'},subtitleJobTitle:{color:'#e6faff',fontSize:10,fontWeight:'800'},subtitleJobText:{color:'#8292a6',fontSize:9,marginTop:3,lineHeight:13},
+  subtitleRefresh:{marginTop:10,flexDirection:'row',alignItems:'center',gap:9,flexWrap:'wrap'},subtitleBtn:{height:36,borderWidth:1,borderColor:'#5c458e',borderRadius:8,backgroundColor:'#211a3b',paddingHorizontal:10,flexDirection:'row',alignItems:'center',gap:7},subtitleBtnText:{color:'#d8ccff',fontSize:10,fontWeight:'700'},subtitleHint:{color:'#7d8899',fontSize:9,flexShrink:1},
   quickCreate:{marginTop:12,borderWidth:1,borderColor:'#27303d',borderRadius:12,backgroundColor:'#0d131c',padding:10},quickHead:{flexDirection:'row',alignItems:'flex-start',justifyContent:'space-between'},quickKicker:{color:'#8d72ff',fontSize:8,fontWeight:'900',letterSpacing:1.2},quickTitle:{color:'#f3f5f9',fontSize:12,fontWeight:'800',marginTop:3},quickHint:{color:'#727e90',fontSize:8},quickPresetRow:{gap:8,paddingTop:10,paddingBottom:2},quickPreset:{width:145,overflow:'hidden',borderWidth:1,borderColor:'#29313d',borderRadius:10,backgroundColor:'#0b1017'},quickPresetArt:{height:70,position:'relative',overflow:'hidden'},quickShade:{...StyleSheet.absoluteFill,backgroundColor:'rgba(7,10,16,.42)'},quickBadge:{position:'absolute',left:7,top:7,color:'#eee8ff',fontSize:7,fontWeight:'900'},quickPresetName:{color:'#f5f7fb',fontSize:9,fontWeight:'800',paddingHorizontal:8,paddingTop:7},quickPresetMeta:{color:'#727e90',fontSize:7,paddingHorizontal:8,paddingTop:3,paddingBottom:8},quickActions:{flexDirection:'row',gap:7,marginTop:9},quickAction:{flex:1,minHeight:42,borderWidth:1,borderColor:'#5b49ba',borderRadius:9,backgroundColor:'rgba(112,85,225,.12)',flexDirection:'row',alignItems:'center',justifyContent:'center',gap:6},quickPrimary:{backgroundColor:'#7058ed'},quickActionText:{color:'#cfc5ff',fontSize:9,fontWeight:'800'},quickPrimaryText:{color:'#fff',fontSize:9,fontWeight:'800'},quickStatus:{marginTop:8,borderWidth:1,borderColor:'rgba(139,92,246,.24)',borderRadius:9,backgroundColor:'rgba(55,42,92,.34)',padding:9},quickStatusTitle:{color:'#eee9ff',fontSize:9,fontWeight:'800'},quickStatusText:{color:'#8793a4',fontSize:8,marginTop:3},
   save:{height:42,marginTop:12,borderWidth:1,borderColor:'#7355dc',borderRadius:10,backgroundColor:'#241d45',flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8},saveDone:{borderColor:'#38c784',backgroundColor:'#143528'},saveText:{color:'#c8baff',fontSize:11,fontWeight:'700'},
   renderMessage:{color:'#c9bfdf',fontSize:10,lineHeight:16,marginTop:13},disabled:{opacity:.55},
