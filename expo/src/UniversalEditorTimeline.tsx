@@ -246,7 +246,6 @@ export function UniversalEditorTimeline({
   const visualTop=audioTop+rowHeight('audio');
   const subtitleTop=visualTop+rowHeight('visual');
   const effectsTop=subtitleTop+rowHeight('subtitle');
-  const canvasHeight=effectsTop+rowHeight('effects');
 
   const onCanvasLayout=(event:LayoutChangeEvent)=>setViewportWidth(Math.max(280,event.nativeEvent.layout.width));
   const rulerStep=Math.max(1,10/zoom);
@@ -267,22 +266,17 @@ export function UniversalEditorTimeline({
 
   return <View style={[styles.root,compact&&styles.rootCompact]}>
     <View style={[styles.header,compact&&styles.headerCompact]}>
-      <View style={styles.headerTop}>
-        <View style={styles.timelineTitle}>
-          <Text style={styles.title}>Creator Timeline</Text>
-          <Text style={styles.time}>{stamp(playhead)} / {stamp(safeDuration)}</Text>
-        </View>
-        <View style={styles.history}>
-          <Tool icon={<Undo2 size={14}/>} disabled={!undoStack.length} onPress={undo}/>
-          <Tool icon={<Redo2 size={14}/>} disabled={!redoStack.length} onPress={redo}/>
-        </View>
-        <Pressable onPress={onAddMedia} style={[styles.addMedia,compact&&styles.addMediaCompact]}>
-          <ImagePlus size={15} color="#d8deea"/>
-          {!compact&&<Text style={styles.addMediaText}>Thêm ảnh/video</Text>}
-        </Pressable>
+      <View style={[styles.timelineTitle,compact&&styles.timelineTitleCompact]}>
+        <Text style={styles.title}>Creator Timeline</Text>
+        <Text style={styles.time}>{stamp(playhead)} / {stamp(safeDuration)}</Text>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.tools,compact&&styles.toolsCompact]}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={[styles.toolsScroll,compact&&styles.toolsScrollCompact]}
+        contentContainerStyle={[styles.tools,compact&&styles.toolsCompact]}
+      >
         <Tool active={tool==='select'} onPress={()=>setTool('select')} icon={<MousePointer2 size={14}/>} />
         <Tool active={tool==='razor'} onPress={()=>setTool('razor')} icon={<Scissors size={14}/>} />
         <Tool active={snapping} onPress={()=>setSnapping(value=>!value)} icon={<Magnet size={14}/>} />
@@ -291,6 +285,16 @@ export function UniversalEditorTimeline({
         <Tool disabled={!selected} onPress={duplicateSelected} icon={<Copy size={14}/>} />
         <Tool disabled={!selected} onPress={deleteSelected} icon={<Trash2 size={14}/>} />
       </ScrollView>
+
+      <View style={styles.history}>
+        <Tool icon={<Undo2 size={14}/>} disabled={!undoStack.length} onPress={undo}/>
+        <Tool icon={<Redo2 size={14}/>} disabled={!redoStack.length} onPress={redo}/>
+      </View>
+
+      <Pressable onPress={onAddMedia} style={[styles.addMedia,compact&&styles.addMediaCompact]}>
+        <ImagePlus size={15} color="#d8deea"/>
+        {!compact&&<Text style={styles.addMediaText}>Thêm ảnh/video</Text>}
+      </Pressable>
 
       <View style={[styles.zoom,compact&&styles.zoomCompact]}>
         <Pressable disabled={zoom<=MIN_ZOOM} onPress={()=>setZoom(z=>Math.max(MIN_ZOOM,z-.25))} style={[styles.zoomBtn,zoom<=MIN_ZOOM&&styles.disabled]}><Minus size={13} color="#cdd4df"/></Pressable>
@@ -322,7 +326,7 @@ export function UniversalEditorTimeline({
         style={styles.timelineScroll}
       >
         <Pressable
-          style={[styles.canvas,{width,height:canvasHeight}]}
+          style={[styles.canvas,{width,height:compact?220:344}]}
           onPress={event=>{
             const x=(event.nativeEvent as any).locationX||0;
             onSeek(snap(x/px));
@@ -492,15 +496,17 @@ function MovableClip({
 }
 
 const styles=StyleSheet.create({
-  root:{marginTop:18,minWidth:0,borderWidth:1,borderColor:'#202735',borderRadius:14,backgroundColor:'#090d14',overflow:'hidden'},
+  root:{marginTop:18,minWidth:0,borderWidth:1,borderColor:'#202735',borderRadius:16,backgroundColor:'#090d14',overflow:'hidden',shadowColor:'#000',shadowOpacity:.22,shadowRadius:18,elevation:5},
   rootCompact:{borderRadius:12},
-  header:{minHeight:52,borderBottomWidth:1,borderColor:'#202735',paddingHorizontal:14,paddingVertical:9,gap:7},
+  header:{minHeight:58,borderBottomWidth:1,borderColor:'#202735',paddingHorizontal:12,paddingVertical:9,gap:8,flexDirection:'row',alignItems:'center',flexWrap:'wrap'},
   headerCompact:{paddingHorizontal:8,paddingVertical:8,gap:6},
-  headerTop:{minHeight:32,flexDirection:'row',alignItems:'center',gap:8},
-  timelineTitle:{flex:1,minWidth:0,flexDirection:'row',alignItems:'center',gap:8},
-  title:{color:'#f4f6fb',fontSize:11,fontWeight:'800'},
-  time:{color:'#727d90',fontSize:9},
-  history:{flexDirection:'row',gap:4},
+  timelineTitle:{minWidth:145,flexDirection:'column',gap:2},
+  timelineTitleCompact:{minWidth:0,flex:1},
+  title:{color:'#f4f6fb',fontSize:12,fontWeight:'800'},
+  time:{color:'#8d99aa',fontSize:9},
+  history:{flexDirection:'row',gap:5},
+  toolsScroll:{flexGrow:0,flexShrink:1},
+  toolsScrollCompact:{width:'100%',order:5},
   tools:{gap:4,alignItems:'center'},
   toolsCompact:{width:'100%',justifyContent:'center',paddingTop:1,paddingBottom:1},
   toolDivider:{width:1,height:20,backgroundColor:'#2a3341',marginHorizontal:2},
@@ -510,8 +516,8 @@ const styles=StyleSheet.create({
   addMedia:{height:32,borderWidth:1,borderColor:'#313a49',borderRadius:9,backgroundColor:'#111722',paddingHorizontal:10,flexDirection:'row',alignItems:'center',gap:6},
   addMediaCompact:{width:34,paddingHorizontal:0,justifyContent:'center'},
   addMediaText:{color:'#d8deea',fontSize:10},
-  zoom:{flexDirection:'row',alignItems:'center',gap:6},
-  zoomCompact:{width:'100%',justifyContent:'flex-end'},
+  zoom:{flexDirection:'row',alignItems:'center',gap:6,marginLeft:'auto'},
+  zoomCompact:{width:'100%',justifyContent:'flex-end',marginLeft:0},
   zoomBtn:{width:30,height:30,borderWidth:1,borderColor:'#313a49',borderRadius:8,backgroundColor:'#111722',alignItems:'center',justifyContent:'center'},
   zoomBound:{color:'#657185',fontSize:7},
   zoomValue:{minWidth:34,color:'#f1f4f9',fontSize:8,fontWeight:'800',textAlign:'center'},
@@ -523,7 +529,7 @@ const styles=StyleSheet.create({
   nudgeText:{color:'#c5bed0',fontSize:8},
   nudgeDivider:{width:1,height:20,backgroundColor:'rgba(148,163,184,.18)',marginHorizontal:2},
   timelineScroll:{backgroundColor:'#070a10'},
-  canvas:{position:'relative',backgroundColor:'#070a10'},
+  canvas:{position:'relative',backgroundColor:'#070a10',overflow:'hidden'},
   ruler:{position:'absolute',left:0,right:0,top:0,height:30,borderBottomWidth:1,borderColor:'#28303d',backgroundColor:'#090e15',zIndex:5},
   tick:{position:'absolute',top:17,height:13,borderLeftWidth:1,borderColor:'#3b4556'},
   tickText:{position:'absolute',bottom:13,left:4,color:'#8792a5',fontSize:8,width:48},
