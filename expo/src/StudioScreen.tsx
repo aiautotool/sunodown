@@ -147,6 +147,12 @@ export function StudioScreen({
         wave:config.wave,
         waveGlow:config.waveGlow,
         waveHeight:config.waveHeight,
+        waveColor:config.waveColor,
+        waveColor2:config.waveColor2,
+        waveThickness:config.waveThickness,
+        waveOpacity:config.waveOpacity,
+        waveDensity:config.waveDensity,
+        waveRotation:config.waveRotation,
         backgroundUri:background,
         lyricsMode:config.lyrics,
         timeline,
@@ -155,10 +161,21 @@ export function StudioScreen({
         subtitleVisible:!trackState.subtitle.hidden,
         effectsVisible:!trackState.effects.hidden,
         effects:config.effects,
+        effectSpeed:config.effectSpeed,
+        effectAngle:config.effectAngle,
+        effectDensity:config.effectDensity,
+        effectSize:config.effectSize,
         audioMuted:trackState.audio.muted,
+        eqBass:config.eqBass,
+        eqVocal:config.eqVocal,
+        eqTreble:config.eqTreble,
         titleColor:config.titleColor,
+        creatorColor:config.creatorColor,
         subtitleColor:config.subtitleColor,
         subtitleActiveColor:config.subtitleActiveColor,
+        titleScale:config.titleScale,
+        creatorScale:config.creatorScale,
+        subtitleScale:config.subtitleScale,
         quality:config.quality,
       },progress=>{
         setRenderProgress(progress);
@@ -458,7 +475,7 @@ function PreviewStage({
           <Text style={styles.localAudioCreator}>{(song.creator||'Local audio').toUpperCase()}</Text>
         </View>}
         {!compact&&config.lyrics!=='off'&&timeline.length>0&&<View style={styles.karaoke}>
-          <Text style={[styles.karaokeMain,{color:config.subtitleActiveColor}]}>{timeline.find(line=>currentTime>=line.start&&currentTime<line.end)?.text||lyricLines[0]}</Text>
+          <Text style={[styles.karaokeMain,{color:config.subtitleActiveColor,fontSize:Math.round(29*((config.subtitleScale??100)/100))}]}>{timeline.find(line=>currentTime>=line.start&&currentTime<line.end)?.text||lyricLines[0]}</Text>
           <Text style={[styles.karaokeNext,{color:config.subtitleColor}]}>{timeline.find(line=>line.start>currentTime)?.text||lyricLines[1]||''}</Text>
         </View>}
         {!trackState.effects.hidden&&<View style={[styles.wave,compact&&styles.waveCompact]}>
@@ -575,6 +592,7 @@ const styles=StyleSheet.create({
   localAudioCreator:{color:'rgba(226,217,255,.72)',fontSize:10,fontWeight:'800',letterSpacing:1,marginTop:8},
   stageRatio:{position:'absolute',right:12,top:12,zIndex:5,borderWidth:1,borderColor:'rgba(255,255,255,.16)',borderRadius:8,backgroundColor:'rgba(7,10,15,.55)',paddingHorizontal:8,paddingVertical:5},
   stageRatioText:{color:'#fff',fontSize:9,fontWeight:'800'},
+  titleOverlay:{position:'absolute',zIndex:4,left:'8%',right:'8%',top:'8%',alignItems:'center'},previewTitle:{color:'#fff',fontSize:24,fontWeight:'800',textAlign:'center',textShadowColor:'#000',textShadowRadius:10},previewCreator:{color:'#d1d5db',fontSize:12,marginTop:5,textShadowColor:'#000',textShadowRadius:8},
   karaoke:{position:'absolute',zIndex:3,left:'8%',right:'8%',bottom:'8%',alignItems:'center'},
   karaokeMain:{color:'#fff',fontSize:29,fontWeight:'800',textAlign:'center',textShadowColor:'#000',textShadowRadius:8},
   karaokeNext:{color:'#e1e3e7',fontSize:21,marginTop:8,textAlign:'center',textShadowColor:'#000',textShadowRadius:8},
