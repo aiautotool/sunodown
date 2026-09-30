@@ -108,6 +108,7 @@ function UniversalApp(){
 
   const showHeader=!compact&&view!=='music';
   const showGlobalPlayer=Boolean(playingSong) && (view==='library'||view==='music');
+  const hasMobileSectionHeader=compact&&view!=='create'&&view!=='music';
 
   return <SafeAreaView style={styles.safe} edges={compact?['top']:[]}>
     <StatusBar style="light"/>
@@ -115,12 +116,12 @@ function UniversalApp(){
       <View nativeID="v24react-build" accessibilityLabel={BUILD_SHA} style={styles.buildMarker}/>
       {showHeader&&<Header song={song} view={view} open={profileMenuOpen} onToggle={()=>setProfileMenuOpen(value=>!value)} onNavigate={next=>{setProfileMenuOpen(false);setView(next)}}/>}
       {showHeader&&profileMenuOpen&&<Pressable accessibilityLabel="Đóng menu" style={styles.navBackdrop} onPress={()=>setProfileMenuOpen(false)}/>}
-      {compact&&view!=='create'&&view!=='music'&&<MobileSectionHeader
+      {hasMobileSectionHeader&&<MobileSectionHeader
         open={mobileMenuOpen}
         onToggle={()=>setMobileMenuOpen(value=>!value)}
         onNavigate={nextView=>{setMobileMenuOpen(false);setView(nextView)}}
       />}
-      <View style={styles.content}>{songInit.visible?<SongInitScreen state={songInit}/>:body}</View>
+      <View style={[styles.content,hasMobileSectionHeader&&styles.contentWithMobileHeader]}>{songInit.visible?<SongInitScreen state={songInit}/>:body}</View>
       {compact&&!song&&<MobileAppNav active={view} onNavigate={setView}/>}
       {showGlobalPlayer&&<MusicPlayer song={playingSong}/>}
     </View>
@@ -220,6 +221,7 @@ const styles=StyleSheet.create({
   app:{flex:1,backgroundColor:colors.bg},
   buildMarker:{position:'absolute',left:-2,top:-2,width:1,height:1,opacity:0},
   content:{flex:1,backgroundColor:colors.bg},
+  contentWithMobileHeader:{paddingTop:58},
   navBackdrop:{position:'absolute',zIndex:25,left:0,right:0,top:v24.headerHeight,bottom:0,backgroundColor:'rgba(0,0,0,.18)'},
   mobileSectionHeaderWrap:{position:'absolute',zIndex:95,left:0,right:0,top:0,pointerEvents:'box-none'},
   mobileSectionHeader:{height:58,flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingLeft:16,paddingRight:4},
