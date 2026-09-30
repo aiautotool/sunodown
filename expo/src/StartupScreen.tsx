@@ -8,10 +8,21 @@ export function StartupScreen() {
   const [visible,setVisible]=useState(true);
   const [progress,setProgress]=useState(8);
   const opacity=useRef(new Animated.Value(1)).current;
+  const wave=useRef(new Animated.Value(0)).current;
+  const glow=useRef(new Animated.Value(.72)).current;
 
   useEffect(()=>{
     let cancelled=false;
     const started=Date.now();
+    const motion=Animated.loop(Animated.sequence([
+      Animated.timing(wave,{toValue:1,duration:420,useNativeDriver:true}),
+      Animated.timing(wave,{toValue:0,duration:420,useNativeDriver:true}),
+    ]));
+    const pulse=Animated.loop(Animated.sequence([
+      Animated.timing(glow,{toValue:1,duration:1200,useNativeDriver:true}),
+      Animated.timing(glow,{toValue:.72,duration:1200,useNativeDriver:true}),
+    ]));
+    motion.start();pulse.start();
     const timer=setInterval(()=>setProgress(value=>Math.min(88,value+Math.max(1,Math.round((92-value)*.08)))),120);
     const delay=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
     const pageReady=Platform.OS==='web'
@@ -37,22 +48,27 @@ export function StartupScreen() {
       if(cancelled)return;
       Animated.timing(opacity,{toValue:0,duration:520,useNativeDriver:true}).start(()=>{if(!cancelled)setVisible(false)});
     });
-    return()=>{cancelled=true;clearInterval(timer)};
-  },[opacity]);
+    return()=>{cancelled=true;clearInterval(timer);motion.stop();pulse.stop()};
+  },[opacity,wave,glow]);
 
   if(!visible)return null;
+  const scale=wave.interpolate({inputRange:[0,1],outputRange:[.72,1.14]});
   return <Animated.View style={[styles.overlay,{opacity}]}>
-    <LinearGradient colors={['#0d0a17','#070a10','#070a10']} style={StyleSheet.absoluteFill}/>
-    <View style={styles.glowA}/>
-    <View style={styles.glowB}/>
+    <LinearGradient colors={['#070a10','#070a10']} style={StyleSheet.absoluteFill}/>
+    <Animated.View style={[styles.glowA,{opacity:glow}]}/>
+    <Animated.View style={[styles.glowB,{opacity:glow}]}/>
+    <View style={styles.grid}>
+      {Array.from({length:12}).map((_,i)=><View key={'v'+i} style={[styles.gridV,{left:(i/11*100)+'%' as any}]}/>)}
+      {Array.from({length:12}).map((_,i)=><View key={'h'+i} style={[styles.gridH,{top:(i/11*100)+'%' as any}]}/>)}
+    </View>
 
     <View style={styles.content}>
       <View style={styles.mark}>
-        <View style={[styles.waveBar,{height:22}]}/>
-        <View style={[styles.waveBar,{height:42}]}/>
-        <View style={[styles.waveBar,{height:72}]}/>
-        <View style={[styles.waveBar,{height:42}]}/>
-        <View style={[styles.waveBar,{height:22}]}/>
+        <Animated.View style={[styles.waveBar,{height:22,transform:[{scaleY:scale}]}]}/>
+        <Animated.View style={[styles.waveBar,{height:42,transform:[{scaleY:scale}]}]}/>
+        <Animated.View style={[styles.waveBar,{height:72,transform:[{scaleY:scale}]}]}/>
+        <Animated.View style={[styles.waveBar,{height:42,transform:[{scaleY:scale}]}]}/>
+        <Animated.View style={[styles.waveBar,{height:22,transform:[{scaleY:scale}]}]}/>
         <LinearGradient colors={['#8567ff','#5436d4']} style={styles.logo}>
           <Music2 size={31} color="#fff" strokeWidth={2.25}/>
         </LinearGradient>
@@ -76,6 +92,7 @@ const styles=StyleSheet.create({
   overlay:{...StyleSheet.absoluteFill,zIndex:9999,alignItems:'center',justifyContent:'center',backgroundColor:'#070a10',overflow:'hidden'},
   glowA:{position:'absolute',width:540,height:540,borderRadius:270,backgroundColor:'rgba(119,82,255,.12)',top:'17%'},
   glowB:{position:'absolute',width:760,height:760,borderRadius:380,backgroundColor:'rgba(58,129,255,.035)',top:'5%'},
+  grid:{...StyleSheet.absoluteFill,opacity:.10,transform:[{scale:1.25},{rotate:'0deg'}]},gridV:{position:'absolute',top:0,bottom:0,width:1,backgroundColor:'rgba(139,108,255,.22)'},gridH:{position:'absolute',left:0,right:0,height:1,backgroundColor:'rgba(139,108,255,.22)'},
   content:{width:'100%',maxWidth:470,paddingHorizontal:24,alignItems:'center'},
   mark:{height:88,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:5,marginBottom:28,position:'relative'},
   waveBar:{width:4,borderRadius:99,backgroundColor:'#8062ef',opacity:.55},
