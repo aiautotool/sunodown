@@ -14,6 +14,7 @@ import type {
 
 type Tool='select'|'razor';
 type Snapshot={subtitles:KaraokeLine[];clips:MediaClip[]};
+type ClipboardItem={kind:'clip';value:MediaClip}|{kind:'subtitle';value:KaraokeLine};
 
 const MIN_ZOOM=.5;
 const MAX_ZOOM=5;
@@ -61,6 +62,7 @@ export function UniversalEditorTimeline({
   const [viewportWidth,setViewportWidth]=useState(320);
   const [undoStack,setUndoStack]=useState<Snapshot[]>([]);
   const [redoStack,setRedoStack]=useState<Snapshot[]>([]);
+  const [clipboard,setClipboard]=useState<ClipboardItem|null>(null);
   const tracks=trackState||defaultTracks;
   const safeDuration=Math.max(1,duration||1);
   const canvasWidth=Math.max(viewportWidth,Math.max(900,safeDuration*22)*zoom);
@@ -140,18 +142,56 @@ export function UniversalEditorTimeline({
     }else onClipsChange(clips.filter(clip=>clip.id!==selected));
     setSelected(null);
   };
+  const copySelected=()=>{
+    if(!selected)return;
+    if(selected.startsWith('sub-')){
+      const source=subtitles[Number(selected.slice(4))];
+      if(source)setClipboard({kind:'subtitle',value:cloneLines([source])[0]!});
+    }else{
+      const source=clips.find(clip=>clip.id===selected);
+      if(source)setClipboard({kind:'clip',value:{...source}});
+    }
+  };
+  const pasteClipboard=()=>{
+    if(!clipboard)return;
+    pushHistory();
+    if(clipboard.kind==='subtitle'){
+      const source=clipboard.value;
+      const len=Math.max(.12,source.end-source.start);
+      const start=clamp(playhead,0,Math.max(0,safeDuration-len)),delta=start-source.start;
+      const value={...source,start,end:start+len,words:source.words?.map(word=>({...word,start:word.start+delta,end:word.end+delta}))};
+      onSubtitlesChange([...cloneLines(subtitles),value].sort((a,b)=>a.start-b.start));
+      setSelected(null);
+    }else{
+      const source=clipboard.value,len=Math.max(.25,source.end-source.start);
+      const start=clamp(playhead,0,Math.max(0,safeDuration-len));
+      const value={...source,id:'clip-'+Date.now().toString(36),start,end:start+len,name:source.name+' · copy',isDefault:false};
+      onClipsChange([...cloneClips(clips),value]);
+      setSelected(value.id);
+    }
+  };
   const duplicateSelected=()=>{
     if(!selected)return;
-    pushHistory();
+    let item:ClipboardItem|null=null;
     if(selected.startsWith('sub-')){
-      const source=subtitles[Number(selected.slice(4))];if(!source)return;
-      const len=source.end-source.start,start=clamp(playhead,0,Math.max(0,safeDuration-len)),delta=start-source.start;
+      const source=subtitles[Number(selected.slice(4))];
+      if(source)item={kind:'subtitle',value:cloneLines([source])[0]!};
+    }else{
+      const source=clips.find(clip=>clip.id===selected);
+      if(source)item={kind:'clip',value:{...source}};
+    }
+    if(!item)return;
+    setClipboard(item);
+    pushHistory();
+    if(item.kind==='subtitle'){
+      const source=item.value,len=Math.max(.12,source.end-source.start);
+      const start=clamp(playhead,0,Math.max(0,safeDuration-len)),delta=start-source.start;
       const value={...source,start,end:start+len,words:source.words?.map(word=>({...word,start:word.start+delta,end:word.end+delta}))};
       onSubtitlesChange([...cloneLines(subtitles),value].sort((a,b)=>a.start-b.start));
     }else{
-      const source=clips.find(clip=>clip.id===selected);if(!source)return;
-      const len=source.end-source.start,start=clamp(playhead,0,Math.max(0,safeDuration-len));
-      const value={...source,id:'clip-'+Date.now().toString(36),start,end:start+len,name:source.name+' · copy'};
+      const source=item.value,len=Math.max(.25,source.end-source.start);
+      const start=clamp(playhead,0,Math.max(0,safeDuration-len));
+      const value={...source,id:'clip-'+Date.now().toString(36),start,end:start+len,name:source.name+' · copy',isDefault:false};
       onClipsChange([...cloneClips(clips),value]);setSelected(value.id);
     }
   };
@@ -186,6 +226,17 @@ export function UniversalEditorTimeline({
   const rulerStep=zoom>=2?5:zoom>=1?10:20;
   const ticks=Array.from({length:Math.ceil(safeDuration/rulerStep)+1},(_,i)=>i*rulerStep);
   const selectedSubtitle=selected?.startsWith('sub-')?Number(selected.slice(4)):-1;
+  const selectedClip=selected&&!selected.startsWith('sub-')?clips.find(clip=>clip.id===selected):undefined;
+  const rulerStartX=useRef(0);
+  const rulerResponder=useMemo(()=>PanResponder.create({
+    onStartShouldSetPanResponder:()=>true,
+    onMoveShouldSetPanResponder:(_,gesture)=>Math.abs(gesture.dx)>2,
+    onPanResponderGrant:event=>{
+      rulerStartX.current=(event.nativeEvent as any).locationX||0;
+      onSeek(snap(rulerStartX.current/px));
+    },
+    onPanResponderMove:(_,gesture)=>onSeek(snap((rulerStartX.current+gesture.dx)/px)),
+  }),[px,onSeek,snap]);
 
   return <View style={[styles.root,compact&&styles.rootCompact]}>
     <View style={[styles.header,compact&&styles.headerCompact]}>
@@ -195,7 +246,9 @@ export function UniversalEditorTimeline({
         <Tool active={tool==='razor'} onPress={()=>setTool('razor')} icon={<Scissors size={14}/>} label="B"/>
         <Tool active={snapping} onPress={()=>setSnapping(value=>!value)} icon={<Magnet size={14}/>} label="Snap"/>
         <Tool disabled={!selected} onPress={splitSelected} icon={<Scissors size={14}/>} label="Split"/>
-        <Tool disabled={!selected} onPress={duplicateSelected} icon={<Copy size={14}/>} label="Copy"/>
+        <Tool disabled={!selected} onPress={copySelected} icon={<Copy size={14}/>} label="Copy"/>
+        <Tool disabled={!clipboard} onPress={pasteClipboard} icon={<Copy size={14}/>} label="Paste"/>
+        <Tool disabled={!selected} onPress={duplicateSelected} icon={<Copy size={14}/>} label="Duplicate"/>
         <Tool disabled={!selected} onPress={deleteSelected} icon={<Trash2 size={14}/>} label="Delete"/>
         <Tool disabled={!undoStack.length} onPress={undo} icon={<Undo2 size={14}/>} label="Undo"/>
         <Tool disabled={!redoStack.length} onPress={redo} icon={<Redo2 size={14}/>} label="Redo"/>
@@ -218,6 +271,22 @@ export function UniversalEditorTimeline({
       <Pressable onPress={()=>shiftSubtitle(selectedSubtitle,-.1,true)} style={styles.nudgeBtn}><Text style={styles.nudgeText}>Từ đây −.1s</Text></Pressable>
       <Pressable onPress={()=>shiftSubtitle(selectedSubtitle,.1,true)} style={styles.nudgeBtn}><Text style={styles.nudgeText}>Từ đây +.1s</Text></Pressable>
     </View>}
+    {selectedClip&&<View style={styles.nudge}>
+      <Text style={styles.nudgeLabel}>Clip · {selectedClip.name}</Text>
+      {[-.5,-.1,.1,.5].map(delta=><Pressable key={delta} onPress={()=>{
+        const length=selectedClip.end-selectedClip.start;
+        const start=clamp(selectedClip.start+delta,0,Math.max(0,safeDuration-length));
+        pushHistory();
+        onClipsChange(clips.map(clip=>clip.id===selectedClip.id?{...clip,start,end:start+length}:clip));
+      }} style={styles.nudgeBtn}><Text style={styles.nudgeText}>{delta>0?'+':''}{delta.toFixed(1)}s</Text></Pressable>)}
+      <Pressable onPress={()=>{
+        const length=selectedClip.end-selectedClip.start;
+        const start=clamp(playhead,0,Math.max(0,safeDuration-length));
+        pushHistory();
+        onClipsChange(clips.map(clip=>clip.id===selectedClip.id?{...clip,start,end:start+length}:clip));
+      }} style={styles.nudgeBtn}><Text style={styles.nudgeText}>Đặt đầu tại playhead</Text></Pressable>
+      <Pressable onPress={()=>splitSelected(playhead)} style={styles.nudgeBtn}><Text style={styles.nudgeText}>Split tại playhead</Text></Pressable>
+    </View>}
 
     <View onLayout={onCanvasLayout}>
       <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator contentContainerStyle={{width:canvasWidth}}>
@@ -230,7 +299,7 @@ export function UniversalEditorTimeline({
             if(tool==='razor'&&selected)splitSelected(value);
           }}
         >
-          <View style={styles.ruler}>
+          <View {...rulerResponder.panHandlers} style={styles.ruler}>
             {ticks.map(value=><View key={value} style={[styles.tick,{left:value*px}]}><Text style={styles.tickText}>{stamp(value)}</Text></View>)}
           </View>
 
