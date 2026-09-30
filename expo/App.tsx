@@ -8,7 +8,6 @@ import { colors, v24 } from './src/theme';
 import type { AppView, LocalLibraryItem, Project, RenderJob, Song, StudioSnapshot } from './src/types';
 import { EmptyCreate } from './src/EmptyCreate';
 import { StudioScreen } from './src/StudioScreen';
-import { MobileStudioScreen } from './src/MobileStudioScreen';
 import { LibraryScreen } from './src/LibraryScreen';
 import { JobsScreen, ProjectsScreen, SettingsScreen } from './src/SecondaryScreens';
 import { MusicPlayer } from './src/MusicPlayer';
@@ -84,9 +83,14 @@ function UniversalApp(){
   const body=useMemo(()=>{
     if(view==='create'){
       if(!song) return <EmptyCreate onResolved={resolveDone} onNavigate={setView} projects={projects} onOpenProject={openProject} onInitChange={setSongInit}/>;
-      return compact
-        ? <MobileStudioScreen song={song} initialStudio={initialStudio} onSave={saveProject} onBack={()=>{setSong(null);setInitialStudio(undefined)}} onRenderJob={upsertJob}/>
-        : <StudioScreen song={song} initialStudio={initialStudio} onSave={saveProject} onRenderJob={upsertJob}/>;
+      return <StudioScreen
+        song={song}
+        compact={compact}
+        initialStudio={initialStudio}
+        onSave={saveProject}
+        onBack={()=>{setSong(null);setInitialStudio(undefined)}}
+        onRenderJob={upsertJob}
+      />;
     }
     if(view==='library') return <LibraryScreen items={library} onPlay={setPlayingSong} onOpen={openLibraryItem} onCreate={goCreate}/>;
     if(view==='projects') return <ProjectsScreen projects={projects} onOpen={openProject} onCreate={goCreate}/>;
