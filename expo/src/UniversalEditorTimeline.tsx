@@ -336,7 +336,7 @@ export function UniversalEditorTimeline({
 
           <TrackRow
             compact={compact} name="audio" top={audioTop} height={rowHeight('audio')} expanded={expandedTrack==='audio'} state={tracks.audio}
-            label="Audio" icon={<Waves size={14}/>} onToggle={()=>setExpandedTrack(current=>current==='audio'?'subtitle':'audio')}
+            label="Audio" icon={<Waves size={14}/>} onToggle={()=>setExpandedTrack('audio')}
             onUpdate={patch=>updateTrack('audio',patch)}
           >
             {!tracks.audio.hidden&&<View style={[styles.waveformClip,{top:compact?34:26,left:0,width}]}>
