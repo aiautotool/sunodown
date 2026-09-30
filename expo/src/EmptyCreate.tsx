@@ -15,8 +15,7 @@ export function EmptyCreate({onResolved}:{onResolved:(song:Song,input:string)=>v
  const paste=async()=>{const value=(await Clipboard.getStringAsync()).trim();if(value)setInput(value)};
  return <View style={styles.page}>
    <Text style={styles.kicker}>SUNO CREATOR STUDIO</Text>
-   <Text style={styles.hero}>Âm nhạc của bạn.{'
-'}<Text style={{color:colors.violet}}>Nội dung của bạn.</Text></Text>
+   <Text style={styles.hero}>Âm nhạc của bạn.{`\n`}<Text style={{color:colors.violet}}>Nội dung của bạn.</Text></Text>
    <Text style={styles.sub}>Dán link Suno để tải nhạc, đồng bộ lyric, dựng visualizer và xuất video đa nền tảng.</Text>
    <View style={styles.inputBox}><Link2 size={20} color="#bec5d1"/><TextInput value={input} onChangeText={setInput} placeholder="Dán link https://suno.com/..." placeholderTextColor="#697488" autoCapitalize="none" style={styles.input}/><Pressable onPress={paste}><Text style={styles.paste}>DÁN</Text></Pressable></View>
    <Pressable disabled={loading} onPress={analyze}><LinearGradient colors={['#7258f5','#905cff']} style={styles.analyze}>{loading?<ActivityIndicator color="#fff"/>:<><Sparkles size={20} color="#fff"/><Text style={styles.analyzeText}>Phân tích bài hát</Text></>}</LinearGradient></Pressable>
