@@ -1,4 +1,4 @@
-import { cloneElement, useEffect, useMemo, useState, type ReactElement } from 'react';
+import { cloneElement, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -60,6 +60,8 @@ export function StudioScreen({
   const [customPresets,setCustomPresets]=useState<SavedVisualPreset[]>([]);
   const [quickMode,setQuickMode]=useState(true);
   const [tool,setTool]=useState<Tool>(null);
+  const [focusTimeline,setFocusTimeline]=useState(false);
+  const mobileScrollRef=useRef<ScrollView|null>(null);
   const [rendering,setRendering]=useState(false);
   const [renderProgress,setRenderProgress]=useState(0);
   const [renderStage,setRenderStage]=useState<'idle'|'validation'|'prepare'|'render'|'finalize'>('idle');
@@ -84,6 +86,11 @@ export function StudioScreen({
     onSave({schemaVersion:1,config,timeline,background,clips,trackState});
     setSaved(true);
     setTimeout(()=>setSaved(false),1500);
+  };
+  const openMobileTimeline=()=>{
+    setTool(null);
+    setQuickMode(false);
+    setFocusTimeline(true);
   };
   const saveVisualPreset=()=>{
     const preset:SavedVisualPreset={
@@ -332,6 +339,7 @@ export function StudioScreen({
     onPreset={item=>setConfig(applyPresetConfig(config,item,song.duration||0))}
     onExport={()=>void exportVideo()}
     onHighlight={()=>void exportVideo(30)}
+    onCustomize={compact?openMobileTimeline:()=>setQuickMode(false)}
   />;
 
   const controls=<V24StudioControls
@@ -355,7 +363,7 @@ export function StudioScreen({
 
   if(compact){
     return <View style={styles.mobileRoot}>
-      <ScrollView style={styles.mobileScroll} contentContainerStyle={styles.mobileContent}>
+      <ScrollView ref={mobileScrollRef} style={styles.mobileScroll} contentContainerStyle={styles.mobileContent}>
         <View style={styles.mobileTitleBar}>
           <Pressable onPress={onBack} style={styles.mobileBack}><Text style={styles.mobileBackText}>‹</Text></Pressable>
           {song.picture?<Image source={{uri:song.picture}} style={styles.mobileCover}/>:<LocalAudioCover title={song.title} style={styles.mobileCover}/>} 
@@ -364,27 +372,35 @@ export function StudioScreen({
         </View>
 
         {preview}
-        {!quickMode&&<UniversalEditorTimeline
-          compact
-          duration={playback.duration||song.duration||0}
-          playhead={playback.current}
-          onSeek={value=>{playback.pause();playback.seekTo(value)}}
-          subtitles={timeline}
-          onSubtitlesChange={setTimeline}
-          clips={clips}
-          onClipsChange={setClips}
-          effects={config.effects}
-          trackState={trackState}
-          onTrackStateChange={setTrackState}
-          onAddMedia={()=>void addTimelineMedia()}
-          audioSource={musicAudioUrl(song)}
-          trimStart={config.trimStart}
-          trimEnd={config.trimEnd||playback.duration||song.duration||0}
-          onTrimChange={(trimStart,trimEnd)=>setConfig(prev=>({...prev,trimStart,trimEnd}))}
-        />}
+        {!quickMode&&<View
+          onLayout={event=>{
+            if(!focusTimeline)return;
+            mobileScrollRef.current?.scrollTo({y:Math.max(0,event.nativeEvent.layout.y-10),animated:true});
+            setFocusTimeline(false);
+          }}
+        >
+          <UniversalEditorTimeline
+            compact
+            duration={playback.duration||song.duration||0}
+            playhead={playback.current}
+            onSeek={value=>{playback.pause();playback.seekTo(value)}}
+            subtitles={timeline}
+            onSubtitlesChange={setTimeline}
+            clips={clips}
+            onClipsChange={setClips}
+            effects={config.effects}
+            trackState={trackState}
+            onTrackStateChange={setTrackState}
+            onAddMedia={()=>void addTimelineMedia()}
+            audioSource={musicAudioUrl(song)}
+            trimStart={config.trimStart}
+            trimEnd={config.trimEnd||playback.duration||song.duration||0}
+            onTrimChange={(trimStart,trimEnd)=>setConfig(prev=>({...prev,trimStart,trimEnd}))}
+          />
+        </View>}
         {subtitleBlock}
         {backgroundBlock}
-        {quickBlock}
+        {quickMode&&quickBlock}
         <Pressable onPress={save} style={[styles.mobileSave,saved&&styles.saveDone]}>
           <Save size={16} color={saved?'#8ff0bd':'#c8baff'}/>
           <Text style={[styles.mobileSaveText,saved&&styles.saveTextDone]}>{saved?'Đã lưu dự án':'Lưu dự án'}</Text>
@@ -433,7 +449,7 @@ export function StudioScreen({
         {preview}
         {subtitleBlock}
         {backgroundBlock}
-        <QuickCreate
+        {quickMode&&<QuickCreate
           compact={false}
           song={song}
           config={config}
@@ -447,7 +463,7 @@ export function StudioScreen({
           onExport={()=>void exportVideo()}
           onHighlight={()=>void exportVideo(30)}
           onCustomize={()=>setQuickMode(false)}
-        />
+        />}
         {!quickMode&&<UniversalEditorTimeline
           duration={playback.duration||song.duration||0}
           playhead={playback.current}
@@ -647,7 +663,9 @@ function QuickCreate({
   return <View style={[styles.quickCreate,compact&&styles.quickCreateCompact]}>
     <View style={styles.quickHead}>
       <View><Text style={styles.quickKicker}>QUICK CREATE</Text><Text style={styles.quickTitle}>{compact?'Tạo nhanh':'Tạo nhanh từ preset phù hợp'}</Text></View>
-      {compact?<Text style={styles.quickHint}>Preset phù hợp bài này</Text>:<Pressable style={styles.quickCustomize} onPress={onCustomize}><SlidersHorizontal size={14} color="#cbd3df"/><Text style={styles.quickCustomizeText}>Customize</Text></Pressable>}
+      {onCustomize
+        ? <Pressable style={[styles.quickCustomize,compact&&styles.quickCustomizeCompact]} onPress={onCustomize}><SlidersHorizontal size={14} color="#cbd3df"/><Text style={styles.quickCustomizeText}>Customize</Text></Pressable>
+        : compact?<Text style={styles.quickHint}>Preset phù hợp bài này</Text>:null}
     </View>
     {compact
       ? <View style={styles.quickPresetList}>{cards}</View>
@@ -731,6 +749,7 @@ const styles=StyleSheet.create({
   quickTitle:{color:'#f3f5f9',fontSize:12,fontWeight:'800',marginTop:4},
   quickHint:{color:'#727e90',fontSize:8,textAlign:'right'},
   quickCustomize:{height:34,borderWidth:1,borderColor:'#303a49',borderRadius:10,backgroundColor:'#121925',paddingHorizontal:11,flexDirection:'row',alignItems:'center',gap:6},
+  quickCustomizeCompact:{height:32,paddingHorizontal:9},
   quickCustomizeText:{color:'#cbd3df',fontSize:10},
   quickPresetRow:{flexDirection:'row',gap:8,marginTop:11},
   quickPresetList:{gap:8,marginTop:10},
