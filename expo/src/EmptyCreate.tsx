@@ -98,8 +98,7 @@ export function EmptyCreate({
       <View style={[styles.hero,stacked&&styles.heroStack]}>
         <View style={styles.copy}>
           <View style={styles.kicker}><Sparkles size={13} color="#a27dff"/><Text style={styles.kickerText}>CREATOR STUDIO</Text></View>
-          <Text style={[styles.headline,mobile&&styles.headlineMobile]}>Turn your Suno song{'
-'}<Text style={styles.headlineAccent}>into stunning content</Text></Text>
+          <Text style={[styles.headline,mobile&&styles.headlineMobile]}>Turn your Suno song{"\\n"}<Text style={styles.headlineAccent}>into stunning content</Text></Text>
           <Text style={styles.description}>Biến nhạc Suno thành video lyric, karaoke và social video chuyên nghiệp chỉ trong vài phút.</Text>
 
           <View style={[styles.analyzeRow,stacked&&styles.analyzeRowStack]}>
@@ -161,8 +160,7 @@ export function EmptyCreate({
               <Image source={{uri:previewUri}} style={StyleSheet.absoluteFillObject} resizeMode="cover"/>
               <LinearGradient colors={['rgba(4,7,12,.02)','rgba(4,7,12,.10)','rgba(4,7,12,.92)']} style={StyleSheet.absoluteFillObject}/>
               <View style={styles.ratioBadge}><Text style={styles.ratioText}>9:16</Text></View>
-              <Text style={styles.phoneLyrics}>Có những ngày{'
-'}chỉ muốn đi thật xa...</Text>
+              <Text style={styles.phoneLyrics}>Có những ngày{"\\n"}chỉ muốn đi thật xa...</Text>
               <View style={styles.phoneWave}>{Array.from({length:34}).map((_,i)=><View key={i} style={[styles.phoneBar,{height:5+((i*11)%18)}]}/>)}</View>
               <View style={styles.phoneTime}><Text style={styles.phoneTimeText}>00:42</Text><Text style={styles.phoneTimeText}>03:18</Text></View>
               <View style={styles.phoneControls}><Text style={styles.chev}>‹</Text><View style={styles.phonePlay}><Play size={19} color="#fff" fill="#fff"/></View><Text style={styles.chev}>›</Text></View>
