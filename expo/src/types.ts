@@ -1,4 +1,4 @@
-export type AppView = 'create' | 'projects' | 'library' | 'jobs' | 'settings';
+export type AppView = 'create' | 'music' | 'projects' | 'library' | 'jobs' | 'settings';
 
 export type Song = {
   id?: string;
