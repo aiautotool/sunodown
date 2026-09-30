@@ -117,13 +117,6 @@ function UniversalApp(){
   </SafeAreaView>
 }
 
-function MobileSectionBrand(){
-  return <View style={styles.mobileSectionBrand}>
-    <View style={styles.mobileSectionBrandLeft}><Music2 size={27} color={colors.violet}/><Text style={styles.mobileSectionBrandText}>SunoDown</Text></View>
-    <View style={styles.mobileSectionMenu}><Text style={styles.mobileSectionMenuText}>☰</Text></View>
-  </View>
-}
-
 function MobileSectionHeader({open,onToggle,onNavigate}:{open:boolean;onToggle:()=>void;onNavigate:(view:AppView)=>void}){
   const items=[
     {id:'create' as const,label:'Create',Icon:PlusCircle},
@@ -134,13 +127,13 @@ function MobileSectionHeader({open,onToggle,onNavigate}:{open:boolean;onToggle:(
   ];
   return <View pointerEvents="box-none" style={styles.mobileSectionHeaderWrap}>
     <View style={styles.mobileSectionHeader}>
-      <Pressable style={styles.mobileSectionBrand} onPress={()=>onNavigate('create')}>
+      <Pressable style={styles.mobileSectionBrandButton} onPress={()=>onNavigate('create')}>
         <View style={styles.mobileSectionBrandMark}><Music2 size={27} color={colors.violet}/></View>
         <Text style={styles.mobileSectionBrandText}>SunoDown</Text>
       </Pressable>
       <Pressable style={styles.mobileSectionMenuButton} onPress={onToggle}>{open?<X size={22} color="#d8dee9"/>:<Menu size={22} color="#d8dee9"/>}</Pressable>
     </View>
-    {open&&<View style={styles.mobileSectionMenu}>
+    {open&&<View style={styles.mobileSectionMenuPanel}>
       <View style={styles.mobileSectionMenuHead}><View style={styles.mobileMenuAvatar}><Text style={styles.mobileMenuAvatarText}>S</Text></View><View><Text style={styles.mobileMenuName}>SunoDown</Text><Text style={styles.mobileMenuSub}>Creator Studio</Text></View></View>
       {items.map(({id,label,Icon})=><Pressable key={id} style={styles.mobileMenuLink} onPress={()=>onNavigate(id)}><Icon size={17} color="#a9b4c4"/><Text style={styles.mobileMenuLinkText}>{label}</Text></Pressable>)}
     </View>}
@@ -201,22 +194,17 @@ const styles=StyleSheet.create({
   content:{flex:1,backgroundColor:colors.bg},
   mobileSectionHeaderWrap:{position:'absolute',zIndex:95,left:0,right:0,top:0,pointerEvents:'box-none'},
   mobileSectionHeader:{height:58,flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingLeft:16,paddingRight:4},
-  mobileSectionBrand:{height:52,flexDirection:'row',alignItems:'center',gap:10},
+  mobileSectionBrandButton:{height:52,flexDirection:'row',alignItems:'center',gap:10},
   mobileSectionBrandMark:{width:16,height:32,alignItems:'center',justifyContent:'center'},
-  mobileSectionBrandText:{color:'#f5f7fb',fontSize:21,fontWeight:'700'},
   mobileSectionMenuButton:{width:38,height:38,borderWidth:1,borderColor:'#303744',borderRadius:10,backgroundColor:'#101620',alignItems:'center',justifyContent:'center'},
-  mobileSectionMenu:{position:'absolute',right:8,top:56,width:230,borderWidth:1,borderColor:'#2b3442',borderRadius:14,backgroundColor:'#0d131d',padding:9,shadowColor:'#000',shadowOpacity:.42,shadowRadius:30},
+  mobileSectionMenuPanel:{position:'absolute',right:8,top:56,width:230,borderWidth:1,borderColor:'#2b3442',borderRadius:14,backgroundColor:'#0d131d',padding:9,shadowColor:'#000',shadowOpacity:.42,shadowRadius:30,elevation:20},
   mobileSectionMenuHead:{minHeight:54,borderBottomWidth:1,borderColor:'#202834',paddingHorizontal:8,paddingBottom:9,flexDirection:'row',alignItems:'center',gap:9},
   mobileMenuAvatar:{width:34,height:34,borderRadius:17,backgroundColor:'#7569a4',alignItems:'center',justifyContent:'center'},
   mobileMenuAvatarText:{color:'#fff',fontWeight:'800'},mobileMenuName:{color:'#eef2f7',fontSize:11,fontWeight:'800'},mobileMenuSub:{color:'#728094',fontSize:8,marginTop:2},
   mobileMenuLink:{height:39,borderRadius:9,paddingHorizontal:9,flexDirection:'row',alignItems:'center',gap:9},
   mobileMenuLinkText:{color:'#c2cad5',fontSize:10,fontWeight:'700'},
   contentBody:{flex:1},
-  mobileSectionBrand:{height:58,flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:16,backgroundColor:'#090d14'},
-  mobileSectionBrandLeft:{flexDirection:'row',alignItems:'center',gap:10},
   mobileSectionBrandText:{color:'#f5f7fb',fontSize:21,fontWeight:'700'},
-  mobileSectionMenu:{width:38,height:38,borderWidth:1,borderColor:'#343d4b',borderRadius:11,backgroundColor:'#111722',alignItems:'center',justifyContent:'center'},
-  mobileSectionMenuText:{color:'#c9d0dc',fontSize:19,lineHeight:22},
   mobileNav:{position:'absolute',zIndex:70,left:0,right:0,bottom:0,height:64,paddingHorizontal:6,paddingTop:4,paddingBottom:4,borderTopWidth:1,borderColor:'rgba(148,163,184,.14)',backgroundColor:'rgba(8,11,18,.97)',flexDirection:'row'},
   mobileNavItem:{flex:1,minHeight:52,borderRadius:12,alignItems:'center',justifyContent:'center',gap:3},
   mobileNavActive:{backgroundColor:'rgba(116,88,225,.08)'},
