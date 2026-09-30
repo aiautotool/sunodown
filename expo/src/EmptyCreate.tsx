@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
-import { BookOpen, ChevronLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Link2, ListMusic, Menu, Music2, Play, Plus, Sparkles, Upload } from 'lucide-react-native';
+import { BookOpen, ChevronLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Link2, ListMusic, Menu, Music2, Play, Plus, Settings, Sparkles, Upload, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, v24 } from './theme';
 import type { AppView, Project, Song } from './types';
@@ -44,6 +44,7 @@ export function EmptyCreate({
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState('');
   const [collapsed,setCollapsed]=useState(false);
+  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
 
   const openResolvedSource=async(value:string,presetId?:string)=>{
     if(!value.trim())return;
@@ -139,8 +140,28 @@ export function EmptyCreate({
 
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.shell,mid&&styles.shellMid,stacked&&styles.shellStacked,mobile&&styles.shellMobile]}>
       {mobile&&<View style={styles.mobileBrand}>
-        <View style={styles.mobileBrandLeft}><Music2 size={27} color={colors.violet}/><Text style={styles.mobileBrandText}>SunoDown</Text></View>
-        <View style={styles.mobileMenu}><Menu size={20} color="#c9d0dc"/></View>
+        <Pressable style={styles.mobileBrandLeft} onPress={()=>onNavigate('create')}>
+          <Music2 size={27} color={colors.violet}/><Text style={styles.mobileBrandText}>SunoDown</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={mobileMenuOpen?'Đóng menu':'Mở menu'} style={styles.mobileMenu} onPress={()=>setMobileMenuOpen(value=>!value)}>
+          {mobileMenuOpen?<X size={20} color="#c9d0dc"/>:<Menu size={20} color="#c9d0dc"/>}
+        </Pressable>
+        {mobileMenuOpen&&<View style={styles.mobileNavMenu}>
+          <View style={styles.mobileNavMenuHead}>
+            <View style={styles.mobileNavAvatar}><Text style={styles.mobileNavAvatarText}>S</Text></View>
+            <View><Text style={styles.mobileNavName}>SunoDown</Text><Text style={styles.mobileNavSub}>Creator Studio</Text></View>
+          </View>
+          {[
+            ['create','Create',Plus],
+            ['music','Music',Music2],
+            ['projects','Projects',Folder],
+            ['library','Library',BookOpen],
+            ['jobs','Jobs',ListMusic],
+            ['settings','Settings',Settings],
+          ].map(([id,label,Icon])=><Pressable key={String(id)} style={styles.mobileNavEntry} onPress={()=>{setMobileMenuOpen(false);onNavigate(id as AppView)}}>
+            <Icon size={17} color="#a9b4c4"/><Text style={styles.mobileNavEntryText}>{String(label)}</Text>
+          </Pressable>)}
+        </View>}
       </View>}
 
       <View style={[styles.hero,stacked&&styles.heroStack]}>
@@ -285,8 +306,13 @@ const styles=StyleSheet.create({
   proTitle:{color:'#f3f5f8',fontSize:12,fontWeight:'700'},proSub:{color:'#717e92',fontSize:8,marginTop:4},proArrow:{color:'#8e9bb0',fontSize:22},
 
   scroll:{flex:1},shell:{paddingTop:26,paddingHorizontal:28,paddingBottom:22},shellMid:{paddingTop:22,paddingHorizontal:20,paddingBottom:22},shellStacked:{paddingTop:18,paddingHorizontal:18,paddingBottom:90},shellMobile:{paddingTop:12,paddingHorizontal:16,paddingBottom:92},
-  mobileBrand:{height:52,flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginHorizontal:-16,paddingLeft:16,paddingRight:4,marginBottom:8},
-  mobileBrandLeft:{flexDirection:'row',alignItems:'center',gap:10},mobileBrandText:{color:'#f5f7fb',fontSize:21,fontWeight:'700'},mobileMenu:{width:38,height:38,borderWidth:1,borderColor:'#343d4b',borderRadius:11,backgroundColor:'#111722',alignItems:'center',justifyContent:'center'},
+  mobileBrand:{position:'relative',zIndex:80,height:52,flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginHorizontal:-16,paddingLeft:16,paddingRight:4,marginBottom:8},
+  mobileBrandLeft:{height:46,flexDirection:'row',alignItems:'center',gap:10},mobileBrandText:{color:'#f5f7fb',fontSize:21,fontWeight:'700'},mobileMenu:{width:38,height:38,borderWidth:1,borderColor:'#343d4b',borderRadius:11,backgroundColor:'#111722',alignItems:'center',justifyContent:'center'},
+  mobileNavMenu:{position:'absolute',zIndex:120,right:4,top:50,width:232,borderWidth:1,borderColor:'#2b3442',borderRadius:14,backgroundColor:'#0d131d',padding:9,shadowColor:'#000',shadowOpacity:.42,shadowRadius:30,elevation:24},
+  mobileNavMenuHead:{minHeight:54,borderBottomWidth:1,borderColor:'#202834',paddingHorizontal:8,paddingBottom:9,flexDirection:'row',alignItems:'center',gap:9},
+  mobileNavAvatar:{width:34,height:34,borderRadius:17,backgroundColor:'#7569a4',alignItems:'center',justifyContent:'center'},mobileNavAvatarText:{color:'#fff',fontWeight:'800'},
+  mobileNavName:{color:'#eef2f7',fontSize:11,fontWeight:'800'},mobileNavSub:{color:'#728094',fontSize:8,marginTop:2},
+  mobileNavEntry:{height:39,borderRadius:9,paddingHorizontal:9,flexDirection:'row',alignItems:'center',gap:9},mobileNavEntryText:{color:'#c2cad5',fontSize:10,fontWeight:'700'},
   hero:{minHeight:520,flexDirection:'row',gap:18,alignItems:'center'},heroStack:{flexDirection:'column',alignItems:'stretch',paddingTop:18},
   copy:{flexGrow:1.05,flexShrink:1,flexBasis:500,maxWidth:720},kicker:{alignSelf:'flex-start',height:34,borderWidth:1,borderColor:'rgba(145,164,194,.13)',borderRadius:999,backgroundColor:'rgba(23,32,49,.72)',paddingHorizontal:14,flexDirection:'row',alignItems:'center',gap:8},
   kickerText:{color:'#b9c3d4',fontSize:9,fontWeight:'800',letterSpacing:1.8},
