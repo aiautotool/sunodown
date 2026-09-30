@@ -1,4 +1,4 @@
-import type { Song } from './types';
+import type { KaraokeLine, Song, StudioAspect, StudioLyricsMode } from './types';
 
 export type ExportAsset = {
   uri: string;
@@ -7,10 +7,26 @@ export type ExportAsset = {
   cleanup?: () => void;
 };
 
+export type VisualizerExportOptions = {
+  presetId: string;
+  durationSeconds?: number;
+  startSeconds?: number;
+  aspect?: StudioAspect;
+  wave?: string;
+  waveGlow?: number;
+  waveHeight?: number;
+  backgroundUri?: string;
+  lyricsMode?: StudioLyricsMode;
+  timeline?: KaraokeLine[];
+  titleColor?: string;
+  subtitleColor?: string;
+  subtitleActiveColor?: string;
+  quality?: 'balanced'|'high';
+};
+
 export async function exportVisualizer(
   _song:Song,
-  _presetId:string,
-  _durationSeconds?:number,
+  _options:VisualizerExportOptions,
   _onProgress?:(progress:number)=>void,
 ):Promise<ExportAsset>{
   throw new Error('Platform render engine was not resolved.');
