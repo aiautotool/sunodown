@@ -10,6 +10,7 @@ import type { SongInitState } from './SongInitScreen';
 import { resolveSuno } from './api';
 
 const DEFAULT='https://suno.com/s/tszo0jGdVUua4rT4';
+const V24_MOBILE_SHOWCASE_NARROW_HEIGHT=420;
 const previewUri=Platform.OS==='web'?'/home-cinematic-v23.svg':'https://sunoapp.aiautotool.com/home-cinematic-v23.svg';
 const featured=[
   ['Sad Lyrics Cinema','cinematic','Locked',['#281c44','#875dff']],
@@ -303,7 +304,7 @@ const styles=StyleSheet.create({
   sourceIcon:{width:44,height:44,borderRadius:13,backgroundColor:'rgba(133,82,255,.20)',alignItems:'center',justifyContent:'center'},sourceCopy:{flex:1},sourceTitle:{color:'#e9edf4',fontSize:11,fontWeight:'700'},sourceSub:{color:'#778397',fontSize:8,marginTop:4},sourceArrow:{color:'#8996aa',fontSize:20},
   error:{color:'#ff9da5',fontSize:12,marginTop:10},continueCard:{marginTop:10,minHeight:54,borderWidth:1,borderColor:'rgba(105,122,149,.12)',borderRadius:11,backgroundColor:'rgba(10,16,25,.65)',paddingHorizontal:12,flexDirection:'row',alignItems:'center',gap:10},continueKicker:{color:'#7666c9',fontSize:7,letterSpacing:1},continueTitle:{color:'#dbe1ea',fontSize:9,fontWeight:'700',marginTop:2},
 
-  showcase:{flexGrow:.95,flexShrink:1,flexBasis:430,minHeight:520,alignItems:'center',justifyContent:'center',position:'relative'},showcaseStack:{width:'100%',minHeight:480},showcaseNarrow:{minHeight:420},
+  showcase:{flexGrow:.95,flexShrink:1,flexBasis:430,minHeight:520,alignItems:'center',justifyContent:'center',position:'relative'},showcaseStack:{width:'100%',minHeight:480},showcaseNarrow:{minHeight:V24_MOBILE_SHOWCASE_NARROW_HEIGHT},
   showcaseGlow:{position:'absolute',width:590,height:520,borderRadius:295,backgroundColor:'rgba(139,75,255,.035)',shadowColor:'#bc54ff',shadowOpacity:.12,shadowRadius:70,transform:[{rotate:'-8deg'}]},
   toolStack:{position:'absolute',left:'5%',top:'23%',zIndex:5,width:100,borderWidth:1,borderColor:'rgba(182,166,231,.2)',borderRadius:21,overflow:'hidden',backgroundColor:'rgba(20,21,38,.90)',transform:[{rotate:'8deg'}]},
   toolStackMid:{left:0,width:100},miniTool:{height:76,alignItems:'center',justifyContent:'center',borderBottomWidth:1,borderColor:'rgba(255,255,255,.045)'},miniToolText:{color:'#bec7d7',fontSize:7,marginTop:8},
