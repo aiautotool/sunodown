@@ -31,6 +31,16 @@ function clippedBuffer(ctx:AudioContext,input:AudioBuffer,start:number,duration:
   }
   return out;
 }
+async function applyEq(input:AudioBuffer,bass=0,vocal=0,treble=0){
+  if(Math.abs(bass)<.01&&Math.abs(vocal)<.01&&Math.abs(treble)<.01)return input;
+  const offline=new OfflineAudioContext(input.numberOfChannels,input.length,input.sampleRate);
+  const source=offline.createBufferSource();source.buffer=input;
+  const low=offline.createBiquadFilter();low.type='lowshelf';low.frequency.value=120;low.gain.value=bass;
+  const mid=offline.createBiquadFilter();mid.type='peaking';mid.frequency.value=2500;mid.Q.value=.9;mid.gain.value=vocal;
+  const high=offline.createBiquadFilter();high.type='highshelf';high.frequency.value=8000;high.gain.value=treble;
+  source.connect(low);low.connect(mid);mid.connect(high);high.connect(offline.destination);source.start();
+  return offline.startRendering();
+}
 async function loadBackground(uri?:string){
   if(!uri)return null;
   try{
@@ -53,7 +63,7 @@ function frameImage(options:VisualizerExportOptions,images:Map<string,ImageBitma
   const active=[...(options.mediaClips||[])].reverse().find(clip=>clip.type==='image'&&absoluteTime>=clip.start&&absoluteTime<clip.end);
   return active?images.get(active.id)||fallback:fallback;
 }
-function drawEffects(ctx:CanvasRenderingContext2D,w:number,h:number,effects:string[],frame:number){
+function drawEffects(ctx:CanvasRenderingContext2D,w:number,h:number,effects:string[],frame:number,speed=1,angle=0,density=1,size=1){
   if(effects.includes('vignette')){
     const g=ctx.createRadialGradient(w/2,h/2,Math.min(w,h)*.18,w/2,h/2,Math.max(w,h)*.72);
     g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,.42)');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
@@ -65,9 +75,10 @@ function drawEffects(ctx:CanvasRenderingContext2D,w:number,h:number,effects:stri
     ctx.fillStyle='rgba(255,255,255,.025)';for(let y=(frame%5);y<h;y+=6)ctx.fillRect(0,y,w,1);
   }
   if(effects.includes('dust')||effects.includes('sparkles')||effects.includes('stars')){
-    const count=effects.includes('stars')?18:effects.includes('sparkles')?10:7;
+    const count=Math.max(1,Math.round((effects.includes('stars')?18:effects.includes('sparkles')?10:7)*density));
     ctx.fillStyle=effects.includes('dust')?'rgba(255,230,190,.16)':'rgba(255,255,255,.42)';
-    for(let i=0;i<count;i++){const x=((i*137+frame*7)%997)/997*w,y=((i*251+frame*3)%991)/991*h,r=1+((i+frame)%3);ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill()}
+    const drift=Math.tan(angle*Math.PI/180)*.18;
+    for(let i=0;i<count;i++){const f=frame*speed,x=((((i*137+f*7)%997)/997)+drift*((i*251+f*3)%991)/991)%1*w,y=((i*251+f*3)%991)/991*h,r=(1+((i+Math.floor(f))%3))*size;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill()}
   }
 }
 function cover(ctx:CanvasRenderingContext2D,image:ImageBitmap,w:number,h:number){
@@ -83,24 +94,26 @@ function ampAt(samples:Float32Array,rate:number,t:number){
   }
   return Math.min(1,Math.max(.04,Math.sqrt(sum/Math.max(1,count))*4.8+peak*.5));
 }
-function drawWave(ctx:CanvasRenderingContext2D,w:number,h:number,wave:string,samples:Float32Array,rate:number,t:number,progress:number,color:string,glow:number,heightPct:number){
+function drawWave(ctx:CanvasRenderingContext2D,w:number,h:number,wave:string,samples:Float32Array,rate:number,t:number,progress:number,color:string,color2:string,glow:number,heightPct:number,thickness=46,opacity=92,density=72,rotation=0){
   const centerX=w/2,baseY=h*.79,maxH=h*Math.max(.05,Math.min(.25,heightPct/650));
   ctx.save();
+  ctx.globalAlpha=Math.max(.1,Math.min(1,opacity/100));
+  ctx.translate(centerX,baseY);ctx.rotate(rotation*Math.PI/180);ctx.translate(-centerX,-baseY);
   ctx.shadowColor=color;ctx.shadowBlur=Math.max(0,glow*.22);
   const circular=/circle|ring|circular|orbit/.test(wave);
   const ribbon=/ribbon/.test(wave);
   const spectrum=/spectrum|bars|mirror/.test(wave);
   if(circular){
-    const bars=82,radius=Math.min(w,h)*.17;
+    const bars=Math.max(24,Math.round(82*(density/72))),radius=Math.min(w,h)*.17;
     ctx.translate(centerX,h*.60);
     for(let i=0;i<bars;i++){
       const a=i/bars*Math.PI*2,amp=ampAt(samples,rate,t+i/bars*.16),len=9+amp*maxH*.55;
-      ctx.strokeStyle=i/bars<progress?color:'rgba(174,157,255,.42)';ctx.lineWidth=Math.max(2,w/420);
+      ctx.strokeStyle=i/bars<progress?(i%2?color2:color):'rgba(174,157,255,.42)';ctx.lineWidth=Math.max(1,(w/420)*(thickness/46));
       ctx.beginPath();ctx.moveTo(Math.cos(a)*radius,Math.sin(a)*radius);ctx.lineTo(Math.cos(a)*(radius+len),Math.sin(a)*(radius+len));ctx.stroke();
     }
   }else if(ribbon){
-    ctx.strokeStyle=color;ctx.lineWidth=Math.max(3,w/250);ctx.beginPath();
-    const points=86;
+    const gradient=ctx.createLinearGradient(w*.12,0,w*.88,0);gradient.addColorStop(0,color);gradient.addColorStop(1,color2);ctx.strokeStyle=gradient;ctx.lineWidth=Math.max(2,(w/250)*(thickness/46));ctx.beginPath();
+    const points=Math.max(32,Math.round(86*(density/72)));
     for(let i=0;i<points;i++){
       const x=w*.12+(w*.76)*(i/(points-1)),a=ampAt(samples,rate,t+i/points*.24);
       const y=baseY+Math.sin(i*.42+t*5.2)*maxH*.22*a;
@@ -109,10 +122,10 @@ function drawWave(ctx:CanvasRenderingContext2D,w:number,h:number,wave:string,sam
     ctx.stroke();
     ctx.globalAlpha=.35;ctx.translate(0,12);ctx.stroke();ctx.globalAlpha=1;
   }else{
-    const bars=spectrum?58:72,barW=Math.max(2,w*.006),span=w*.78,gap=(span-bars*barW)/Math.max(1,bars-1);
+    const bars=Math.max(20,Math.round((spectrum?58:72)*(density/72))),barW=Math.max(1,w*.006*(thickness/46)),span=w*.78,gap=Math.max(1,(span-bars*barW)/Math.max(1,bars-1));
     for(let i=0;i<bars;i++){
       const a=ampAt(samples,rate,t+i/bars*.24),bh=10+a*maxH,x=centerX-span/2+i*(barW+gap);
-      ctx.fillStyle=i/bars<progress?color:'rgba(174,157,255,.38)';
+      ctx.fillStyle=i/bars<progress?(i%2?color2:color):'rgba(174,157,255,.38)';
       const y=baseY-bh/2;ctx.fillRect(x,y,barW,bh);
       if(/mirror/.test(wave)){ctx.globalAlpha=.28;ctx.fillRect(x,baseY+bh/2+4,barW,bh*.45);ctx.globalAlpha=1}
     }
@@ -140,7 +153,8 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
     const start=Math.max(0,Math.min(options.startSeconds||0,Math.max(0,decoded.duration-.1)));
     const maxDuration=Math.max(.1,decoded.duration-start);
     const duration=Math.max(.5,Math.min(options.durationSeconds||song.duration||maxDuration,maxDuration));
-    const audio=clippedBuffer(audioContext,decoded,start,duration);
+    const clipped=clippedBuffer(audioContext,decoded,start,duration);
+    const audio=await applyEq(clipped,options.eqBass??0,options.eqVocal??0,options.eqTreble??0);
     const [width,height]=aspectSize(options.aspect,options.quality);
     const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
     const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Không khởi tạo được canvas video.');
@@ -152,7 +166,7 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
     await output.start();if(audioSource){await audioSource.add(audio);audioSource.close()}
 
     const samples=audio.getChannelData(0),fps=30,total=Math.ceil(duration*fps),wave=options.wave||'mirror-glow';
-    const titleColor=options.titleColor||'#f5f7fb',subColor=options.subtitleActiveColor||options.subtitleColor||'#ffffff';
+    const titleColor=options.titleColor||'#f5f7fb',creatorColor=options.creatorColor||'#c5cede',subColor=options.subtitleActiveColor||options.subtitleColor||'#ffffff';
     for(let frame=0;frame<total;frame++){
       const t=frame/fps,absoluteTime=start+t;
       const currentBackground=frameImage(options,clipImages,absoluteTime,background);
@@ -166,15 +180,15 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
       glow.addColorStop(0,'rgba(139,108,255,.20)');glow.addColorStop(1,'rgba(139,108,255,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,width,height);
 
       ctx.textAlign='center';ctx.fillStyle=titleColor;ctx.shadowColor='rgba(0,0,0,.8)';ctx.shadowBlur=18;
-      ctx.font=`700 ${Math.round(Math.min(width,height)*.055)}px system-ui,sans-serif`;ctx.fillText(song.title||'SunoDown',width/2,height*.12,width*.86);
-      ctx.fillStyle='#c5cede';ctx.font=`500 ${Math.round(Math.min(width,height)*.027)}px system-ui,sans-serif`;ctx.fillText(song.creator||'Suno',width/2,height*.16,width*.8);
+      ctx.font=`700 ${Math.round(Math.min(width,height)*.055*((options.titleScale??100)/100))}px system-ui,sans-serif`;ctx.fillText(song.title||'SunoDown',width/2,height*.12,width*.86);
+      ctx.fillStyle=creatorColor;ctx.font=`500 ${Math.round(Math.min(width,height)*.027*((options.creatorScale??100)/100))}px system-ui,sans-serif`;ctx.fillText(song.creator||'Suno',width/2,height*.16,width*.8);
 
       if(options.subtitleVisible!==false&&options.lyricsMode!=='off'){
         const line=activeLyric(options,song,absoluteTime,t);
-        if(line){ctx.fillStyle=subColor;ctx.font=`700 ${Math.round(Math.min(width,height)*.044)}px system-ui,sans-serif`;ctx.fillText(line,width/2,height*.66,width*.84)}
+        if(line){ctx.fillStyle=subColor;ctx.font=`700 ${Math.round(Math.min(width,height)*.044*((options.subtitleScale??100)/100))}px system-ui,sans-serif`;ctx.fillText(line,width/2,height*.66,width*.84)}
       }
-      if(options.visualVisible!==false)drawWave(ctx,width,height,wave,samples,audio.sampleRate,t,t/duration,options.subtitleActiveColor||'#b17cff',options.waveGlow??80,options.waveHeight??100);
-      if(options.effectsVisible!==false)drawEffects(ctx,width,height,options.effects||[],frame);
+      if(options.visualVisible!==false)drawWave(ctx,width,height,wave,samples,audio.sampleRate,t,t/duration,options.waveColor||'#d946ef',options.waveColor2||'#60a5fa',options.waveGlow??80,options.waveHeight??100,options.waveThickness??46,options.waveOpacity??92,options.waveDensity??72,options.waveRotation??0);
+      if(options.effectsVisible!==false)drawEffects(ctx,width,height,options.effects||[],frame,options.effectSpeed??1,options.effectAngle??0,options.effectDensity??1,options.effectSize??1);
       ctx.shadowBlur=0;ctx.fillStyle='#a0aaba';ctx.font=`500 ${Math.round(Math.min(width,height)*.021)}px system-ui,sans-serif`;
       const mm=Math.floor(t/60),ss=Math.floor(t%60);ctx.fillText(String(mm)+':'+String(ss).padStart(2,'0'),width/2,height*.90);
       await videoSource.add(t,1/fps,{keyFrame:frame%60===0});
