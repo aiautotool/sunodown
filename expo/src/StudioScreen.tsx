@@ -397,7 +397,7 @@ export function StudioScreen({
             if(!focusTimeline)return;
             mobileScrollRef.current?.scrollTo({y:Math.max(0,event.nativeEvent.layout.y-10),animated:true});
             setFocusTimeline(false);
-          }
+          }}
         >
           <UniversalEditorTimeline
             compact
