@@ -15,19 +15,36 @@ export type VisualizerExportOptions = {
   wave?: string;
   waveGlow?: number;
   waveHeight?: number;
+  waveColor?: string;
+  waveColor2?: string;
+  waveThickness?: number;
+  waveOpacity?: number;
+  waveDensity?: number;
+  waveRotation?: number;
   backgroundUri?: string;
   lyricsMode?: StudioLyricsMode;
   timeline?: KaraokeLine[];
   titleColor?: string;
+  creatorColor?: string;
   subtitleColor?: string;
   subtitleActiveColor?: string;
+  titleScale?: number;
+  creatorScale?: number;
+  subtitleScale?: number;
   quality?: 'balanced'|'high';
   mediaClips?: MediaClip[];
   visualVisible?: boolean;
   subtitleVisible?: boolean;
   effectsVisible?: boolean;
   effects?: string[];
+  effectSpeed?: number;
+  effectAngle?: number;
+  effectDensity?: number;
+  effectSize?: number;
   audioMuted?: boolean;
+  eqBass?: number;
+  eqVocal?: number;
+  eqTreble?: number;
 };
 
 export async function exportVisualizer(
