@@ -39,7 +39,8 @@
         {
           "photosPermission": "Cho phép SunoDown chọn ảnh/video làm background."
         }
-      ]
+      ],
+      "munim-ffmpeg"
     ],
     "experiments": {
       "typedRoutes": false
