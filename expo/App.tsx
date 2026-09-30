@@ -77,7 +77,7 @@ function UniversalApp(){
 
   const body=useMemo(()=>{
     if(view==='create'){
-      if(!song) return <EmptyCreate onResolved={resolveDone} onNavigate={setView} projects={projects}/>;
+      if(!song) return <EmptyCreate onResolved={resolveDone} onNavigate={setView} projects={projects} onOpenProject={openProject}/>;
       return compact
         ? <MobileStudioScreen song={song} onSave={saveProject} onBack={()=>setSong(null)} onRenderJob={upsertJob}/>
         : <StudioScreen song={song} onSave={saveProject} onRenderJob={upsertJob}/>;
