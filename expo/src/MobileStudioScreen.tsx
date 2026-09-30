@@ -10,6 +10,7 @@ import { exportAudio, exportVisualizer } from './render-engine';
 import { useStudioPlayback } from './useStudioPlayback';
 import { useSubtitleSync } from './useSubtitleSync';
 import { SuggestedBackground } from './SuggestedBackground';
+import { findHighlight } from './highlight-engine';
 import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendPresets, V24_PRESETS, type StudioVisualConfig } from './V24StudioControls';
 
 type Tool='presets'|'style'|'lyrics'|null;
@@ -25,6 +26,7 @@ export function MobileStudioScreen({song,onSave,onBack,onRenderJob,initialStudio
   const [renderProgress,setRenderProgress]=useState(0);
   const [renderStage,setRenderStage]=useState<'idle'|'validation'|'prepare'|'render'|'finalize'>('idle');
   const [renderMessage,setRenderMessage]=useState('');
+  const [highlightNotice,setHighlightNotice]=useState('');
   const [downloadBusy,setDownloadBusy]=useState('');
   const playback=useStudioPlayback(song);
   const lyricLines=useMemo(()=>song.lyrics?.split(/\n+/).map(v=>v.trim()).filter(Boolean)||[],[song.lyrics]);
@@ -47,12 +49,20 @@ export function MobileStudioScreen({song,onSave,onBack,onRenderJob,initialStudio
     try{
       await new Promise<void>(resolve=>setTimeout(resolve,40));
       setRenderStage('prepare');setRenderProgress(4);
-      const duration=durationSeconds||Math.max(0,(config.trimEnd||song.duration||0)-config.trimStart);
+      let startSeconds=config.trimStart;
+      let duration=durationSeconds||Math.max(0,(config.trimEnd||song.duration||0)-config.trimStart);
+      if(durationSeconds===30){
+        setHighlightNotice('Đang phân tích toàn bài để tìm đoạn cao trào…');
+        const highlight=await findHighlight(song,timeline,config.trimStart,config.trimEnd||song.duration||0,30);
+        startSeconds=highlight.startSeconds;
+        duration=Math.max(1,highlight.endSeconds-highlight.startSeconds);
+        setHighlightNotice('Đã chọn cao trào '+fmt(highlight.startSeconds)+' – '+fmt(highlight.endSeconds)+' · '+Math.round(highlight.confidence*100)+'% confidence');
+      }else setHighlightNotice('');
       setRenderStage('render');
       const asset=await exportVisualizer(song,{
         presetId:config.presetId,
         durationSeconds:duration,
-        startSeconds:config.trimStart,
+        startSeconds,
         aspect:config.aspect,
         wave:config.wave,
         waveGlow:config.waveGlow,
@@ -142,6 +152,7 @@ export function MobileStudioScreen({song,onSave,onBack,onRenderJob,initialStudio
           </Pressable>)}
         </ScrollView>
         <View style={styles.quickActions}><Pressable disabled={rendering} onPress={()=>void exportVideo()} style={[styles.quickAction,styles.quickPrimary,rendering&&styles.disabled]}><Upload size={15} color="#fff"/><Text style={styles.quickPrimaryText}>{rendering?(renderStage==='validation'?'Checking ':renderStage==='prepare'?'Preparing ':renderStage==='finalize'?'Finalizing ':'Rendering ')+Math.round(renderProgress)+'%':'Create video'}</Text></Pressable><Pressable disabled={rendering} onPress={()=>void exportVideo(30)} style={styles.quickAction}><Play size={14} color="#cfc5ff"/><Text style={styles.quickActionText}>Tạo 30s cao trào</Text></Pressable></View>
+        {!!highlightNotice&&<View style={styles.highlightStatus}><Sparkles size={13} color="#c4b5fd"/><Text style={styles.highlightText}>{highlightNotice}</Text></View>}
         {rendering&&<View style={styles.quickStatus}><Text style={styles.quickStatusTitle}>{renderStage==='validation'?'Đang kiểm tra video…':renderStage==='prepare'?'Đang chuẩn bị media…':renderStage==='finalize'?'Đang hoàn tất video…':'Đang tạo video…'}</Text><Text style={styles.quickStatusText}>{Math.round(renderProgress)}% · Không đóng app trong khi đang xử lý.</Text></View>}
       </View>
 
@@ -187,7 +198,7 @@ const styles=StyleSheet.create({
   playerOverlay:{height:50,marginTop:-64,marginHorizontal:13,zIndex:6,flexDirection:'row',alignItems:'center',gap:10,paddingHorizontal:4},seek:{height:4,flex:1,borderRadius:99,backgroundColor:'rgba(255,255,255,.22)',position:'relative'},seekFill:{width:'24%',height:4,borderRadius:99,backgroundColor:'#8b6cff'},knob:{position:'absolute',left:'24%',top:-4,width:12,height:12,borderRadius:6,backgroundColor:'#fff'},time:{width:67,color:'#fff',fontSize:9},
   subtitleJob:{minHeight:48,marginTop:18,borderWidth:1,borderColor:'rgba(34,211,238,.2)',borderRadius:12,backgroundColor:'rgba(8,18,27,.92)',paddingHorizontal:12,paddingVertical:9,flexDirection:'row',alignItems:'center',gap:10},subtitleJobSynced:{borderColor:'rgba(74,222,128,.2)',backgroundColor:'rgba(10,28,21,.82)'},subtitleJobFallback:{borderColor:'rgba(245,158,11,.24)',backgroundColor:'rgba(35,24,8,.76)'},subtitleDot:{width:20,height:20,borderRadius:10,borderWidth:2,borderColor:'#f59e0b'},subtitleDotSynced:{borderWidth:0,backgroundColor:'#22c55e'},subtitleJobTitle:{color:'#e6faff',fontSize:10,fontWeight:'800'},subtitleJobText:{color:'#8292a6',fontSize:9,marginTop:3,lineHeight:13},
   subtitleRefresh:{marginTop:10,flexDirection:'row',alignItems:'center',gap:9,flexWrap:'wrap'},subtitleBtn:{height:36,borderWidth:1,borderColor:'#5c458e',borderRadius:8,backgroundColor:'#211a3b',paddingHorizontal:10,flexDirection:'row',alignItems:'center',gap:7},subtitleBtnText:{color:'#d8ccff',fontSize:10,fontWeight:'700'},subtitleHint:{color:'#7d8899',fontSize:9,flexShrink:1},
-  quickCreate:{marginTop:12,borderWidth:1,borderColor:'#27303d',borderRadius:12,backgroundColor:'#0d131c',padding:10},quickHead:{flexDirection:'row',alignItems:'flex-start',justifyContent:'space-between'},quickKicker:{color:'#8d72ff',fontSize:8,fontWeight:'900',letterSpacing:1.2},quickTitle:{color:'#f3f5f9',fontSize:12,fontWeight:'800',marginTop:3},quickHint:{color:'#727e90',fontSize:8},quickPresetRow:{gap:8,paddingTop:10,paddingBottom:2},quickPreset:{width:145,overflow:'hidden',borderWidth:1,borderColor:'#29313d',borderRadius:10,backgroundColor:'#0b1017'},quickPresetArt:{height:70,position:'relative',overflow:'hidden'},quickShade:{...StyleSheet.absoluteFill,backgroundColor:'rgba(7,10,16,.42)'},quickBadge:{position:'absolute',left:7,top:7,color:'#eee8ff',fontSize:7,fontWeight:'900'},quickPresetName:{color:'#f5f7fb',fontSize:9,fontWeight:'800',paddingHorizontal:8,paddingTop:7},quickPresetMeta:{color:'#727e90',fontSize:7,paddingHorizontal:8,paddingTop:3,paddingBottom:8},quickActions:{flexDirection:'row',gap:7,marginTop:9},quickAction:{flex:1,minHeight:42,borderWidth:1,borderColor:'#5b49ba',borderRadius:9,backgroundColor:'rgba(112,85,225,.12)',flexDirection:'row',alignItems:'center',justifyContent:'center',gap:6},quickPrimary:{backgroundColor:'#7058ed'},quickActionText:{color:'#cfc5ff',fontSize:9,fontWeight:'800'},quickPrimaryText:{color:'#fff',fontSize:9,fontWeight:'800'},quickStatus:{marginTop:8,borderWidth:1,borderColor:'rgba(139,92,246,.24)',borderRadius:9,backgroundColor:'rgba(55,42,92,.34)',padding:9},quickStatusTitle:{color:'#eee9ff',fontSize:9,fontWeight:'800'},quickStatusText:{color:'#8793a4',fontSize:8,marginTop:3},
+  quickCreate:{marginTop:12,borderWidth:1,borderColor:'#27303d',borderRadius:12,backgroundColor:'#0d131c',padding:10},quickHead:{flexDirection:'row',alignItems:'flex-start',justifyContent:'space-between'},quickKicker:{color:'#8d72ff',fontSize:8,fontWeight:'900',letterSpacing:1.2},quickTitle:{color:'#f3f5f9',fontSize:12,fontWeight:'800',marginTop:3},quickHint:{color:'#727e90',fontSize:8},quickPresetRow:{gap:8,paddingTop:10,paddingBottom:2},quickPreset:{width:145,overflow:'hidden',borderWidth:1,borderColor:'#29313d',borderRadius:10,backgroundColor:'#0b1017'},quickPresetArt:{height:70,position:'relative',overflow:'hidden'},quickShade:{...StyleSheet.absoluteFill,backgroundColor:'rgba(7,10,16,.42)'},quickBadge:{position:'absolute',left:7,top:7,color:'#eee8ff',fontSize:7,fontWeight:'900'},quickPresetName:{color:'#f5f7fb',fontSize:9,fontWeight:'800',paddingHorizontal:8,paddingTop:7},quickPresetMeta:{color:'#727e90',fontSize:7,paddingHorizontal:8,paddingTop:3,paddingBottom:8},quickActions:{flexDirection:'row',gap:7,marginTop:9},quickAction:{flex:1,minHeight:42,borderWidth:1,borderColor:'#5b49ba',borderRadius:9,backgroundColor:'rgba(112,85,225,.12)',flexDirection:'row',alignItems:'center',justifyContent:'center',gap:6},quickPrimary:{backgroundColor:'#7058ed'},quickActionText:{color:'#cfc5ff',fontSize:9,fontWeight:'800'},quickPrimaryText:{color:'#fff',fontSize:9,fontWeight:'800'},highlightStatus:{marginTop:8,minHeight:34,borderRadius:8,backgroundColor:'rgba(139,92,246,.08)',paddingHorizontal:9,flexDirection:'row',alignItems:'center',gap:7},highlightText:{flex:1,color:'#bcb2d4',fontSize:8,lineHeight:12},quickStatus:{marginTop:8,borderWidth:1,borderColor:'rgba(139,92,246,.24)',borderRadius:9,backgroundColor:'rgba(55,42,92,.34)',padding:9},quickStatusTitle:{color:'#eee9ff',fontSize:9,fontWeight:'800'},quickStatusText:{color:'#8793a4',fontSize:8,marginTop:3},
   save:{height:42,marginTop:12,borderWidth:1,borderColor:'#7355dc',borderRadius:10,backgroundColor:'#241d45',flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8},saveDone:{borderColor:'#38c784',backgroundColor:'#143528'},saveText:{color:'#c8baff',fontSize:11,fontWeight:'700'},
   renderMessage:{color:'#c9bfdf',fontSize:10,lineHeight:16,marginTop:13},disabled:{opacity:.55},
   export:{height:58,marginTop:16,borderRadius:14,backgroundColor:'#7359f6',flexDirection:'row',alignItems:'center',justifyContent:'center',gap:10},exportText:{color:'#fff',fontSize:13,fontWeight:'700'},
