@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, Style
 import * as ImagePicker from 'expo-image-picker';
 import { Download, Menu, Music2, Play, Save, SlidersHorizontal, Sparkles, Subtitles, Upload, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { KaraokeLine, RenderJob, Song, StudioSnapshot } from './types';
+import type { KaraokeLine, MediaClip, RenderJob, Song, StudioSnapshot, TimelineTrackState } from './types';
 import { colors, v24 } from './theme';
 import { safeFilename, saveExportedAsset, shareTextFile } from './file-actions';
 import { exportAudio, exportVisualizer } from './render-engine';
@@ -12,6 +12,7 @@ import { useSubtitleSync } from './useSubtitleSync';
 import { SuggestedBackground } from './SuggestedBackground';
 import { findHighlight } from './highlight-engine';
 import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendPresets, V24_PRESETS, type StudioVisualConfig } from './V24StudioControls';
+import { UniversalEditorTimeline } from './UniversalEditorTimeline';
 
 type Tool='presets'|'style'|'lyrics'|null;
 
@@ -34,7 +35,22 @@ export function StudioScreen({
   const {height}=useWindowDimensions();
   const [config,setConfig]=useState<StudioVisualConfig>(initialStudio?.config||{...DEFAULT_VISUAL_CONFIG,trimEnd:song.duration||0});
   const [background,setBackground]=useState<string|undefined>(initialStudio?.background||song.picture);
-  const {timeline,status:subtitleStatus,message:subtitleMessage,error:subError,regenerating:subLoading,reget}=useSubtitleSync(song,initialStudio?.timeline||[]);
+  const [clips,setClips]=useState<MediaClip[]>(initialStudio?.clips||((initialStudio?.background||song.picture)?[{
+    id:'default-cover',
+    type:'image',
+    uri:initialStudio?.background||song.picture||'',
+    name:'Ảnh bìa',
+    start:0,
+    end:Math.max(1,song.duration||1),
+    isDefault:true,
+  }]:[]));
+  const [trackState,setTrackState]=useState<TimelineTrackState>(initialStudio?.trackState||{
+    audio:{hidden:false,muted:false,locked:false},
+    visual:{hidden:false,muted:false,locked:false},
+    subtitle:{hidden:false,muted:false,locked:false},
+    effects:{hidden:false,muted:false,locked:false},
+  });
+  const {timeline,setTimeline,status:subtitleStatus,message:subtitleMessage,error:subError,regenerating:subLoading,reget}=useSubtitleSync(song,initialStudio?.timeline||[]);
   const [saved,setSaved]=useState(false);
   const [tool,setTool]=useState<Tool>(null);
   const [rendering,setRendering]=useState(false);
@@ -51,19 +67,45 @@ export function StudioScreen({
   const seekPercent=playback.duration>0?Math.max(0,Math.min(100,playback.current/playback.duration*100)):0;
 
   const save=()=>{
-    onSave({schemaVersion:1,config,timeline,background});
+    onSave({schemaVersion:1,config,timeline,background,clips,trackState});
     setSaved(true);
     setTimeout(()=>setSaved(false),1500);
+  };
+
+  const applyBackground=(uri:string)=>{
+    setBackground(uri);
+    setConfig(prev=>({...prev,backgroundMode:'image'}));
+    setClips(current=>{
+      const duration=Math.max(1,song.duration||1);
+      const next=current.filter(clip=>!clip.isDefault);
+      return [{id:'default-cover',type:'image',uri,name:'Ảnh bìa',start:0,end:duration,isDefault:true},...next];
+    });
   };
 
   const pickBackground=async()=>{
     const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images','videos'],quality:.9});
     if(result.canceled)return;
-    const uri=result.assets[0]?.uri;
-    if(uri){
-      setBackground(uri);
-      setConfig(prev=>({...prev,backgroundMode:'image'}));
-    }
+    const asset=result.assets[0];
+    if(asset?.uri)applyBackground(asset.uri);
+  };
+
+  const addTimelineMedia=async()=>{
+    const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images','videos'],quality:.9,allowsMultipleSelection:true});
+    if(result.canceled||!result.assets.length)return;
+    const start=Math.max(0,Math.min(song.duration||0,playback.current));
+    const added:MediaClip[]=result.assets.map((asset,index)=>{
+      const clipStart=Math.min(Math.max(0,(song.duration||1)-.1),start+index*5);
+      return {
+        id:'media-'+Date.now().toString(36)+'-'+index,
+        type:asset.type==='video'?'video':'image',
+        uri:asset.uri,
+        name:asset.fileName||('Media '+(index+1)),
+        start:clipStart,
+        end:Math.min(song.duration||clipStart+5,clipStart+5),
+      };
+    });
+    setClips(current=>[...current,...added]);
+    if(!background&&added[0]?.uri)applyBackground(added[0].uri);
   };
 
   const exportVideo=async(durationSeconds?:number)=>{
@@ -190,10 +232,7 @@ export function StudioScreen({
     aspect={config.aspect}
     selectedUri={background}
     disabled={rendering}
-    onApply={uri=>{
-      setBackground(uri);
-      setConfig(prev=>({...prev,backgroundMode:'image'}));
-    }}
+    onApply={applyBackground}
     onBrowse={()=>void pickBackground()}
   />;
 
@@ -237,6 +276,20 @@ export function StudioScreen({
         {subtitleBlock}
         {backgroundBlock}
         {quickBlock}
+        <UniversalEditorTimeline
+          compact
+          duration={song.duration||0}
+          playhead={playback.current}
+          onSeek={playback.seekTo}
+          subtitles={timeline}
+          onSubtitlesChange={setTimeline}
+          clips={clips}
+          onClipsChange={setClips}
+          effects={config.effects}
+          trackState={trackState}
+          onTrackStateChange={setTrackState}
+          onAddMedia={()=>void addTimelineMedia()}
+        />
 
         <Pressable onPress={save} style={[styles.mobileSave,saved&&styles.saveDone]}>
           <Save size={16} color={saved?'#8ff0bd':'#c8baff'}/>
@@ -283,7 +336,19 @@ export function StudioScreen({
       {subtitleBlock}
       {backgroundBlock}
       {quickBlock}
-      <EditorTimeline song={song} background={background} config={config} timeline={timeline} currentTime={playback.current} onSeek={playback.seekTo}/>
+      <UniversalEditorTimeline
+        duration={song.duration||0}
+        playhead={playback.current}
+        onSeek={playback.seekTo}
+        subtitles={timeline}
+        onSubtitlesChange={setTimeline}
+        clips={clips}
+        onClipsChange={setClips}
+        effects={config.effects}
+        trackState={trackState}
+        onTrackStateChange={setTrackState}
+        onAddMedia={()=>void addTimelineMedia()}
+      />
     </ScrollView>
 
     <ScrollView style={styles.inspector} contentContainerStyle={styles.inspectorContent}>
@@ -429,23 +494,6 @@ function QuickCreate({
     </View>
     {!!highlightNotice&&<View style={styles.highlightStatus}><Sparkles size={13} color="#c4b5fd"/><Text style={styles.highlightText}>{highlightNotice}</Text></View>}
     {(rendering||!!renderMessage)&&<View style={[styles.quickStatus,!!renderMessage&&!rendering&&styles.quickStatusDone]}><Text style={styles.quickStatusTitle}>{rendering?(renderStage==='validation'?'Đang kiểm tra video…':renderStage==='prepare'?'Đang chuẩn bị media…':renderStage==='finalize'?'Đang hoàn tất video…':'Đang tạo video…'):'Hoàn tất'}</Text><Text style={styles.quickStatusText}>{rendering?Math.round(renderProgress)+'% · Không đóng ứng dụng trong khi đang xử lý.':renderMessage}</Text></View>}
-  </View>;
-}
-
-function EditorTimeline({
-  compact=false,song,background,config,timeline,currentTime,onSeek,
-}:{
-  compact?:boolean; song:Song; background?:string; config:StudioVisualConfig; timeline:KaraokeLine[]; currentTime:number; onSeek:(value:number)=>void;
-}){
-  const [width,setWidth]=useState(1);
-  return <View style={[styles.editorTimeline,compact&&styles.editorTimelineCompact]}>
-    <View style={styles.timelineHead}><Text style={styles.timelineHeadTitle}>Timeline</Text><Text style={styles.timelineHeadSub}>Video · Subtitle · Audio</Text><View style={styles.timelineIcon}><SlidersHorizontal size={15} color="#d8deea"/></View></View>
-    <Pressable style={[styles.timelineCanvas,compact&&styles.timelineCanvasCompact]} onLayout={event=>setWidth(Math.max(1,event.nativeEvent.layout.width))} onPress={event=>{const x=(event.nativeEvent as any)?.locationX||0;onSeek((x/width)*(song.duration||0))}}>
-      <View style={styles.ruler}>{['00:00','00:15','00:30','00:45','01:00'].map(x=><View key={x} style={{flex:1}}><Text style={styles.rulerText}>{x}</Text><View style={styles.rulerTick}/></View>)}</View>
-      <View style={styles.trackRow}><Text style={styles.trackLabel}>VIDEO</Text><View style={styles.videoClip}>{Array.from({length:6}).map((_,i)=><View key={i} style={styles.clipThumb}>{background?<Image source={{uri:background}} style={StyleSheet.absoluteFill}/>:<LinearGradient colors={['#241d3d','#8b6cff']} style={StyleSheet.absoluteFill}/>}</View>)}<Text numberOfLines={1} style={styles.clipTitle}>{config.presetId} · {config.backgroundMode}</Text></View></View>
-      <View style={styles.trackRow}><Text style={styles.trackLabel}>SUB</Text><View style={styles.subClip}><Text numberOfLines={1} style={styles.subClipText}>{timeline[0]?.text||song.lyrics?.split(/\n/)[0]||'Subtitle track'}</Text></View></View>
-      <View style={[styles.playhead,{left:((song.duration||1)>0?Math.min(100,Math.max(0,currentTime/(song.duration||1)*100)):0)+'%' as any}]}><View style={styles.playheadDot}/></View>
-    </Pressable>
   </View>;
 }
 
