@@ -24,6 +24,8 @@ function cloudLines(payload:any):KaraokeLine[]{
 }
 
 export function useSubtitleSync(song:Song,initialTimeline:KaraokeLine[]=[]){
+  const initialLinesRef=useRef<KaraokeLine[]>(initialTimeline);
+  initialLinesRef.current=initialTimeline;
   const [timeline,setTimeline]=useState<KaraokeLine[]>(initialTimeline);
   const [status,setStatus]=useState<SubtitleSyncStatus>('idle');
   const [message,setMessage]=useState('');
@@ -32,16 +34,16 @@ export function useSubtitleSync(song:Song,initialTimeline:KaraokeLine[]=[]){
   const run=useRef(0);
 
   const fallback=useCallback((reason:string)=>{
-    const estimated=initialTimeline.length?initialTimeline:estimatedTimeline(song);
+    const estimated=initialLinesRef.current.length?initialLinesRef.current:estimatedTimeline(song);
     setTimeline(estimated);
     setStatus('fallback');
     setMessage(estimated.length?'Đang dùng timing lời tạm thời.':'Subtitle cloud chưa sẵn sàng.');
     setError(reason);
-  },[song,initialTimeline]);
+  },[song]);
 
   useEffect(()=>{
     const current=++run.current;
-    setTimeline(initialTimeline);
+    setTimeline(initialLinesRef.current);
     setError('');
     if(!song.id){
       setStatus('idle');
@@ -81,7 +83,7 @@ export function useSubtitleSync(song:Song,initialTimeline:KaraokeLine[]=[]){
       }
     })();
     return()=>{run.current+=1};
-  },[song.id,song.audio,fallback,initialTimeline]);
+  },[song.id,song.audio,fallback]);
 
   const reget=useCallback(async()=>{
     if(!song.id){setError('Bài hát chưa có songId.');return}
