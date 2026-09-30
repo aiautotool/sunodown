@@ -446,7 +446,7 @@ function stageLabel(stage:'idle'|'validation'|'prepare'|'render'|'finalize'){
 }
 
 function PreviewStage({
-  compact,song,config,background,selectedPreset,lyricLines,timeline,currentTime,duration,seekPercent,playing,onToggle,onSeek,desktopHeight,
+  compact,song,config,background,selectedPreset,lyricLines,timeline,clips,trackState,currentTime,duration,seekPercent,playing,onToggle,onSeek,desktopHeight,
 }:{
   compact:boolean; song:Song; config:StudioVisualConfig; background?:string; selectedPreset:(typeof V24_PRESETS)[number];
   lyricLines:string[]; timeline:KaraokeLine[]; clips:MediaClip[]; trackState:TimelineTrackState; currentTime:number; duration:number; seekPercent:number;
@@ -457,6 +457,10 @@ function PreviewStage({
   const ratio=aspectValue(config.aspect);
   const innerH=Math.max(1,Math.min(stageBox.height,stageBox.width/ratio));
   const innerW=Math.max(1,Math.min(stageBox.width,innerH*ratio));
+  const activeClip=[...clips].reverse().find(clip=>currentTime>=clip.start&&currentTime<clip.end);
+  const activeVisual=trackState.visual.hidden?undefined:(activeClip?.type==='image'?activeClip.uri:background);
+  const barCount=Math.max(18,Math.round((compact?38:54)*((config.waveDensity??72)/72)));
+
   return <View>
     <View style={styles.previewHead}>
       <Text style={styles.previewHeadTitle}>Xem trước trực tiếp</Text>
@@ -467,20 +471,24 @@ function PreviewStage({
       onLayout={e=>setStageBox({width:e.nativeEvent.layout.width,height:e.nativeEvent.layout.height})}
     >
       <View style={[styles.visualFrame,{width:innerW,height:innerH}]}>
-        {background?<ImageBackground source={{uri:background}} resizeMode="cover" style={StyleSheet.absoluteFill}/>:<LinearGradient colors={[selectedPreset.accent,selectedPreset.secondary]} style={StyleSheet.absoluteFill}/>}
+        {activeVisual?<ImageBackground source={{uri:activeVisual}} resizeMode="cover" style={StyleSheet.absoluteFill}/>:<LinearGradient colors={trackState.visual.hidden?['#080c12','#080c12']:[selectedPreset.accent,selectedPreset.secondary]} style={StyleSheet.absoluteFill}/>}
         <LinearGradient colors={['rgba(4,7,11,0)','rgba(4,7,11,.08)','rgba(4,7,11,.72)']} locations={[0,.62,1]} style={StyleSheet.absoluteFill}/>
-        {!background&&<View style={styles.localAudioVisual}>
+        {!trackState.visual.hidden&&!activeVisual&&<View style={styles.localAudioVisual}>
           <Music2 size={compact?54:68} color="rgba(255,255,255,.82)"/>
           <Text style={[styles.localAudioTitle,compact&&styles.localAudioTitleCompact]}>{song.title}</Text>
           <Text style={styles.localAudioCreator}>{(song.creator||'Local audio').toUpperCase()}</Text>
         </View>}
-        {!compact&&config.lyrics!=='off'&&timeline.length>0&&<View style={styles.karaoke}>
+        {!trackState.visual.hidden&&<View style={styles.titleOverlay}>
+          <Text numberOfLines={2} style={[styles.previewTitle,{color:config.titleColor,fontSize:Math.round(24*((config.titleScale??100)/100))}]}>{song.title}</Text>
+          <Text numberOfLines={1} style={[styles.previewCreator,{color:config.creatorColor,fontSize:Math.round(12*((config.creatorScale??100)/100))}]}>{song.creator||'Suno'}</Text>
+        </View>}
+        {!compact&&!trackState.subtitle.hidden&&config.lyrics!=='off'&&timeline.length>0&&<View style={styles.karaoke}>
           <Text style={[styles.karaokeMain,{color:config.subtitleActiveColor,fontSize:Math.round(29*((config.subtitleScale??100)/100))}]}>{timeline.find(line=>currentTime>=line.start&&currentTime<line.end)?.text||lyricLines[0]}</Text>
           <Text style={[styles.karaokeNext,{color:config.subtitleColor}]}>{timeline.find(line=>line.start>currentTime)?.text||lyricLines[1]||''}</Text>
         </View>}
-        {!trackState.effects.hidden&&<View style={[styles.wave,compact&&styles.waveCompact]}>
-          {Array.from({length:compact?38:54}).map((_,i)=><View key={i} style={[styles.bar,{height:(compact?6:8)+((i*(compact?13:17))%(compact?31:48))}]}/>)}
-        </View>
+        {!trackState.visual.hidden&&<View style={[styles.wave,compact&&styles.waveCompact,{opacity:(config.waveOpacity??92)/100,transform:[{rotate:(config.waveRotation??0)+'deg'}]}]}>
+          {Array.from({length:barCount}).map((_,i)=><View key={i} style={[styles.bar,{width:Math.max(1,Math.round((config.waveThickness??46)/23)),backgroundColor:i%2?(config.waveColor2||'#60a5fa'):(config.waveColor||'#d946ef'),height:Math.max(4,((compact?6:8)+((i*(compact?13:17))%(compact?31:48)))*((config.waveHeight??108)/108))}]}/>)}
+        </View>}
         <Pressable style={[styles.centerPlay,compact&&styles.centerPlayCompact,playing&&styles.centerPlayPlaying]} onPress={onToggle}>
           {playing?<Pause size={compact?22:25} color="#fff" fill="#fff"/>:<Play size={compact?24:27} color="#fff" fill="#fff"/>}
         </Pressable>
@@ -495,7 +503,7 @@ function PreviewStage({
         onLayout={e=>setSeekWidth(Math.max(1,e.nativeEvent.layout.width))}
         onPress={e=>onSeek(((e.nativeEvent as any).locationX||0)/seekWidth*Math.max(0,duration))}
       >
-        <View style={[styles.seekTrack]}/>
+        <View style={styles.seekTrack}/>
         <View style={[styles.seekFill,{width:(seekPercent+'%') as any}]}/>
         <View style={[styles.seekKnob,{left:(seekPercent+'%') as any}]}/>
       </Pressable>
