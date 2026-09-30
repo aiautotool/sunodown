@@ -176,8 +176,8 @@ function ampAt(samples:Float32Array,rate:number,t:number){
   }
   return Math.min(1,Math.max(.04,Math.sqrt(sum/Math.max(1,count))*4.8+peak*.5));
 }
-function drawWave(ctx:CanvasRenderingContext2D,w:number,h:number,wave:string,samples:Float32Array,rate:number,t:number,progress:number,color:string,color2:string,glow:number,heightPct:number,thickness=46,opacity=92,density=72,rotation=0){
-  const centerX=w/2,baseY=h*.79,maxH=h*Math.max(.05,Math.min(.25,heightPct/650));
+function drawWave(ctx:CanvasRenderingContext2D,w:number,h:number,wave:string,samples:Float32Array,rate:number,t:number,progress:number,color:string,color2:string,glow:number,heightPct:number,thickness=46,opacity=92,density=72,rotation=0,xPct=50,yPct=82){
+  const centerX=w*Math.max(.04,Math.min(.96,xPct/100)),baseY=h*Math.max(.04,Math.min(.96,yPct/100)),maxH=h*Math.max(.05,Math.min(.25,heightPct/650));
   ctx.save();
   ctx.globalAlpha=Math.max(.1,Math.min(1,opacity/100));
   ctx.translate(centerX,baseY);ctx.rotate(rotation*Math.PI/180);ctx.translate(-centerX,-baseY);
@@ -187,7 +187,7 @@ function drawWave(ctx:CanvasRenderingContext2D,w:number,h:number,wave:string,sam
   const spectrum=/spectrum|bars|mirror/.test(wave);
   if(circular){
     const bars=Math.max(24,Math.round(82*(density/72))),radius=Math.min(w,h)*.17;
-    ctx.translate(centerX,h*.60);
+    ctx.translate(centerX,baseY);
     for(let i=0;i<bars;i++){
       const a=i/bars*Math.PI*2,amp=ampAt(samples,rate,t+i/bars*.16),len=9+amp*maxH*.55;
       ctx.strokeStyle=i/bars<progress?(i%2?color2:color):'rgba(174,157,255,.42)';ctx.lineWidth=Math.max(1,(w/420)*(thickness/46));
@@ -265,15 +265,18 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
       const glow=ctx.createRadialGradient(width*.76,height*.24,0,width*.76,height*.24,Math.max(width,height)*.42);
       glow.addColorStop(0,'rgba(139,108,255,.20)');glow.addColorStop(1,'rgba(139,108,255,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,width,height);
 
+      const titleX=width*Math.max(.04,Math.min(.96,(options.titleX??50)/100)),titleY=height*Math.max(.04,Math.min(.96,(options.titleY??67)/100));
+      const creatorX=width*Math.max(.04,Math.min(.96,(options.creatorX??50)/100)),creatorY=height*Math.max(.04,Math.min(.96,(options.creatorY??75)/100));
+      const subtitleX=width*Math.max(.04,Math.min(.96,(options.subtitleX??50)/100)),subtitleY=height*Math.max(.04,Math.min(.96,(options.subtitleY??70)/100));
       ctx.textAlign='center';ctx.fillStyle=titleColor;ctx.shadowColor='rgba(0,0,0,.8)';ctx.shadowBlur=18;
-      ctx.font=`700 ${Math.round(Math.min(width,height)*.055*((options.titleScale??100)/100))}px system-ui,sans-serif`;ctx.fillText(song.title||'SunoDown',width/2,height*.12,width*.86);
-      ctx.fillStyle=creatorColor;ctx.font=`500 ${Math.round(Math.min(width,height)*.027*((options.creatorScale??100)/100))}px system-ui,sans-serif`;ctx.fillText(song.creator||'Suno',width/2,height*.16,width*.8);
+      ctx.font=`700 ${Math.round(Math.min(width,height)*.055*((options.titleScale??100)/100))}px system-ui,sans-serif`;ctx.fillText(song.title||'SunoDown',titleX,titleY,width*.86);
+      ctx.fillStyle=creatorColor;ctx.font=`500 ${Math.round(Math.min(width,height)*.027*((options.creatorScale??100)/100))}px system-ui,sans-serif`;ctx.fillText(song.creator||'Suno',creatorX,creatorY,width*.8);
 
       if(options.subtitleVisible!==false&&options.lyricsMode!=='off'){
         const line=activeLyric(options,song,absoluteTime,t);
-        if(line){ctx.fillStyle=subColor;ctx.font=`700 ${Math.round(Math.min(width,height)*.044*((options.subtitleScale??100)/100))}px system-ui,sans-serif`;ctx.fillText(line,width/2,height*.66,width*.84)}
+        if(line){ctx.fillStyle=subColor;ctx.font=`700 ${Math.round(Math.min(width,height)*.044*((options.subtitleScale??100)/100))}px system-ui,sans-serif`;ctx.fillText(line,subtitleX,subtitleY,width*.84)}
       }
-      if(options.visualVisible!==false)drawWave(ctx,width,height,wave,samples,audio.sampleRate,t,t/duration,options.waveColor||'#d946ef',options.waveColor2||'#60a5fa',options.waveGlow??80,options.waveHeight??100,options.waveThickness??46,options.waveOpacity??92,options.waveDensity??72,options.waveRotation??0);
+      if(options.visualVisible!==false)drawWave(ctx,width,height,wave,samples,audio.sampleRate,t,t/duration,options.waveColor||'#d946ef',options.waveColor2||'#60a5fa',options.waveGlow??80,options.waveHeight??100,options.waveThickness??46,options.waveOpacity??92,options.waveDensity??72,options.waveRotation??0,options.waveX??50,options.waveY??82);
       if(options.effectsVisible!==false)drawEffects(ctx,width,height,options.effects||[],frame,options.effectSpeed??1,options.effectAngle??0,options.effectDensity??1,options.effectSize??1);
       ctx.shadowBlur=0;ctx.fillStyle='#a0aaba';ctx.font=`500 ${Math.round(Math.min(width,height)*.021)}px system-ui,sans-serif`;
       const mm=Math.floor(t/60),ss=Math.floor(t%60);ctx.fillText(String(mm)+':'+String(ss).padStart(2,'0'),width/2,height*.90);
