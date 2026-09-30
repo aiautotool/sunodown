@@ -12,7 +12,7 @@ async function streamSong(request: NextRequest, headOnly = false) {
   }
 
   const song = await getPublicSong(id);
-  if (!song || !song.isPublic) {
+  if (!song) {
     return NextResponse.json(
       { error: 'song_not_found' },
       { status: 404, headers: { 'cache-control': 'no-store' } },
