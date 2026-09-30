@@ -1,6 +1,6 @@
 export const runtime='edge';
 
-type Env={RENDERER?:Fetcher};
+type Env={RENDER_SERVICE_URL?:string;RENDER_SERVICE_TOKEN?:string};
 async function env():Promise<Env>{const mod=await import('cloudflare:workers');return (mod as unknown as {env:Env}).env}
 
 const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -15,12 +15,16 @@ export async function GET(request:Request){
   if(!['m4a','mp3','wav'].includes(format))return Response.json({error:'unsupported_format'},{status:400});
 
   const e=await env();
-  if(!e.RENDERER)return Response.json({error:'Audio renderer chưa được cấu hình.'},{status:503});
+  if(!e.RENDER_SERVICE_URL)return Response.json({error:'Audio renderer chưa được cấu hình.'},{status:503});
 
+  const rendererBase=e.RENDER_SERVICE_URL.replace(/\/render\/?$/,'');
   const audioUrl=`${url.origin}/api/music/audio?id=${encodeURIComponent(songId)}`;
-  const response=await e.RENDERER.fetch('https://renderer/audio',{
+  const response=await fetch(`${rendererBase}/audio`,{
     method:'POST',
-    headers:{'content-type':'application/json'},
+    headers:{
+      'content-type':'application/json',
+      ...(e.RENDER_SERVICE_TOKEN?{authorization:`Bearer ${e.RENDER_SERVICE_TOKEN}`}:{}),
+    },
     body:JSON.stringify({audioUrl,format,title}),
   });
 
