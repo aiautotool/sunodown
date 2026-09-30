@@ -1,4 +1,4 @@
-name: Deploy isolated v24react
+name: Deploy v24react exact web
 # final-v24-parity-redeploy
 
 on:
@@ -10,7 +10,6 @@ on:
       - 'services/**'
       - 'scripts/**'
       - 'migrations/**'
-      - 'expo/**'
       - 'worker-picai.js'
       - 'worker-sunoapp.js'
       - 'package.json'
@@ -54,31 +53,18 @@ jobs:
           BUILD_VERSION: v24react
         run: npm run build
 
-      - name: Install Expo dependencies
-        working-directory: expo
+      - name: Prepare exact v24 web UI and isolated Worker
         run: |
-          npm install
-          npx expo install --fix
-
-      - name: Typecheck Expo app
-        working-directory: expo
-        run: npm run typecheck
-
-      - name: Export Expo Web with same-origin API
-        working-directory: expo
-        run: npm run build:web
-
-      - name: Merge Expo UI with v24 API worker
-        run: |
+          # IMPORTANT: do not replace dist/client with expo/dist.
+          # v24react was branched from v24 and app/** + components/** remain
+          # the source of truth for web parity. Keeping the Vinext build here
+          # preserves the original v24 HTML/CSS/JS exactly.
           test -f dist/server/index.js
-          test -f expo/dist/index.html
-          rm -rf dist/client
-          mkdir -p dist/client
-          cp -R expo/dist/. dist/client/
+          test -d dist/client
           cp worker-picai.js dist/server/worker-picai.js
           cp worker-sunoapp.js dist/server/worker-sunoapp.js
-          test -f dist/client/index.html
           test -f dist/server/worker-sunoapp.js
+          test -n "$(find dist/client -maxdepth 2 -type f | head -n 1)"
 
       - name: Provision isolated D1 R2 and Queue
         run: node scripts/provision-v24react-cloudflare.mjs
@@ -113,10 +99,11 @@ jobs:
           MEDIA_TOKEN_SECRET: ${{ secrets.MEDIA_TOKEN_SECRET }}
 
 
-      - name: Smoke check isolated frontend
+      - name: Smoke check exact v24 frontend
         run: |
           curl --fail --silent --show-error --retry 6 --retry-delay 3 --max-time 30 "$APP_URL/" -o /tmp/sunoapp.html
           grep -qi '<html' /tmp/sunoapp.html
+          grep -qi 'SunoDown' /tmp/sunoapp.html
 
       - name: Verify API resolves directly on SunoApp
         run: |
