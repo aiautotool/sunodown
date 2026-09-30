@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, Style
 import * as ImagePicker from 'expo-image-picker';
 import { ChevronDown, Image as ImageIcon, Menu, Music2, Play, RefreshCw, Save, SlidersHorizontal, Sparkles, Subtitles, Upload, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { KaraokeLine, RenderJob, Song } from './types';
+import type { KaraokeLine, RenderJob, Song, StudioSnapshot } from './types';
 import { colors } from './theme';
 import { saveExportedAsset } from './file-actions';
 import { exportAudio, exportVisualizer } from './render-engine';
@@ -14,12 +14,12 @@ import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendP
 type Tool='presets'|'style'|'lyrics'|null;
 const fmt=(n=0)=>`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 
-export function MobileStudioScreen({song,onSave,onBack,onRenderJob}:{song:Song;onSave:()=>void;onBack:()=>void;onRenderJob:(job:RenderJob)=>void}) {
-  const [background,setBackground]=useState<string|undefined>(song.picture);
-  const {timeline,setTimeline,status:subtitleStatus,message:subtitleMessage,error,regenerating:busy,reget}=useSubtitleSync(song);
+export function MobileStudioScreen({song,onSave,onBack,onRenderJob,initialStudio}:{song:Song;onSave:(snapshot:StudioSnapshot)=>void;onBack:()=>void;onRenderJob:(job:RenderJob)=>void;initialStudio?:StudioSnapshot}) {
+  const [background,setBackground]=useState<string|undefined>(initialStudio?.background||song.picture);
+  const {timeline,setTimeline,status:subtitleStatus,message:subtitleMessage,error,regenerating:busy,reget}=useSubtitleSync(song,initialStudio?.timeline||[]);
   const [tool,setTool]=useState<Tool>(null);
   const [saved,setSaved]=useState(false);
-  const [config,setConfig]=useState<StudioVisualConfig>({...DEFAULT_VISUAL_CONFIG,trimEnd:song.duration||0});
+  const [config,setConfig]=useState<StudioVisualConfig>(initialStudio?.config||{...DEFAULT_VISUAL_CONFIG,trimEnd:song.duration||0});
   const [rendering,setRendering]=useState(false);
   const [renderProgress,setRenderProgress]=useState(0);
   const [renderStage,setRenderStage]=useState<'idle'|'validation'|'prepare'|'render'|'finalize'>('idle');
@@ -35,7 +35,7 @@ export function MobileStudioScreen({song,onSave,onBack,onRenderJob}:{song:Song;o
     if(!r.canceled)setBackground(r.assets[0]?.uri);
   };
 
-  const save=()=>{onSave();setSaved(true);setTimeout(()=>setSaved(false),1400)};
+  const save=()=>{onSave({schemaVersion:1,config,timeline,background});setSaved(true);setTimeout(()=>setSaved(false),1400)};
 
   const exportVideo=async(durationSeconds?:number)=>{
     if(rendering)return;
