@@ -63,7 +63,7 @@ import {
   convertProcessedAudio,
   renderTikTokLikeAudio,
 } from '@/app/lib/audio-processing';
-import { exportSrt, normalizeKaraokeTimeline } from '@/app/lib/karaoke';
+import { buildEstimatedKaraokeTimeline, exportSrt, normalizeKaraokeTimeline } from '@/app/lib/karaoke';
 import { runKaraokePipeline } from '@/app/lib/karaoke-pipeline';
 import { findMusicHighlight } from '@/app/lib/audio-highlight';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
@@ -1702,8 +1702,32 @@ export default function CreatorStudio({
           error: error instanceof Error ? error.message : String(error),
         });
       }
+
+      const estimated = target.lyrics?.trim()
+        ? buildEstimatedKaraokeTimeline(target.lyrics, duration)
+        : [];
+      if (estimated.length) {
+        pushSubtitleDebug('cloud-subtitle-estimated-fallback', {
+          lines: estimated.length,
+        });
+        setKaraokeTimeline(estimated);
+        setKaraokeSyncStatus('fallback');
+        setKaraokeSyncMessage('Đang dùng timing lời tạm thời.');
+        setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
+        setSubtitleNotice(
+          'Subtitle cloud chưa sẵn sàng. Đang dùng timing tạm thời và sẽ đồng bộ lại khi server hoạt động.',
+        );
+      } else {
+        setKaraokeTimeline([]);
+        setKaraokeSyncStatus('fallback');
+        setKaraokeSyncMessage('Subtitle cloud chưa sẵn sàng.');
+      }
+      return;
     }
 
+    // Local/offline audio has no songId, so it keeps the device/backend
+    // recognition pipeline. Online Suno songs never upload audio back from
+    // the browser for transcription.
     // Mobile backend emits useful chunk-by-chunk timelines before the whole
     // song has finished. Keep the best one so a later network/validation
     // failure never wipes already synchronized cues back to Subtitle 0.
