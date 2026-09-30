@@ -30,7 +30,11 @@
     "react-native-svg": "15.15.4",
     "@expo/metro-runtime": "57.0.16",
     "expo-file-system": "~57.0.7",
-    "expo-sharing": "~57.0.22"
+    "expo-sharing": "~57.0.22",
+    "mediabunny": "^1.56.2",
+    "@mediabunny/mp3-encoder": "^1.56.2",
+    "munim-ffmpeg": "0.8.0",
+    "react-native-nitro-modules": "0.36.5"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
