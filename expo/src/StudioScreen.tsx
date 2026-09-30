@@ -429,6 +429,9 @@ export function StudioScreen({
           trackState={trackState}
           onTrackStateChange={setTrackState}
           onAddMedia={()=>void addTimelineMedia()}
+          trimStart={config.trimStart}
+          trimEnd={config.trimEnd||playback.duration||song.duration||0}
+          onTrimChange={(trimStart,trimEnd)=>setConfig(prev=>({...prev,trimStart,trimEnd}))}
         />}
       </ScrollView>
     </View>
