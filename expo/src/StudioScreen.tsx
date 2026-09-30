@@ -20,6 +20,7 @@ import { backgroundPresetColors } from './background-presets';
 import { parseSubtitleText, toSrt } from './subtitle-files';
 import { musicAudioUrl } from './api';
 import { extractWaveform } from './waveform-engine';
+import { V23SceneThumb } from './V23SceneThumb';
 
 type Tool=StudioPanel|null;
 
@@ -856,10 +857,14 @@ function QuickCreate({
       config.presetId===item.id&&{borderColor:item.accent},
     ]}
   >
-    <View style={[styles.quickPresetArt,compact&&styles.quickPresetArtCompact,{backgroundColor:item.accent+'22'}]}>
-      {song.picture&&<Image source={{uri:song.picture}} style={StyleSheet.absoluteFill}/>}
-      <View style={styles.quickShade}/>
-      {!compact&&<Text style={styles.quickBadge}>{index===0?'ĐỀ XUẤT':item.badge}</Text>}
+    <View style={[styles.quickPresetArt,compact&&styles.quickPresetArtCompact]}>
+      <V23SceneThumb
+        template={item.template}
+        picture={song.picture}
+        accent={item.accent}
+        secondary={item.secondary}
+        badge={!compact?(index===0?'ĐỀ XUẤT':item.badge):undefined}
+      />
     </View>
     <View style={[styles.quickPresetCopy,compact&&styles.quickPresetCopyCompact]}>
       {compact&&<Text style={styles.quickBadgeCompact}>{index===0?'ĐỀ XUẤT':item.badge}</Text>}
