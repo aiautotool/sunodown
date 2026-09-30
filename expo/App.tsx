@@ -77,6 +77,8 @@ function UniversalApp(){
   };
 
   const goCreate=()=>setView('create');
+  const clearLibrary=()=>{setLibrary([]);void storage.setLibrary([])};
+  const clearProjects=()=>{setProjects([]);void storage.setProjects([])};
   const upsertJob=(job:RenderJob)=>{
     setJobs(prev=>{
       const updated=[job,...prev.filter(item=>item.id!==job.id)].slice(0,100);
@@ -98,10 +100,10 @@ function UniversalApp(){
       />;
     }
     if(view==='music') return <MusicHubScreen items={library} onPlay={setPlayingSong} onOpenLibrary={()=>setView('library')} onCreate={goCreate}/>;
-    if(view==='library') return <LibraryScreen items={library} onPlay={setPlayingSong} onOpen={openLibraryItem} onCreate={goCreate}/>;
+    if(view==='library') return <LibraryScreen items={library} onPlay={setPlayingSong} onOpen={openLibraryItem} onCreate={goCreate} onClear={clearLibrary}/>;
     if(view==='projects') return <ProjectsScreen projects={projects} onOpen={openProject} onCreate={goCreate}/>;
     if(view==='jobs') return <JobsScreen jobs={jobs} onCreate={goCreate}/>;
-    return <SettingsScreen onCreate={goCreate}/>;
+    return <SettingsScreen onCreate={goCreate} onClearProjects={clearProjects}/>;
   },[view,song,library,projects,jobs,sourceUrl,compact,initialStudio]);
 
   const showHeader=!compact&&view!=='music';
