@@ -41,7 +41,7 @@ function searchQuery(text:string){
 }
 function orientation(aspect:StudioAspect){return aspect==='1:1'?'square':aspect==='16:9'||aspect==='4:3'?'landscape':'portrait'}
 function rank(photos:Photo[],aspect:StudioAspect){
-  const [w,h]=aspect.split(':').map(Number),ratio=w/h;
+  const parts=aspect.split(':').map(Number); const w=parts[0]||9,h=parts[1]||16,ratio=w/h;
   return [...photos].sort((a,b)=>score(b)-score(a));
   function score(p:Photo){
     const imageRatio=p.width/p.height,pixels=p.width*p.height,alt=(p.alt||'').toLowerCase();
