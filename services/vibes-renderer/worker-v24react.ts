@@ -32,7 +32,7 @@ export default {
     if(url.pathname==='/health'){
       return bindings.AI_RENDERER.getByName('v24react-renderer-health').fetch(request);
     }
-    if(url.pathname!=='/render'||request.method!=='POST'){
+    if(!['/render','/audio'].includes(url.pathname)||request.method!=='POST'){
       return new Response('Not found',{status:404});
     }
     if(

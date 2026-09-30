@@ -55,6 +55,12 @@ class RenderRequest(BaseModel):
     input: dict[str, Any]
 
 
+class AudioExportRequest(BaseModel):
+    audioUrl: str
+    format: str = "m4a"
+    title: str = "suno-audio"
+
+
 def authorize(value: str | None) -> None:
     expected = os.getenv("RENDER_SERVICE_TOKEN", "")
     if expected and value != f"Bearer {expected}":
@@ -256,6 +262,42 @@ def health() -> dict[str, Any]:
     }
 
 
+def render_visualizer(audio: Path, output: Path, aspect: str, duration: float, style: str = "") -> None:
+    size = {"9:16": (720, 1280), "1:1": (720, 720), "16:9": (1280, 720)}[aspect]
+    width, height = size
+    wave_h = max(150, int(height * 0.18))
+    y = max(40, height - wave_h - int(height * 0.11))
+    spectrum = "spectrum" in (style or "").lower()
+    viz = (
+        f"showspectrum=s={width-120}x{wave_h}:mode=combined:color=intensity:slide=scroll:scale=log"
+        if spectrum
+        else f"showwaves=s={width-120}x{wave_h}:mode=cline:rate=30:colors=0xb9a7ff"
+    )
+    filter_graph = (
+        f"[0:a]{viz},format=rgba[viz];"
+        f"color=c=0x080c12:s={width}x{height}:r=30:d={duration}[bg];"
+        f"[bg][viz]overlay=60:{y}:shortest=1,format=yuv420p[v]"
+    )
+    run(
+        "ffmpeg", "-y", "-i", str(audio), "-filter_complex", filter_graph,
+        "-map", "[v]", "-map", "0:a:0", "-c:v", "libx264", "-preset", "veryfast",
+        "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+        "-t", str(duration), "-movflags", "+faststart", str(output),
+    )
+
+
+def convert_audio(audio_url: str, target: Path, fmt: str) -> None:
+    with tempfile.TemporaryDirectory(prefix="sunodown-audio-") as temp:
+        source = Path(temp) / "source.m4a"
+        download(audio_url, source)
+        if fmt == "mp3":
+            run("ffmpeg", "-y", "-i", str(source), "-vn", "-c:a", "libmp3lame", "-b:a", "320k", str(target))
+        elif fmt == "wav":
+            run("ffmpeg", "-y", "-i", str(source), "-vn", "-c:a", "pcm_s16le", "-ar", "48000", str(target))
+        else:
+            run("ffmpeg", "-y", "-i", str(source), "-vn", "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart", str(target))
+
+
 def render_video(payload: RenderRequest) -> Path:
     data = payload.input
     song = data.get("song") or {}
@@ -270,13 +312,17 @@ def render_video(payload: RenderRequest) -> Path:
         try:
             download(audio_url, audio)
             duration = float(data.get("duration") or song.get("duration") or probe_duration(audio))
-            scenes = build_storyboard(
-                lyrics, data.get("style") or song.get("style") or song.get("tags") or "",
-                duration, data.get("sceneSeconds", 5), data.get("maxUniqueScenes", 12),
-                str(data.get("title") or song.get("title") or "Suno music video"),
-            )
-            clips = generated_clips(scenes, work, str(data.get("title") or song.get("title") or "Suno"), aspect, resolution)
-            compose(clips, audio, output, duration)
+            mode = str(data.get("mode") or "visualizer")
+            if mode == "visualizer":
+                render_visualizer(audio, output, aspect, duration, str(data.get("style") or song.get("style") or ""))
+            else:
+                scenes = build_storyboard(
+                    lyrics, data.get("style") or song.get("style") or song.get("tags") or "",
+                    duration, data.get("sceneSeconds", 5), data.get("maxUniqueScenes", 12),
+                    str(data.get("title") or song.get("title") or "Suno music video"),
+                )
+                clips = generated_clips(scenes, work, str(data.get("title") or song.get("title") or "Suno"), aspect, resolution)
+                compose(clips, audio, output, duration)
             persistent = RESULTS / f"{payload.jobId}.mp4"
             shutil.copy2(output, persistent)
             return persistent
@@ -286,7 +332,6 @@ def render_video(payload: RenderRequest) -> Path:
             LOGGER.exception("Render %s failed", payload.jobId)
             raise HTTPException(502, str(error)) from error
 
-
 def remember_failure(job_id: str, future: Future[Path]) -> None:
     error = future.exception()
     if error is None:
@@ -295,18 +340,40 @@ def remember_failure(job_id: str, future: Future[Path]) -> None:
         FAILURES[job_id] = public_error(error)
 
 
+@app.post("/audio", response_model=None)
+def audio_export(payload: AudioExportRequest, authorization: str | None = Header(default=None)):
+    authorize(authorization)
+    fmt = payload.format.lower()
+    if fmt not in {"m4a", "mp3", "wav"}:
+        raise HTTPException(422, "Unsupported audio format")
+    if not payload.audioUrl.startswith("https://"):
+        raise HTTPException(422, "A public HTTPS audio URL is required")
+    suffix = ".m4a" if fmt == "m4a" else f".{fmt}"
+    target = RESULTS / f"audio-{abs(hash(payload.audioUrl + fmt))}{suffix}"
+    convert_audio(payload.audioUrl, target, fmt)
+    media = {"m4a": "audio/mp4", "mp3": "audio/mpeg", "wav": "audio/wav"}[fmt]
+    safe = re.sub(r"[^a-zA-Z0-9._-]+", "-", payload.title).strip("-")[:80] or "suno-audio"
+    return FileResponse(
+        target,
+        media_type=media,
+        filename=f"{safe}{suffix}",
+        background=BackgroundTask(target.unlink, missing_ok=True),
+    )
+
+
 @app.post("/render", response_model=None)
 def render(payload: RenderRequest, authorization: str | None = Header(default=None)):
     authorize(authorization)
     data = payload.input
-    if data.get("mode") != "ai_music_video":
-        raise HTTPException(422, "This renderer only accepts ai_music_video jobs")
+    mode = data.get("mode")
+    if mode not in {"ai_music_video", "visualizer"}:
+        raise HTTPException(422, "Unsupported render mode")
     song = data.get("song") or {}
     audio_url = song.get("audio")
     lyrics = data.get("lyrics") or song.get("lyrics") or ""
     if not isinstance(audio_url, str) or not audio_url.startswith("https://"):
         raise HTTPException(422, "A public HTTPS audio URL is required")
-    if not isinstance(lyrics, str) or not lyrics.strip():
+    if mode == "ai_music_video" and (not isinstance(lyrics, str) or not lyrics.strip()):
         raise HTTPException(422, "Lyrics are required")
     result = RESULTS / f"{payload.jobId}.mp4"
     if result.exists():
