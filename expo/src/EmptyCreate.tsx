@@ -6,6 +6,7 @@ import { BookOpen, ChevronLeft, ChevronRight, FileText, Folder, Image as ImageIc
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, v24 } from './theme';
 import type { AppView, Project, Song } from './types';
+import type { SongInitState } from './SongInitScreen';
 import { resolveSuno } from './api';
 
 const DEFAULT='https://suno.com/s/tszo0jGdVUua4rT4';
@@ -24,11 +25,13 @@ export function EmptyCreate({
   onNavigate,
   projects,
   onOpenProject,
+  onInitChange,
 }:{
   onResolved:(song:Song,input:string)=>void;
   onNavigate:(view:AppView)=>void;
   projects:Project[];
   onOpenProject:(project:Project)=>void;
+  onInitChange:(state:SongInitState)=>void;
 }) {
   const {width}=useWindowDimensions();
   const mobile=width<=v24.mobileBreakpoint;
@@ -41,22 +44,34 @@ export function EmptyCreate({
   const [error,setError]=useState('');
   const [collapsed,setCollapsed]=useState(false);
 
-  const analyze=async()=>{
-    if(!input.trim())return;
+  const openResolvedSource=async(value:string,presetId?:string)=>{
+    if(!value.trim())return;
     setLoading(true);setError('');
-    try{const song=await resolveSuno(input.trim());onResolved(song,input.trim())}
-    catch(e){setError(e instanceof Error?e.message:'Không phân tích được link')}
-    finally{setLoading(false)}
-  };
-  const paste=async()=>{const value=(await Clipboard.getStringAsync()).trim();if(value)setInput(value)};
-  const openFeatured=async(presetId:string)=>{
-    setLoading(true);setError('');
+    onInitChange({visible:true,progress:5,title:'Đang mở bài hát mới',detail:'Đọc thông tin bài hát từ Suno…'});
     try{
-      const song=await resolveSuno(DEFAULT);
-      onResolved({...song,style:presetId},DEFAULT);
-    }catch(e){setError(e instanceof Error?e.message:'Không mở được mẫu video')}
-    finally{setLoading(false)}
+      const song=await resolveSuno(value.trim());
+      onInitChange({visible:true,progress:24,title:'Đang tải âm thanh',detail:'Chuẩn bị audio và dữ liệu preview…'});
+      if(song.audio){
+        const response=await fetch(song.audio,{cache:'no-store'});
+        if(!response.ok)throw new Error('Không tải được binary audio.');
+        await response.blob();
+      }
+      onInitChange({visible:true,progress:82,title:'Đang dựng Studio',detail:'Ghép audio và preview…'});
+      await new Promise<void>(resolve=>setTimeout(resolve,90));
+      const hydrated=presetId?{...song,style:presetId}:song;
+      onInitChange({visible:true,progress:100,title:'Sẵn sàng',detail:'Mọi dữ liệu đã được khởi tạo.'});
+      onResolved(hydrated,value.trim());
+      await new Promise<void>(resolve=>setTimeout(resolve,80));
+    }catch(e){
+      setError(e instanceof Error?e.message:'Không phân tích được link');
+    }finally{
+      setLoading(false);
+      onInitChange({visible:false,progress:0,title:'Đang khởi tạo bài hát',detail:'Chuẩn bị dữ liệu mới…'});
+    }
   };
+  const analyze=async()=>openResolvedSource(input.trim());
+  const paste=async()=>{const value=(await Clipboard.getStringAsync()).trim();if(value)setInput(value)};
+  const openFeatured=async(presetId:string)=>openResolvedSource(DEFAULT,presetId);
   const pickAudio=async()=>{
     setError('');
     try{
@@ -64,9 +79,16 @@ export function EmptyCreate({
       if(result.canceled)return;
       const item=result.assets[0];
       if(!item)return;
+      onInitChange({visible:true,progress:12,title:'Đang mở file audio',detail:'Đọc metadata và thời lượng…'});
+      await new Promise<void>(resolve=>setTimeout(resolve,80));
       const title=(item.name||'Local audio').replace(/\.[^.]+$/,'');
+      onInitChange({visible:true,progress:55,title:'Đang mở file audio',detail:'Tạo cover và timeline mặc định…'});
+      await new Promise<void>(resolve=>setTimeout(resolve,80));
+      onInitChange({visible:true,progress:100,title:'Sẵn sàng',detail:'Mọi dữ liệu đã được khởi tạo.'});
       onResolved({title,creator:'Local audio',audio:item.uri,duration:0,lyrics:''},item.uri);
+      await new Promise<void>(resolve=>setTimeout(resolve,60));
     }catch(e){setError(e instanceof Error?e.message:'Không mở được file audio')}
+    finally{onInitChange({visible:false,progress:0,title:'Đang khởi tạo bài hát',detail:'Chuẩn bị dữ liệu mới…'})}
   };
 
   const railWidth=stacked?0:(collapsed?(mid?72:76):(mid?210:250));
