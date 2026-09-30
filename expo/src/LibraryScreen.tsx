@@ -83,7 +83,7 @@ const styles=StyleSheet.create({
   content:{minHeight:'100%',marginLeft:v24.railWidth,paddingTop:v24.headerHeight+42,paddingHorizontal:42,paddingBottom:120},
   contentCompact:{marginLeft:0,paddingTop:0,paddingHorizontal:18,paddingBottom:100},
   head:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:20,borderBottomWidth:1,borderColor:'#242b35',paddingBottom:24},
-  headCompact:{flexDirection:'column',alignItems:'stretch',paddingTop:20},
+  headCompact:{flexDirection:'column',alignItems:'stretch',paddingTop:0},
   kicker:{color:'#8d72ff',fontSize:9,fontWeight:'800',letterSpacing:3},
   title:{color:'#f5f7fb',fontSize:32,fontWeight:'400',marginTop:7},titleCompact:{fontSize:27},
   headSub:{color:'#7f8a9b',fontSize:12,marginTop:7},
