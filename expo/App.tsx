@@ -223,7 +223,7 @@ const styles=StyleSheet.create({
     flexDirection:'row',alignItems:'center',borderBottomWidth:1,borderColor:'#202630',
     backgroundColor:'#090d13',
   },
-  brand:{width:v24.railWidth,height:'100%',flexDirection:'row',alignItems:'center',gap:12,paddingLeft:26},
+  brand:{width:240,height:'100%',flexDirection:'row',alignItems:'center',gap:12,paddingLeft:26},
   brandMark:{width:25,height:32,alignItems:'center',justifyContent:'center'},
   brandText:{color:'#f5f7fb',fontSize:21,fontWeight:'700'},
   headerCenter:{flex:1,height:'100%',alignItems:'center',justifyContent:'center'},
