@@ -34,7 +34,8 @@
     "mediabunny": "^1.56.2",
     "@mediabunny/mp3-encoder": "^1.56.2",
     "munim-ffmpeg": "0.8.0",
-    "react-native-nitro-modules": "0.36.5"
+    "react-native-nitro-modules": "0.36.5",
+    "expo-document-picker": "~57.0.2"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
