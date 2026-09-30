@@ -15,6 +15,10 @@ export class V24ReactRendererContainer extends Container<RendererEnv>{
     RENDER_SERVICE_TOKEN:String(env.RENDER_SERVICE_TOKEN||''),
     AUDIO_SOURCE_HOSTS:'sunoapp.aiautotool.com',
   };
+  entrypoint=[
+    'sh','-lc',
+    "python -m pip install --no-cache-dir 'fastapi==0.115.12' 'uvicorn[standard]==0.34.2' 'requests==2.32.3' 'VibesAI-api==1.5.0' >/tmp/pip.log 2>&1 && python -c \"import urllib.request; urllib.request.urlretrieve('https://raw.githubusercontent.com/aiautotool/sunodown/4942ca8e655eaec877955c70c1a3f63d563959c8/services/vibes-renderer/app.py','/tmp/app.py')\" && uvicorn --app-dir /tmp app:app --host 0.0.0.0 --port 8080"
+  ];
 }
 
 function pool(jobId:string){
