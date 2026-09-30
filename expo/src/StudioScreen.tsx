@@ -3,9 +3,11 @@ import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, Style
 import * as ImagePicker from 'expo-image-picker';
 import { ChevronDown, Download, Image as ImageIcon, Music2, Palette, Play, RefreshCw, Save, SlidersHorizontal, Sparkles, Subtitles, Upload, Wand2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { KaraokeLine, Song, StudioPreset } from './types';
+import type { KaraokeLine, RenderJob, Song, StudioPreset } from './types';
 import { colors, v24 } from './theme';
-import { regenerateSubtitle } from './api';
+import { audioExportUrl, regenerateSubtitle, renderResultUrl, startVisualizerRender, waitForRender, type CloudRenderStatus } from './api';
+import { saveRemoteFile, safeFilename, shareTextFile } from './file-actions';
+import { useStudioPlayback } from './useStudioPlayback';
 
 const presets:StudioPreset[]=[
   {id:'cinematic',name:'Cinematic',subtitle:'Điện ảnh cảm xúc',colors:['#241d3d','#8b6cff'],waveform:'bars',lyrics:'karaoke'},
@@ -19,7 +21,7 @@ const presets:StudioPreset[]=[
 const fmt=(n=0)=>`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 type Fold='background'|'style'|'subtitle'|'audio'|null;
 
-export function StudioScreen({song,onSave}:{song:Song;onSave:()=>void}){
+export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>void;onRenderJob:(job:RenderJob)=>void}){
   const {height}=useWindowDimensions();
   const [preset,setPreset]=useState(presets[0]!);
   const [background,setBackground]=useState<string|undefined>(song.picture);
@@ -28,6 +30,11 @@ export function StudioScreen({song,onSave}:{song:Song;onSave:()=>void}){
   const [subError,setSubError]=useState('');
   const [fold,setFold]=useState<Fold>('style');
   const [saved,setSaved]=useState(false);
+  const [rendering,setRendering]=useState(false);
+  const [renderProgress,setRenderProgress]=useState(0);
+  const [renderMessage,setRenderMessage]=useState('');
+  const [downloadBusy,setDownloadBusy]=useState('');
+  const playback=useStudioPlayback(song);
   const lyricLines=useMemo(()=>song.lyrics?.split(/\n+/).map(v=>v.trim()).filter(Boolean).slice(0,14)||[],[song.lyrics]);
   const stageHeight=Math.max(420,height-240);
 
@@ -44,6 +51,42 @@ export function StudioScreen({song,onSave}:{song:Song;onSave:()=>void}){
     finally{setSubLoading(false)}
   };
 
+  const toLocalJob=(status:CloudRenderStatus):RenderJob=>({
+    id:status.id,title:status.title||song.title,progress:status.progress||0,status:status.status,
+    createdAt:status.createdAt||Date.now(),resultUrl:status.resultUrl||undefined,error:status.error||undefined,
+  });
+  const exportVideo=async(durationSeconds?:number)=>{
+    if(rendering)return;
+    setRendering(true);setRenderProgress(0);setRenderMessage('');
+    try{
+      const created=await startVisualizerRender(song,preset.id,durationSeconds);
+      onRenderJob(toLocalJob(created));
+      const final=await waitForRender(created.id,(status)=>{setRenderProgress(status.progress||0);onRenderJob(toLocalJob(status));});
+      if(final.status!=='completed'||!final.resultUrl)throw new Error(final.error||'Render chưa tạo được video.');
+      await saveRemoteFile(renderResultUrl(final.resultUrl),safeFilename(song.title)+(durationSeconds?'-30s':'')+'.mp4','video/mp4');
+      setRenderMessage('Video ready · đã mở lưu/chia sẻ.');
+    }catch(e){setRenderMessage(e instanceof Error?e.message:'Không thể xuất video.')}
+    finally{setRendering(false)}
+  };
+  const downloadAudio=async(format:'m4a'|'mp3'|'wav')=>{
+    if(downloadBusy)return;
+    setDownloadBusy(format);setRenderMessage('');
+    try{await saveRemoteFile(audioExportUrl(song,format),safeFilename(song.title)+'.'+format,format==='wav'?'audio/wav':format==='mp3'?'audio/mpeg':'audio/mp4')}
+    catch(e){setRenderMessage(e instanceof Error?e.message:'Không thể xuất audio.')}
+    finally{setDownloadBusy('')}
+  };
+  const exportSrtText=()=>timeline.map((line,index)=>{
+    const stamp=(seconds:number)=>{const ms=Math.max(0,Math.round(seconds*1000));const h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000),s=Math.floor(ms%60000/1000),x=ms%1000;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+','+String(x).padStart(3,'0')};
+    return String(index+1)+'\n'+stamp(line.start)+' --> '+stamp(line.end)+'\n'+line.text+'\n';
+  }).join('\n');
+  const downloadText=async(format:'txt'|'srt')=>{
+    try{
+      const text=format==='srt'?exportSrtText():(song.lyrics||'');
+      if(!text.trim())throw new Error(format==='srt'?'Subtitle chưa có timestamp.':'Bài hát chưa có lyrics.');
+      await shareTextFile(text,safeFilename(song.title)+'-lyrics.'+format,format==='srt'?'application/x-subrip':'text/plain');
+    }catch(e){setRenderMessage(e instanceof Error?e.message:'Không thể lưu file lời.')}
+  };
+
   return <View style={styles.root}>
     <ScrollView style={styles.canvasScroll} contentContainerStyle={styles.canvasColumn}>
       <View style={[styles.stage,{height:stageHeight}]}>
@@ -57,12 +100,12 @@ export function StudioScreen({song,onSave}:{song:Song;onSave:()=>void}){
         <View style={styles.wave}>
           {Array.from({length:54}).map((_,i)=><View key={i} style={[styles.bar,{height:8+((i*17)%48)}]}/>)}
         </View>
-        <Pressable style={styles.centerPlay}><Play size={27} color="#fff" fill="#fff"/></Pressable>
+        <Pressable style={styles.centerPlay} onPress={playback.toggle}><Play size={27} color="#fff" fill="#fff"/></Pressable>
       </View>
 
       <View style={styles.player}>
-        <Pressable style={styles.playerBtn}><Play size={23} color="#fff" fill="#fff"/></Pressable>
-        <Text style={styles.playerTime}>0:00 / {fmt(song.duration)}</Text>
+        <Pressable style={styles.playerBtn} onPress={playback.toggle}><Play size={23} color="#fff" fill="#fff"/></Pressable>
+        <Text style={styles.playerTime}>{fmt(playback.current)} / {fmt(playback.duration)}</Text>
         <View style={styles.seek}><View style={styles.seekFill}/><View style={styles.seekKnob}/></View>
         <Music2 size={19} color="#d7dde7"/>
         <SlidersHorizontal size={18} color="#aeb7c5"/>
@@ -79,7 +122,7 @@ export function StudioScreen({song,onSave}:{song:Song;onSave:()=>void}){
       <View style={styles.firstRun}>
         <Pressable style={[styles.firstRunItem,styles.firstRunPrimary]} onPress={()=>setFold('style')}><Text style={styles.firstRunStrong}>1 · Chọn mẫu</Text><Text style={styles.firstRunSub}>Mẫu hoàn chỉnh</Text></Pressable>
         <View style={styles.firstRunItem}><Text style={styles.firstRunStrong}>2 · Xem preview</Text><Text style={styles.firstRunSub}>Chạm Play để kiểm tra</Text></View>
-        <Pressable style={styles.firstRunItem}><Text style={styles.firstRunStrong}>3 · Xuất video</Text><Text style={styles.firstRunSub}>Tạo video</Text></Pressable>
+        <Pressable style={styles.firstRunItem} onPress={()=>void exportVideo()}><Text style={styles.firstRunStrong}>3 · Xuất video</Text><Text style={styles.firstRunSub}>{rendering?Math.round(renderProgress)+'%':'Tạo video'}</Text></Pressable>
       </View>
 
       <EditorTimeline song={song} background={background} preset={preset} timeline={timeline}/>
@@ -141,11 +184,15 @@ export function StudioScreen({song,onSave}:{song:Song;onSave:()=>void}){
     </ScrollView>
 
     <View style={styles.actions}>
-      <Pressable style={styles.export}><Upload size={20} color="#fff"/><Text style={styles.exportText}>Export {fmt(song.duration)} video</Text></Pressable>
+      {!!renderMessage&&<Text style={styles.renderMessage}>{renderMessage}</Text>}
+      <Pressable style={[styles.export,rendering&&styles.disabled]} disabled={rendering} onPress={()=>void exportVideo()}><Upload size={20} color="#fff"/><Text style={styles.exportText}>{rendering?'Rendering '+Math.round(renderProgress)+'%':'Export '+fmt(song.duration)+' video'}</Text></Pressable>
       <View style={styles.downloads}>
-        <Pressable style={styles.downloadBtn}><Play size={15} color="#cfc5ff"/><Text style={styles.downloadText}>30s cao trào</Text></Pressable>
-        <Pressable style={styles.downloadBtn}><Download size={15} color="#cfc5ff"/><Text style={styles.downloadText}>MP3</Text></Pressable>
-        <Pressable style={styles.downloadBtn}><Download size={15} color="#cfc5ff"/><Text style={styles.downloadText}>WAV</Text></Pressable>
+        <Pressable style={styles.downloadBtn} disabled={rendering} onPress={()=>void exportVideo(30)}><Play size={15} color="#cfc5ff"/><Text style={styles.downloadText}>30s</Text></Pressable>
+        <Pressable style={styles.downloadBtn} disabled={!!downloadBusy} onPress={()=>void downloadAudio('mp3')}><Download size={15} color="#cfc5ff"/><Text style={styles.downloadText}>{downloadBusy==='mp3'?'…':'MP3'}</Text></Pressable>
+        <Pressable style={styles.downloadBtn} disabled={!!downloadBusy} onPress={()=>void downloadAudio('wav')}><Download size={15} color="#cfc5ff"/><Text style={styles.downloadText}>{downloadBusy==='wav'?'…':'WAV'}</Text></Pressable>
+        <Pressable style={styles.downloadBtn} disabled={!!downloadBusy} onPress={()=>void downloadAudio('m4a')}><Music2 size={15} color="#cfc5ff"/><Text style={styles.downloadText}>M4A</Text></Pressable>
+        <Pressable style={styles.downloadBtn} onPress={()=>void downloadText('txt')}><Subtitles size={15} color="#cfc5ff"/><Text style={styles.downloadText}>Lyrics</Text></Pressable>
+        <Pressable style={styles.downloadBtn} onPress={()=>void downloadText('srt')}><Subtitles size={15} color="#cfc5ff"/><Text style={styles.downloadText}>SRT</Text></Pressable>
       </View>
     </View>
   </View>
@@ -192,7 +239,8 @@ const styles=StyleSheet.create({
   optionWrap:{flexDirection:'row',flexWrap:'wrap',gap:7},option:{borderWidth:1,borderColor:'#303947',borderRadius:8,backgroundColor:'#151c27',paddingHorizontal:10,paddingVertical:8},optionActive:{borderColor:'#8a67ff',backgroundColor:'rgba(125,91,255,.18)'},optionText:{color:'#aeb8c7',fontSize:11},optionTextActive:{color:'#fff'},regen:{height:38,borderRadius:8,backgroundColor:'#7658e9',flexDirection:'row',alignItems:'center',justifyContent:'center',gap:7,marginBottom:8},regenText:{color:'#fff',fontSize:10,fontWeight:'700'},error:{color:'#ff9da5',fontSize:9,marginBottom:7},cue:{minHeight:34,flexDirection:'row',gap:8,alignItems:'center',borderBottomWidth:1,borderColor:'#1f2631'},cueTime:{width:35,color:'#9478ff',fontSize:8},cueText:{flex:1,color:'#b9c1cd',fontSize:9},
   visualSync:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginTop:8,borderWidth:1,borderColor:'rgba(74,222,128,.18)',borderRadius:9,backgroundColor:'rgba(34,197,94,.07)',paddingHorizontal:9,paddingVertical:7},visualSyncLabel:{color:'#9ca3af',fontSize:9,fontWeight:'700',letterSpacing:.4},visualSyncHash:{color:'#86efac',fontSize:9,fontWeight:'700'},
   actions:{position:'absolute',right:0,bottom:0,zIndex:26,width:v24.inspectorWidth,borderTopWidth:1,borderColor:'#29313e',backgroundColor:'#0a0e14',paddingTop:14,paddingHorizontal:25,paddingBottom:18},
-  export:{height:58,borderRadius:9,backgroundColor:'#7057f8',flexDirection:'row',alignItems:'center',justifyContent:'center',gap:12},exportText:{color:'#fff',fontSize:13,fontWeight:'700'},downloads:{flexDirection:'row',gap:8,marginTop:9},downloadBtn:{flex:1,minHeight:42,borderWidth:1,borderColor:'#6f57dd',borderRadius:8,backgroundColor:'rgba(114,83,230,.15)',alignItems:'center',justifyContent:'center',gap:4},downloadText:{color:'#cfc5ff',fontSize:9,textAlign:'center'},
+  renderMessage:{color:'#c7bedf',fontSize:9,lineHeight:14,marginBottom:8},disabled:{opacity:.55},
+  export:{height:58,borderRadius:9,backgroundColor:'#7057f8',flexDirection:'row',alignItems:'center',justifyContent:'center',gap:12},exportText:{color:'#fff',fontSize:13,fontWeight:'700'},downloads:{flexDirection:'row',flexWrap:'wrap',gap:8,marginTop:9},downloadBtn:{flex:1,minHeight:42,borderWidth:1,borderColor:'#6f57dd',borderRadius:8,backgroundColor:'rgba(114,83,230,.15)',alignItems:'center',justifyContent:'center',gap:4},downloadText:{color:'#cfc5ff',fontSize:9,textAlign:'center'},
   editorTimeline:{marginTop:18,borderWidth:1,borderColor:'#202735',borderRadius:14,backgroundColor:'#090d14',overflow:'hidden'},timelineHead:{height:52,flexDirection:'row',alignItems:'center',gap:9,paddingHorizontal:14,borderBottomWidth:1,borderColor:'#202735'},timelineHeadTitle:{color:'#f4f6fb',fontSize:12,fontWeight:'800'},timelineHeadSub:{flex:1,color:'#727d90',fontSize:11},timelineIcon:{width:32,height:32,borderWidth:1,borderColor:'#313a49',borderRadius:9,backgroundColor:'#111722',alignItems:'center',justifyContent:'center'},
   timelineCanvas:{height:205,paddingTop:30,position:'relative',backgroundColor:'#070a10'},ruler:{position:'absolute',left:0,right:0,top:0,height:30,flexDirection:'row',borderBottomWidth:1,borderColor:'#28303d'},rulerText:{color:'#8792a5',fontSize:10,marginLeft:4,marginTop:3},rulerTick:{height:13,borderLeftWidth:1,borderColor:'#3b4556',marginTop:4},
   trackRow:{height:76,borderBottomWidth:1,borderColor:'#171d27',paddingTop:7,position:'relative'},trackLabel:{position:'absolute',left:6,top:5,zIndex:8,color:'#818da1',fontSize:9,backgroundColor:'rgba(17,23,34,.85)',paddingHorizontal:6,paddingVertical:3,borderRadius:5},
