@@ -32,15 +32,96 @@ function clippedBuffer(ctx:AudioContext,input:AudioBuffer,start:number,duration:
   }
   return out;
 }
-async function applyEq(input:AudioBuffer,bass=0,vocal=0,treble=0){
-  if(Math.abs(bass)<.01&&Math.abs(vocal)<.01&&Math.abs(treble)<.01)return input;
+function audioStats(buffer:AudioBuffer){
+  let peak=0,sum=0,count=0;
+  for(let channel=0;channel<buffer.numberOfChannels;channel++){
+    const data=buffer.getChannelData(channel);
+    for(let i=0;i<data.length;i+=8){
+      const v=data[i]||0;peak=Math.max(peak,Math.abs(v));sum+=v*v;count++;
+    }
+  }
+  return {peak,rms:Math.sqrt(sum/Math.max(1,count))};
+}
+
+async function normalizeAudio(input:AudioBuffer,targetDb=-14,ceilingDb=-1){
+  const {peak,rms}=audioStats(input);
+  if(rms<1e-7)return input;
+  const target=Math.pow(10,targetDb/20),ceiling=Math.pow(10,ceilingDb/20);
+  const byRms=target/rms,byPeak=peak>0?ceiling/peak:byRms;
+  const gain=Math.max(.25,Math.min(4,byRms,byPeak));
+  if(Math.abs(gain-1)<.01)return input;
   const offline=new OfflineAudioContext(input.numberOfChannels,input.length,input.sampleRate);
   const source=offline.createBufferSource();source.buffer=input;
-  const low=offline.createBiquadFilter();low.type='lowshelf';low.frequency.value=120;low.gain.value=bass;
-  const mid=offline.createBiquadFilter();mid.type='peaking';mid.frequency.value=2500;mid.Q.value=.9;mid.gain.value=vocal;
-  const high=offline.createBiquadFilter();high.type='highshelf';high.frequency.value=8000;high.gain.value=treble;
-  source.connect(low);low.connect(mid);mid.connect(high);high.connect(offline.destination);source.start();
+  const node=offline.createGain();node.gain.value=gain;
+  source.connect(node);node.connect(offline.destination);source.start();
   return offline.startRendering();
+}
+
+async function applyAudioProcessing(input:AudioBuffer,options:VisualizerExportOptions){
+  const quick=[options.eqBass??0,options.eqVocal??0,options.eqTreble??0];
+  const bands=(options.masterEqBands||[]).filter(b=>b.enabled&&Math.abs(b.gain)>.01);
+  const profile=options.masteringProfile||'original';
+  const drive=Math.max(0,Math.min(.4,options.masterDrive??0));
+  const spatial=Boolean(options.spatialEnabled);
+  const needs=quick.some(v=>Math.abs(v)>.01)||bands.length>0||profile!=='original'||drive>.001||spatial;
+  if(!needs)return input;
+
+  const channels=spatial?Math.max(2,input.numberOfChannels):input.numberOfChannels;
+  const offline=new OfflineAudioContext(channels,input.length,input.sampleRate);
+  const source=offline.createBufferSource();source.buffer=input;
+  let node:AudioNode=source;
+
+  const connectFilter=(type:BiquadFilterType,frequency:number,gain:number,q:number)=>{
+    const filter=offline.createBiquadFilter();filter.type=type;filter.frequency.value=frequency;filter.gain.value=gain;filter.Q.value=q;
+    node.connect(filter);node=filter;
+  };
+  connectFilter('lowshelf',120,quick[0],.7);
+  connectFilter('peaking',2500,quick[1],.9);
+  connectFilter('highshelf',8000,quick[2],.7);
+  for(const band of bands)connectFilter(band.type,Math.max(20,Math.min(20000,band.frequency)),band.gain,Math.max(.3,Math.min(8,band.q)));
+
+  if(profile!=='original'){
+    const compressor=offline.createDynamicsCompressor();
+    compressor.threshold.value=Math.max(-30,Math.min(-6,options.masterThresholdDb??-18));
+    compressor.ratio.value=Math.max(1,Math.min(20,options.masterRatio??2));
+    compressor.attack.value=Math.max(.001,Math.min(.08,(options.masterAttackMs??10)/1000));
+    compressor.release.value=Math.max(.04,Math.min(.5,(options.masterReleaseMs??120)/1000));
+    node.connect(compressor);node=compressor;
+  }
+
+  if(drive>.001){
+    const shaper=offline.createWaveShaper(),curve=new Float32Array(2048),amount=1+drive*18;
+    for(let i=0;i<curve.length;i++){const x=i*2/(curve.length-1)-1;curve[i]=Math.tanh(x*amount)/Math.tanh(amount)}
+    shaper.curve=curve;shaper.oversample='2x';node.connect(shaper);node=shaper;
+  }
+
+  if(spatial){
+    const amount=Math.max(.2,Math.min(1,(options.spatialAmount??65)/100));
+    const mode=options.spatialMode||'immersive';
+    if(mode==='orbit'){
+      const panner=offline.createStereoPanner(),osc=offline.createOscillator(),depth=offline.createGain();
+      osc.type='sine';osc.frequency.value=.085;depth.gain.value=Math.min(1,amount);
+      osc.connect(depth);depth.connect(panner.pan);node.connect(panner);node=panner;osc.start(0);osc.stop(input.duration);
+    }else{
+      const splitter=offline.createChannelSplitter(2),merger=offline.createChannelMerger(2);
+      const leftGain=offline.createGain(),rightGain=offline.createGain(),leftCross=offline.createGain(),rightCross=offline.createGain();
+      const leftDelay=offline.createDelay(.05),rightDelay=offline.createDelay(.05);
+      const delay=mode==='immersive'?.018:.008,cross=mode==='immersive'?.22:.10;
+      leftGain.gain.value=1;rightGain.gain.value=1;leftCross.gain.value=cross*amount;rightCross.gain.value=cross*amount;
+      leftDelay.delayTime.value=delay;rightDelay.delayTime.value=delay;
+      node.connect(splitter);
+      splitter.connect(leftGain,0);leftGain.connect(merger,0,0);
+      splitter.connect(rightGain,input.numberOfChannels>1?1:0);rightGain.connect(merger,0,1);
+      splitter.connect(leftDelay,0);leftDelay.connect(leftCross);leftCross.connect(merger,0,1);
+      splitter.connect(rightDelay,input.numberOfChannels>1?1:0);rightDelay.connect(rightCross);rightCross.connect(merger,0,0);
+      node=merger;
+    }
+  }
+
+  node.connect(offline.destination);source.start();
+  let rendered=await offline.startRendering();
+  if(profile!=='original')rendered=await normalizeAudio(rendered,options.masterTargetLufs??-14,options.masterCeilingDb??-1);
+  return rendered;
 }
 async function loadBackground(uri?:string){
   if(!uri)return null;
@@ -156,7 +237,7 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
     const maxDuration=Math.max(.1,decoded.duration-start);
     const duration=Math.max(.5,Math.min(options.durationSeconds||song.duration||maxDuration,maxDuration));
     const clipped=clippedBuffer(audioContext,decoded,start,duration);
-    const audio=await applyEq(clipped,options.eqBass??0,options.eqVocal??0,options.eqTreble??0);
+    const audio=await applyAudioProcessing(clipped,options);
     const [width,height]=aspectSize(options.aspect,options.quality);
     const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
     const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Không khởi tạo được canvas video.');
