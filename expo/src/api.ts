@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { KaraokeLine, Song } from './types';
 
 export const API_BASE =
@@ -118,4 +119,101 @@ export function musicAudioUrl(song: Song) {
   return song.id
     ? absoluteUrl(`/api/music/audio?id=${encodeURIComponent(song.id)}`)
     : song.audio;
+}
+
+
+export type CloudRenderStatus = {
+  id: string;
+  status: 'queued'|'preparing'|'rendering'|'uploading'|'completed'|'failed';
+  progress: number;
+  title: string;
+  resultUrl?: string|null;
+  error?: string|null;
+  createdAt?: number;
+  updatedAt?: number;
+};
+
+const INSTALLATION_KEY='sunodown:v24react:installationId';
+
+function appOrigin(){
+  if(API_BASE)return API_BASE.replace(/\/$/,'');
+  if(typeof globalThis!=='undefined' && 'location' in globalThis){
+    const value=(globalThis as typeof globalThis & {location?:{origin?:string}}).location?.origin;
+    if(value)return value;
+  }
+  return 'https://sunoapp.aiautotool.com';
+}
+
+export async function installationId(){
+  const existing=await AsyncStorage.getItem(INSTALLATION_KEY);
+  if(existing)return existing;
+  const created='expo-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,12);
+  await AsyncStorage.setItem(INSTALLATION_KEY,created);
+  return created;
+}
+
+export function publicAudioUrl(song:Song){
+  if(song.id)return appOrigin()+'/api/music/audio?id='+encodeURIComponent(song.id);
+  if(song.audio.startsWith('http'))return song.audio;
+  return appOrigin()+song.audio;
+}
+
+export async function renderCapabilities(){
+  return request<{aiMusicVideo:boolean;backgroundVisualizer:boolean}>('/api/render/capabilities');
+}
+
+export async function startVisualizerRender(song:Song,presetId:string,durationSeconds?:number){
+  const caps=await renderCapabilities();
+  if(!caps.backgroundVisualizer)throw new Error('Renderer visualizer chưa sẵn sàng trên máy chủ.');
+  const installId=await installationId();
+  return request<CloudRenderStatus>('/api/render/jobs',{
+    method:'POST',
+    body:JSON.stringify({
+      mode:'visualizer',
+      installationId:installId,
+      title:song.title,
+      aspect:'9:16',
+      resolution:'720p',
+      duration:durationSeconds||song.duration||undefined,
+      style:[song.style,presetId].filter(Boolean).join(', '),
+      lyrics:song.lyrics||'',
+      presetId,
+      song:{
+        title:song.title,
+        audio:publicAudioUrl(song),
+        picture:song.picture||null,
+        lyrics:song.lyrics||'',
+        style:song.style||'',
+        tags:song.tags||'',
+        duration:durationSeconds||song.duration||undefined,
+        creator:song.creator||'Suno',
+      },
+    }),
+  });
+}
+
+export async function getRenderJob(id:string){
+  return request<CloudRenderStatus>('/api/render/jobs/'+encodeURIComponent(id),{
+    headers:{'cache-control':'no-cache',pragma:'no-cache'},
+  });
+}
+
+export async function waitForRender(id:string,onProgress?:(status:CloudRenderStatus)=>void){
+  for(let attempt=0;attempt<100;attempt+=1){
+    const status=await getRenderJob(id);
+    onProgress?.(status);
+    if(status.status==='completed'||status.status==='failed')return status;
+    await new Promise<void>(resolve=>setTimeout(resolve,2500));
+  }
+  throw new Error('Render quá thời gian chờ. Job vẫn được giữ trong mục Jobs.');
+}
+
+export function renderResultUrl(value:string){
+  return value.startsWith('http')?value:appOrigin()+value;
+}
+
+export function audioExportUrl(song:Song,format:'m4a'|'mp3'|'wav'){
+  if(!song.id)throw new Error('Audio export cần bài Suno có songId.');
+  const q=new URLSearchParams({songId:song.id,format,title:song.title});
+  return appOrigin()+'/api/audio/export?'+q.toString();
 }
