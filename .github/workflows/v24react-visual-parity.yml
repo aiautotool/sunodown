@@ -4,6 +4,7 @@ on:
   push:
     branches: [v24react]
     paths:
+      - 'expo/**'
       - '.github/workflows/v24react-visual-parity.yml'
   workflow_dispatch:
 
@@ -36,7 +37,7 @@ jobs:
           for(let attempt=0;attempt<40;attempt++){
             try{
               await page.goto('https://sunoapp.aiautotool.com/',{waitUntil:'domcontentloaded',timeout:30000});
-              await page.waitForTimeout(2400);
+              await page.waitForTimeout(3200);
               ready=await page.getByText('Sad Lyrics Cinema',{exact:true}).isVisible().catch(()=>false);
               if(ready)break;
             }catch{}
@@ -60,7 +61,7 @@ jobs:
 
           async function load(page,url){
             await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
-            await page.waitForTimeout(2700);
+            await page.waitForTimeout(3200);
           }
           async function shot(page,name){
             await page.screenshot({path:'visual-parity/'+name+'.png',fullPage:false});
