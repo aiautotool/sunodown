@@ -23,10 +23,12 @@ export function EmptyCreate({
   onResolved,
   onNavigate,
   projects,
+  onOpenProject,
 }:{
   onResolved:(song:Song,input:string)=>void;
   onNavigate:(view:AppView)=>void;
   projects:Project[];
+  onOpenProject:(project:Project)=>void;
 }) {
   const {width}=useWindowDimensions();
   const mobile=width<=v24.mobileBreakpoint;
@@ -47,6 +49,14 @@ export function EmptyCreate({
     finally{setLoading(false)}
   };
   const paste=async()=>{const value=(await Clipboard.getStringAsync()).trim();if(value)setInput(value)};
+  const openFeatured=async(presetId:string)=>{
+    setLoading(true);setError('');
+    try{
+      const song=await resolveSuno(DEFAULT);
+      onResolved({...song,style:presetId},DEFAULT);
+    }catch(e){setError(e instanceof Error?e.message:'Không mở được mẫu video')}
+    finally{setLoading(false)}
+  };
   const pickAudio=async()=>{
     setError('');
     try{
@@ -153,7 +163,7 @@ export function EmptyCreate({
           </View>
 
           {!!error&&<Text style={styles.error}>{error}</Text>}
-          {projects[0]&&<Pressable style={styles.continueCard}>
+          {projects[0]&&<Pressable style={styles.continueCard} onPress={()=>onOpenProject(projects[0]!)}>
             <Folder size={17} color="#8d72ff"/>
             <View style={{flex:1}}><Text style={styles.continueKicker}>TIẾP TỤC DỰ ÁN</Text><Text numberOfLines={1} style={styles.continueTitle}>{projects[0].title}</Text></View>
             <Text style={styles.sourceArrow}>›</Text>
@@ -203,7 +213,7 @@ export function EmptyCreate({
       <View style={styles.featured}>
         <View style={styles.featuredHead}><View style={styles.featuredTitleRow}><Text>🔥</Text><Text style={styles.featuredTitle}>Mẫu video nổi bật</Text></View><Text style={styles.featuredLink}>Xem tất cả  ›</Text></View>
         {stacked?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
-          {featured.map(([name,id,badge,gradient],index)=><TemplateCard key={id} name={name} badge={badge} gradient={gradient} index={index}/>)}
+          {featured.map(([name,id,badge,gradient],index)=><TemplateCard key={id} name={name} badge={badge} gradient={gradient} index={index} onPress={()=>void openFeatured(id)}/>)}
         </ScrollView>:<View style={styles.featuredGrid}>
           {featured.map(([name,id,badge,gradient],index)=><TemplateCard key={id} name={name} badge={badge} gradient={gradient} index={index} mid={mid}/>)}
         </View>}
@@ -220,7 +230,7 @@ export function EmptyCreate({
 function MiniTool({icon,label}:{icon:React.ReactNode;label:string}){return <View style={styles.miniTool}>{icon}<Text style={styles.miniToolText}>{label}</Text></View>}
 function SliderFake({label,value,text}:{label:string;value:number;text:string}){return <View style={styles.sliderRow}><Text style={styles.sliderLabel}>{label}</Text><View style={styles.sliderTrack}><LinearGradient colors={['#9c6aff','#7768ff']} style={[styles.sliderFill,{width:`${value}%`}]}/></View><Text style={styles.sliderValue}>{text}</Text></View>}
 function Benefit({icon,title,sub}:{icon:string;title:string;sub:string}){return <View style={styles.benefit}><View style={styles.benefitIcon}><Text style={styles.benefitIconText}>{icon}</Text></View><View style={{flex:1}}><Text style={styles.benefitTitle}>{title}</Text><Text style={styles.benefitSub}>{sub}</Text></View></View>}
-function TemplateCard({name,badge,gradient,index,mid=false}:{name:string;badge:string;gradient:readonly [string,string];index:number;mid?:boolean}){return <Pressable style={[styles.template,mid&&styles.templateMid,index===0&&styles.templateActive]}>
+function TemplateCard({name,badge,gradient,index,mid=false,onPress}:{name:string;badge:string;gradient:readonly [string,string];index:number;mid?:boolean;onPress:()=>void}){return <Pressable onPress={onPress} style={[styles.template,mid&&styles.templateMid,index===0&&styles.templateActive]}>
   <LinearGradient colors={gradient as any} style={styles.templateThumb}>
     <Image source={{uri:previewUri}} style={StyleSheet.absoluteFill} resizeMode="cover"/>
     <LinearGradient colors={['transparent','rgba(5,8,13,.68)']} style={StyleSheet.absoluteFill}/>
