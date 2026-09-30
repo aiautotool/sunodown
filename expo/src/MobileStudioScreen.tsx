@@ -5,8 +5,9 @@ import { ChevronDown, Image as ImageIcon, Menu, Music2, Play, RefreshCw, Save, S
 import { LinearGradient } from 'expo-linear-gradient';
 import type { KaraokeLine, RenderJob, Song } from './types';
 import { colors } from './theme';
-import { audioExportUrl, regenerateSubtitle, renderResultUrl, startVisualizerRender, waitForRender, type CloudRenderStatus } from './api';
-import { saveRemoteFile, safeFilename } from './file-actions';
+import { regenerateSubtitle } from './api';
+import { saveExportedAsset } from './file-actions';
+import { exportAudio, exportVisualizer } from './render-engine';
 import { useStudioPlayback } from './useStudioPlayback';
 
 type Tool='presets'|'style'|'lyrics'|'audio'|null;
@@ -39,25 +40,33 @@ export function MobileStudioScreen({song,onSave,onBack,onRenderJob}:{song:Song;o
   };
   const save=()=>{onSave();setSaved(true);setTimeout(()=>setSaved(false),1400)};
 
-  const toLocalJob=(status:CloudRenderStatus):RenderJob=>({id:status.id,title:status.title||song.title,progress:status.progress||0,status:status.status,createdAt:status.createdAt||Date.now(),resultUrl:status.resultUrl||undefined,error:status.error||undefined});
   const exportVideo=async(durationSeconds?:number)=>{
     if(rendering)return;
+    const jobId='local-'+Date.now().toString(36);
+    const started=Date.now();
     setRendering(true);setRenderProgress(0);setRenderMessage('');
+    onRenderJob({id:jobId,title:song.title,progress:0,status:'queued',createdAt:started});
     try{
-      const created=await startVisualizerRender(song,'cinematic',durationSeconds);
-      onRenderJob(toLocalJob(created));
-      const final=await waitForRender(created.id,status=>{setRenderProgress(status.progress||0);onRenderJob(toLocalJob(status));});
-      if(final.status!=='completed'||!final.resultUrl)throw new Error(final.error||'Render chưa tạo được video.');
-      await saveRemoteFile(renderResultUrl(final.resultUrl),safeFilename(song.title)+(durationSeconds?'-30s':'')+'.mp4','video/mp4');
+      const asset=await exportVisualizer(song,'cinematic',durationSeconds,(progress)=>{
+        setRenderProgress(progress);
+        onRenderJob({id:jobId,title:song.title,progress,status:'rendering',createdAt:started});
+      });
+      await saveExportedAsset(asset);
+      onRenderJob({id:jobId,title:song.title,progress:100,status:'completed',createdAt:started});
       setRenderMessage('Video ready · đã mở lưu/chia sẻ.');
-    }catch(e){setRenderMessage(e instanceof Error?e.message:'Không thể xuất video.')}
-    finally{setRendering(false)}
+    }catch(e){
+      const message=e instanceof Error?e.message:'Không thể xuất video.';
+      onRenderJob({id:jobId,title:song.title,progress:renderProgress,status:'failed',createdAt:started,error:message});
+      setRenderMessage(message);
+    }finally{setRendering(false)}
   };
   const downloadAudio=async(format:'m4a'|'mp3'|'wav')=>{
     if(downloadBusy)return;
     setDownloadBusy(format);setRenderMessage('');
-    try{await saveRemoteFile(audioExportUrl(song,format),safeFilename(song.title)+'.'+format,format==='wav'?'audio/wav':format==='mp3'?'audio/mpeg':'audio/mp4')}
-    catch(e){setRenderMessage(e instanceof Error?e.message:'Không thể xuất audio.')}
+    try{
+      const asset=await exportAudio(song,format);
+      await saveExportedAsset(asset);
+    }catch(e){setRenderMessage(e instanceof Error?e.message:'Không thể xuất audio.')}
     finally{setDownloadBusy('')}
   };
 
