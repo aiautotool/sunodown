@@ -40,6 +40,54 @@ async function backgroundFor(uri?:string){
 function assertResult(result:{success:boolean;cancelled?:boolean;failStackTrace?:string|null;output?:string|null}){
   if(!result.success&&!result.cancelled)throw new Error(result.failStackTrace||result.output||'FFmpeg xử lý thất bại.');
 }
+function clamp(value:number,min:number,max:number){return Math.max(min,Math.min(max,value))}
+function audioChain(options:VisualizerExportOptions){
+  const filters:string[]=[];
+  const pushEq=(frequency:number,q:number,gain:number)=>{
+    if(Math.abs(gain)<.01)return;
+    filters.push(`equalizer=f=${Math.round(clamp(frequency,20,20000))}:t=q:w=${clamp(q,.3,8).toFixed(2)}:g=${clamp(gain,-12,12).toFixed(2)}`);
+  };
+  pushEq(120,1,options.eqBass??0);
+  pushEq(2500,.9,options.eqVocal??0);
+  pushEq(8000,1,options.eqTreble??0);
+  for(const band of options.masterEqBands||[]){
+    if(!band.enabled)continue;
+    pushEq(band.frequency,band.q,band.gain);
+  }
+
+  const profile=options.masteringProfile||'original';
+  if(profile!=='original'){
+    const thresholdDb=clamp(options.masterThresholdDb??-18,-30,-6);
+    const threshold=Math.pow(10,thresholdDb/20);
+    const ratio=clamp(options.masterRatio??2,1,20);
+    const attack=clamp(options.masterAttackMs??10,.01,2000);
+    const release=clamp(options.masterReleaseMs??120,.01,9000);
+    filters.push(`acompressor=threshold=${threshold.toFixed(6)}:ratio=${ratio.toFixed(2)}:attack=${attack.toFixed(2)}:release=${release.toFixed(2)}:makeup=1:knee=2.82843:link=maximum:detection=rms`);
+
+    const drive=clamp(options.masterDrive??0,0,.4);
+    if(drive>.001){
+      const softThreshold=clamp(1-drive*.7,.68,1);
+      filters.push(`asoftclip=type=tanh:threshold=${softThreshold.toFixed(3)}:output=.98:oversample=2`);
+    }
+  }
+
+  if(options.spatialEnabled){
+    const amount=clamp((options.spatialAmount??65)/100,.2,1);
+    if(options.spatialMode==='orbit'){
+      filters.push(`apulsator=mode=sine:amount=${(.25+amount*.7).toFixed(3)}:offset_l=0:offset_r=.5:timing=hz:hz=.08`);
+    }else{
+      const multiplier=options.spatialMode==='immersive'?1+amount*.9:1+amount*.5;
+      filters.push(`extrastereo=m=${multiplier.toFixed(3)}:c=1`);
+    }
+  }
+
+  if(profile!=='original'){
+    const target=clamp(options.masterTargetLufs??-14,-70,-5);
+    const ceiling=clamp(options.masterCeilingDb??-1,-9,0);
+    filters.push(`loudnorm=I=${target.toFixed(1)}:TP=${ceiling.toFixed(1)}:LRA=11,aresample=48000`);
+  }
+  return filters.length?filters.join(','):'anull';
+}
 export async function exportVisualizer(song:Song,options:VisualizerExportOptions,onProgress?:(progress:number)=>void):Promise<ExportAsset>{
   const base=FileSystem.cacheDirectory;
   if(!base)throw new Error('Thiết bị không cấp thư mục cache.');
@@ -72,8 +120,7 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
     }catch{}
   }
 
-  const bass=options.eqBass??0,vocal=options.eqVocal??0,treble=options.eqTreble??0;
-  const eq=`equalizer=f=120:t=q:w=1:g=${bass},equalizer=f=2500:t=q:w=.9:g=${vocal},equalizer=f=8000:t=q:w=1:g=${treble}`;
+  const processedAudio=audioChain(options);
   const spectrum=/spectrum|circle|ring|circular|neon/.test(options.wave||'');
   const waveH=Math.max(110,Math.round(height*Math.max(.08,Math.min(.25,(options.waveHeight||100)/650))));
   const density=Math.max(.35,Math.min(1.6,(options.waveDensity??72)/72));
@@ -88,14 +135,14 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
 
   let audioLabel='';
   if(options.visualVisible!==false&&!options.audioMuted){
-    filters.push(`[0:a]${eq},asplit=2[aout][aviz]`);
+    filters.push(`[0:a]${processedAudio},asplit=2[aout][aviz]`);
     filters.push(`[aviz]${viz}[viz]`);
     audioLabel='aout';
   }else if(options.visualVisible!==false){
-    filters.push(`[0:a]${eq}[aviz]`);
+    filters.push(`[0:a]${processedAudio}[aviz]`);
     filters.push(`[aviz]${viz}[viz]`);
   }else if(!options.audioMuted){
-    filters.push(`[0:a]${eq}[aout]`);
+    filters.push(`[0:a]${processedAudio}[aout]`);
     audioLabel='aout';
   }
 
