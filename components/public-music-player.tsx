@@ -7,12 +7,16 @@ import {
   Share2,
   SlidersHorizontal,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useGlobalMusic,
   type GlobalMusicSong,
 } from '@/components/music-global-player';
-import { buildEstimatedKaraokeTimeline } from '@/app/lib/karaoke';
+import {
+  buildEstimatedKaraokeTimeline,
+  normalizeKaraokeTimeline,
+  type KaraokeLine,
+} from '@/app/lib/karaoke';
 
 type Props = {
   id: string;
@@ -49,6 +53,34 @@ export function PublicMusicPlayer({
     : duration || 0;
   const progress =
     resolvedDuration > 0 ? (time / resolvedDuration) * 100 : 0;
+  const [cloudTimeline, setCloudTimeline] = useState<KaraokeLine[]>([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/music/subtitle?songId=${encodeURIComponent(id)}&language=vi`,
+          {
+            signal: controller.signal,
+            cache: 'no-store',
+          },
+        );
+        if (!response.ok) return;
+        const payload = (await response.json()) as {
+          subtitle?: { lines?: KaraokeLine[] };
+        };
+        const timeline = normalizeKaraokeTimeline(
+          Array.isArray(payload.subtitle?.lines)
+            ? payload.subtitle!.lines!
+            : [],
+          duration || Number.POSITIVE_INFINITY,
+        );
+        if (timeline.length) setCloudTimeline(timeline);
+      } catch {}
+    })();
+    return () => controller.abort();
+  }, [duration, id]);
 
   const song = useMemo<GlobalMusicSong>(
     () => ({
@@ -60,8 +92,19 @@ export function PublicMusicPlayer({
       duration,
       tags: style,
       lyrics,
+      karaokeTimeline: cloudTimeline.length ? cloudTimeline : undefined,
     }),
-    [creator, duration, handle, id, lyrics, picture, style, title],
+    [
+      cloudTimeline,
+      creator,
+      duration,
+      handle,
+      id,
+      lyrics,
+      picture,
+      style,
+      title,
+    ],
   );
 
   const resolvedLyrics = active ? music.current?.lyrics || lyrics : lyrics;
@@ -78,11 +121,14 @@ export function PublicMusicPlayer({
     () =>
       active && music.current?.karaokeTimeline?.length
         ? music.current.karaokeTimeline
-        : resolvedLyrics && resolvedDuration > 0
-          ? buildEstimatedKaraokeTimeline(resolvedLyrics, resolvedDuration)
-          : [],
+        : cloudTimeline.length
+          ? cloudTimeline
+          : resolvedLyrics && resolvedDuration > 0
+            ? buildEstimatedKaraokeTimeline(resolvedLyrics, resolvedDuration)
+            : [],
     [
       active,
+      cloudTimeline,
       music.current?.karaokeTimeline,
       resolvedDuration,
       resolvedLyrics,
