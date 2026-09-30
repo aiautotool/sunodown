@@ -29,6 +29,16 @@ jobs:
           java-version: '17'
       - run: npm install
       - run: npx expo install --fix
+      - name: Enforce one UI source tree
+        shell: bash
+        run: |
+          test ! -f App.native.tsx
+          test ! -f App.ios.tsx
+          test ! -f App.android.tsx
+          test ! -f App.web.tsx
+          ! grep -R "react-native-webview\|WebView" . --exclude-dir=node_modules --include='*.ts' --include='*.tsx' --include='package.json'
+          ! grep -R "MobileStudioScreen" App.tsx src/StudioScreen.tsx
+          echo "One App.tsx and one responsive StudioScreen for Web/iOS/Android."
       - run: npm run typecheck
       - run: npm run build:web
       - name: Validate Android native project generation
