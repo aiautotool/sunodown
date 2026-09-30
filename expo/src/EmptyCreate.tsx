@@ -215,7 +215,7 @@ export function EmptyCreate({
         {stacked?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
           {featured.map(([name,id,badge,gradient],index)=><TemplateCard key={id} name={name} badge={badge} gradient={gradient} index={index} onPress={()=>void openFeatured(id)}/>)}
         </ScrollView>:<View style={styles.featuredGrid}>
-          {featured.map(([name,id,badge,gradient],index)=><TemplateCard key={id} name={name} badge={badge} gradient={gradient} index={index} mid={mid}/>)}
+          {featured.map(([name,id,badge,gradient],index)=><TemplateCard key={id} name={name} badge={badge} gradient={gradient} index={index} mid={mid} onPress={()=>void openFeatured(id)}/>)}
         </View>}
       </View>
 
