@@ -43,3 +43,8 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+# Expo universal client
+expo/node_modules/
+expo/.expo/
+expo/dist/
+expo/.env
