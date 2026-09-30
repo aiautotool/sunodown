@@ -1,5 +1,5 @@
 import { cloneElement, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image, ImageBackground, PanResponder, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Download, Menu, Music2, Pause, Play, Save, SlidersHorizontal, Sparkles, Subtitles, Upload, X } from 'lucide-react-native';
@@ -225,6 +225,14 @@ export function StudioScreen({
         titleScale:config.titleScale,
         creatorScale:config.creatorScale,
         subtitleScale:config.subtitleScale,
+        titleX:config.titleX,
+        titleY:config.titleY,
+        creatorX:config.creatorX,
+        creatorY:config.creatorY,
+        subtitleX:config.subtitleX,
+        subtitleY:config.subtitleY,
+        waveX:config.waveX,
+        waveY:config.waveY,
         quality:config.quality,
       },progress=>{
         setRenderProgress(progress);
@@ -305,6 +313,12 @@ export function StudioScreen({
     onToggle={playback.toggle}
     onSeek={value=>{playback.pause();playback.seekTo(value)}}
     desktopHeight={stageHeight}
+    editable={!rendering}
+    onConfigChange={setConfig}
+    onEditOverlay={key=>{
+      setQuickMode(false);
+      setTool(key==='wave'?'wave':key==='subtitle'?'lyrics':'text');
+    }}
   />;
 
   const subtitleBlock=<SubtitleBlock
@@ -357,8 +371,8 @@ export function StudioScreen({
     customPresets={customPresets}
     onSavePreset={saveVisualPreset}
     onDeletePreset={deleteVisualPreset}
-    panel={compact&&tool?tool:undefined}
-    onPanelChange={panel=>{if(compact)setTool(panel)}}
+    panel={tool||undefined}
+    onPanelChange={setTool}
   />;
 
   if(compact){
@@ -541,14 +555,18 @@ function stageLabel(stage:'idle'|'validation'|'prepare'|'render'|'finalize'){
 }
 
 function PreviewStage({
-  compact,song,config,background,selectedPreset,lyricLines,timeline,clips,trackState,currentTime,duration,seekPercent,playing,onToggle,onSeek,desktopHeight,
+  compact,song,config,background,selectedPreset,lyricLines,timeline,clips,trackState,currentTime,duration,seekPercent,playing,onToggle,onSeek,desktopHeight,editable,onConfigChange,onEditOverlay,
 }:{
   compact:boolean; song:Song; config:StudioVisualConfig; background?:string; selectedPreset:(typeof V24_PRESETS)[number];
   lyricLines:string[]; timeline:KaraokeLine[]; clips:MediaClip[]; trackState:TimelineTrackState; currentTime:number; duration:number; seekPercent:number;
-  playing:boolean; onToggle:()=>void; onSeek:(value:number)=>void; desktopHeight:number;
+  playing:boolean; onToggle:()=>void; onSeek:(value:number)=>void; desktopHeight:number; editable:boolean;
+  onConfigChange:(next:StudioVisualConfig)=>void; onEditOverlay:(key:'title'|'creator'|'subtitle'|'wave')=>void;
 }){
+  type OverlayKey='title'|'creator'|'subtitle'|'wave';
   const [seekWidth,setSeekWidth]=useState(1);
   const [stageBox,setStageBox]=useState({width:1,height:1});
+  const [selectedOverlay,setSelectedOverlay]=useState<OverlayKey|null>(null);
+  const dragOrigin=useRef({x:50,y:50});
   const ratio=aspectValue(config.aspect);
   const innerH=Math.max(1,Math.min(stageBox.height,stageBox.width/ratio));
   const innerW=Math.max(1,Math.min(stageBox.width,innerH*ratio));
@@ -558,7 +576,31 @@ function PreviewStage({
   const presetColors=backgroundPresetColors(config.backgroundPreset);
   const frameColors=config.backgroundMode==='preset'?[...presetColors]:[selectedPreset.accent,selectedPreset.secondary];
   const barCount=Math.max(28,Math.round((compact?46:72)*((config.waveDensity??72)/72)));
-  const titleY=67,creatorY=75,subtitleY=70,waveY=82;
+  const titleX=config.titleX??50,titleY=config.titleY??67;
+  const creatorX=config.creatorX??50,creatorY=config.creatorY??75;
+  const subtitleX=config.subtitleX??50,subtitleY=config.subtitleY??70;
+  const waveX=config.waveX??50,waveY=config.waveY??82;
+  const clampPct=(value:number)=>Math.max(4,Math.min(96,value));
+  const buildResponder=(key:OverlayKey,xKey:'titleX'|'creatorX'|'subtitleX'|'waveX',yKey:'titleY'|'creatorY'|'subtitleY'|'waveY',x:number,y:number)=>PanResponder.create({
+    onStartShouldSetPanResponder:()=>editable,
+    onMoveShouldSetPanResponder:(_,gesture)=>editable&&(Math.abs(gesture.dx)>2||Math.abs(gesture.dy)>2),
+    onPanResponderGrant:()=>{
+      setSelectedOverlay(key);
+      dragOrigin.current={x,y};
+    },
+    onPanResponderMove:(_,gesture)=>{
+      if(!editable)return;
+      const nextX=clampPct(dragOrigin.current.x+gesture.dx/Math.max(1,innerW)*100);
+      const nextY=clampPct(dragOrigin.current.y+gesture.dy/Math.max(1,innerH)*100);
+      onConfigChange({...config,[xKey]:nextX,[yKey]:nextY});
+    },
+    onPanResponderTerminationRequest:()=>false,
+  });
+  const titleResponder=useMemo(()=>buildResponder('title','titleX','titleY',titleX,titleY),[editable,innerW,innerH,titleX,titleY,config]);
+  const creatorResponder=useMemo(()=>buildResponder('creator','creatorX','creatorY',creatorX,creatorY),[editable,innerW,innerH,creatorX,creatorY,config]);
+  const subtitleResponder=useMemo(()=>buildResponder('subtitle','subtitleX','subtitleY',subtitleX,subtitleY),[editable,innerW,innerH,subtitleX,subtitleY,config]);
+  const waveResponder=useMemo(()=>buildResponder('wave','waveX','waveY',waveX,waveY),[editable,innerW,innerH,waveX,waveY,config]);
+  const editStyle=(key:OverlayKey)=>editable&&selectedOverlay===key?styles.overlaySelected:undefined;
 
   return <View>
     <View style={styles.previewHead}>
@@ -577,17 +619,35 @@ function PreviewStage({
           <Text style={[styles.localAudioTitle,compact&&styles.localAudioTitleCompact]}>{song.title}</Text>
           <Text style={styles.localAudioCreator}>{(song.creator||'Local audio').toUpperCase()}</Text>
         </View>}
-        {!trackState.visual.hidden&&<View style={[styles.titleOverlay,{top:(titleY+'%') as any}]}>
+        {!trackState.visual.hidden&&<Pressable
+          {...titleResponder.panHandlers}
+          onPress={()=>{setSelectedOverlay('title');onEditOverlay('title')}}
+          style={[styles.titleOverlay,editStyle('title'),{top:(titleY+'%') as any,transform:[{translateX:(titleX-50)*innerW/100},{translateY:-12}]}]}
+        >
           <Text numberOfLines={2} style={[styles.previewTitle,{color:config.titleColor,fontSize:Math.round((compact?18:24)*((config.titleScale??100)/100))}]}>{song.title}</Text>
-        </View>}
-        {!trackState.visual.hidden&&<View style={[styles.creatorOverlay,{top:(creatorY+'%') as any}]}><Text numberOfLines={1} style={[styles.previewCreator,{color:config.creatorColor,fontSize:Math.round((compact?9:12)*((config.creatorScale??100)/100))}]}>{song.creator||'Suno'}</Text></View>}
-        {!trackState.subtitle.hidden&&config.lyrics!=='off'&&timeline.length>0&&<View style={[styles.karaoke,{top:(subtitleY+'%') as any}]}>
+        </Pressable>}
+        {!trackState.visual.hidden&&<Pressable
+          {...creatorResponder.panHandlers}
+          onPress={()=>{setSelectedOverlay('creator');onEditOverlay('creator')}}
+          style={[styles.creatorOverlay,editStyle('creator'),{top:(creatorY+'%') as any,transform:[{translateX:(creatorX-50)*innerW/100},{translateY:-7}]}]}
+        >
+          <Text numberOfLines={1} style={[styles.previewCreator,{color:config.creatorColor,fontSize:Math.round((compact?9:12)*((config.creatorScale??100)/100))}]}>{song.creator||'Suno'}</Text>
+        </Pressable>}
+        {!trackState.subtitle.hidden&&config.lyrics!=='off'&&timeline.length>0&&<Pressable
+          {...subtitleResponder.panHandlers}
+          onPress={()=>{setSelectedOverlay('subtitle');onEditOverlay('subtitle')}}
+          style={[styles.karaoke,editStyle('subtitle'),{top:(subtitleY+'%') as any,transform:[{translateX:(subtitleX-50)*innerW/100},{translateY:-15}]}]}
+        >
           <Text style={[styles.karaokeMain,{color:config.subtitleActiveColor,fontSize:Math.round(29*((config.subtitleScale??100)/100))}]}>{timeline.find(line=>currentTime>=line.start&&currentTime<line.end)?.text||lyricLines[0]}</Text>
           <Text style={[styles.karaokeNext,{color:config.subtitleColor}]}>{timeline.find(line=>line.start>currentTime)?.text||lyricLines[1]||''}</Text>
-        </View>}
-        {!trackState.visual.hidden&&<View style={[styles.wave,compact&&styles.waveCompact,{top:(waveY+'%') as any,opacity:(config.waveOpacity??92)/100,transform:[{rotate:(config.waveRotation??0)+'deg'}]}]}>
+        </Pressable>}
+        {!trackState.visual.hidden&&<Pressable
+          {...waveResponder.panHandlers}
+          onPress={()=>{setSelectedOverlay('wave');onEditOverlay('wave')}}
+          style={[styles.wave,compact&&styles.waveCompact,editStyle('wave'),{top:(waveY+'%') as any,opacity:(config.waveOpacity??92)/100,transform:[{translateX:(waveX-50)*innerW/100},{translateY:compact?-17:-26},{rotate:(config.waveRotation??0)+'deg'}]}]}
+        >
           {Array.from({length:barCount}).map((_,i)=>{const h=Math.max(3,((compact?4:6)+((i*(compact?13:17))%(compact?22:34)))*((config.waveHeight??108)/108));return <View key={i} style={styles.mirrorBar}><View style={[styles.bar,{width:Math.max(1,Math.round((config.waveThickness??46)/30)),backgroundColor:i%2?(config.waveColor2||'#60a5fa'):(config.waveColor||'#d946ef'),height:h}]}/><View style={[styles.bar,styles.barMirror,{width:Math.max(1,Math.round((config.waveThickness??46)/30)),backgroundColor:i%2?(config.waveColor2||'#60a5fa'):(config.waveColor||'#d946ef'),height:h}]}/></View>})}
-        </View>}
+        </Pressable>}
         <Pressable style={[styles.centerPlay,compact&&styles.centerPlayCompact,playing&&styles.centerPlayPlaying]} onPress={onToggle}>
           {playing?<Pause size={compact?22:25} color="#fff" fill="#fff"/>:<Play size={compact?24:27} color="#fff" fill="#fff"/>}
         </Pressable>
@@ -610,10 +670,9 @@ function PreviewStage({
       <Music2 size={compact?17:19} color="#d7dde7"/>
       {!compact&&<SlidersHorizontal size={18} color="#aeb7c5"/>}
     </View>
-    <Text style={styles.previewHint}>Preview dùng audio thật làm clock. Nắm trực tiếp sóng hoặc subtitle trên video để kéo tới vị trí mong muốn.</Text>
+    <Text style={styles.previewHint}>Chạm title / subtitle / sóng để mở chỉnh sửa. Kéo trực tiếp trên preview để đổi vị trí.</Text>
   </View>;
 }
-
 function SubtitleBlock({
   compact,song,status,message,error,busy,onReget,
 }:{
@@ -706,6 +765,7 @@ const styles=StyleSheet.create({
   stage:{position:'relative',width:'100%',minHeight:420,borderRadius:7,overflow:'hidden',backgroundColor:'#000',alignItems:'center',justifyContent:'center'},
   stageCompact:{minHeight:0,height:372,borderRadius:8},
   visualFrame:{position:'relative',overflow:'hidden',backgroundColor:'#25165c'},
+  overlaySelected:{borderWidth:1,borderColor:'rgba(167,139,250,.9)',borderRadius:7,backgroundColor:'rgba(139,92,246,.08)'},
   localAudioVisual:{...StyleSheet.absoluteFill,alignItems:'center',justifyContent:'center',paddingTop:'24%' as any},
   localAudioTitle:{color:'#f1ecff',fontSize:30,fontWeight:'800',marginTop:48,textAlign:'center'},
   localAudioTitleCompact:{fontSize:20,marginTop:34},
