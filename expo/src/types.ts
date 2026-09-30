@@ -55,6 +55,8 @@ export type RenderJob = {
   id: string;
   title: string;
   progress: number;
-  status: 'queued' | 'rendering' | 'done' | 'error';
+  status: 'queued' | 'preparing' | 'rendering' | 'uploading' | 'completed' | 'failed' | 'done' | 'error';
   createdAt: number;
+  resultUrl?: string;
+  error?: string;
 };
