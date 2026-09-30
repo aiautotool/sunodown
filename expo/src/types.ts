@@ -81,6 +81,13 @@ export type MediaClip = {
 export type TimelineTrackName = 'audio' | 'visual' | 'subtitle' | 'effects';
 export type TimelineTrackState = Record<TimelineTrackName,{hidden:boolean;muted:boolean;locked:boolean}>;
 
+export type SavedVisualPreset = {
+  id: string;
+  name: string;
+  createdAt: number;
+  config: StudioVisualConfig;
+};
+
 export type StudioSnapshot = {
   schemaVersion: 1;
   config: StudioVisualConfig;
