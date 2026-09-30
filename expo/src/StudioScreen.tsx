@@ -3,41 +3,34 @@ import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, Style
 import * as ImagePicker from 'expo-image-picker';
 import { ChevronDown, Download, Image as ImageIcon, Music2, Palette, Play, RefreshCw, Save, SlidersHorizontal, Sparkles, Subtitles, Upload, Wand2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { KaraokeLine, RenderJob, Song, StudioPreset } from './types';
+import type { KaraokeLine, RenderJob, Song } from './types';
 import { colors, v24 } from './theme';
 import { regenerateSubtitle } from './api';
 import { safeFilename, saveExportedAsset, shareTextFile } from './file-actions';
 import { exportAudio, exportVisualizer } from './render-engine';
 import { useStudioPlayback } from './useStudioPlayback';
-
-const presets:StudioPreset[]=[
-  {id:'cinematic',name:'Cinematic',subtitle:'Điện ảnh cảm xúc',colors:['#241d3d','#8b6cff'],waveform:'bars',lyrics:'karaoke'},
-  {id:'minimal',name:'Minimal',subtitle:'Tối giản hiện đại',colors:['#10151d','#444f60'],waveform:'line',lyrics:'classic'},
-  {id:'neon',name:'Neon',subtitle:'Ánh sáng sân khấu',colors:['#16112c','#b148ff'],waveform:'spectrum',lyrics:'karaoke'},
-  {id:'vintage',name:'Vintage',subtitle:'Film ấm cổ điển',colors:['#342219','#a06c43'],waveform:'line',lyrics:'classic'},
-  {id:'aesthetic',name:'Aesthetic',subtitle:'Mềm và nghệ thuật',colors:['#2c1c31','#cc74bd'],waveform:'circle',lyrics:'karaoke'},
-  {id:'visualizer',name:'Visualizer',subtitle:'Tập trung waveform',colors:['#0d1125','#6556e8'],waveform:'spectrum',lyrics:'off'},
-];
+import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendPresets, V24_PRESETS, type StudioVisualConfig } from './V24StudioControls';
 
 const fmt=(n=0)=>`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`;
-type Fold='background'|'style'|'subtitle'|'audio'|null;
 
 export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>void;onRenderJob:(job:RenderJob)=>void}){
   const {height}=useWindowDimensions();
-  const [preset,setPreset]=useState(presets[0]!);
+  const [config,setConfig]=useState<StudioVisualConfig>({...DEFAULT_VISUAL_CONFIG,trimEnd:song.duration||0});
   const [background,setBackground]=useState<string|undefined>(song.picture);
   const [timeline,setTimeline]=useState<KaraokeLine[]>([]);
   const [subLoading,setSubLoading]=useState(false);
   const [subError,setSubError]=useState('');
-  const [fold,setFold]=useState<Fold>('style');
   const [saved,setSaved]=useState(false);
   const [rendering,setRendering]=useState(false);
   const [renderProgress,setRenderProgress]=useState(0);
+  const [renderStage,setRenderStage]=useState<'idle'|'validation'|'prepare'|'render'|'finalize'>('idle');
   const [renderMessage,setRenderMessage]=useState('');
   const [downloadBusy,setDownloadBusy]=useState('');
   const playback=useStudioPlayback(song);
   const lyricLines=useMemo(()=>song.lyrics?.split(/\n+/).map(v=>v.trim()).filter(Boolean).slice(0,14)||[],[song.lyrics]);
   const stageHeight=Math.max(420,height-240);
+  const quickPresets=useMemo(()=>recommendPresets(song),[song]);
+  const selectedPreset=V24_PRESETS.find(item=>item.id===config.presetId)||V24_PRESETS[0]!;
 
   const save=()=>{onSave();setSaved(true);setTimeout(()=>setSaved(false),1600)};
   const pickBackground=async()=>{
@@ -56,21 +49,26 @@ export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>voi
     if(rendering)return;
     const jobId='local-'+Date.now().toString(36);
     const started=Date.now();
-    setRendering(true);setRenderProgress(0);setRenderMessage('');
+    setRendering(true);setRenderProgress(0);setRenderMessage('');setRenderStage('validation');
     onRenderJob({id:jobId,title:song.title,progress:0,status:'queued',createdAt:started});
     try{
-      const asset=await exportVisualizer(song,preset.id,durationSeconds,(progress)=>{
+      await new Promise<void>(resolve=>setTimeout(resolve,40));
+      setRenderStage('prepare');setRenderProgress(4);
+      const duration=durationSeconds||Math.max(0,(config.trimEnd||song.duration||0)-config.trimStart);
+      setRenderStage('render');
+      const asset=await exportVisualizer(song,config.presetId,duration,(progress)=>{
         setRenderProgress(progress);
         onRenderJob({id:jobId,title:song.title,progress,status:'rendering',createdAt:started});
       });
+      setRenderStage('finalize');setRenderProgress(99);
       await saveExportedAsset(asset);
       onRenderJob({id:jobId,title:song.title,progress:100,status:'completed',createdAt:started});
-      setRenderMessage('Video ready · đã mở lưu/chia sẻ.');
+      setRenderProgress(100);setRenderMessage('Video ready · đã mở lưu/chia sẻ.');
     }catch(e){
       const message=e instanceof Error?e.message:'Không thể xuất video.';
       onRenderJob({id:jobId,title:song.title,progress:renderProgress,status:'failed',createdAt:started,error:message});
       setRenderMessage(message);
-    }finally{setRendering(false)}
+    }finally{setRendering(false);setRenderStage('idle')}
   };
   const downloadAudio=async(format:'m4a'|'mp3'|'wav')=>{
     if(downloadBusy)return;
@@ -96,13 +94,13 @@ export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>voi
   return <View style={styles.root}>
     <ScrollView style={styles.canvasScroll} contentContainerStyle={styles.canvasColumn}>
       <View style={[styles.stage,{height:stageHeight}]}>
-        {background?<ImageBackground source={{uri:background}} resizeMode="cover" style={StyleSheet.absoluteFill}/>:<LinearGradient colors={preset.colors} style={StyleSheet.absoluteFill}/>}
+        {background?<ImageBackground source={{uri:background}} resizeMode="cover" style={StyleSheet.absoluteFill}/>:<LinearGradient colors={[selectedPreset.accent,selectedPreset.secondary]} style={StyleSheet.absoluteFill}/>}
         <LinearGradient colors={['rgba(4,7,11,0)','rgba(4,7,11,.08)','rgba(4,7,11,.72)']} locations={[0,.62,1]} style={StyleSheet.absoluteFill}/>
-        <View style={styles.stageRatio}><Text style={styles.stageRatioText}>9:16</Text></View>
-        <View style={styles.karaoke}>
-          <Text style={styles.karaokeMain}>{timeline[0]?.text||lyricLines[0]||song.title}</Text>
-          <Text style={styles.karaokeNext}>{timeline[1]?.text||lyricLines[1]||'SunoDown Creator Studio'}</Text>
-        </View>
+        <View style={styles.stageRatio}><Text style={styles.stageRatioText}>{config.aspect}</Text></View>
+        {config.lyrics!=='off'&&<View style={styles.karaoke}>
+          <Text style={[styles.karaokeMain,{color:config.subtitleActiveColor}]}>{timeline[0]?.text||lyricLines[0]||song.title}</Text>
+          <Text style={[styles.karaokeNext,{color:config.subtitleColor}]}>{timeline[1]?.text||lyricLines[1]||'SunoDown Creator Studio'}</Text>
+        </View>}
         <View style={styles.wave}>
           {Array.from({length:54}).map((_,i)=><View key={i} style={[styles.bar,{height:8+((i*17)%48)}]}/>)}
         </View>
@@ -125,13 +123,23 @@ export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>voi
         <Text style={styles.subtitleRefreshHint}>Bỏ cache và tạo subtitle mới từ audio hiện tại.</Text>
       </View>}
 
-      <View style={styles.firstRun}>
-        <Pressable style={[styles.firstRunItem,styles.firstRunPrimary]} onPress={()=>setFold('style')}><Text style={styles.firstRunStrong}>1 · Chọn mẫu</Text><Text style={styles.firstRunSub}>Mẫu hoàn chỉnh</Text></Pressable>
-        <View style={styles.firstRunItem}><Text style={styles.firstRunStrong}>2 · Xem preview</Text><Text style={styles.firstRunSub}>Chạm Play để kiểm tra</Text></View>
-        <Pressable style={styles.firstRunItem} onPress={()=>void exportVideo()}><Text style={styles.firstRunStrong}>3 · Xuất video</Text><Text style={styles.firstRunSub}>{rendering?Math.round(renderProgress)+'%':'Tạo video'}</Text></Pressable>
+      <View style={styles.quickCreate}>
+        <View style={styles.quickHead}><View><Text style={styles.quickKicker}>QUICK CREATE</Text><Text style={styles.quickTitle}>Tạo nhanh từ preset phù hợp</Text></View><Text style={styles.quickHint}>Gợi ý theo style & lyrics của bài</Text></View>
+        <View style={styles.quickPresetRow}>
+          {quickPresets.map((item,index)=><Pressable key={item.id} onPress={()=>setConfig(applyPresetConfig(config,item,song.duration||0))} style={[styles.quickPreset,config.presetId===item.id&&{borderColor:item.accent}]}>
+            <View style={[styles.quickPresetArt,{backgroundColor:item.accent+'22'}]}>{song.picture&&<Image source={{uri:song.picture}} style={StyleSheet.absoluteFill}/>}<View style={styles.quickShade}/><Text style={styles.quickBadge}>{index===0?'ĐỀ XUẤT':item.badge}</Text></View>
+            <Text numberOfLines={1} style={styles.quickPresetName}>{item.name}</Text>
+            <Text style={styles.quickPresetMeta}>{item.aspect} · {item.lyrics==='off'?'Visualizer':'Lyrics'}</Text>
+          </Pressable>)}
+        </View>
+        <View style={styles.quickActions}>
+          <Pressable disabled={rendering} onPress={()=>void exportVideo()} style={[styles.quickAction,styles.quickActionPrimary,rendering&&styles.disabled]}><Upload size={16} color="#fff"/><Text style={styles.quickActionPrimaryText}>{rendering?renderStage==='validation'?'Checking '+Math.round(renderProgress)+'%':renderStage==='prepare'?'Preparing '+Math.round(renderProgress)+'%':renderStage==='finalize'?'Finalizing '+Math.round(renderProgress)+'%':'Rendering '+Math.round(renderProgress)+'%':'Create video'}</Text></Pressable>
+          <Pressable disabled={rendering} onPress={()=>void exportVideo(30)} style={[styles.quickAction,rendering&&styles.disabled]}><Play size={15} color="#cfc5ff"/><Text style={styles.quickActionText}>Tạo 30s cao trào</Text></Pressable>
+        </View>
+        {(rendering||!!renderMessage)&&<View style={[styles.quickStatus,!!renderMessage&&!rendering&&styles.quickStatusDone]}><Text style={styles.quickStatusTitle}>{rendering?(renderStage==='validation'?'Đang kiểm tra video…':renderStage==='prepare'?'Đang chuẩn bị media…':renderStage==='finalize'?'Đang hoàn tất video…':'Đang tạo video…'):'Hoàn tất'}</Text><Text style={styles.quickStatusText}>{rendering?Math.round(renderProgress)+'% · Không đóng trang trong khi đang xử lý.':renderMessage}</Text></View>}
       </View>
 
-      <EditorTimeline song={song} background={background} preset={preset} timeline={timeline}/>
+      <EditorTimeline song={song} background={background} config={config} timeline={timeline} currentTime={playback.current} onSeek={playback.seekTo}/>
     </ScrollView>
 
     <ScrollView style={styles.inspector} contentContainerStyle={styles.inspectorContent}>
@@ -151,39 +159,7 @@ export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>voi
 
       <View style={styles.divider}/>
 
-      <View style={styles.presetSystem}>
-        <View style={styles.presetHead}>
-          <View><View style={styles.presetKickerRow}><Sparkles size={13} color="#a78bfa"/><Text style={styles.presetKicker}>PRESET SYSTEM</Text></View><Text style={styles.presetHeadTitle}>Mẫu video</Text></View>
-          <Pressable style={styles.presetHeadBtn}><Text style={styles.presetHeadBtnText}>Lưu mẫu</Text></Pressable>
-        </View>
-        <View style={styles.presetTabs}><View style={[styles.pill,styles.pillActive]}><Text style={styles.pillActiveText}>Nổi bật</Text></View><View style={styles.pill}><Text style={styles.pillText}>Social</Text></View><View style={styles.pill}><Text style={styles.pillText}>Lyrics</Text></View></View>
-        <View style={styles.presetGrid}>
-          {presets.map((item,index)=><Pressable key={item.id} onPress={()=>setPreset(item)} style={[styles.presetCard,preset.id===item.id&&{borderColor:item.colors[1]}]}>
-            <LinearGradient colors={item.colors} style={styles.presetArt}>
-              {song.picture&&<Image source={{uri:song.picture}} style={StyleSheet.absoluteFill} resizeMode="cover"/>}
-              <LinearGradient colors={['rgba(7,10,16,.05)','rgba(7,10,16,.7)']} style={StyleSheet.absoluteFill}/>
-              <Text style={styles.presetBadge}>{index===0?'HOT':'STYLE'}</Text>
-              <View style={[styles.presetDisc,{borderColor:item.colors[1]}]}><View style={[styles.presetDiscIn,{backgroundColor:item.colors[1]}]}/></View>
-            </LinearGradient>
-            <View style={styles.presetCopy}><Text numberOfLines={1} style={styles.presetName}>{item.name}</Text><Text numberOfLines={2} style={styles.presetDesc}>{item.subtitle}</Text></View>
-          </Pressable>)}
-        </View>
-      </View>
-
-      <FoldRow icon={<ImageIcon size={20} color="#b9c2cf"/>} title="Background" open={fold==='background'} onPress={()=>setFold(fold==='background'?null:'background')}>
-        <Pressable onPress={pickBackground} style={styles.uploadBg}><Upload size={18} color="#b9a7ff"/><View><Text style={styles.uploadTitle}>Ảnh / video của bạn</Text><Text style={styles.uploadSub}>Chọn background từ thiết bị</Text></View></Pressable>
-      </FoldRow>
-      <FoldRow icon={<Palette size={20} color="#b9c2cf"/>} title="Style & Visualizer" open={fold==='style'} onPress={()=>setFold(fold==='style'?null:'style')}>
-        <View style={styles.optionWrap}>{['Bars','Spectrum','Circle','Line','Glow','Film'].map((x,i)=><Pressable key={x} style={[styles.option,i===0&&styles.optionActive]}><Text style={[styles.optionText,i===0&&styles.optionTextActive]}>{x}</Text></Pressable>)}</View>
-      </FoldRow>
-      <FoldRow icon={<Subtitles size={20} color="#b9c2cf"/>} title="Subtitle & Lyrics" open={fold==='subtitle'} onPress={()=>setFold(fold==='subtitle'?null:'subtitle')}>
-        <Pressable onPress={reget} style={styles.regen} disabled={subLoading}>{subLoading?<ActivityIndicator color="#fff"/>:<RefreshCw size={15} color="#fff"/>}<Text style={styles.regenText}>Lấy subtitle mới</Text></Pressable>
-        {!!subError&&<Text style={styles.error}>{subError}</Text>}
-        {(timeline.length?timeline:lyricLines.slice(0,5).map((text,i)=>({text,start:i*4,end:i*4+3}))).slice(0,5).map((line,i)=><View style={styles.cue} key={i}><Text style={styles.cueTime}>{fmt(line.start)}</Text><Text style={styles.cueText}>{line.text}</Text></View>)}
-      </FoldRow>
-      <FoldRow icon={<Music2 size={20} color="#b9c2cf"/>} title="Audio" open={fold==='audio'} onPress={()=>setFold(fold==='audio'?null:'audio')}>
-        <View style={styles.optionWrap}>{['Original','Clean','Vocal','Punchy','Bass+','Wide','Immersive'].map((x,i)=><Pressable key={x} style={[styles.option,i===0&&styles.optionActive]}><Text style={[styles.optionText,i===0&&styles.optionTextActive]}>{x}</Text></Pressable>)}</View>
-      </FoldRow>
+      <V24StudioControls song={song} config={config} onChange={setConfig} timeline={timeline} subtitleLoading={subLoading} subtitleError={subError} onReget={()=>void reget()} onPickBackground={()=>void pickBackground()}/>
 
       <View style={styles.visualSync}><Text style={styles.visualSyncLabel}>VISUAL SYNC</Text><Text style={styles.visualSyncHash}>V24-RN</Text></View>
       <View style={{height:270}}/>
@@ -191,7 +167,7 @@ export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>voi
 
     <View style={styles.actions}>
       {!!renderMessage&&<Text style={styles.renderMessage}>{renderMessage}</Text>}
-      <Pressable style={[styles.export,rendering&&styles.disabled]} disabled={rendering} onPress={()=>void exportVideo()}><Upload size={20} color="#fff"/><Text style={styles.exportText}>{rendering?'Rendering '+Math.round(renderProgress)+'%':'Export '+fmt(song.duration)+' video'}</Text></Pressable>
+      <Pressable style={[styles.export,rendering&&styles.disabled]} disabled={rendering} onPress={()=>void exportVideo()}><Upload size={20} color="#fff"/><Text style={styles.exportText}>{rendering?(renderStage==='validation'?'Checking ':renderStage==='prepare'?'Preparing ':renderStage==='finalize'?'Finalizing ':'Rendering ')+Math.round(renderProgress)+'%':'Export '+fmt(Math.max(0,(config.trimEnd||song.duration||0)-config.trimStart))+' video'}</Text></Pressable>
       <View style={styles.downloads}>
         <Pressable style={styles.downloadBtn} disabled={rendering} onPress={()=>void exportVideo(30)}><Play size={15} color="#cfc5ff"/><Text style={styles.downloadText}>30s</Text></Pressable>
         <Pressable style={styles.downloadBtn} disabled={!!downloadBusy} onPress={()=>void downloadAudio('mp3')}><Download size={15} color="#cfc5ff"/><Text style={styles.downloadText}>{downloadBusy==='mp3'?'…':'MP3'}</Text></Pressable>
@@ -204,19 +180,15 @@ export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>voi
   </View>
 }
 
-function FoldRow({icon,title,open,onPress,children}:{icon:React.ReactNode;title:string;open:boolean;onPress:()=>void;children:React.ReactNode}){
-  return <View style={styles.fold}><Pressable style={styles.foldButton} onPress={onPress}>{icon}<Text style={styles.foldTitle}>{title}</Text><ChevronDown size={18} color="#7f8999" style={{transform:[{rotate:open?'180deg':'0deg'}]}}/></Pressable>{open&&<View style={styles.foldContent}>{children}</View>}</View>
-}
-
-function EditorTimeline({song,background,preset,timeline}:{song:Song;background?:string;preset:StudioPreset;timeline:KaraokeLine[]}){
+function EditorTimeline({song,background,config,timeline,currentTime,onSeek}:{song:Song;background?:string;config:StudioVisualConfig;timeline:KaraokeLine[];currentTime:number;onSeek:(value:number)=>void}){
   return <View style={styles.editorTimeline}>
     <View style={styles.timelineHead}><Text style={styles.timelineHeadTitle}>Timeline</Text><Text style={styles.timelineHeadSub}>Video · Subtitle · Audio</Text><Pressable style={styles.timelineIcon}><SlidersHorizontal size={15} color="#d8deea"/></Pressable></View>
-    <View style={styles.timelineCanvas}>
+    <Pressable style={styles.timelineCanvas} onPress={(event)=>{const width=(event.nativeEvent as any)?.target?.clientWidth||0;const x=(event.nativeEvent as any)?.locationX||0;if(width>0)onSeek((x/width)*(song.duration||0))}}>
       <View style={styles.ruler}>{['00:00','00:15','00:30','00:45','01:00'].map((x,i)=><View key={x} style={{flex:1}}><Text style={styles.rulerText}>{x}</Text><View style={styles.rulerTick}/></View>)}</View>
-      <View style={styles.trackRow}><Text style={styles.trackLabel}>VIDEO</Text><View style={styles.videoClip}>{Array.from({length:6}).map((_,i)=><View key={i} style={styles.clipThumb}>{background?<Image source={{uri:background}} style={StyleSheet.absoluteFill}/>:<LinearGradient colors={preset.colors} style={StyleSheet.absoluteFill}/>}</View>)}<Text numberOfLines={1} style={styles.clipTitle}>{preset.name} · background</Text></View></View>
+      <View style={styles.trackRow}><Text style={styles.trackLabel}>VIDEO</Text><View style={styles.videoClip}>{Array.from({length:6}).map((_,i)=><View key={i} style={styles.clipThumb}>{background?<Image source={{uri:background}} style={StyleSheet.absoluteFill}/>:<LinearGradient colors={['#241d3d','#8b6cff']} style={StyleSheet.absoluteFill}/>}</View>)}<Text numberOfLines={1} style={styles.clipTitle}>{config.presetId} · {config.backgroundMode}</Text></View></View>
       <View style={styles.trackRow}><Text style={styles.trackLabel}>SUB</Text><View style={styles.subClip}><Text numberOfLines={1} style={styles.subClipText}>{timeline[0]?.text||song.lyrics?.split(/\n/)[0]||'Subtitle track'}</Text></View></View>
-      <View style={styles.playhead}><View style={styles.playheadDot}/></View>
-    </View>
+      <View style={[styles.playhead,{left:((song.duration||1)>0?Math.min(100,Math.max(0,currentTime/(song.duration||1)*100)):0)+'%' as any}]}><View style={styles.playheadDot}/></View>
+    </Pressable>
   </View>
 }
 
@@ -230,7 +202,7 @@ const styles=StyleSheet.create({
   centerPlay:{position:'absolute',zIndex:35,left:'50%',top:'50%',marginLeft:-32,marginTop:-32,width:64,height:64,borderWidth:1,borderColor:'rgba(255,255,255,.45)',borderRadius:32,backgroundColor:'rgba(8,11,18,.72)',alignItems:'center',justifyContent:'center'},
   player:{height:72,flexDirection:'row',alignItems:'center',gap:12,borderBottomLeftRadius:7,borderBottomRightRadius:7,backgroundColor:'#0d1219',paddingHorizontal:22},playerBtn:{width:34,alignItems:'center'},playerTime:{width:105,color:'#c6ccd6',fontSize:12},seek:{flex:1,height:4,borderRadius:99,backgroundColor:'#2a313d',position:'relative'},seekFill:{width:'27%',height:4,borderRadius:99,backgroundColor:'#8967ff'},seekKnob:{position:'absolute',left:'27%',top:-4,width:12,height:12,borderRadius:6,backgroundColor:'#fff'},
   subtitleRefresh:{minHeight:46,marginTop:10,flexDirection:'row',alignItems:'center',gap:10},subtitleRefreshBtn:{height:34,borderWidth:1,borderColor:'#5b438f',borderRadius:8,backgroundColor:'#211a3b',paddingHorizontal:11,flexDirection:'row',alignItems:'center',gap:7},subtitleRefreshText:{color:'#d9ceff',fontSize:10,fontWeight:'700'},subtitleRefreshHint:{color:'#778395',fontSize:9},
-  firstRun:{minHeight:70,marginTop:8,borderWidth:1,borderColor:'#27303d',borderRadius:12,backgroundColor:'#0d131c',padding:7,flexDirection:'row',gap:7},firstRunItem:{flex:1,borderRadius:9,backgroundColor:'#111925',padding:10,justifyContent:'center'},firstRunPrimary:{borderWidth:1,borderColor:'#6e52db',backgroundColor:'#211a3d'},firstRunStrong:{color:'#e9edf4',fontSize:10,fontWeight:'800'},firstRunSub:{color:'#7f8a9b',fontSize:8,marginTop:4},
+  quickCreate:{marginTop:10,borderWidth:1,borderColor:'#27303d',borderRadius:14,backgroundColor:'#0d131c',padding:12},quickHead:{flexDirection:'row',alignItems:'flex-start',justifyContent:'space-between',gap:12},quickKicker:{color:'#8d72ff',fontSize:8,fontWeight:'900',letterSpacing:1.3},quickTitle:{color:'#f3f5f9',fontSize:12,fontWeight:'800',marginTop:4},quickHint:{color:'#727e90',fontSize:8,textAlign:'right'},quickPresetRow:{flexDirection:'row',gap:8,marginTop:11},quickPreset:{flex:1,overflow:'hidden',borderWidth:1,borderColor:'#29313d',borderRadius:10,backgroundColor:'#0b1017'},quickPresetArt:{height:66,overflow:'hidden',position:'relative'},quickShade:{...StyleSheet.absoluteFill,backgroundColor:'rgba(7,10,16,.42)'},quickBadge:{position:'absolute',left:7,top:7,color:'#eee8ff',fontSize:7,fontWeight:'900'},quickPresetName:{color:'#f5f7fb',fontSize:9,fontWeight:'800',paddingHorizontal:8,paddingTop:7},quickPresetMeta:{color:'#727e90',fontSize:7,paddingHorizontal:8,paddingTop:3,paddingBottom:8},quickActions:{flexDirection:'row',gap:8,marginTop:10},quickAction:{flex:1,minHeight:42,borderWidth:1,borderColor:'#5b49ba',borderRadius:9,backgroundColor:'rgba(112,85,225,.12)',flexDirection:'row',alignItems:'center',justifyContent:'center',gap:7},quickActionPrimary:{backgroundColor:'#7058ed'},quickActionText:{color:'#cfc5ff',fontSize:10,fontWeight:'800'},quickActionPrimaryText:{color:'#fff',fontSize:10,fontWeight:'800'},quickStatus:{marginTop:9,borderWidth:1,borderColor:'rgba(139,92,246,.24)',borderRadius:9,backgroundColor:'rgba(55,42,92,.34)',padding:9},quickStatusDone:{borderColor:'rgba(74,222,128,.18)',backgroundColor:'rgba(15,65,45,.25)'},quickStatusTitle:{color:'#eee9ff',fontSize:9,fontWeight:'800'},quickStatusText:{color:'#8793a4',fontSize:8,marginTop:3},
 
   inspector:{width:v24.inspectorWidth,backgroundColor:'#0a0e14'},inspectorContent:{paddingTop:30,paddingHorizontal:25,paddingBottom:80},
   song:{flexDirection:'row',gap:20,alignItems:'center'},cover:{width:125,height:125,borderWidth:1,borderColor:'#394352',borderRadius:9,backgroundColor:'#151c26'},coverEmpty:{alignItems:'center',justifyContent:'center'},songCopy:{flex:1,minWidth:0},songTitle:{color:'#f5f7fb',fontSize:25,fontWeight:'700',marginBottom:5},songMeta:{color:'#9ba5b5',fontSize:12,marginTop:8},
