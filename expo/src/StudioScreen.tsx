@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, Style
 import * as ImagePicker from 'expo-image-picker';
 import { Download, Menu, Music2, Pause, Play, Save, SlidersHorizontal, Sparkles, Subtitles, Upload, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { KaraokeLine, MediaClip, RenderJob, Song, StudioSnapshot, TimelineTrackState } from './types';
+import type { KaraokeLine, MediaClip, RenderJob, SavedVisualPreset, Song, StudioSnapshot, TimelineTrackState } from './types';
 import { colors, v24 } from './theme';
 import { safeFilename, saveExportedAsset, shareTextFile } from './file-actions';
 import { exportAudio, exportVisualizer } from './render-engine';
@@ -13,6 +13,7 @@ import { SuggestedBackground } from './SuggestedBackground';
 import { findHighlight } from './highlight-engine';
 import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendPresets, V24_PRESETS, type StudioPanel, type StudioVisualConfig } from './V24StudioControls';
 import { UniversalEditorTimeline } from './UniversalEditorTimeline';
+import { storage } from './storage';
 
 type Tool=StudioPanel|null;
 
@@ -52,6 +53,7 @@ export function StudioScreen({
   });
   const {timeline,setTimeline,status:subtitleStatus,message:subtitleMessage,error:subError,regenerating:subLoading,reget}=useSubtitleSync(song,initialStudio?.timeline||[]);
   const [saved,setSaved]=useState(false);
+  const [customPresets,setCustomPresets]=useState<SavedVisualPreset[]>([]);
   const [quickMode,setQuickMode]=useState(true);
   const [tool,setTool]=useState<Tool>(null);
   const [rendering,setRendering]=useState(false);
@@ -66,6 +68,8 @@ export function StudioScreen({
   const selectedPreset=V24_PRESETS.find(item=>item.id===config.presetId)||V24_PRESETS[0]!;
   const stageHeight=Math.max(420,height-330);
   const seekPercent=playback.duration>0?Math.max(0,Math.min(100,playback.current/playback.duration*100)):0;
+  useEffect(()=>{void storage.getVisualPresets().then(setCustomPresets)},[]);
+
   useEffect(()=>{
     if(playback.duration>0&&config.trimEnd<=0){
       setConfig(prev=>({...prev,trimEnd:playback.duration}));
@@ -76,6 +80,26 @@ export function StudioScreen({
     onSave({schemaVersion:1,config,timeline,background,clips,trackState});
     setSaved(true);
     setTimeout(()=>setSaved(false),1500);
+  };
+  const saveVisualPreset=()=>{
+    const preset:SavedVisualPreset={
+      id:'custom-'+Date.now().toString(36),
+      name:`Mẫu ${customPresets.length+1} · ${song.title}`,
+      createdAt:Date.now(),
+      config:{...config,effects:[...config.effects]},
+    };
+    setCustomPresets(current=>{
+      const next=[preset,...current].slice(0,30);
+      void storage.setVisualPresets(next);
+      return next;
+    });
+  };
+  const deleteVisualPreset=(id:string)=>{
+    setCustomPresets(current=>{
+      const next=current.filter(item=>item.id!==id);
+      void storage.setVisualPresets(next);
+      return next;
+    });
   };
 
   const applyBackground=(uri:string)=>{
@@ -292,6 +316,9 @@ export function StudioScreen({
     subtitleError={subError}
     onReget={()=>void reget()}
     onPickBackground={()=>void pickBackground()}
+    customPresets={customPresets}
+    onSavePreset={saveVisualPreset}
+    onDeletePreset={deleteVisualPreset}
     panel={compact&&tool?tool:undefined}
     onPanelChange={panel=>{if(compact)setTool(panel)}}
   />;
