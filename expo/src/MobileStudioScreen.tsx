@@ -48,7 +48,22 @@ export function MobileStudioScreen({song,onSave,onBack,onRenderJob,initialStudio
       setRenderStage('prepare');setRenderProgress(4);
       const duration=durationSeconds||Math.max(0,(config.trimEnd||song.duration||0)-config.trimStart);
       setRenderStage('render');
-      const asset=await exportVisualizer(song,config.presetId,duration,(progress)=>{
+      const asset=await exportVisualizer(song,{
+        presetId:config.presetId,
+        durationSeconds:duration,
+        startSeconds:config.trimStart,
+        aspect:config.aspect,
+        wave:config.wave,
+        waveGlow:config.waveGlow,
+        waveHeight:config.waveHeight,
+        backgroundUri:background,
+        lyricsMode:config.lyrics,
+        timeline,
+        titleColor:config.titleColor,
+        subtitleColor:config.subtitleColor,
+        subtitleActiveColor:config.subtitleActiveColor,
+        quality:config.quality,
+      },(progress)=>{
         setRenderProgress(progress);
         onRenderJob({id:jobId,title:song.title,progress,status:'rendering',createdAt:started});
       });
