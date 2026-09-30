@@ -38,7 +38,9 @@ function mediaSource(mediaUrls:Array<Record<string,unknown>>,format:'mp3'|'m4a')
 }
 export async function POST(request:NextRequest){
  try{
-  const {input}=await request.json();
+  const body=await request.json() as {input?:unknown;metadataOnly?:boolean};
+  const input=body.input;
+  const metadataOnly=body.metadataOnly===true;
   const suppliedSourceToken=typeof input==='string'&&!validSunoUrl(input)?input:null;
   const source=validSunoUrl(input)?input:await verifyMediaToken(suppliedSourceToken,'source');
   if(!source||!validSunoUrl(source))return NextResponse.json({error:'Nguồn bài hát không hợp lệ hoặc đã hết hạn.'},{status:400});
@@ -54,6 +56,16 @@ export async function POST(request:NextRequest){
   if(typeof audioSource!=='string'||audioSource.includes('/api/forbidden'))return NextResponse.json({error:'Suno chưa cung cấp nguồn âm thanh cho bài này.'},{status:502});
   const videoSource=typeof clip.video_url==='string'&&clip.video_url.startsWith('https://')?clip.video_url:null;
   const picture=typeof clip.image_large_url==='string'?clip.image_large_url:typeof clip.image_url==='string'?clip.image_url:null;
+  if(metadataOnly){
+   return NextResponse.json({
+    id:clipId,title:firstString(clip.title)||'Suno audio',
+    duration:typeof metadata?.duration==='number'?metadata.duration:typeof clip.duration==='number'?clip.duration:null,
+    lyrics:firstString(metadata?.prompt,metadata?.lyrics,clip.lyrics,clip.prompt)||null,
+    creator:firstString(clip.display_name,clip.handle)||null,
+    handle:firstString(clip.handle)||null,
+    isPublic:typeof clip.is_public==='boolean'?clip.is_public:null
+   });
+  }
   const [audioToken,videoToken,pictureToken,sourceToken]=await Promise.all([createMediaToken(audioSource,'audio'),videoSource?createMediaToken(videoSource,'audio'):null,picture?createMediaToken(picture,'image'):null,suppliedSourceToken??createMediaToken(source,'source',31536000)]);
   const audio=`/api/audio?token=${encodeURIComponent(audioToken)}`;
   const lyrics=firstString(metadata?.prompt,metadata?.lyrics,clip.lyrics,clip.prompt);
