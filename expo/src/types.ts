@@ -65,6 +65,14 @@ export type StudioVisualConfig = {
   titleScale: number;
   creatorScale: number;
   subtitleScale: number;
+  titleX?: number;
+  titleY?: number;
+  creatorX?: number;
+  creatorY?: number;
+  subtitleX?: number;
+  subtitleY?: number;
+  waveX?: number;
+  waveY?: number;
   effectSpeed: number;
   effectAngle: number;
   effectDensity: number;
