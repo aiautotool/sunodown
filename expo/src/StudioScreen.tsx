@@ -364,6 +364,24 @@ export function StudioScreen({
         </View>
 
         {preview}
+        {!quickMode&&<UniversalEditorTimeline
+          compact
+          duration={playback.duration||song.duration||0}
+          playhead={playback.current}
+          onSeek={playback.seekTo}
+          subtitles={timeline}
+          onSubtitlesChange={setTimeline}
+          clips={clips}
+          onClipsChange={setClips}
+          effects={config.effects}
+          trackState={trackState}
+          onTrackStateChange={setTrackState}
+          onAddMedia={()=>void addTimelineMedia()}
+          audioSource={musicAudioUrl(song)}
+          trimStart={config.trimStart}
+          trimEnd={config.trimEnd||playback.duration||song.duration||0}
+          onTrimChange={(trimStart,trimEnd)=>setConfig(prev=>({...prev,trimStart,trimEnd}))}
+        />}
         {subtitleBlock}
         {backgroundBlock}
         {quickBlock}
@@ -522,7 +540,8 @@ function PreviewStage({
   const sourceVisual=config.backgroundMode==='suno'?song.picture:config.backgroundMode==='preset'?undefined:background;
   const activeVisual=trackState.visual.hidden?undefined:(activeClip?.type==='image'?activeClip.uri:sourceVisual);
   const presetColors=backgroundPresetColors(config.backgroundPreset);
-  const barCount=Math.max(18,Math.round((compact?38:54)*((config.waveDensity??72)/72)));
+  const barCount=Math.max(28,Math.round((compact?46:72)*((config.waveDensity??72)/72)));
+  const titleY=67,creatorY=75,subtitleY=58,waveY=86;
 
   return <View>
     <View style={styles.previewHead}>
@@ -536,21 +555,16 @@ function PreviewStage({
       <View style={[styles.visualFrame,{width:innerW,height:innerH}]}>
         {activeVisual?<ImageBackground source={{uri:activeVisual}} resizeMode="cover" style={StyleSheet.absoluteFill}/>:<LinearGradient colors={trackState.visual.hidden?['#080c12','#080c12']:[selectedPreset.accent,selectedPreset.secondary]} style={StyleSheet.absoluteFill}/>}
         <LinearGradient colors={['rgba(4,7,11,0)','rgba(4,7,11,.08)','rgba(4,7,11,.72)']} locations={[0,.62,1]} style={StyleSheet.absoluteFill}/>
-        {!trackState.visual.hidden&&!activeVisual&&<View style={styles.localAudioVisual}>
-          <Music2 size={compact?54:68} color="rgba(255,255,255,.82)"/>
-          <Text style={[styles.localAudioTitle,compact&&styles.localAudioTitleCompact]}>{song.title}</Text>
-          <Text style={styles.localAudioCreator}>{(song.creator||'Local audio').toUpperCase()}</Text>
+        {!trackState.visual.hidden&&<View style={[styles.titleOverlay,{top:(titleY+'%') as any}]}>
+          <Text numberOfLines={2} style={[styles.previewTitle,{color:config.titleColor,fontSize:Math.round((compact?18:24)*((config.titleScale??100)/100))}]}>{song.title}</Text>
         </View>}
-        {!trackState.visual.hidden&&<View style={styles.titleOverlay}>
-          <Text numberOfLines={2} style={[styles.previewTitle,{color:config.titleColor,fontSize:Math.round(24*((config.titleScale??100)/100))}]}>{song.title}</Text>
-          <Text numberOfLines={1} style={[styles.previewCreator,{color:config.creatorColor,fontSize:Math.round(12*((config.creatorScale??100)/100))}]}>{song.creator||'Suno'}</Text>
-        </View>}
-        {!compact&&!trackState.subtitle.hidden&&config.lyrics!=='off'&&timeline.length>0&&<View style={styles.karaoke}>
+        {!trackState.visual.hidden&&<View style={[styles.creatorOverlay,{top:(creatorY+'%') as any}]}><Text numberOfLines={1} style={[styles.previewCreator,{color:config.creatorColor,fontSize:Math.round((compact?9:12)*((config.creatorScale??100)/100))}]}>{song.creator||'Suno'}</Text></View>}
+        {!trackState.subtitle.hidden&&config.lyrics!=='off'&&timeline.length>0&&<View style={[styles.karaoke,{top:(subtitleY+'%') as any}]}>
           <Text style={[styles.karaokeMain,{color:config.subtitleActiveColor,fontSize:Math.round(29*((config.subtitleScale??100)/100))}]}>{timeline.find(line=>currentTime>=line.start&&currentTime<line.end)?.text||lyricLines[0]}</Text>
           <Text style={[styles.karaokeNext,{color:config.subtitleColor}]}>{timeline.find(line=>line.start>currentTime)?.text||lyricLines[1]||''}</Text>
         </View>}
-        {!trackState.visual.hidden&&<View style={[styles.wave,compact&&styles.waveCompact,{opacity:(config.waveOpacity??92)/100,transform:[{rotate:(config.waveRotation??0)+'deg'}]}]}>
-          {Array.from({length:barCount}).map((_,i)=><View key={i} style={[styles.bar,{width:Math.max(1,Math.round((config.waveThickness??46)/23)),backgroundColor:i%2?(config.waveColor2||'#60a5fa'):(config.waveColor||'#d946ef'),height:Math.max(4,((compact?6:8)+((i*(compact?13:17))%(compact?31:48)))*((config.waveHeight??108)/108))}]}/>)}
+        {!trackState.visual.hidden&&<View style={[styles.wave,compact&&styles.waveCompact,{top:(waveY+'%') as any,opacity:(config.waveOpacity??92)/100,transform:[{rotate:(config.waveRotation??0)+'deg'}]}]}>
+          {Array.from({length:barCount}).map((_,i)=>{const h=Math.max(3,((compact?4:6)+((i*(compact?13:17))%(compact?22:34)))*((config.waveHeight??108)/108));return <View key={i} style={styles.mirrorBar}><View style={[styles.bar,{width:Math.max(1,Math.round((config.waveThickness??46)/30)),backgroundColor:i%2?(config.waveColor2||'#60a5fa'):(config.waveColor||'#d946ef'),height:h}]}/><View style={[styles.bar,styles.barMirror,{width:Math.max(1,Math.round((config.waveThickness??46)/30)),backgroundColor:i%2?(config.waveColor2||'#60a5fa'):(config.waveColor||'#d946ef'),height:h}]}/></View>})}
         </View>}
         <Pressable style={[styles.centerPlay,compact&&styles.centerPlayCompact,playing&&styles.centerPlayPlaying]} onPress={onToggle}>
           {playing?<Pause size={compact?22:25} color="#fff" fill="#fff"/>:<Play size={compact?24:27} color="#fff" fill="#fff"/>}
@@ -657,19 +671,19 @@ const styles=StyleSheet.create({
   stage:{position:'relative',width:'100%',minHeight:420,borderRadius:7,overflow:'hidden',backgroundColor:'#000',alignItems:'center',justifyContent:'center'},
   stageCompact:{minHeight:0,height:372,borderRadius:8},
   visualFrame:{position:'relative',overflow:'hidden',backgroundColor:'#25165c'},
-  localAudioVisual:{...StyleSheet.absoluteFill,alignItems:'center',justifyContent:'center',paddingTop:'24%' as any},
+  localAudioVisual:{...StyleSheet.absoluteFill,alignItems:'center',justifyContent:'center'},
   localAudioTitle:{color:'#f1ecff',fontSize:30,fontWeight:'800',marginTop:48,textAlign:'center'},
   localAudioTitleCompact:{fontSize:20,marginTop:34},
   localAudioCreator:{color:'rgba(226,217,255,.72)',fontSize:10,fontWeight:'800',letterSpacing:1,marginTop:8},
   stageRatio:{position:'absolute',right:12,top:12,zIndex:5,borderWidth:1,borderColor:'rgba(255,255,255,.16)',borderRadius:8,backgroundColor:'rgba(7,10,15,.55)',paddingHorizontal:8,paddingVertical:5},
   stageRatioText:{color:'#fff',fontSize:9,fontWeight:'800'},
-  titleOverlay:{position:'absolute',zIndex:4,left:'8%',right:'8%',top:'8%',alignItems:'center'},previewTitle:{color:'#fff',fontSize:24,fontWeight:'800',textAlign:'center',textShadowColor:'#000',textShadowRadius:10},previewCreator:{color:'#d1d5db',fontSize:12,marginTop:5,textShadowColor:'#000',textShadowRadius:8},
-  karaoke:{position:'absolute',zIndex:3,left:'8%',right:'8%',bottom:'8%',alignItems:'center'},
+  titleOverlay:{position:'absolute',zIndex:4,left:'8%',right:'8%',alignItems:'center',transform:[{translateY:-12}]},creatorOverlay:{position:'absolute',zIndex:4,left:'8%',right:'8%',alignItems:'center',transform:[{translateY:-7}]},previewTitle:{color:'#fff',fontSize:24,fontWeight:'800',textAlign:'center',textShadowColor:'#000',textShadowRadius:10},previewCreator:{color:'#d1d5db',fontSize:12,textShadowColor:'#000',textShadowRadius:8,textTransform:'uppercase',letterSpacing:1},
+  karaoke:{position:'absolute',zIndex:3,left:'8%',right:'8%',alignItems:'center',transform:[{translateY:-15}]},
   karaokeMain:{color:'#fff',fontSize:29,fontWeight:'800',textAlign:'center',textShadowColor:'#000',textShadowRadius:8},
   karaokeNext:{color:'#e1e3e7',fontSize:21,marginTop:8,textAlign:'center',textShadowColor:'#000',textShadowRadius:8},
-  wave:{position:'absolute',zIndex:3,left:25,right:25,bottom:22,height:42,flexDirection:'row',alignItems:'center',justifyContent:'space-between',opacity:.82},
-  waveCompact:{left:18,right:18,bottom:58,height:28},
-  bar:{width:3,borderRadius:3,backgroundColor:'#a47cff'},
+  wave:{position:'absolute',zIndex:3,left:'8%',right:'8%',height:52,flexDirection:'row',alignItems:'center',justifyContent:'space-between',opacity:.82,transform:[{translateY:-26}]},
+  waveCompact:{left:'7%',right:'7%',height:34,transform:[{translateY:-17}]},mirrorBar:{height:'100%',alignItems:'center',justifyContent:'center'},
+  bar:{width:2,borderRadius:3,backgroundColor:'#a47cff'},barMirror:{opacity:.52,transform:[{scaleY:-1}]},
   centerPlay:{position:'absolute',zIndex:35,left:'50%',top:'50%',marginLeft:-32,marginTop:-32,width:64,height:64,borderWidth:1,borderColor:'rgba(255,255,255,.45)',borderRadius:32,backgroundColor:'rgba(8,11,18,.72)',alignItems:'center',justifyContent:'center'},
   centerPlayCompact:{marginLeft:-28,marginTop:-28,width:56,height:56,borderRadius:28},
   centerPlayPlaying:{opacity:.18},
