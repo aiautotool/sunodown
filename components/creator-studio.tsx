@@ -2,6 +2,7 @@
 import {DEFAULT_EFFECT_SETTINGS,normalizeEffectSettings,type EffectSettings} from './v8/video-effects';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { requestRegeneratedSubtitle } from '@/app/lib/subtitle-regeneration';
 import { useRenderWakeLock } from '@/hooks/use-render-wake-lock';
 import {
   Bell,
@@ -68,7 +69,7 @@ import { runKaraokePipeline } from '@/app/lib/karaoke-pipeline';
 import { findMusicHighlight } from '@/app/lib/audio-highlight';
 import { cleanLyricsForVideo } from '@/components/v4/lyrics-clean';
 import { initAnalytics, track } from '@/app/lib/analytics';
-import { DEFAULT_PLAN, canUse } from '@/app/lib/entitlements';
+import { DEFAULT_PLAN } from '@/app/lib/entitlements';
 import type { KaraokeLine } from '@/app/lib/karaoke';
 import { EditorTimeline, type MediaClip, type TimelineTrackState } from '@/components/editor-timeline';
 import { PresetGallery } from '@/components/presets/preset-gallery';
@@ -83,6 +84,8 @@ import {
 } from '@/components/presets/production-preset';
 import { StudioSheet, StudioTabs } from '@/components/studio-ui';
 import { StyleStudio } from '@/components/style-studio';
+import { StudioSettingsPanel } from '@/components/studio-settings-panel';
+import { readSettings, useStudioSettings, applySubtitleOffset } from '@/app/lib/studio-settings';
 import { AccountLibraryPanel } from '@/components/account-library-panel';
 import { MobileAppNav } from '@/components/mobile-app-nav';
 import { STUDIO_TITLE_FONTS } from '@/components/studio-fonts';
@@ -801,14 +804,14 @@ export default function CreatorStudio({
   initialView?: AppView;
 }) {
   const [view, setView] = useState<AppView>(initialView);
-  const [autoPreview, setAutoPreview] = useState(true);
+  const [autoPreview, setAutoPreview] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [homeSideCollapsed, setHomeSideCollapsed] = useState(false);
   const [signedInUser, setSignedInUser] = useState<SignedInUser | null>(null);
   const [quickMode, setQuickMode] = useState(true);
-  const [projects, setProjects] = useState<SavedProjectListItem[]>(readSavedProjectList);
+  const [projects, setProjects] = useState<SavedProjectListItem[]>([]);
   const [projectQuery, setProjectQuery] = useState('');
-  const [libraryItems, setLibraryItems] = useState<LocalLibraryItem[]>(readLocalLibraryItems);
+  const [libraryItems, setLibraryItems] = useState<LocalLibraryItem[]>([]);
   const [libraryQuery, setLibraryQuery] = useState('');
   const [url, setUrl] = useState('https://suno.com/s/tszo0jGdVUua4rT4'),
     [song, setSong] = useState<Song | null>(null),
@@ -821,6 +824,11 @@ export default function CreatorStudio({
     [mobileTools, setMobileTools] = useState(false),
     [savingProject, setSavingProject] = useState(false),
     [savedProject, setSavedProject] = useState(false);
+  const [draftStatus, setDraftStatus] = useState('');
+  const projectSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const activeSource = useRef(url);
+  useEffect(() => { activeSource.current = url; }, [url]);
+  const restoringProject = useRef(false);
   const [initProgress, setInitProgress] = useState(0);
   const [initTitle, setInitTitle] = useState('Đang khởi tạo bài hát');
   const [initDetail, setInitDetail] = useState('Chuẩn bị dữ liệu mới…');
@@ -842,9 +850,13 @@ export default function CreatorStudio({
     } | null>(null),
     [progress, setProgress] = useState(0),
     [downloading, setDownloading] = useState('');
+  const renderAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => { renderAbort.current?.abort(); }, []);
+  const [renderEta, setRenderEta] = useState<number | null>(null);
   const [renderNotice, setRenderNotice] = useState('');
   const [highlightNotice, setHighlightNotice] = useState('');
-  useRenderWakeLock(rendering);
+  const preferences = useStudioSettings();
+  useRenderWakeLock(rendering && preferences.keepAwake);
 
   const [masteringConfig, setMasteringConfig] = useState<ProductionMasteringConfig>(structuredClone(DEFAULT_PRODUCTION_MASTERING));
   const [exportConfig, setExportConfig] = useState<ProductionExportConfig>({...DEFAULT_PRODUCTION_EXPORT,aspect:'9:16'});
@@ -956,23 +968,7 @@ export default function CreatorStudio({
   }, []);
   const [trimStart, setTrimStart] = useState(0),
     [trimEnd, setTrimEnd] = useState(0);
-  const timelineMediaClips = useMemo<MediaClip[]>(
-    () =>
-      mediaClips.length
-        ? mediaClips
-        : song?.picture
-          ? [{
-              id: 'fallback-cover',
-              type: 'image',
-              url: song.picture,
-              name: song.title || 'Ảnh bìa',
-              start: 0,
-              end: song.duration || trimEnd || 1,
-              isDefault: true,
-            }]
-          : [],
-    [mediaClips, song?.picture, song?.title, song?.duration, trimEnd],
-  );
+  const timelineMediaClips = mediaClips;
   const timer = useRef<number | undefined>(undefined);
   const editedFieldsTracked = useRef(new Set<keyof StudioPresetConfig>());
   const previewPlayTracked = useRef(false);
@@ -1086,7 +1082,7 @@ export default function CreatorStudio({
     const objectUrl = URL.createObjectURL(audioBinary);
     const audio = new Audio(objectUrl);
     audio.preload = 'auto';
-    audio.playsInline = true;
+    audio.setAttribute('playsinline', '');
 
     let context: AudioContext | null = null;
     let track: MediaStreamTrack | null = null;
@@ -1618,12 +1614,28 @@ export default function CreatorStudio({
     localStorage.setItem('sunodown-v16-favorite-presets', JSON.stringify(next));
   };
 
+  function applyProjectDefaults() {
+    const defaults = readSettings();
+    setAspect(defaults.aspect);
+    setWave(defaults.wave);
+    setBackground({ ...DEFAULT_BACKGROUND_CONFIG, mode: defaults.background === 'suno' ? 'suno' : 'preset', presetId: defaults.background === 'suno' ? undefined : defaults.background });
+    setMasteringConfig({ profile: defaults.audio, spatial: { enabled: defaults.spatial, mode: 'immersive', amount: 65 } });
+    setExportConfig({ ...DEFAULT_PRODUCTION_EXPORT, aspect: defaults.aspect, quality: defaults.exportQuality, resolution: defaults.resolution, fps: defaults.fps });
+    setAutoPreview(defaults.autoPreview);
+    setSelectedPresetId(null);
+    setPresetCommit(null);
+    setPresetModified(false);
+    setPresetOverrideFields([]);
+  }
+
   async function generateSubtitlesInBackground(
     target: Song,
     audio: Blob,
     duration: number,
     syncRun: number,
   ) {
+    const subtitlePreferences = readSettings();
+    const setGeneratedTimeline = (lines: KaraokeLine[]) => setKaraokeTimeline(applySubtitleOffset(lines, duration, subtitlePreferences.subtitleOffset));
     setKaraokeSyncStatus('syncing');
     setKaraokeSyncMessage('Đang chuẩn bị subtitle…');
     pushSubtitleDebug('subtitle-run-start', {
@@ -1635,7 +1647,7 @@ export default function CreatorStudio({
     });
 
     if (target.id) {
-      const cloudEndpoint = `/api/music/subtitle?songId=${encodeURIComponent(target.id)}&language=vi`;
+      const cloudEndpoint = `/api/music/subtitle?songId=${encodeURIComponent(target.id)}&language=${encodeURIComponent(subtitlePreferences.subtitleLanguage)}`;
       try {
         pushSubtitleDebug('cloud-subtitle-lookup', { songId: target.id });
         let response = await fetch(cloudEndpoint, { cache: 'no-store' });
@@ -1644,7 +1656,7 @@ export default function CreatorStudio({
           response = await fetch('/api/music/subtitle/generate', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ songId: target.id, language: 'vi' }),
+            body: JSON.stringify({ songId: target.id, language: subtitlePreferences.subtitleLanguage }),
           });
           if (response.status === 202) {
             for (let poll = 0; poll < 8; poll += 1) {
@@ -1687,7 +1699,7 @@ export default function CreatorStudio({
               cached: Boolean(payload.cached),
               realigned: Boolean(payload.realigned),
             });
-            setKaraokeTimeline(cloudLines);
+            setGeneratedTimeline(cloudLines);
             cacheMusicSubtitle(target.id, cloudLines);
             setKaraokeSyncStatus(cloudStatus);
             setKaraokeSyncMessage(message);
@@ -1711,7 +1723,7 @@ export default function CreatorStudio({
         pushSubtitleDebug('cloud-subtitle-estimated-fallback', {
           lines: estimated.length,
         });
-        setKaraokeTimeline(estimated);
+        setGeneratedTimeline(estimated);
         setKaraokeSyncStatus('fallback');
         setKaraokeSyncMessage('Đang dùng timing lời tạm thời.');
         setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
@@ -1719,7 +1731,7 @@ export default function CreatorStudio({
           'Subtitle cloud chưa sẵn sàng. Đang dùng timing tạm thời và sẽ đồng bộ lại khi server hoạt động.',
         );
       } else {
-        setKaraokeTimeline([]);
+        setGeneratedTimeline([]);
         setKaraokeSyncStatus('fallback');
         setKaraokeSyncMessage('Subtitle cloud chưa sẵn sàng.');
       }
@@ -1734,7 +1746,7 @@ export default function CreatorStudio({
     // failure never wipes already synchronized cues back to Subtitle 0.
     let bestPartialTimeline: KaraokeLine[] = [];
 
-    const delays = [0, 2200];
+    const delays = subtitlePreferences.subtitleRetry ? [0, 2200] : [0];
     for (let attempt = 0; attempt < delays.length; attempt++) {
       if (karaokeSyncRun.current !== syncRun) return;
       pushSubtitleDebug('attempt-start', {
@@ -1755,7 +1767,7 @@ export default function CreatorStudio({
           audio,
           lyrics: target.lyrics,
           duration,
-          language: 'vi',
+          language: subtitlePreferences.subtitleLanguage,
           onProgress: ({ stage, engine, message }) => {
             if (karaokeSyncRun.current !== syncRun) return;
             pushSubtitleDebug('pipeline-progress', {
@@ -1785,7 +1797,7 @@ export default function CreatorStudio({
               firstStart: Math.round((partialTimeline[0]?.start || 0) * 100) / 100,
               lastEnd: Math.round((partialTimeline.at(-1)?.end || 0) * 100) / 100,
             });
-            setKaraokeTimeline(partialTimeline);
+            setGeneratedTimeline(partialTimeline);
             setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
             setKaraokeSyncMessage(
               `Đã tìm thấy ${partialTimeline.length} dòng subtitle…`,
@@ -1810,7 +1822,7 @@ export default function CreatorStudio({
           lines: result.timeline.length,
           attempts: result.attempts.length,
         });
-        setKaraokeTimeline(result.timeline);
+        setGeneratedTimeline(result.timeline);
         cacheMusicSubtitle(target.id, result.timeline);
         setKaraokeSyncStatus(result.status);
         setKaraokeSyncMessage(publicResultMessage);
@@ -1846,7 +1858,7 @@ export default function CreatorStudio({
       pushSubtitleDebug('partial-preserved', {
         lines: bestPartialTimeline.length,
       });
-      setKaraokeTimeline(bestPartialTimeline);
+      setGeneratedTimeline(bestPartialTimeline);
       cacheMusicSubtitle(target.id, bestPartialTimeline);
       setKaraokeSyncStatus('fallback');
       setLyrics((mode) => (mode === 'off' ? 'focus' : mode));
@@ -1866,7 +1878,7 @@ export default function CreatorStudio({
       attempts: delays.length,
       partialLines: bestPartialTimeline.length,
     });
-    setKaraokeTimeline([]);
+    setGeneratedTimeline([]);
     setKaraokeSyncStatus('fallback');
     setKaraokeSyncMessage('Chưa tạo được subtitle.');
     track('karaoke_auto_sync_failed', {
@@ -1875,6 +1887,7 @@ export default function CreatorStudio({
   }
 
   async function regenerateSubtitleFromCloud() {
+    const subtitlePreferences = readSettings();
     if (!song?.id) {
       setError('Bài này chưa có songId để lấy lại subtitle từ cloud.');
       return;
@@ -1892,34 +1905,15 @@ export default function CreatorStudio({
     pushSubtitleDebug('cloud-subtitle-force-start', { songId: song.id });
 
     try {
-      let response = await fetch('/api/music/subtitle/generate', {
+      const requestGeneration = () => fetch('/api/music/subtitle/generate', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          songId: song.id,
-          language: 'vi',
-          force: true,
-        }),
+        cache: 'no-store',
+        body: JSON.stringify({ songId: song.id, language: 'vi', force: true }),
       });
-
-      if (response.status === 202) {
-        const endpoint = `/api/music/subtitle?songId=${encodeURIComponent(song.id)}&language=vi&refresh=${Date.now()}`;
-        for (let attempt = 0; attempt < 20; attempt += 1) {
-          if (karaokeSyncRun.current !== run) return;
-          await new Promise<void>((resolvePoll) =>
-            window.setTimeout(resolvePoll, 1500),
-          );
-          response = await fetch(endpoint, {
-            cache: 'no-store',
-            headers: {
-              'cache-control': 'no-cache',
-              pragma: 'no-cache',
-            },
-          });
-          if (response.ok) break;
-          if (response.status !== 404) break;
-        }
-      }
+      const response = await requestRegeneratedSubtitle(requestGeneration, {
+        isCurrent: () => karaokeSyncRun.current === run,
+      });
 
       const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
@@ -1956,7 +1950,7 @@ export default function CreatorStudio({
           ? `Đã lấy lại subtitle mới · ${lines.length} câu.`
           : `Đã lấy lại subtitle mới · ${lines.length} câu · nên kiểm tra timing.`;
 
-      setKaraokeTimeline(lines);
+      setKaraokeTimeline(applySubtitleOffset(lines, song.duration || 1, subtitlePreferences.subtitleOffset));
       cacheMusicSubtitle(song.id, lines);
       setKaraokeSyncStatus(nextStatus);
       setKaraokeSyncMessage(message);
@@ -2026,13 +2020,14 @@ export default function CreatorStudio({
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ input: value }),
         }),
-        data = await r.json();
+        data = await r.json() as Partial<Song> & { error?: string };
       if (!r.ok) throw Error(data.error || 'Không thể tải bài hát này.');
       if (karaokeSyncRun.current !== syncRun) return null;
 
       const hydrated: Song = {
         ...data,
         title: data.title || 'Suno song',
+        audio: data.audio || '',
         creator: data.creator || 'Suno',
         picture: data.picture || '',
         lyrics:
@@ -2102,6 +2097,7 @@ export default function CreatorStudio({
       setInitProgress(100);
       setInitTitle('Sẵn sàng');
       setInitDetail('Mọi dữ liệu đã được khởi tạo.');
+      applyProjectDefaults();
       setSong(hydrated);
       if (options.updateUrl !== false) updateEditorUrl(privateSource, false, options.replaceUrl);
       if (options.generateSubtitles !== false) {
@@ -2182,7 +2178,10 @@ export default function CreatorStudio({
   };
 
   async function renderVideo(mode: 'cut' | '30' = 'cut', attempt = 1) {
-    if (!song || rendering) return;
+    if (!song || rendering || renderAbort.current) return;
+    const controller = new AbortController();
+    renderAbort.current = controller;
+    setRenderEta(null);
     const renderStartedAt = performance.now();
     let stage: 'validation' | 'prepare' | 'render' | 'finalize' = 'validation';
     setRendering(true);
@@ -2313,7 +2312,16 @@ export default function CreatorStudio({
           layout: visual.layout,
           startSeconds,
           previewSeconds,
-          onProgress: setProgress,
+          useStoredAudioTrim: false,
+          signal: controller.signal,
+          onProgress: (value) => {
+            controller.signal.throwIfAborted();
+            setProgress(value);
+            if (value > 12 && value < 90) {
+              const elapsed = (performance.now() - renderStartedAt) / 1000;
+              setRenderEta(Math.ceil(elapsed * (90 - value) / (value - 10)));
+            }
+          },
           effects: config,
           karaokeTimeline,
           mediaClips,
@@ -2321,6 +2329,9 @@ export default function CreatorStudio({
           subtitleStyle: visual.subtitleStyle,
           background: visual.background,
           quality: exportConfig.quality,
+          resolution: exportConfig.resolution,
+          fps: exportConfig.fps,
+          timelineTracks,
           productionMastering: masteringConfig,
           onAudioFallback: (reason) => {
             setRenderNotice('iPhone không giải mã được mastering của nguồn này nên video sẽ dùng audio gốc để đảm bảo xuất thành công.');
@@ -2333,6 +2344,7 @@ export default function CreatorStudio({
         },
       );
 
+      controller.signal.throwIfAborted();
       stageTrack('finalize');
       if (resultUrl) URL.revokeObjectURL(resultUrl);
       const name = `${safeName(song.title)}${mode === '30' ? '-30s' : ''}.mp4`;
@@ -2360,6 +2372,11 @@ export default function CreatorStudio({
          export_duration_mode: mode === '30' ? '30s' : exportConfig.durationMode,
       });
     } catch (e) {
+      if (controller.signal.aborted) {
+        setRenderNotice('Đã hủy render. Bạn có thể chỉnh tiếp hoặc tạo lại.');
+        track('render_cancelled', { mode, stage });
+        return;
+      }
       const message = e instanceof Error ? e.message : 'Không thể tạo video.';
       const classification = classifyRenderFailure(message, stage);
       setError(message);
@@ -2381,6 +2398,8 @@ export default function CreatorStudio({
         reason: message.slice(0, 120),
       });
     } finally {
+      renderAbort.current = null;
+      setRenderEta(null);
       setRendering(false);
       setRenderStage('idle');
     }
@@ -2483,6 +2502,8 @@ export default function CreatorStudio({
   useEffect(() => {
     const readProjects = () => setProjects(readSavedProjectList());
     const readLibrary = () => setLibraryItems(readLocalLibraryItems());
+    readProjects();
+    readLibrary();
     window.addEventListener('sunodown-v10-library-change', readLibrary);
     window.addEventListener('storage', readLibrary);
     window.addEventListener('storage', readProjects);
@@ -2529,7 +2550,10 @@ export default function CreatorStudio({
       void openProject({ url: projectId, title: 'Dự án đã lưu' });
     } else if (source && validSourceInput(source)) {
       setUrl(source);
-      void resolve(source, { replaceUrl: true });
+      void loadProjectData(source).then(async (draft) => {
+        if (draft) await openProject({ url: source, title: draft.title });
+        else await resolve(source, { replaceUrl: true });
+      }).catch(() => setError('Không đọc được bản nháp trên thiết bị.'));
     }
   }, []);
   useEffect(() => {
@@ -2543,28 +2567,38 @@ export default function CreatorStudio({
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
-  async function saveProject() {
-    if (!song || !url) return;
-    setSavingProject(true);
-    setSavedProject(false);
+  async function saveProject(automatic = false) {
+    if (!song || !url || restoringProject.current) return;
+    if (!automatic) { setSavingProject(true); setSavedProject(false); }
+    setDraftStatus('Đang lưu nháp…');
+    const write = async () => {
     try {
+      const assetBlob = async (assetUrl: string) => {
+        const cached = mediaCache.current.get(assetUrl);
+        if (cached) return cached;
+        const response = await fetch(assetUrl);
+        if (!response.ok) throw new Error('Không lưu được media của dự án.');
+        const blob = await response.blob();
+        mediaCache.current.set(assetUrl, blob);
+        return blob;
+      };
       const media = await Promise.all(
         mediaClips.map(async ({ url: clipUrl, ...clip }) => ({
           ...clip,
-          blob: await (await fetch(clipUrl)).blob(),
+          blob: await assetBlob(clipUrl),
         })),
       );
       const backgroundAsset =
         background.mode === 'image' && background.imageUrl
           ? {
               kind: 'image' as const,
-              blob: await (await fetch(background.imageUrl)).blob(),
+              blob: await assetBlob(background.imageUrl),
               fingerprint: background.imageFingerprint,
             }
           : background.mode === 'video' && background.videoUrl
             ? {
                 kind: 'video' as const,
-                blob: await (await fetch(background.videoUrl)).blob(),
+                blob: await assetBlob(background.videoUrl),
                 fingerprint: background.videoFingerprint,
               }
             : undefined;
@@ -2602,30 +2636,58 @@ export default function CreatorStudio({
         media,
         audioAsset:
           url.startsWith('local-audio:') && audioBinary
-            ? { blob: audioBinary, duration: song.duration || trimEnd, title: song.title }
+            ? { blob: audioBinary, duration: song.duration || trimEnd, title: song.title,
+                cover: song.picture ? await assetBlob(song.picture) : undefined }
             : undefined,
       });
       const next = [
         { url, title: song.title },
-        ...projects.filter((x) => x.url !== url),
+        ...readSavedProjectList().filter((x) => x.url !== url),
       ].slice(0, 30);
-      setProjects(next);
+      setProjects((current) => [{ url, title: song.title }, ...current.filter((item) => item.url !== url)].slice(0, 30));
       localStorage.setItem('sundown-projects', JSON.stringify(next));
-      setSavedProject(true);
-      updateEditorUrl(url, true);
-      track('project_saved', {
+      if (activeSource.current === url) {
+        setDraftStatus('Đã lưu nháp trên thiết bị');
+        if (!automatic) setSavedProject(true);
+        updateEditorUrl(url, true, automatic);
+      }
+      if (!automatic) track('project_saved', {
         preset_id: selectedPresetId,
         template,
         aspect,
       });
-      window.setTimeout(() => setSavedProject(false), 1800);
+      if (!automatic) window.setTimeout(() => setSavedProject(false), 1800);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Không lưu được dự án.');
+      if (activeSource.current === url) setDraftStatus('Chưa lưu được nháp · hãy thử lưu lại');
+      if (!automatic) setError(e instanceof Error ? e.message : 'Không lưu được dự án.');
     } finally {
-      setSavingProject(false);
+      if (!automatic) setSavingProject(false);
     }
+    };
+    projectSaveQueue.current = projectSaveQueue.current.then(write, write);
+    await projectSaveQueue.current;
   }
+
+  useEffect(() => {
+    if (!song || busy || restoringProject.current) return;
+    const pending = window.setTimeout(() => void saveProject(true), 900);
+    const flush = () => {
+      if (document.visibilityState === 'hidden') {
+        window.clearTimeout(pending);
+        void saveProject(true);
+      }
+    };
+    document.addEventListener('visibilitychange', flush);
+    return () => { window.clearTimeout(pending); document.removeEventListener('visibilitychange', flush); };
+  }, [song, url, busy, studioModel, karaokeTimeline, mediaClips, timelineTracks,
+      trimStart, trimEnd, masteringConfig, exportConfig, selectedPresetId,
+      presetModified, presetOverrideFields, quickMode, panel, audioBinary, karaokeSyncStatus, karaokeSyncMessage]);
+
   async function openProject(item: { url: string; title: string }) {
+    restoringProject.current = true;
+    setDraftStatus('Đang khôi phục nháp…');
+    try {
+    await projectSaveQueue.current;
     setView('create');
     track('project_resumed');
     setUrl(item.url);
@@ -2635,7 +2697,7 @@ export default function CreatorStudio({
     let restoredAudio: Blob | null = null;
     if (project.audioAsset) {
       const audio = URL.createObjectURL(project.audioAsset.blob);
-      const coverAsset = project.media.find((clip) => clip.isDefault)?.blob;
+      const coverAsset = project.audioAsset.cover || project.media.find((clip) => clip.isDefault)?.blob;
       const picture = coverAsset ? URL.createObjectURL(coverAsset) : undefined;
       setAudioBinary(project.audioAsset.blob);
       restoredSong = {
@@ -2735,6 +2797,10 @@ export default function CreatorStudio({
         karaokeSyncRun.current,
       );
     }
+    setDraftStatus('Đã khôi phục nháp');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Không khôi phục được dự án.');
+    } finally { restoringProject.current = false; }
   }
 
   const readAudioDuration = (source: string) =>
@@ -2809,6 +2875,7 @@ export default function CreatorStudio({
       setPreviewTime(0);
       setLyrics('off');
       setMediaClips([{ id: crypto.randomUUID(), type: 'image', url: picture, name: title, start: 0, end: duration, isDefault: true }]);
+      applyProjectDefaults();
       setSong({ title, creator: 'Local audio', duration, audio, picture });
       updateEditorUrl(projectUrl);
       setQuickMode(true);
@@ -3113,13 +3180,13 @@ export default function CreatorStudio({
                   ? 'Lưu, mở lại và tiếp tục dựng video từ những phiên gần đây.'
                   : view === 'library'
                     ? 'Tập hợp bài Suno đã mở, tải hoặc render trên thiết bị này.'
-                    : 'Quản lý trạng thái SunoDown.'}
+                    : view === 'settings' ? 'Tài khoản, chất lượng xuất, tài nguyên và xử lý sự cố.' : 'Quản lý trạng thái SunoDown.'}
               </p>
             </div>
-            <button onClick={() => setView('create')}>
+            {view !== 'settings' && <button onClick={() => setView('create')}>
               <Plus />
               Tạo mới
-            </button>
+            </button>}
           </div>
           {view === 'projects' && (
             <>
@@ -3273,38 +3340,15 @@ export default function CreatorStudio({
             </div>
           )}
           {view === 'settings' && (
-            <div className="sd-settings">
-              <label>
-                <span>
-                  <b>Auto-play preview</b>
-                  <small>Play the full song when media is ready.</small>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={autoPreview}
-                  onChange={(e) => setAutoPreview(e.target.checked)}
-                />
-              </label>
-              <div className="sd-plan-foundation">
-                <b>Plan foundation</b>
-                <span>
-                  {DEFAULT_PLAN.toUpperCase()} · Advanced mastering {canUse(DEFAULT_PLAN, 'advanced_mastering') ? 'enabled' : 'locked'} · Pro entitlements ready
-                </span>
-              </div>
-              <button
-                onClick={() => {
-                  localStorage.removeItem('sundown-projects');
-                  setProjects([]);
-                  void clearProjectData();
-                }}
-              >
-                Clear saved projects
-              </button>
-            </div>
+            <StudioSettingsPanel
+              account={signedInUser?.email || null}
+              onLogout={async () => { const response = await fetch('/api/auth/logout', { method: 'POST' }); if (!response.ok) throw new Error('Logout failed'); setSignedInUser(null); }}
+              onClearProjects={async () => { await clearProjectData(); localStorage.removeItem('sundown-projects'); setProjects([]); }}
+            />
           )}
         </section>
       )}
-      {busy ? (
+      {view !== 'settings' && (busy ? (
         <main className="sd-init-screen" aria-live="polite">
           <div className="sd-init-stage">
             <div className="sd-init-orbit" aria-hidden="true">
@@ -3743,7 +3787,7 @@ export default function CreatorStudio({
                 )}
                 {renderNotice && !error && (
                   <div className="sd-quick-render-status" role="status" aria-live="polite">
-                    <b>Đang dùng audio gốc</b>
+                    <b>Trạng thái render</b>
                     <span>{renderNotice}</span>
                   </div>
                 )}
@@ -3825,7 +3869,13 @@ export default function CreatorStudio({
                 </button>
               </div>
             )}
+            <output aria-live="polite" className="sd-draft-status">{draftStatus}</output>
+            {rendering && <div role="status">
+              {Math.round(progress)}%{renderEta !== null ? ` · Còn khoảng ${renderEta}s` : ' · Đang chuẩn bị'}
+              <button type="button" onClick={() => renderAbort.current?.abort()}>Hủy render</button>
+            </div>}
             <EditorTimeline
+              key={song.id || url}
               duration={song.duration || 1}
               picture={song.picture}
               playhead={previewTime}
@@ -3841,11 +3891,13 @@ export default function CreatorStudio({
               subtitles={karaokeTimeline}
               onSubtitlesChange={(lines) => {
                 markPresetField('lyrics');
+                invalidateRenderedResult();
+                cacheMusicSubtitle(song.id, lines);
                 setKaraokeTimeline(lines);
               }}
               clips={timelineMediaClips}
-              onClipsChange={setMediaClips}
-              onTrackStateChange={setTimelineTracks}
+              onClipsChange={(clips) => { invalidateRenderedResult(); setMediaClips(clips); }}
+              onTrackStateChange={(tracks) => { invalidateRenderedResult(); setTimelineTracks(tracks); }}
               trackState={timelineTracks}
               audioBinary={audioBinary}
               audioUrl={song.audio}
@@ -4031,8 +4083,8 @@ export default function CreatorStudio({
             </nav>
           </div>
         </main>
-      )}
-      {song && mobileTools && (
+      ))}
+      {song && view !== 'settings' && mobileTools && (
         <StudioSheet title="Điều khiển video" onClose={() => setMobileTools(false)} className="sd-tool-sheet">
           <ToolControls {...toolControlsProps} presetContent={<PresetGallery
               presets={[...BUILTIN_STUDIO_PRESETS, ...customPresets]}

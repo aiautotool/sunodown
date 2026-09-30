@@ -24,6 +24,7 @@ import {
   Video,
   Waves,
 } from 'lucide-react';
+import { useStudioSettings } from '@/app/lib/studio-settings';
 import type { KaraokeLine } from '@/app/lib/karaoke';
 
 export type MediaClip = {
@@ -41,6 +42,7 @@ export type TimelineTrackState = Record<TrackName, TrackState>;
 type Snapshot = {
   subtitles: KaraokeLine[];
   clips: MediaClip[];
+  tracks: TimelineTrackState;
 };
 
 type TrackName = 'audio' | 'visual' | 'subtitle' | 'effects';
@@ -77,12 +79,14 @@ const stamp = (value: number) => {
   return `${minutes}:${String(seconds).padStart(2, '0')}.${tenths}`;
 };
 
-const cloneSnapshot = (props: Props): Snapshot => ({
+const cloneSnapshot = (props: Props, tracks: TimelineTrackState): Snapshot => ({
   subtitles: structuredClone(props.subtitles),
   clips: props.clips.map((clip) => ({ ...clip })),
+  tracks: structuredClone(tracks),
 });
 
 export function EditorTimeline(props: Props) {
+  const preferences = useStudioSettings();
   const [zoom, setZoom] = useState(1);
   const [tool, setTool] = useState<Tool>('select');
   const [snapping, setSnapping] = useState(true);
@@ -95,16 +99,14 @@ export function EditorTimeline(props: Props) {
   const [undoStack, setUndoStack] = useState<Snapshot[]>([]);
   const [redoStack, setRedoStack] = useState<Snapshot[]>([]);
   const [trackHeight, setTrackHeight] = useState(1);
-  const [tracks, setTracks] = useState<Record<TrackName, TrackState>>({
+  const [localTracks, setTracks] = useState<Record<TrackName, TrackState>>({
     audio: { hidden: false, muted: false, locked: false },
     visual: { hidden: false, muted: false, locked: false },
     subtitle: { hidden: false, muted: false, locked: false },
     effects: { hidden: false, muted: false, locked: false },
   });
 
-  useEffect(() => {
-    if (props.trackState) setTracks(structuredClone(props.trackState));
-  }, [props.trackState]);
+  const tracks = props.trackState || localTracks;
   const clipboard = useRef<{ kind: 'clip' | 'subtitle'; value: MediaClip | KaraokeLine } | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const touchDistance = useRef<number | null>(null);
@@ -114,6 +116,8 @@ export function EditorTimeline(props: Props) {
   const pinchActive = useRef(false);
   const MIN_ZOOM = 0.5;
   const MAX_ZOOM = 5;
+  useEffect(() => { setZoom(preferences.zoom); }, [preferences.zoom]);
+  useEffect(() => { setSnapping(preferences.snap); }, [preferences.snap]);
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -121,15 +125,25 @@ export function EditorTimeline(props: Props) {
 
   const width = Math.max(900, props.duration * 22 * zoom);
   const px = width / Math.max(1, props.duration);
-  const grid = zoom >= 2 ? 0.1 : zoom >= 1 ? 0.25 : 0.5;
+  const grid = preferences.snapInterval;
+  useEffect(() => {
+    if (!preferences.autoScroll || !scroller.current) return;
+    const node = scroller.current;
+    const x = props.playhead * px;
+    if (x < node.scrollLeft || x > node.scrollLeft + node.clientWidth - 40) {
+      node.scrollLeft = Math.max(0,x - node.clientWidth * 0.3);
+    }
+  }, [props.playhead, px, preferences.autoScroll]);
 
   const pushHistory = () => {
-    const current = cloneSnapshot(props);
+    const current = cloneSnapshot(props, tracks);
     setUndoStack((items) => [...items.slice(-39), current]);
     setRedoStack([]);
   };
 
   const restore = (snapshot: Snapshot) => {
+    setTracks(structuredClone(snapshot.tracks));
+    props.onTrackStateChange?.(structuredClone(snapshot.tracks));
     props.onSubtitlesChange(structuredClone(snapshot.subtitles));
     props.onClipsChange(snapshot.clips.map((clip) => ({ ...clip })));
   };
@@ -137,7 +151,7 @@ export function EditorTimeline(props: Props) {
   const undo = () => {
     const previous = undoStack.at(-1);
     if (!previous) return;
-    setRedoStack((items) => [...items.slice(-39), cloneSnapshot(props)]);
+    setRedoStack((items) => [...items.slice(-39), cloneSnapshot(props, tracks)]);
     setUndoStack((items) => items.slice(0, -1));
     restore(previous);
   };
@@ -145,13 +159,14 @@ export function EditorTimeline(props: Props) {
   const redo = () => {
     const next = redoStack.at(-1);
     if (!next) return;
-    setUndoStack((items) => [...items.slice(-39), cloneSnapshot(props)]);
+    setUndoStack((items) => [...items.slice(-39), cloneSnapshot(props, tracks)]);
     setRedoStack((items) => items.slice(0, -1));
     restore(next);
   };
 
   useEffect(() => {
     let cancelled = false;
+    if (!preferences.showWaveform) { setWaveform([]); return; }
     (async () => {
       try {
         let blob = props.audioBinary || null;
@@ -178,7 +193,7 @@ export function EditorTimeline(props: Props) {
           const left = decoded.getChannelData(0);
           const right =
             decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : left;
-          const bins = 320;
+          const bins = preferences.waveformDetail === 'low' ? 160 : preferences.waveformDetail === 'high' ? 640 : 320;
           const block = Math.max(1, Math.floor(left.length / bins));
           const peaks = Array.from({ length: bins }, (_, index) => {
             const start = index * block;
@@ -205,7 +220,7 @@ export function EditorTimeline(props: Props) {
     return () => {
       cancelled = true;
     };
-  }, [props.audioBinary, props.audioUrl]);
+  }, [props.audioBinary, props.audioUrl, preferences.waveformDetail, preferences.showWaveform]);
 
   useEffect(() => {
     const node = scroller.current;
@@ -311,18 +326,15 @@ export function EditorTimeline(props: Props) {
     return clamp(best, 0, props.duration);
   };
 
-  const updateTrack = (name: TrackName, patch: Partial<TrackState>) =>
-    setTracks((current) => {
-      const next = {
-        ...current,
-        [name]: { ...current[name], ...patch },
-      };
-      props.onTrackStateChange?.(next);
-      return next;
-    });
+  const updateTrack = (name: TrackName, patch: Partial<TrackState>) => {
+    pushHistory();
+    const next = { ...tracks, [name]: { ...tracks[name], ...patch } };
+    setTracks(next);
+    props.onTrackStateChange?.(next);
+  };
 
   const splitSelected = (target = selected, at = props.playhead) => {
-    if (!target) return;
+    if (!target || tracks[target.startsWith('sub-') ? 'subtitle' : 'visual'].locked) return;
     if (target.startsWith('sub-')) {
       const index = Number(target.slice(4));
       const line = props.subtitles[index];
@@ -351,7 +363,8 @@ export function EditorTimeline(props: Props) {
   };
 
   const deleteSelected = () => {
-    if (!selected) return;
+    if (!selected || tracks[selected.startsWith('sub-') ? 'subtitle' : 'visual'].locked) return;
+    if (preferences.confirmDelete && !window.confirm('Xóa clip / subtitle đã chọn?')) return;
     pushHistory();
     if (selected.startsWith('sub-')) {
       const index = Number(selected.slice(4));
@@ -375,7 +388,7 @@ export function EditorTimeline(props: Props) {
 
   const paste = () => {
     const copied = clipboard.current;
-    if (!copied) return;
+    if (!copied || tracks[copied.kind === 'subtitle' ? 'subtitle' : 'visual'].locked) return;
     pushHistory();
     if (copied.kind === 'clip') {
       const source = copied.value as MediaClip;
@@ -447,7 +460,7 @@ export function EditorTimeline(props: Props) {
 
   const seekAt = (clientX: number) => {
     props.onEditStart?.();
-    props.onSeek(snap(timeAt(clientX)));
+    props.onSeek(timeAt(clientX));
   };
 
   const scrub = (event: React.PointerEvent) => {
@@ -458,7 +471,7 @@ export function EditorTimeline(props: Props) {
     event.currentTarget.setPointerCapture?.(pointerId);
     const move = (e: PointerEvent) => {
       if (e.pointerId !== pointerId) return;
-      props.onSeek(snap(timeAt(e.clientX)));
+      props.onSeek(timeAt(e.clientX));
     };
     const up = (e: PointerEvent) => {
       if (e.pointerId !== pointerId) return;
@@ -495,6 +508,7 @@ export function EditorTimeline(props: Props) {
     edge: 'move' | 'start' | 'end',
   ) => {
     event.stopPropagation();
+    if (tracks[kind === 'subtitle' ? 'subtitle' : 'visual'].locked) return;
     props.onEditStart?.();
     pushHistory();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -574,7 +588,7 @@ export function EditorTimeline(props: Props) {
   };
 
   const addMedia = (files: FileList | null, replaceId?: string) => {
-    if (!files?.length) return;
+    if (!files?.length || tracks.visual.locked) return;
     pushHistory();
     const added = Array.from(files).map((file, index) => {
       const existing = replaceId
@@ -620,6 +634,7 @@ export function EditorTimeline(props: Props) {
     following: boolean,
   ) => {
     if (
+      tracks.subtitle.locked ||
       !Number.isInteger(index) ||
       index < 0 ||
       index >= props.subtitles.length
@@ -845,7 +860,7 @@ export function EditorTimeline(props: Props) {
               <Waves /> Audio <ChevronDown />
             </button>
             {trackActions('audio')}
-            <div className="sd-waveform-clip" style={{ left: 0, width }}>
+            <div className="sd-waveform-clip" style={{ left: 0, width, display: preferences.showWaveform ? undefined : 'none' }}>
               <div
                 className="sd-waveform-bars"
                 aria-label="Waveform âm thanh thật"

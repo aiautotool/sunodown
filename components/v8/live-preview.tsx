@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useStudioSettings } from '@/app/lib/studio-settings';
 import { Pause, Play } from 'lucide-react';
 import {
   createLiveFramePainter,
@@ -85,6 +86,7 @@ function clampPreviewTime(value: number, start: number, end: number) {
 }
 
 export function LivePreview(props: Props) {
+  const preferences = useStudioSettings();
   const canvas = useRef<HTMLCanvasElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const spatialContext = useRef<AudioContext | null>(null);
@@ -500,8 +502,8 @@ export function LivePreview(props: Props) {
       typeof navigator !== 'undefined' &&
       (/iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent) ||
         (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent)));
-    const targetFps = mobilePreview ? 24 : 30;
-    const maxSurface = mobilePreview ? 520 : 640;
+    const targetFps = preferences.previewFps;
+    const maxSurface = preferences.previewQuality === 'low' ? 360 : preferences.previewQuality === 'high' ? 960 : 640;
     let frame = 0;
     let previous = 0;
     let perfStarted = performance.now();
@@ -705,6 +707,8 @@ export function LivePreview(props: Props) {
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
   }, [
+    preferences.previewFps,
+    preferences.previewQuality,
     bitmap,
     backgroundBitmap,
     props.background,

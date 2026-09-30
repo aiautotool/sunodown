@@ -5362,3 +5362,27 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
   .sd-subtitle-refresh>button{justify-content:center}
   .sd-subtitle-refresh>small{text-align:center}
 }
+
+/* Settings: seven entry points, with controls disclosed inside each group. */
+.sd-settings-hub{width:100%;max-width:920px;margin:auto;color:#e8eef9}
+.sd-settings-heading{display:flex;align-items:center;gap:14px;margin-bottom:24px}
+.sd-settings-heading h2{font-size:26px;font-weight:700;margin:0}
+.sd-settings-heading p,.sd-settings-note{font-size:13px;line-height:1.65;color:#9aa9c0;margin-top:8px}
+.sd-settings-heading>button{padding:10px;border:1px solid #ffffff18;border-radius:12px}
+.sd-settings-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.sd-settings-groups>button{display:flex;align-items:center;gap:16px;text-align:left;padding:22px;background:#ffffff04;border:1px solid #ffffff12;border-radius:16px;transition:background .15s}
+.sd-settings-groups>button:hover{background:#ffffff09;border-color:#8bd4ff50}
+.sd-settings-groups>button>svg:first-child{color:#8bd4ff}
+.sd-settings-groups>button>svg:last-child{margin-left:auto;color:#73849e}
+.sd-settings-groups span{display:grid;gap:6px}.sd-settings-groups b{font-size:15px}.sd-settings-groups small{font-size:12px;color:#91a0b6}
+.sd-settings-detail{padding:8px 22px 22px;background:#ffffff03;border:1px solid #ffffff12;border-radius:16px}
+.sd-settings-detail h3{margin:22px 0 10px;font-size:13px;font-weight:700;letter-spacing:.04em;color:#8bd4ff}
+.sd-setting-row{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:16px 0;border-bottom:1px solid #ffffff0b}
+.sd-setting-row span{display:grid;gap:5px}.sd-setting-row b{font-size:13px;font-weight:500}.sd-setting-row small{font-size:12px;line-height:1.5;color:#8e9db4;max-width:470px}
+.sd-setting-row select,.sd-setting-row input[type=number]{max-width:220px;min-width:100px;background:#101b2c;color:#e8eef9;border:1px solid #ffffff20;border-radius:9px;padding:8px 10px;font-size:13px}
+.sd-setting-row input[type=checkbox]{width:18px;height:18px;flex-shrink:0;accent-color:#7dd3fc}
+.sd-settings-detail>button,.sd-settings-detail>a{display:block;width:fit-content;margin-top:14px;padding:10px 14px;border:1px solid #ffffff20;border-radius:10px;font-size:13px;color:#d8eaff}
+.sd-settings-detail button:disabled{opacity:.45}.sd-settings-saved{font-size:12px;color:#86efac;margin-top:16px}.sd-settings-error{font-size:13px;color:#fca5a5;margin-top:16px}
+.sd-settings-hub :focus-visible{outline:2px solid #7dd3fc;outline-offset:3px}
+@media(max-width:600px){.sd-settings-groups{grid-template-columns:1fr}.sd-settings-groups>button{padding:18px}.sd-settings-detail{padding:6px 14px 20px}.sd-setting-row{gap:12px}.sd-setting-row select{max-width:145px}.sd-setting-row small{font-size:11px}.sd-settings-heading h2{font-size:23px}}
+.sd-settings-saved{display:block}.sd-settings-detail>form button{margin-top:14px;padding:10px 14px;border:1px solid #ffffff20;border-radius:10px;font-size:13px}.sd-section-settings{padding-bottom:100px}

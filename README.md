@@ -2,6 +2,24 @@
 
 Trình tải và phát nhạc Suno chạy trên Cloudflare Workers.
 
+## Chạy local khi phát triển
+
+```bash
+npm ci
+npm run local:start
+```
+
+Mở `http://localhost:3001` (nếu cổng đang dùng, terminal sẽ hiển thị cổng thay thế).
+Lưu thay đổi trong source để giao diện tự cập nhật qua HMR/Fast Refresh,
+không cần chạy build lại. Có thể chạy trực tiếp bằng `npm run dev`.
+Thay đổi cấu hình hoặc biến môi trường có thể cần khởi động lại dev server.
+
+Để xem bản build production: chạy `npm run build`, rồi `npm run preview:local`.
+
+## Settings v24
+
+Mở `/settings` để chỉnh 7 nhóm tùy chọn. Phạm vi đã triển khai, giới hạn Web và các hạng mục còn lại được ghi trong [docs/settings-v24.md](docs/settings-v24.md).
+
 ## Karaoke lyrics trong Gen Video
 
 Khi bài Suno có lyrics, phần **Xem lời bài hát** có Karaoke Timing Editor:

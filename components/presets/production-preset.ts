@@ -10,6 +10,8 @@ export type ProductionMasteringConfig = {
 };
 export type ProductionExportConfig = {
   aspect: VideoAspect;
+  resolution?: '720' | '1080' | '2160';
+  fps?: 24 | 30 | 60;
   quality: SmartRenderQualityMode;
    durationMode: 'full' | '30s' | 'custom';
  };
@@ -54,6 +56,8 @@ export function normalizeProductionPreset(
       },
     },
     export: {
+      ...(exp.resolution && ['720','1080','2160'].includes(exp.resolution) ? { resolution: exp.resolution } : {}),
+      ...(exp.fps && [24,30,60].includes(exp.fps) ? { fps: exp.fps } : {}),
       aspect: ASPECT.has(exp.aspect as VideoAspect) ? exp.aspect as VideoAspect : fallbackAspect,
       quality: QUALITY.has(exp.quality as SmartRenderQualityMode) ? exp.quality as SmartRenderQualityMode : 'auto',
       durationMode: DURATION.has(exp.durationMode as ProductionExportConfig['durationMode']) ? exp.durationMode as ProductionExportConfig['durationMode'] : 'full',

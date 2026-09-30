@@ -31,6 +31,7 @@ import {
   seekVideoFrame,
   type BackgroundConfig,
 } from '@/components/v8/background';
+import type { TimelineTrackState } from '@/components/editor-timeline';
 import type { MediaClip } from '@/components/editor-timeline';
 import { ensureStudioFontsReady } from '@/components/studio-fonts';
 import { drawVideoEffects, type EffectConfig } from '@/components/v8/video-effects';
@@ -81,6 +82,8 @@ export type PreviewAudioAnalysis = {
 };
 export type RealtimeSpectrumBands = { bass:number; lowMid:number; vocal:number; high:number };
 export type SafeRenderOptions = {
+  resolution?: '720' | '1080' | '2160';
+  fps?: 24 | 30 | 60;
   motion: MotionIntensity;
   lyrics: LyricsMode;
   layout?: OverlayLayout;
@@ -89,11 +92,14 @@ export type SafeRenderOptions = {
   karaokeTimeline?: KaraokeLine[];
   background?: BackgroundConfig;
   mediaClips?: MediaClip[];
+  timelineTracks?: TimelineTrackState;
   effects?: EffectConfig;
   waveAppearance?: WaveAppearance;
   loopDuration?: number;
+  useStoredAudioTrim?: boolean;
   startSeconds?: number;
   previewSeconds?: number;
+  signal?: AbortSignal;
   onProgress?: (value: number) => void;
   productionMastering?: ProductionMasteringConfig;
   onAudioFallback?: (reason: string) => void;
@@ -1566,6 +1572,7 @@ export async function generateVisualizerVideoSafe(
   template: VisualTemplate,
   options: SafeRenderOptions,
 ) {
+  options.signal?.throwIfAborted();
   await ensureStudioFontsReady([
     options.overlayTextStyles?.title.font,
     options.overlayTextStyles?.creator.font,
@@ -1574,8 +1581,8 @@ export async function generateVisualizerVideoSafe(
     throw new Error('Không đủ ảnh hoặc âm thanh để tạo video.');
   options.onProgress?.(1);
   const [ir, ar] = await Promise.all([
-    fetch(song.picture, { cache: 'no-store' }),
-    fetch(song.audio, { cache: 'no-store' }),
+    fetch(song.picture, { cache: 'no-store', signal: options.signal }),
+    fetch(song.audio, { cache: 'no-store', signal: options.signal }),
   ]);
   if (!ir.ok || !ar.ok) throw new Error('Không thể tải ảnh hoặc âm thanh.');
   options.onProgress?.(4);
@@ -1674,7 +1681,7 @@ export async function generateVisualizerVideoSafe(
   )
     throw new Error('Không đọc được âm thanh.');
   if (masteringFallback) options.onAudioFallback?.('mobile_decode_or_encode');
-  const trim = storedAudioTrim(sourceDuration),
+  const trim = options.useStoredAudioTrim === false ? null : storedAudioTrim(sourceDuration),
     trimStart = trim?.start || 0,
     trimEnd = trim?.end || sourceDuration,
     fullDuration = Math.max(0.05, trimEnd - trimStart),
@@ -1694,19 +1701,23 @@ export async function generateVisualizerVideoSafe(
     end = start + duration;
   let samples: Float32Array | null = null,
     rate = 48000;
-  if (processedWav) {
+  {
     try {
-      const ac = new AudioContext(),
-        d = await ac.decodeAudioData(await processedWav.arrayBuffer());
-      samples = d.getChannelData(0);
-      rate = d.sampleRate;
-      await ac.close();
+      const ac = new AudioContext();
+      try {
+        const d = await ac.decodeAudioData(await (processedWav || originalAudio).arrayBuffer());
+        samples = d.getChannelData(0);
+        rate = d.sampleRate;
+      } finally { await ac.close(); }
     } catch {
       samples = null;
     }
   }
-  const { width, height } = VIDEO_SIZES[aspect],
-    canvas = document.createElement('canvas');
+  const baseSize = VIDEO_SIZES[aspect];
+  const outputScale = options.resolution ? Number(options.resolution) / Math.min(baseSize.width, baseSize.height) : 1;
+  const width = Math.round(baseSize.width * outputScale / 2) * 2;
+  const height = Math.round(baseSize.height * outputScale / 2) * 2;
+  const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d', { alpha: false });
@@ -1739,22 +1750,23 @@ export async function generateVisualizerVideoSafe(
     videoSource = new CanvasSource(canvas, { codec: 'avc', bitrate }),
     audioSource = new EncodedAudioPacketSource(codec);
   output.addVideoTrack(videoSource);
-  output.addAudioTrack(audioSource, { decoderConfig });
+  if (!options.timelineTracks?.audio.muted) output.addAudioTrack(audioSource, { decoderConfig });
   await output.start();
   try {
-    const fps = mobile && background.mode === 'video' ? 10 : 15,
+    const fps = options.fps ?? (mobile && background.mode === 'video' ? 10 : 15),
       fd = 1 / fps,
       frames = Math.ceil(duration * fps);
     for (let i = 0; i < frames; i++) {
+      options.signal?.throwIfAborted();
       const localT = i * fd,
         absoluteT = start + localT,
         trimT = ((absoluteT % fullDuration) + fullDuration) % fullDuration,
         songT = trimStart + trimT,
         level = amplitude(samples, rate, songT),
-        scene = sceneMedia.findLast(
+        scene = options.timelineTracks?.visual.hidden ? undefined : sceneMedia.findLast(
           ({ clip }) => (!clip.isDefault || background.mode === 'suno') && absoluteT >= clip.start && absoluteT < clip.end,
         ),
-        customBackground = Boolean(scene) || background.mode !== 'suno';
+        customBackground = options.mediaClips !== undefined || background.mode !== 'suno';
       if (scene?.bitmap) {
         drawMediaBackground(
           ctx,
@@ -1831,7 +1843,7 @@ export async function generateVisualizerVideoSafe(
         options.overlayTextStyles,
       );
       withSubtitleLayout(ctx, width, height, options.layout, () => {
-        if (options.lyrics !== 'off' && options.karaokeTimeline?.length)
+        if (!options.timelineTracks?.subtitle.hidden && options.lyrics !== 'off' && options.karaokeTimeline?.length)
           drawKaraokeOverlay(
             ctx,
             options.karaokeTimeline,
@@ -1840,7 +1852,7 @@ export async function generateVisualizerVideoSafe(
             height,
             options.subtitleStyle,
           );
-        else
+        else if (options.karaokeTimeline === undefined && !options.timelineTracks?.subtitle.hidden)
           drawLyrics(
             ctx,
             song,
@@ -1866,7 +1878,7 @@ export async function generateVisualizerVideoSafe(
         options.waveAppearance,
         bmp,
       );
-      if (options.effects?.effects?.length) {
+      if (!options.timelineTracks?.effects.hidden && options.effects?.effects?.length) {
         drawVideoEffects(
           ctx,
           width,
@@ -1884,22 +1896,12 @@ export async function generateVisualizerVideoSafe(
           Math.min(90, 10 + Math.round(((i + 1) / frames) * 80)),
         );
     }
-    bmp.close();
-    backgroundBitmap?.close();
-    sceneMedia.forEach(({ bitmap, video }) => {
-      bitmap?.close();
-      if (video) {
-        video.removeAttribute('src');
-        video.load();
-      }
-    });
-    if (backgroundVideo) {
-      backgroundVideo.removeAttribute('src');
-      backgroundVideo.load();
-    }
+    if (!track) throw new Error('Không đọc được audio track.');
     const sink = new EncodedPacketSink(track),
-      sourcePackets = [] as EncodedPacket[];
-    for await (const p of sink.packets()) sourcePackets.push(p);
+      sourcePackets: InstanceType<typeof EncodedPacket>[] = [];
+    if (!options.timelineTracks?.audio.muted) {
+      for await (const p of sink.packets()) sourcePackets.push(p);
+    }
     const meta = { decoderConfig };
     let added = 0;
     const firstLoop = Math.max(0, Math.floor(start / fullDuration)),
@@ -1910,6 +1912,7 @@ export async function generateVisualizerVideoSafe(
     for (let loop = firstLoop; loop <= lastLoop; loop++) {
       const loopOffset = loop * fullDuration;
       for (const p of sourcePackets) {
+        options.signal?.throwIfAborted();
         const sourceStart = p.timestamp,
           sourceEnd = sourceStart + p.duration;
         if (sourceEnd <= trimStart) continue;
@@ -1931,13 +1934,21 @@ export async function generateVisualizerVideoSafe(
         if (added % 25 === 0) options.onProgress?.(94);
       }
     }
+    options.signal?.throwIfAborted();
     options.onProgress?.(97);
     await output.finalize();
     options.onProgress?.(100);
   } catch (e) {
-    bmp.close();
-    output.cancel();
+    await output.cancel();
     throw e;
+  } finally {
+    bmp.close();
+    backgroundBitmap?.close();
+    sceneMedia.forEach(({ bitmap, video }) => {
+      bitmap?.close();
+      if (video) { video.removeAttribute('src'); video.load(); }
+    });
+    if (backgroundVideo) { backgroundVideo.removeAttribute('src'); backgroundVideo.load(); }
   }
   if (!target.buffer) throw new Error('Không xuất được MP4.');
   return new Blob([target.buffer], { type: 'video/mp4' });

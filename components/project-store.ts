@@ -1,3 +1,4 @@
+import type { StudioPresetConfig } from './presets/studio-presets';
 import type {EffectSettings} from './v8/video-effects';
 import type { KaraokeLine } from '@/app/lib/karaoke';
 import type { MediaClip } from '@/components/editor-timeline';
@@ -36,7 +37,7 @@ export type SavedProject = {
   activePanel?: string;
   selectedPresetId?: string | null;
   presetModified?: boolean;
-  presetOverrideFields?: Array<'template'|'wave'|'waveAppearance'|'motion'|'aspect'|'lyrics'|'effects'|'layout'|'textStyles'|'subtitleStyle'|'background'>;
+  presetOverrideFields?: Array<keyof StudioPresetConfig>;
   effects: VideoEffect[];
   effectSettings?:EffectSettings;
   layout: OverlayLayout;
@@ -59,6 +60,7 @@ export type SavedProject = {
   media: Array<Omit<MediaClip, 'url'> & { blob: Blob }>;
   audioAsset?: {
     blob: Blob;
+    cover?: Blob;
     duration: number;
     title: string;
   };
