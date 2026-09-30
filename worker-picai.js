@@ -700,8 +700,8 @@ async function fetchSubtitleSong(songId) {
   const mediaUrls = Array.isArray(clip && clip.media_urls) ? clip.media_urls : [];
   const audioUrl =
     subtitleMediaSource(mediaUrls, 'mp3') ||
-    firstSubtitleString(clip && clip.audio_url) ||
-    subtitleMediaSource(mediaUrls, 'm4a');
+    subtitleMediaSource(mediaUrls, 'm4a') ||
+    firstSubtitleString(clip && clip.audio_url);
   return {
     id: songId,
     lyrics: firstSubtitleString(
