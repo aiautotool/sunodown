@@ -79,7 +79,7 @@ function Step({label,state}:{label:string;state:'idle'|'active'|'done'}){
 }
 
 const styles=StyleSheet.create({
-  root:{...StyleSheet.absoluteFill,zIndex:8000,alignItems:'center',justifyContent:'center',padding:28,backgroundColor:'#080c12'},
+  root:{flex:1,minHeight:'100%',alignItems:'center',justifyContent:'center',padding:28,backgroundColor:'#080c12'},
   rootMobile:{padding:18},
   radial:{position:'absolute',top:'17%',width:520,height:520,borderRadius:260,backgroundColor:'rgba(117,87,255,.09)'},
   stage:{width:'92%',maxWidth:560,alignItems:'center',gap:12},
