@@ -31,6 +31,8 @@ export function EmptyCreate({
   const mobile=width<=v24.mobileBreakpoint;
   const stacked=width<=v24.tabletBreakpoint;
   const mid=width<=v24.laptopBreakpoint;
+  const narrow=width<=520;
+  const headlineSize=mobile?39:Math.max(42,Math.min(70,width*.0415));
   const [input,setInput]=useState(DEFAULT);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState('');
@@ -89,7 +91,7 @@ export function EmptyCreate({
       </Pressable>
     </View>}
 
-    <ScrollView style={styles.scroll} contentContainerStyle={[styles.shell,{paddingTop:mobile?8:26}]}>
+    <ScrollView style={styles.scroll} contentContainerStyle={[styles.shell,mid&&styles.shellMid,stacked&&styles.shellStacked,mobile&&styles.shellMobile]}>
       {mobile&&<View style={styles.mobileBrand}>
         <View style={styles.mobileBrandLeft}><Music2 size={27} color={colors.violet}/><Text style={styles.mobileBrandText}>SunoDown</Text></View>
         <Menu size={20} color="#c9d0dc"/>
@@ -98,7 +100,7 @@ export function EmptyCreate({
       <View style={[styles.hero,stacked&&styles.heroStack]}>
         <View style={styles.copy}>
           <View style={styles.kicker}><Sparkles size={13} color="#a27dff"/><Text style={styles.kickerText}>CREATOR STUDIO</Text></View>
-          <Text style={[styles.headline,mobile&&styles.headlineMobile]}>Turn your Suno song{String.fromCharCode(10)}<Text style={styles.headlineAccent}>into stunning content</Text></Text>
+          <Text style={[styles.headline,{fontSize:headlineSize,lineHeight:headlineSize*.98},mobile&&styles.headlineMobile]}>Turn your Suno song{String.fromCharCode(10)}<Text style={styles.headlineAccent}>into stunning content</Text></Text>
           <Text style={styles.description}>Biến nhạc Suno thành video lyric, karaoke và social video chuyên nghiệp chỉ trong vài phút.</Text>
 
           <View style={[styles.analyzeRow,stacked&&styles.analyzeRowStack]}>
@@ -147,14 +149,14 @@ export function EmptyCreate({
 
         <View style={[styles.showcase,stacked&&styles.showcaseStack]}>
           <View style={styles.showcaseGlow}/>
-          <View style={styles.toolStack}>
+          {!narrow&&<View style={[styles.toolStack,mid&&styles.toolStackMid]}>
             <MiniTool icon={<FileText size={20} color="#d4c8ff"/>} label="Lyrics"/>
             <MiniTool icon={<Music2 size={20} color="#d4c8ff"/>} label="Waveform"/>
             <MiniTool icon={<ImageIcon size={20} color="#d4c8ff"/>} label="Background"/>
             <MiniTool icon={<Sparkles size={20} color="#d4c8ff"/>} label="Preset"/>
-          </View>
+          </View>}
 
-          <View style={[styles.phone,mobile&&styles.phoneMobile]}>
+          <View style={[styles.phone,mid&&styles.phoneMid,mobile&&styles.phoneMobile,narrow&&styles.phoneNarrow]}>
             <View style={styles.phoneNotch}/>
             <View style={styles.phoneScreen}>
               <Image source={{uri:previewUri}} style={StyleSheet.absoluteFill} resizeMode="cover"/>
@@ -167,7 +169,7 @@ export function EmptyCreate({
             </View>
           </View>
 
-          <View style={[styles.controlCard,mobile&&styles.controlCardMobile]}>
+          <View style={[styles.controlCard,mid&&styles.controlCardMid,mobile&&styles.controlCardMobile,narrow&&styles.controlCardNarrow]}>
             <Image source={{uri:previewUri}} style={styles.controlThumb} resizeMode="cover"/>
             <Text style={styles.controlTitle}>Cinematic</Text>
             <SliderFake label="Blur" value={32} text="30%"/>
@@ -187,17 +189,11 @@ export function EmptyCreate({
 
       <View style={styles.featured}>
         <View style={styles.featuredHead}><View style={styles.featuredTitleRow}><Text>🔥</Text><Text style={styles.featuredTitle}>Mẫu video nổi bật</Text></View><Text style={styles.featuredLink}>Xem tất cả  ›</Text></View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
-          {featured.map(([name,id,gradient],index)=><Pressable key={id} style={[styles.template,index===0&&styles.templateActive]}>
-            <LinearGradient colors={gradient as any} style={styles.templateThumb}>
-              <Image source={{uri:previewUri}} style={StyleSheet.absoluteFill} resizeMode="cover"/>
-              <LinearGradient colors={['transparent','rgba(5,8,13,.68)']} style={StyleSheet.absoluteFill}/>
-              <View style={styles.templateBadge}><Text style={styles.templateBadgeText}>{index===0?'HOT':'STYLE'}</Text></View>
-            </LinearGradient>
-            <Text numberOfLines={1} style={styles.templateName}>{name}</Text>
-            <View style={styles.templatePlay}><Play size={9} color="#fff" fill="#fff"/></View>
-          </Pressable>)}
-        </ScrollView>
+        {stacked?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
+          {featured.map(([name,id,gradient],index)=><TemplateCard key={id} name={name} gradient={gradient} index={index}/>)}
+        </ScrollView>:<View style={styles.featuredGrid}>
+          {featured.map(([name,id,gradient],index)=><TemplateCard key={id} name={name} gradient={gradient} index={index} mid={mid}/>)}
+        </View>}
       </View>
 
       <View style={styles.footer}>
@@ -211,6 +207,15 @@ export function EmptyCreate({
 function MiniTool({icon,label}:{icon:React.ReactNode;label:string}){return <View style={styles.miniTool}>{icon}<Text style={styles.miniToolText}>{label}</Text></View>}
 function SliderFake({label,value,text}:{label:string;value:number;text:string}){return <View style={styles.sliderRow}><Text style={styles.sliderLabel}>{label}</Text><View style={styles.sliderTrack}><LinearGradient colors={['#9c6aff','#7768ff']} style={[styles.sliderFill,{width:`${value}%`}]}/></View><Text style={styles.sliderValue}>{text}</Text></View>}
 function Benefit({icon,title,sub}:{icon:string;title:string;sub:string}){return <View style={styles.benefit}><View style={styles.benefitIcon}><Text style={styles.benefitIconText}>{icon}</Text></View><View style={{flex:1}}><Text style={styles.benefitTitle}>{title}</Text><Text style={styles.benefitSub}>{sub}</Text></View></View>}
+function TemplateCard({name,gradient,index,mid=false}:{name:string;gradient:readonly [string,string];index:number;mid?:boolean}){return <Pressable style={[styles.template,mid&&styles.templateMid,index===0&&styles.templateActive]}>
+  <LinearGradient colors={gradient as any} style={styles.templateThumb}>
+    <Image source={{uri:previewUri}} style={StyleSheet.absoluteFill} resizeMode="cover"/>
+    <LinearGradient colors={['transparent','rgba(5,8,13,.68)']} style={StyleSheet.absoluteFill}/>
+    <View style={styles.templateBadge}><Text style={styles.templateBadgeText}>{index===0?'HOT':'STYLE'}</Text></View>
+  </LinearGradient>
+  <Text numberOfLines={1} style={styles.templateName}>{name}</Text>
+  <View style={styles.templatePlay}><Play size={9} color="#fff" fill="#fff"/></View>
+</Pressable>}
 
 const styles=StyleSheet.create({
   root:{flex:1,flexDirection:'row',backgroundColor:'#07101b',paddingTop:v24.headerHeight},rootStacked:{paddingTop:0},
@@ -227,13 +232,13 @@ const styles=StyleSheet.create({
   proCrown:{width:30,height:30,borderRadius:10,backgroundColor:'rgba(245,174,67,.1)',alignItems:'center',justifyContent:'center'},proCrownText:{color:'#ffc45f',fontSize:15},
   proTitle:{color:'#f3f5f8',fontSize:12,fontWeight:'700'},proSub:{color:'#717e92',fontSize:8,marginTop:4},proArrow:{color:'#8e9bb0',fontSize:22},
 
-  scroll:{flex:1},shell:{paddingHorizontal:28,paddingBottom:22},
+  scroll:{flex:1},shell:{paddingTop:26,paddingHorizontal:28,paddingBottom:22},shellMid:{paddingTop:22,paddingHorizontal:20,paddingBottom:22},shellStacked:{paddingTop:18,paddingHorizontal:18,paddingBottom:90},shellMobile:{paddingTop:12,paddingHorizontal:16,paddingBottom:56},
   mobileBrand:{height:52,flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:4,marginBottom:8},
   mobileBrandLeft:{flexDirection:'row',alignItems:'center',gap:10},mobileBrandText:{color:'#f5f7fb',fontSize:21,fontWeight:'700'},
   hero:{minHeight:520,flexDirection:'row',gap:18,alignItems:'center'},heroStack:{flexDirection:'column',alignItems:'stretch',paddingTop:18},
   copy:{flex:1,maxWidth:720},kicker:{alignSelf:'flex-start',height:34,borderWidth:1,borderColor:'rgba(145,164,194,.13)',borderRadius:999,backgroundColor:'rgba(23,32,49,.72)',paddingHorizontal:14,flexDirection:'row',alignItems:'center',gap:8},
   kickerText:{color:'#b9c3d4',fontSize:9,fontWeight:'800',letterSpacing:1.8},
-  headline:{color:'#f5f7fb',fontSize:58,lineHeight:57,fontWeight:'900',letterSpacing:-3,marginTop:17,marginBottom:14},headlineMobile:{fontSize:39,lineHeight:40,letterSpacing:-1.7},
+  headline:{color:'#f5f7fb',fontWeight:'900',letterSpacing:-3,marginTop:17,marginBottom:14},headlineMobile:{fontSize:39,lineHeight:39.4,letterSpacing:-1.7},
   headlineAccent:{color:'#8d66ff'},description:{maxWidth:650,color:'#aeb9cb',fontSize:14,lineHeight:23,marginBottom:24},
   analyzeRow:{flexDirection:'row',gap:9},analyzeRowStack:{flexDirection:'column'},
   linkbox:{flex:1,minHeight:62,borderWidth:1,borderColor:'rgba(143,106,255,.72)',borderRadius:14,backgroundColor:'#0e1622',paddingLeft:15,paddingRight:11,flexDirection:'row',alignItems:'center',gap:10},
@@ -246,21 +251,23 @@ const styles=StyleSheet.create({
 
   showcase:{flex:0.95,minHeight:520,alignItems:'center',justifyContent:'center',position:'relative'},showcaseStack:{width:'100%',minHeight:520},
   showcaseGlow:{position:'absolute',width:500,height:500,borderRadius:250,backgroundColor:'rgba(139,75,255,.13)'},
-  toolStack:{position:'absolute',left:'4%',top:'23%',zIndex:5,width:100,borderWidth:1,borderColor:'rgba(182,166,231,.2)',borderRadius:21,overflow:'hidden',backgroundColor:'rgba(20,21,38,.90)',transform:[{rotate:'8deg'}]},
-  miniTool:{height:76,alignItems:'center',justifyContent:'center',borderBottomWidth:1,borderColor:'rgba(255,255,255,.045)'},miniToolText:{color:'#bec7d7',fontSize:7,marginTop:8},
-  phone:{zIndex:4,width:280,aspectRatio:9/16,borderWidth:1,borderColor:'rgba(210,218,239,.22)',borderRadius:38,backgroundColor:'#111a26',padding:10,transform:[{rotate:'7deg'}]},phoneMobile:{width:250,transform:[{rotate:'4deg'}]},
+  toolStack:{position:'absolute',left:'5%',top:'23%',zIndex:5,width:100,borderWidth:1,borderColor:'rgba(182,166,231,.2)',borderRadius:21,overflow:'hidden',backgroundColor:'rgba(20,21,38,.90)',transform:[{rotate:'8deg'}]},
+  toolStackMid:{left:0,width:100},miniTool:{height:76,alignItems:'center',justifyContent:'center',borderBottomWidth:1,borderColor:'rgba(255,255,255,.045)'},miniToolText:{color:'#bec7d7',fontSize:7,marginTop:8},
+  phone:{zIndex:4,width:280,aspectRatio:9/16,borderWidth:1,borderColor:'rgba(210,218,239,.22)',borderRadius:38,backgroundColor:'#111a26',padding:10,transform:[{rotate:'7deg'},{rotateY:'-8deg'}]},
+  phoneMid:{width:240},phoneMobile:{width:260,transform:[{rotate:'4deg'}]},phoneNarrow:{width:232},
   phoneNotch:{position:'absolute',zIndex:10,top:15,left:'35%',right:'35%',height:18,borderBottomLeftRadius:12,borderBottomRightRadius:12,backgroundColor:'#05070b'},
   phoneScreen:{flex:1,borderRadius:29,overflow:'hidden',backgroundColor:'#090e17'},ratioBadge:{position:'absolute',right:11,top:13,zIndex:5,borderWidth:1,borderColor:'rgba(255,255,255,.12)',borderRadius:9,backgroundColor:'rgba(8,12,19,.55)',paddingHorizontal:7,paddingVertical:5},ratioText:{color:'#fff',fontSize:9,fontWeight:'800'},
   phoneLyrics:{position:'absolute',zIndex:5,left:15,right:15,bottom:120,color:'#fff',fontSize:18,fontWeight:'700',fontStyle:'italic',lineHeight:24,textAlign:'center',textShadowColor:'#000',textShadowRadius:16},
   phoneWave:{position:'absolute',zIndex:5,left:19,right:19,bottom:84,height:22,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},phoneBar:{width:2,borderRadius:2,backgroundColor:'#cf78ff'},
   phoneTime:{position:'absolute',zIndex:5,left:20,right:20,bottom:65,flexDirection:'row',justifyContent:'space-between'},phoneTimeText:{color:'#aeb8ca',fontSize:6},
   phoneControls:{position:'absolute',zIndex:5,left:0,right:0,bottom:16,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:22},chev:{color:'#dce3ec',fontSize:24},phonePlay:{width:48,height:48,borderWidth:1,borderColor:'rgba(255,255,255,.7)',borderRadius:24,backgroundColor:'rgba(255,255,255,.08)',alignItems:'center',justifyContent:'center'},
-  controlCard:{position:'absolute',zIndex:6,right:0,top:'31%',width:165,borderWidth:1,borderColor:'rgba(192,180,225,.24)',borderRadius:18,backgroundColor:'rgba(18,22,34,.95)',padding:10,transform:[{rotate:'6deg'}]},controlCardMobile:{width:128,right:0,top:'34%'},controlThumb:{width:'100%',height:76,borderRadius:11},controlTitle:{color:'#f1f4f8',fontSize:9,fontWeight:'700',marginVertical:9},
+  controlCard:{position:'absolute',zIndex:6,right:0,top:'31%',width:165,borderWidth:1,borderColor:'rgba(192,180,225,.24)',borderRadius:18,backgroundColor:'rgba(18,22,34,.95)',padding:10,transform:[{rotate:'6deg'}]},controlThumb:{width:'100%',height:76,borderRadius:11},controlTitle:{color:'#f1f4f8',fontSize:9,fontWeight:'700',marginVertical:9},
+  controlCardMid:{right:-12,width:145},controlCardMobile:{right:0,top:'34%',width:128},controlCardNarrow:{right:-4,width:118,opacity:.9},
   sliderRow:{flexDirection:'row',alignItems:'center',gap:6,marginVertical:4},sliderLabel:{width:38,color:'#8f9bad',fontSize:6},sliderTrack:{height:3,flex:1,borderRadius:99,backgroundColor:'#222b39',overflow:'hidden'},sliderFill:{height:3,borderRadius:99},sliderValue:{width:27,color:'#8f9bad',fontSize:6,textAlign:'right'},
 
   benefits:{flexDirection:'row',marginTop:4,marginBottom:20,borderWidth:1,borderColor:'rgba(130,146,171,.08)',borderRadius:14,backgroundColor:'rgba(12,19,29,.86)',overflow:'hidden'},benefitsMobile:{flexWrap:'wrap'},
   benefit:{flex:1,minWidth:145,minHeight:75,flexDirection:'row',alignItems:'center',gap:10,paddingHorizontal:12,borderRightWidth:1,borderColor:'rgba(255,255,255,.04)'},benefitIcon:{width:38,height:38,borderRadius:19,backgroundColor:'rgba(122,78,255,.08)',alignItems:'center',justifyContent:'center'},benefitIconText:{color:'#9e75ff',fontSize:9,fontWeight:'900'},benefitTitle:{color:'#eef2f7',fontSize:9,fontWeight:'700'},benefitSub:{color:'#6e7a8d',fontSize:7,marginTop:3},
   featured:{marginTop:4},featuredHead:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:11},featuredTitleRow:{flexDirection:'row',alignItems:'center',gap:7},featuredTitle:{color:'#f5f7fb',fontSize:12,fontWeight:'700'},featuredLink:{color:'#9b82f5',fontSize:8},featuredRow:{gap:9,paddingBottom:5},
-  template:{width:170,overflow:'hidden',borderWidth:1,borderColor:'rgba(126,143,169,.16)',borderRadius:12,backgroundColor:'#0d131d',position:'relative'},templateActive:{borderColor:'#8d5cff'},templateThumb:{height:92,position:'relative'},templateBadge:{position:'absolute',left:7,top:7,borderRadius:999,backgroundColor:'rgba(11,16,25,.75)',paddingHorizontal:6,paddingVertical:3},templateBadgeText:{color:'#fff',fontSize:7,fontWeight:'800'},templateName:{color:'#fff',fontSize:8,fontWeight:'700',paddingTop:9,paddingBottom:10,paddingLeft:10,paddingRight:30},templatePlay:{position:'absolute',right:7,bottom:7,width:22,height:22,borderWidth:1,borderColor:'rgba(255,255,255,.17)',borderRadius:11,backgroundColor:'rgba(11,16,25,.72)',alignItems:'center',justifyContent:'center'},
+  template:{width:'15.7%',minWidth:150,flexGrow:1,overflow:'hidden',borderWidth:1,borderColor:'rgba(126,143,169,.16)',borderRadius:12,backgroundColor:'#0d131d',position:'relative'},templateActive:{borderColor:'#8d5cff'},templateThumb:{height:92,position:'relative'},templateBadge:{position:'absolute',left:7,top:7,borderRadius:999,backgroundColor:'rgba(11,16,25,.75)',paddingHorizontal:6,paddingVertical:3},templateBadgeText:{color:'#fff',fontSize:7,fontWeight:'800'},templateName:{color:'#fff',fontSize:8,fontWeight:'700',paddingTop:9,paddingBottom:10,paddingLeft:10,paddingRight:30},templatePlay:{position:'absolute',right:7,bottom:7,width:22,height:22,borderWidth:1,borderColor:'rgba(255,255,255,.17)',borderRadius:11,backgroundColor:'rgba(11,16,25,.72)',alignItems:'center',justifyContent:'center'},
   footer:{marginTop:24,marginBottom:4,alignItems:'center'},footerLinks:{flexDirection:'row',gap:14,flexWrap:'wrap',justifyContent:'center',marginBottom:10},footerLink:{color:'#78859a',fontSize:9,fontWeight:'700'},footerBuild:{color:'#495468',fontSize:7,fontWeight:'700',letterSpacing:2.4},
 });
