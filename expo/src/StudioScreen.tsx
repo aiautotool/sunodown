@@ -315,6 +315,7 @@ export function StudioScreen({
     config={config}
     onChange={setConfig}
     timeline={timeline}
+    onTimelineChange={setTimeline}
     subtitleLoading={subLoading}
     subtitleError={subError}
     onReget={()=>void reget()}
