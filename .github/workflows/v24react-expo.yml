@@ -1,0 +1,27 @@
+name: v24react Expo checks
+
+on:
+  push:
+    branches: [v24react]
+    paths:
+      - 'expo/**'
+      - '.github/workflows/v24react-expo.yml'
+  workflow_dispatch:
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: expo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13'
+          cache: npm
+          cache-dependency-path: expo/package-lock.json
+      - run: npm install
+      - run: npx expo install --fix
+      - run: npm run typecheck
+      - run: npm run build:web
