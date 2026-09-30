@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import * as DocumentPicker from 'expo-document-picker';
 import { BookOpen, ChevronLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Link2, ListMusic, Menu, Music2, Play, Plus, Sparkles, Upload } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, v24 } from './theme';
@@ -46,6 +47,17 @@ export function EmptyCreate({
     finally{setLoading(false)}
   };
   const paste=async()=>{const value=(await Clipboard.getStringAsync()).trim();if(value)setInput(value)};
+  const pickAudio=async()=>{
+    setError('');
+    try{
+      const result=await DocumentPicker.getDocumentAsync({type:'audio/*',multiple:false,copyToCacheDirectory:true});
+      if(result.canceled)return;
+      const item=result.assets[0];
+      if(!item)return;
+      const title=(item.name||'Local audio').replace(/\.[^.]+$/,'');
+      onResolved({title,creator:'Local audio',audio:item.uri,duration:0,lyrics:''},item.uri);
+    }catch(e){setError(e instanceof Error?e.message:'Không mở được file audio')}
+  };
 
   const railWidth=stacked?0:(collapsed?(mid?72:76):(mid?210:250));
 
@@ -66,7 +78,7 @@ export function EmptyCreate({
       <Pressable style={[styles.sideItem,collapsed&&styles.sideCollapsed]} onPress={()=>onNavigate('create')}>
         <Link2 size={19} color="#96a3b7"/>{!collapsed&&<Text style={styles.sideText}>Từ link Suno</Text>}
       </Pressable>
-      <Pressable style={[styles.sideItem,collapsed&&styles.sideCollapsed]}>
+      <Pressable style={[styles.sideItem,collapsed&&styles.sideCollapsed]} onPress={()=>void pickAudio()}>
         <Upload size={19} color="#96a3b7"/>{!collapsed&&<Text style={styles.sideText}>Tải audio lên</Text>}
       </Pressable>
       <Pressable style={[styles.sideItem,collapsed&&styles.sideCollapsed]} onPress={()=>onNavigate('library')}>
@@ -128,7 +140,7 @@ export function EmptyCreate({
           <View style={styles.orRow}><View style={styles.orLine}/><Text style={styles.orText}>HOẶC</Text><View style={styles.orLine}/></View>
 
           <View style={[styles.sourceGrid,mobile&&styles.sourceGridMobile]}>
-            <Pressable style={styles.sourceCard}>
+            <Pressable style={styles.sourceCard} onPress={()=>void pickAudio()}>
               <View style={styles.sourceIcon}><Upload size={20} color="#a97eff"/></View>
               <View style={styles.sourceCopy}><Text style={styles.sourceTitle}>Tải file audio lên</Text><Text style={styles.sourceSub}>MP3, WAV, M4A, AAC, OGG, FLAC</Text></View>
               <Text style={styles.sourceArrow}>›</Text>
