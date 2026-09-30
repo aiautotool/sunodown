@@ -81,7 +81,7 @@ function NativeApp(){
   const onNavigation=useCallback((state:WebViewNavigation)=>setCanGoBack(Boolean(state.canGoBack)),[]);
 
   return <SafeAreaView style={styles.safe} edges={['top','bottom']}>
-    <StatusBar style="light" backgroundColor="#070a10"/>
+    <StatusBar style="light"/>
     <View style={styles.root}>
       <WebView
         ref={ref}
