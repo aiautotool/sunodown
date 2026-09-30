@@ -106,3 +106,10 @@ jobs:
           cached="$(curl --fail --silent --show-error "$PREVIEW_URL/api/music/subtitle?songId=$song_id&language=vi")"
           printf '%s' "$cached" | jq -e '.status == "ready"' >/dev/null
           printf '%s' "$cached" | jq -e '.subtitle.lines | length > 0' >/dev/null
+
+          first_generated_at="$(printf '%s' "$cached" | jq -r '.subtitle.generatedAt')"
+          second="$(curl --fail --silent --show-error --max-time 60             -X POST "$PREVIEW_URL/api/music/subtitle/generate"             -H 'content-type: application/json'             --data "{\"songId\":\"$song_id\",\"language\":\"vi\"}")"
+          printf '%s' "$second" | jq -e '.status == "ready"' >/dev/null
+          printf '%s' "$second" | jq -e '.cached == true' >/dev/null
+          second_generated_at="$(printf '%s' "$second" | jq -r '.subtitle.generatedAt')"
+          test "$first_generated_at" = "$second_generated_at"
