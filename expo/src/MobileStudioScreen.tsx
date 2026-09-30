@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { cloneElement, useMemo, useState, type ReactElement } from 'react';
 import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ChevronDown, Image as ImageIcon, Menu, Music2, Play, RefreshCw, Save, SlidersHorizontal, Sparkles, Subtitles, Upload, X } from 'lucide-react-native';
@@ -110,9 +110,9 @@ export function MobileStudioScreen({song,onSave,onBack}:{song:Song;onSave:()=>vo
   </View>
 }
 
-function ToolButton({active,icon,label,onPress}:{active:boolean;icon:React.ReactElement;label:string;onPress:()=>void}){
+function ToolButton({active,icon,label,onPress}:{active:boolean;icon:ReactElement<any>;label:string;onPress:()=>void}){
   const color=active?'#a98bff':'#c2c9d4';
-  return <Pressable style={styles.navBtn} onPress={onPress}>{/* @ts-ignore */}{icon&&Object.assign({},icon,{props:{...icon.props,color}})}<Text style={[styles.navText,active&&styles.navTextActive]}>{label}</Text></Pressable>
+  return <Pressable style={styles.navBtn} onPress={onPress}>{cloneElement(icon,{color})}<Text style={[styles.navText,active&&styles.navTextActive]}>{label}</Text></Pressable>
 }
 
 const styles=StyleSheet.create({
