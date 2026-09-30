@@ -52,7 +52,7 @@ export function MusicPlayer({song}:{song:Song|null}) {
 
 const styles=StyleSheet.create({
   root:{position:'absolute',zIndex:78,left:0,right:0,bottom:0,height:82,borderTopWidth:1,borderColor:'rgba(255,255,255,.065)',backgroundColor:'rgba(8,10,15,.96)',paddingHorizontal:28,paddingTop:8,paddingBottom:10,flexDirection:'row',alignItems:'center',gap:18},
-  rootCompact:{height:72,paddingHorizontal:12,gap:8},
+  rootCompact:{height:72,bottom:64,paddingHorizontal:12,gap:8},
   progressTrack:{position:'absolute',top:0,left:0,right:0,height:3,backgroundColor:'rgba(255,255,255,.10)'},progressFill:{height:3,backgroundColor:'#b7a3ff'},
   summary:{flex:1,minWidth:0,flexDirection:'row',alignItems:'center',gap:12},cover:{width:52,height:52,borderRadius:10,backgroundColor:'#171b25'},coverCompact:{width:44,height:44,borderRadius:9},coverEmpty:{alignItems:'center',justifyContent:'center'},copy:{flex:1,minWidth:0},title:{color:'#f4f6fa',fontSize:12,fontWeight:'700'},artist:{color:'#7e899a',fontSize:9,marginTop:4},
   transport:{flex:1.1,minWidth:170,flexDirection:'row',justifyContent:'center',alignItems:'center',gap:8},secondary:{width:34,height:34,borderRadius:17,alignItems:'center',justifyContent:'center'},primary:{width:44,height:44,borderRadius:22,backgroundColor:'#fff',alignItems:'center',justifyContent:'center'},
