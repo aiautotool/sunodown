@@ -57,8 +57,13 @@ export function MusicHubScreen({
     audio:item.audio,
   });
 
-  return <View style={styles.root}>
-    {!compact&&<View style={styles.sidebar}>
+  return <View style={[styles.root,compact&&styles.rootCompact]}>
+    {compact?<View style={styles.mobileTabs}>
+      <MusicTabButton active={tab==='listen'} icon={<Sparkles size={14}/>} label="Listen Now" onPress={()=>setTab('listen')}/>
+      <MusicTabButton active={tab==='new'} icon={<Clock3 size={14}/>} label="New Songs" onPress={()=>setTab('new')}/>
+      <MusicTabButton active={tab==='top'} icon={<ListMusic size={14}/>} label="Top 20" onPress={()=>setTab('top')}/>
+      <MusicTabButton active={tab==='playlists'} icon={<Music2 size={14}/>} label="Playlists" onPress={()=>setTab('playlists')}/>
+    </View>:<View style={styles.sidebar}>
       <Pressable style={styles.brand} onPress={onCreate}>
         <View style={styles.brandMark}><Music2 size={22} color="#9e87ff"/></View>
         <Text style={styles.brandText}>SunoDown</Text>
@@ -110,9 +115,9 @@ export function MusicHubScreen({
             <Pressable
               disabled={!heroSong}
               onPress={()=>heroSong&&play(heroSong)}
-              style={[styles.continueCard,!heroSong&&styles.continueEmpty]}
+              style={[styles.continueCard,compact&&styles.continueCardCompact,!heroSong&&styles.continueEmpty]}
             >
-              {heroSong?.picture?<Image source={{uri:heroSong.picture}} style={styles.continueCover}/>:<View style={[styles.continueCover,styles.coverEmpty]}><Music2 size={28} color="#9b85ff"/></View>}
+              {heroSong?.picture?<Image source={{uri:heroSong.picture}} style={[styles.continueCover,compact&&styles.continueCoverCompact]}/>:<View style={[styles.continueCover,compact&&styles.continueCoverCompact,styles.coverEmpty]}><Music2 size={28} color="#9b85ff"/></View>}
               <View style={styles.continueCopy}>
                 <Text style={styles.continueKicker}>{heroSong?'CONTINUE LISTENING':'START LISTENING'}</Text>
                 <Text numberOfLines={1} style={styles.continueTitle}>{heroSong?.title||'Chưa có lịch sử nghe'}</Text>
@@ -158,8 +163,16 @@ function SideButton({active,icon,label,onPress}:{active:boolean;icon:React.React
   return <Pressable style={[styles.sideBtn,active&&styles.sideBtnActive]} onPress={onPress}>{icon}<Text style={[styles.sideBtnText,active&&styles.sideBtnTextActive]}>{label}</Text></Pressable>;
 }
 
+function MusicTabButton({active,icon,label,onPress}:{active:boolean;icon:React.ReactNode;label:string;onPress:()=>void}){
+  return <Pressable style={[styles.mobileTab,active&&styles.mobileTabActive]} onPress={onPress}>{icon}<Text numberOfLines={1} style={[styles.mobileTabText,active&&styles.mobileTabTextActive]}>{label}</Text></Pressable>;
+}
+
 const styles=StyleSheet.create({
   root:{flex:1,flexDirection:'row',backgroundColor:'#080c12'},
+  rootCompact:{flexDirection:'column'},
+  mobileTabs:{height:56,borderBottomWidth:1,borderColor:'rgba(148,163,184,.10)',backgroundColor:'rgba(8,11,18,.97)',paddingHorizontal:8,paddingVertical:5,flexDirection:'row',gap:4},
+  mobileTab:{flex:1,minWidth:0,borderRadius:9,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:5,paddingHorizontal:5},
+  mobileTabActive:{backgroundColor:'rgba(118,91,232,.13)'},mobileTabText:{color:'#8f9bad',fontSize:9,fontWeight:'700'},mobileTabTextActive:{color:'#f3efff'},
   sidebar:{width:226,borderRightWidth:1,borderRightColor:'#202630',backgroundColor:'#0a0f16',paddingHorizontal:16,paddingTop:22,paddingBottom:98},
   brand:{height:48,flexDirection:'row',alignItems:'center',gap:10,paddingHorizontal:6},
   brandMark:{width:34,height:34,borderRadius:11,backgroundColor:'rgba(126,96,238,.13)',alignItems:'center',justifyContent:'center'},
@@ -190,7 +203,7 @@ const styles=StyleSheet.create({
   heroCopy:{flex:1},
   eyebrow:{color:'#8f79ff',fontSize:9,fontWeight:'900',letterSpacing:1.8},
   heroTitle:{color:'#f5f7fb',fontSize:46,lineHeight:49,fontWeight:'800',letterSpacing:-1.8,marginTop:10},
-  heroTitleCompact:{fontSize:32,lineHeight:35},
+  heroTitleCompact:{fontSize:42,lineHeight:42,letterSpacing:-1.9},
   heroText:{color:'#7f8ba0',fontSize:12,lineHeight:19,marginTop:14},
   heroActions:{flexDirection:'row',gap:9,marginTop:20},
   heroActionsCompact:{flexDirection:'column'},
@@ -199,8 +212,8 @@ const styles=StyleSheet.create({
   secondary:{minHeight:43,borderWidth:1,borderColor:'#313a48',borderRadius:11,backgroundColor:'#121925',paddingHorizontal:15,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8},
   secondaryText:{color:'#d4ccff',fontSize:11,fontWeight:'800'},disabled:{opacity:.35},
 
-  continueCard:{width:340,minHeight:155,borderWidth:1,borderColor:'#29313d',borderRadius:16,backgroundColor:'#111821',padding:12,flexDirection:'row',alignItems:'center',gap:12},
-  continueEmpty:{opacity:.8},continueCover:{width:110,height:130,borderRadius:12,backgroundColor:'#171e29'},coverEmpty:{alignItems:'center',justifyContent:'center'},
+  continueCard:{width:340,minHeight:155,borderWidth:1,borderColor:'#29313d',borderRadius:16,backgroundColor:'#111821',padding:12,flexDirection:'row',alignItems:'center',gap:12},continueCardCompact:{width:'100%',minHeight:108},
+  continueEmpty:{opacity:.8},continueCover:{width:110,height:130,borderRadius:12,backgroundColor:'#171e29'},continueCoverCompact:{width:84,height:84},coverEmpty:{alignItems:'center',justifyContent:'center'},
   continueCopy:{flex:1,minWidth:0},continueKicker:{color:'#8070d8',fontSize:8,fontWeight:'900',letterSpacing:1.1},continueTitle:{color:'#f5f7fb',fontSize:13,fontWeight:'800',marginTop:7},continueMeta:{color:'#8591a3',fontSize:10,marginTop:4},continueTime:{color:'#626f82',fontSize:8,marginTop:20},
   continuePlay:{width:34,height:34,borderRadius:17,backgroundColor:'#fff',alignItems:'center',justifyContent:'center'},continuePlayText:{color:'#0b0f16',fontSize:12},
 
