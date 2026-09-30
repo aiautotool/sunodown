@@ -41,7 +41,7 @@ export function V23SceneThumb({
 
 const styles=StyleSheet.create({
   root:{width:'100%',height:'100%',position:'relative',overflow:'hidden',backgroundColor:'#0b1017'},
-  shade:{...StyleSheet.absoluteFillObject,backgroundColor:'rgba(7,10,16,.42)'},
+  shade:{...StyleSheet.absoluteFill,backgroundColor:'rgba(7,10,16,.42)'},
   badge:{position:'absolute',zIndex:8,left:7,top:7,color:'#dce3ef',fontSize:7,fontWeight:'800'},
 
   vinylDisc:{position:'absolute',zIndex:3,width:'54%',aspectRatio:1,left:'23%',top:'21%',borderRadius:999,borderWidth:7,borderColor:'#0d0f15',backgroundColor:'#20232d',shadowColor:'#7756ff',shadowOpacity:.35,shadowRadius:10,elevation:5},
