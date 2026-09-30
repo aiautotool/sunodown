@@ -9,6 +9,7 @@ import { saveExportedAsset } from './file-actions';
 import { exportAudio, exportVisualizer } from './render-engine';
 import { useStudioPlayback } from './useStudioPlayback';
 import { useSubtitleSync } from './useSubtitleSync';
+import { SuggestedBackground } from './SuggestedBackground';
 import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendPresets, V24_PRESETS, type StudioVisualConfig } from './V24StudioControls';
 
 type Tool='presets'|'style'|'lyrics'|null;
@@ -122,6 +123,15 @@ export function MobileStudioScreen({song,onSave,onBack,onRenderJob,initialStudio
         </Pressable>
         <Text style={styles.subtitleHint}>Bỏ cache và tạo subtitle mới từ audio hiện tại.</Text>
       </View>}
+
+      <SuggestedBackground
+        song={song}
+        aspect={config.aspect}
+        selectedUri={background}
+        disabled={rendering}
+        onApply={uri=>{setBackground(uri);setConfig({...config,backgroundMode:'image'})}}
+        onBrowse={()=>void pick()}
+      />
 
       <View style={styles.quickCreate}>
         <View style={styles.quickHead}><View><Text style={styles.quickKicker}>QUICK CREATE</Text><Text style={styles.quickTitle}>Tạo nhanh</Text></View><Text style={styles.quickHint}>Preset phù hợp bài này</Text></View>
