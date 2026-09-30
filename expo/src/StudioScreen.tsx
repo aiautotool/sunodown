@@ -24,6 +24,10 @@ import { V23SceneThumb } from './V23SceneThumb';
 
 type Tool=StudioPanel|null;
 
+const V23_LOCAL_AUDIO_COVER='v23-local-audio-cover:';
+const localAudioCoverUri=(title:string)=>V23_LOCAL_AUDIO_COVER+encodeURIComponent(title);
+const isLocalAudioCoverUri=(uri?:string)=>Boolean(uri?.startsWith(V23_LOCAL_AUDIO_COVER));
+
 const fmt=(n=0)=>`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const aspectValue=(value:StudioVisualConfig['aspect'])=>{
   const map:Record<StudioVisualConfig['aspect'],number>={'9:16':9/16,'16:9':16/9,'1:1':1,'4:5':4/5,'4:3':4/3};
@@ -43,11 +47,12 @@ export function StudioScreen({
   const {height}=useWindowDimensions();
   const [config,setConfig]=useState<StudioVisualConfig>(initialStudio?.config||{...DEFAULT_VISUAL_CONFIG,trimEnd:song.duration||0});
   const [background,setBackground]=useState<string|undefined>(initialStudio?.background||song.picture);
-  const [clips,setClips]=useState<MediaClip[]>(initialStudio?.clips||((initialStudio?.background||song.picture)?[{
+  const defaultVisualUri=initialStudio?.background||song.picture||(song.creator==='Local audio'?localAudioCoverUri(song.title):undefined);
+  const [clips,setClips]=useState<MediaClip[]>(initialStudio?.clips||(defaultVisualUri?[{
     id:'default-cover',
     type:'image',
-    uri:initialStudio?.background||song.picture||'',
-    name:'Ảnh bìa',
+    uri:defaultVisualUri,
+    name:song.creator==='Local audio'?song.title:'Ảnh bìa',
     start:0,
     end:Math.max(1,song.duration||1),
     isDefault:true,
@@ -576,7 +581,8 @@ function PreviewStage({
   const innerW=Math.max(1,Math.min(stageBox.width,innerH*ratio));
   const activeClip=[...clips].reverse().find(clip=>currentTime>=clip.start&&currentTime<clip.end);
   const sourceVisual=config.backgroundMode==='suno'?song.picture:config.backgroundMode==='preset'?undefined:background;
-  const activeVisual=trackState.visual.hidden?undefined:(activeClip?.type==='image'?activeClip.uri:sourceVisual);
+  const activeClipVisual=activeClip?.type==='image'&&!isLocalAudioCoverUri(activeClip.uri)?activeClip.uri:undefined;
+  const activeVisual=trackState.visual.hidden?undefined:(activeClipVisual||sourceVisual);
   const presetColors=backgroundPresetColors(config.backgroundPreset);
   const frameColors=config.backgroundMode==='preset'?[...presetColors]:[selectedPreset.accent,selectedPreset.secondary];
   const titleX=config.titleX??50,titleY=config.titleY??67;
