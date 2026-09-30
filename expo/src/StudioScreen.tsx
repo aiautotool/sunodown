@@ -47,8 +47,8 @@ export function StudioScreen({song,onSave}:{song:Song;onSave:()=>void}){
   return <View style={styles.root}>
     <ScrollView style={styles.canvasScroll} contentContainerStyle={styles.canvasColumn}>
       <View style={[styles.stage,{height:stageHeight}]}>
-        {background?<ImageBackground source={{uri:background}} resizeMode="cover" style={StyleSheet.absoluteFillObject}/>:<LinearGradient colors={preset.colors} style={StyleSheet.absoluteFillObject}/>}
-        <LinearGradient colors={['rgba(4,7,11,0)','rgba(4,7,11,.08)','rgba(4,7,11,.72)']} locations={[0,.62,1]} style={StyleSheet.absoluteFillObject}/>
+        {background?<ImageBackground source={{uri:background}} resizeMode="cover" style={StyleSheet.absoluteFill}/>:<LinearGradient colors={preset.colors} style={StyleSheet.absoluteFill}/>}
+        <LinearGradient colors={['rgba(4,7,11,0)','rgba(4,7,11,.08)','rgba(4,7,11,.72)']} locations={[0,.62,1]} style={StyleSheet.absoluteFill}/>
         <View style={styles.stageRatio}><Text style={styles.stageRatioText}>9:16</Text></View>
         <View style={styles.karaoke}>
           <Text style={styles.karaokeMain}>{timeline[0]?.text||lyricLines[0]||song.title}</Text>
@@ -111,8 +111,8 @@ export function StudioScreen({song,onSave}:{song:Song;onSave:()=>void}){
         <View style={styles.presetGrid}>
           {presets.map((item,index)=><Pressable key={item.id} onPress={()=>setPreset(item)} style={[styles.presetCard,preset.id===item.id&&{borderColor:item.colors[1]}]}>
             <LinearGradient colors={item.colors} style={styles.presetArt}>
-              {song.picture&&<Image source={{uri:song.picture}} style={StyleSheet.absoluteFillObject} resizeMode="cover"/>}
-              <LinearGradient colors={['rgba(7,10,16,.05)','rgba(7,10,16,.7)']} style={StyleSheet.absoluteFillObject}/>
+              {song.picture&&<Image source={{uri:song.picture}} style={StyleSheet.absoluteFill} resizeMode="cover"/>}
+              <LinearGradient colors={['rgba(7,10,16,.05)','rgba(7,10,16,.7)']} style={StyleSheet.absoluteFill}/>
               <Text style={styles.presetBadge}>{index===0?'HOT':'STYLE'}</Text>
               <View style={[styles.presetDisc,{borderColor:item.colors[1]}]}><View style={[styles.presetDiscIn,{backgroundColor:item.colors[1]}]}/></View>
             </LinearGradient>
@@ -160,7 +160,7 @@ function EditorTimeline({song,background,preset,timeline}:{song:Song;background?
     <View style={styles.timelineHead}><Text style={styles.timelineHeadTitle}>Timeline</Text><Text style={styles.timelineHeadSub}>Video · Subtitle · Audio</Text><Pressable style={styles.timelineIcon}><SlidersHorizontal size={15} color="#d8deea"/></Pressable></View>
     <View style={styles.timelineCanvas}>
       <View style={styles.ruler}>{['00:00','00:15','00:30','00:45','01:00'].map((x,i)=><View key={x} style={{flex:1}}><Text style={styles.rulerText}>{x}</Text><View style={styles.rulerTick}/></View>)}</View>
-      <View style={styles.trackRow}><Text style={styles.trackLabel}>VIDEO</Text><View style={styles.videoClip}>{Array.from({length:6}).map((_,i)=><View key={i} style={styles.clipThumb}>{background?<Image source={{uri:background}} style={StyleSheet.absoluteFillObject}/>:<LinearGradient colors={preset.colors} style={StyleSheet.absoluteFillObject}/>}</View>)}<Text numberOfLines={1} style={styles.clipTitle}>{preset.name} · background</Text></View></View>
+      <View style={styles.trackRow}><Text style={styles.trackLabel}>VIDEO</Text><View style={styles.videoClip}>{Array.from({length:6}).map((_,i)=><View key={i} style={styles.clipThumb}>{background?<Image source={{uri:background}} style={StyleSheet.absoluteFill}/>:<LinearGradient colors={preset.colors} style={StyleSheet.absoluteFill}/>}</View>)}<Text numberOfLines={1} style={styles.clipTitle}>{preset.name} · background</Text></View></View>
       <View style={styles.trackRow}><Text style={styles.trackLabel}>SUB</Text><View style={styles.subClip}><Text numberOfLines={1} style={styles.subClipText}>{timeline[0]?.text||song.lyrics?.split(/\n/)[0]||'Subtitle track'}</Text></View></View>
       <View style={styles.playhead}><View style={styles.playheadDot}/></View>
     </View>
