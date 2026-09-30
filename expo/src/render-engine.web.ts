@@ -39,6 +39,37 @@ async function loadBackground(uri?:string){
     return await createImageBitmap(await response.blob());
   }catch{return null}
 }
+async function loadClipImages(clips:VisualizerExportOptions['mediaClips']){
+  const map=new Map<string,ImageBitmap>();
+  for(const clip of clips||[]){
+    if(clip.type!=='image'||!clip.uri)continue;
+    const image=await loadBackground(clip.uri);
+    if(image)map.set(clip.id,image);
+  }
+  return map;
+}
+function frameImage(options:VisualizerExportOptions,images:Map<string,ImageBitmap>,absoluteTime:number,fallback:ImageBitmap|null){
+  if(options.visualVisible===false)return null;
+  const active=[...(options.mediaClips||[])].reverse().find(clip=>clip.type==='image'&&absoluteTime>=clip.start&&absoluteTime<clip.end);
+  return active?images.get(active.id)||fallback:fallback;
+}
+function drawEffects(ctx:CanvasRenderingContext2D,w:number,h:number,effects:string[],frame:number){
+  if(effects.includes('vignette')){
+    const g=ctx.createRadialGradient(w/2,h/2,Math.min(w,h)*.18,w/2,h/2,Math.max(w,h)*.72);
+    g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,.42)');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+  }
+  if(effects.includes('lightleak')){
+    const g=ctx.createLinearGradient(0,0,w,h*.55);g.addColorStop(0,'rgba(255,80,170,.13)');g.addColorStop(.45,'rgba(255,180,90,.05)');g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+  }
+  if(effects.includes('film')){
+    ctx.fillStyle='rgba(255,255,255,.025)';for(let y=(frame%5);y<h;y+=6)ctx.fillRect(0,y,w,1);
+  }
+  if(effects.includes('dust')||effects.includes('sparkles')||effects.includes('stars')){
+    const count=effects.includes('stars')?18:effects.includes('sparkles')?10:7;
+    ctx.fillStyle=effects.includes('dust')?'rgba(255,230,190,.16)':'rgba(255,255,255,.42)';
+    for(let i=0;i<count;i++){const x=((i*137+frame*7)%997)/997*w,y=((i*251+frame*3)%991)/991*h,r=1+((i+frame)%3);ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill()}
+  }
+}
 function cover(ctx:CanvasRenderingContext2D,image:ImageBitmap,w:number,h:number){
   const scale=Math.max(w/image.width,h/image.height),iw=image.width*scale,ih=image.height*scale;
   ctx.drawImage(image,(w-iw)/2,(h-ih)/2,iw,ih);
@@ -102,7 +133,8 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
   const AudioCtx=window.AudioContext||(window as typeof window&{webkitAudioContext?:typeof AudioContext}).webkitAudioContext;
   if(!AudioCtx)throw new Error('Trình duyệt không hỗ trợ Web Audio.');
   const audioContext=new AudioCtx();
-  const background=await loadBackground(options.backgroundUri||song.picture);
+  const background=options.visualVisible===false?null:await loadBackground(options.backgroundUri||song.picture);
+  const clipImages=options.visualVisible===false?new Map<string,ImageBitmap>():await loadClipImages(options.mediaClips);
   try{
     const decoded=await audioContext.decodeAudioData(bytes.slice(0));
     const start=Math.max(0,Math.min(options.startSeconds||0,Math.max(0,decoded.duration-.1)));
@@ -115,15 +147,16 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
     const target=new BufferTarget(),output=new Output({format:new Mp4OutputFormat(),target});
     const bitrate=options.quality==='balanced'?2_800_000:4_600_000;
     const videoSource=new CanvasSource(canvas,{codec:'avc',quality:new Quality({bitrate})});
-    const audioSource=new AudioBufferSource({codec:'aac',quality:new Quality({bitrate:192_000})});
-    output.addVideoTrack(videoSource,{frameRate:30});output.addAudioTrack(audioSource);
-    await output.start();await audioSource.add(audio);audioSource.close();
+    const audioSource=options.audioMuted?null:new AudioBufferSource({codec:'aac',quality:new Quality({bitrate:192_000})});
+    output.addVideoTrack(videoSource,{frameRate:30});if(audioSource)output.addAudioTrack(audioSource);
+    await output.start();if(audioSource){await audioSource.add(audio);audioSource.close()}
 
     const samples=audio.getChannelData(0),fps=30,total=Math.ceil(duration*fps),wave=options.wave||'mirror-glow';
     const titleColor=options.titleColor||'#f5f7fb',subColor=options.subtitleActiveColor||options.subtitleColor||'#ffffff';
     for(let frame=0;frame<total;frame++){
       const t=frame/fps,absoluteTime=start+t;
-      if(background){cover(ctx,background,width,height);ctx.fillStyle='rgba(4,7,12,.48)';ctx.fillRect(0,0,width,height)}
+      const currentBackground=frameImage(options,clipImages,absoluteTime,background);
+      if(currentBackground){cover(ctx,currentBackground,width,height);ctx.fillStyle='rgba(4,7,12,.48)';ctx.fillRect(0,0,width,height)}
       else{
         const gradient=ctx.createLinearGradient(0,0,width,height);
         gradient.addColorStop(0,options.presetId.includes('neon')?'#171231':'#161124');gradient.addColorStop(.55,'#080c12');gradient.addColorStop(1,'#05070b');
@@ -136,11 +169,12 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
       ctx.font=`700 ${Math.round(Math.min(width,height)*.055)}px system-ui,sans-serif`;ctx.fillText(song.title||'SunoDown',width/2,height*.12,width*.86);
       ctx.fillStyle='#c5cede';ctx.font=`500 ${Math.round(Math.min(width,height)*.027)}px system-ui,sans-serif`;ctx.fillText(song.creator||'Suno',width/2,height*.16,width*.8);
 
-      if(options.lyricsMode!=='off'){
+      if(options.subtitleVisible!==false&&options.lyricsMode!=='off'){
         const line=activeLyric(options,song,absoluteTime,t);
         if(line){ctx.fillStyle=subColor;ctx.font=`700 ${Math.round(Math.min(width,height)*.044)}px system-ui,sans-serif`;ctx.fillText(line,width/2,height*.66,width*.84)}
       }
-      drawWave(ctx,width,height,wave,samples,audio.sampleRate,t,t/duration,options.subtitleActiveColor||'#b17cff',options.waveGlow??80,options.waveHeight??100);
+      if(options.visualVisible!==false)drawWave(ctx,width,height,wave,samples,audio.sampleRate,t,t/duration,options.subtitleActiveColor||'#b17cff',options.waveGlow??80,options.waveHeight??100);
+      if(options.effectsVisible!==false)drawEffects(ctx,width,height,options.effects||[],frame);
       ctx.shadowBlur=0;ctx.fillStyle='#a0aaba';ctx.font=`500 ${Math.round(Math.min(width,height)*.021)}px system-ui,sans-serif`;
       const mm=Math.floor(t/60),ss=Math.floor(t%60);ctx.fillText(String(mm)+':'+String(ss).padStart(2,'0'),width/2,height*.90);
       await videoSource.add(t,1/fps,{keyFrame:frame%60===0});
@@ -149,7 +183,7 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
     videoSource.close();await output.finalize();if(!target.buffer)throw new Error('Không tạo được MP4.');
     onProgress?.(100);
     return asset(new Blob([target.buffer],{type:'video/mp4'}),safe(song.title)+(options.durationSeconds===30?'-30s':'')+'.mp4','video/mp4');
-  }finally{background?.close();await audioContext.close()}
+  }finally{background?.close();for(const image of clipImages.values())image.close();await audioContext.close()}
 }
 
 export async function exportAudio(song:Song,format:'m4a'|'mp3'|'wav',onProgress?:(progress:number)=>void):Promise<ExportAsset>{
