@@ -27,6 +27,16 @@ export type StudioAspect = '9:16' | '16:9' | '1:1' | '4:5' | '4:3';
 export type StudioLyricsMode = 'off' | 'scroll' | 'focus';
 export type StudioMotion = 'low' | 'medium' | 'high';
 
+export type StudioMasterProfile = 'original' | 'clean' | 'tiktok-loud' | 'punchy' | 'max-loud';
+export type StudioSpatialMode = 'wide' | 'immersive' | 'orbit';
+export type StudioEqBand = {
+  enabled: boolean;
+  frequency: number;
+  gain: number;
+  q: number;
+  type: 'lowshelf' | 'peaking' | 'highshelf';
+};
+
 export type StudioVisualConfig = {
   presetId: string;
   template: string;
@@ -62,6 +72,18 @@ export type StudioVisualConfig = {
   eqBass: number;
   eqVocal: number;
   eqTreble: number;
+  masteringProfile: StudioMasterProfile;
+  masterTargetLufs: number;
+  masterCeilingDb: number;
+  masterThresholdDb: number;
+  masterRatio: number;
+  masterAttackMs: number;
+  masterReleaseMs: number;
+  masterDrive: number;
+  masterEqBands: StudioEqBand[];
+  spatialEnabled: boolean;
+  spatialMode: StudioSpatialMode;
+  spatialAmount: number;
   trimStart: number;
   trimEnd: number;
   audioPreset: string;
