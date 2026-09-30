@@ -592,10 +592,71 @@ export default {
       return env.ASSETS.fetch(new Request(url, request));
     }
 
-    // Vinext route modules do not consistently expose Cloudflare secret
-    // bindings on POST requests. Bridge the secret inside the same Worker
-    // isolate instead of relying on request headers. This value never leaves
-    // the server and is identical for concurrent requests in this deployment.
+    // Vinext route modules do not consistently expose secret bindings.
+    // Keep public health deterministic at the outer Worker layer and inject
+    // the Groq secret into the internal request body only for the two routes
+    // that need it. Browser-supplied internal fields are always overwritten.
+    if (url.pathname === '/api/karaoke/groq') {
+      const groqKey =
+        typeof env.GROQ_API_KEY === 'string' ? env.GROQ_API_KEY : '';
+
+      if (request.method === 'GET') {
+        return json({
+          available: Boolean(groqKey),
+          source: groqKey ? 'worker-binding' : 'none',
+          engine: 'groq-whisper-large-v3-turbo',
+          wordTimestamps: true,
+          maxMobileUploadBytes: 24 * 1024 * 1024,
+        });
+      }
+
+      if (request.method === 'POST') {
+        try {
+          const incoming = await request.formData();
+          incoming.set('__server_groq_key', groqKey);
+          const headers = new Headers(request.headers);
+          headers.delete('content-type');
+          headers.delete('content-length');
+          request = new Request(request.url, {
+            method: 'POST',
+            headers,
+            body: incoming,
+          });
+        } catch {
+          return json(
+            {
+              error: 'Multipart form-data không hợp lệ.',
+              code: 'INVALID_MULTIPART',
+            },
+            400,
+          );
+        }
+      }
+    }
+
+    if (
+      url.pathname === '/api/music/subtitle/generate' &&
+      request.method === 'POST'
+    ) {
+      try {
+        const input = await request.json();
+        const payload =
+          input && typeof input === 'object' ? { ...input } : {};
+        payload.__serverGroqKey =
+          typeof env.GROQ_API_KEY === 'string' ? env.GROQ_API_KEY : '';
+        const headers = new Headers(request.headers);
+        headers.set('content-type', 'application/json');
+        headers.delete('content-length');
+        request = new Request(request.url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        return json({ error: 'invalid_json' }, 400);
+      }
+    }
+
     globalThis.__SUNODOWN_GROQ_API_KEY =
       typeof env.GROQ_API_KEY === 'string' ? env.GROQ_API_KEY : '';
     globalThis.__SUNODOWN_SUBTITLE_STORE = env.SUBTITLE_STORE || undefined;
