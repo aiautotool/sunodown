@@ -2,19 +2,42 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sunodown-v24react",
   "account_id": "2de679b502c90e736abad750fd0415f7",
-  "main": "expo/worker.js",
+  "main": "dist/server/worker-sunoapp.js",
   "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "no_bundle": true,
+  "rules": [
+    {
+      "type": "ESModule",
+      "globs": ["**/*.js", "**/*.mjs"]
+    }
+  ],
   "assets": {
-    "directory": "expo/dist",
+    "directory": "dist/client",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": false
+    "run_worker_first": true
   },
   "routes": [
     {
       "pattern": "sunoapp.aiautotool.com",
       "custom_domain": true
     }
+  ],
+  "ai": {
+    "binding": "AI"
+  },
+  "durable_objects": {
+    "bindings": [
+      {"name": "MUSIC_USERS", "class_name": "MusicUserStore"},
+      {"name": "MUSIC_DIRECTORY", "class_name": "PublicMusicDirectory"},
+      {"name": "SUBTITLE_STORE", "class_name": "SubtitleStore"}
+    ]
+  },
+  "migrations": [
+    {"tag": "v24react-music-v1", "new_sqlite_classes": ["MusicUserStore"]},
+    {"tag": "v24react-music-v2", "new_sqlite_classes": ["PublicMusicDirectory"]},
+    {"tag": "v24react-subtitle-v1", "new_sqlite_classes": ["SubtitleStore"]}
   ],
   "observability": {
     "enabled": true
