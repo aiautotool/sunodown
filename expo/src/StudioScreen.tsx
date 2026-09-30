@@ -5,10 +5,10 @@ import { ChevronDown, Download, Image as ImageIcon, Music2, Palette, Play, Refre
 import { LinearGradient } from 'expo-linear-gradient';
 import type { KaraokeLine, RenderJob, Song } from './types';
 import { colors, v24 } from './theme';
-import { regenerateSubtitle } from './api';
 import { safeFilename, saveExportedAsset, shareTextFile } from './file-actions';
 import { exportAudio, exportVisualizer } from './render-engine';
 import { useStudioPlayback } from './useStudioPlayback';
+import { useSubtitleSync } from './useSubtitleSync';
 import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendPresets, V24_PRESETS, type StudioVisualConfig } from './V24StudioControls';
 
 const fmt=(n=0)=>`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`;
@@ -17,9 +17,7 @@ export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>voi
   const {height}=useWindowDimensions();
   const [config,setConfig]=useState<StudioVisualConfig>({...DEFAULT_VISUAL_CONFIG,trimEnd:song.duration||0});
   const [background,setBackground]=useState<string|undefined>(song.picture);
-  const [timeline,setTimeline]=useState<KaraokeLine[]>([]);
-  const [subLoading,setSubLoading]=useState(false);
-  const [subError,setSubError]=useState('');
+  const {timeline,setTimeline,status:subtitleStatus,message:subtitleMessage,error:subError,regenerating:subLoading,reget}=useSubtitleSync(song);
   const [saved,setSaved]=useState(false);
   const [rendering,setRendering]=useState(false);
   const [renderProgress,setRenderProgress]=useState(0);
@@ -37,14 +35,6 @@ export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>voi
     const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images','videos'],quality:0.9});
     if(!result.canceled) setBackground(result.assets[0]?.uri);
   };
-  const reget=async()=>{
-    if(!song.id){setSubError('Bài hát chưa có song id.');return}
-    setSubLoading(true);setSubError('');
-    try{setTimeline(await regenerateSubtitle(song))}
-    catch(e){setSubError(e instanceof Error?e.message:'Không lấy lại được subtitle')}
-    finally{setSubLoading(false)}
-  };
-
   const exportVideo=async(durationSeconds?:number)=>{
     if(rendering)return;
     const jobId='local-'+Date.now().toString(36);
@@ -115,8 +105,12 @@ export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>voi
         <SlidersHorizontal size={18} color="#aeb7c5"/>
       </View>
 
+      {subtitleStatus!=='idle'&&<View style={[styles.subtitleJob,subtitleStatus==='synced'&&styles.subtitleJobSynced,subtitleStatus==='fallback'&&styles.subtitleJobFallback]}>
+        {subtitleStatus==='syncing'?<ActivityIndicator size="small" color="#22d3ee"/>:<View style={[styles.subtitleDot,subtitleStatus==='synced'&&styles.subtitleDotSynced]}/>}
+        <View style={{flex:1}}><Text style={styles.subtitleJobTitle}>{subtitleStatus==='syncing'?(subLoading?'Đang lấy lại subtitle…':'Đang tìm subtitle…'):subtitleStatus==='synced'?'Subtitle đã sẵn sàng':'Subtitle cần kiểm tra timing'}</Text><Text style={styles.subtitleJobText}>{subtitleStatus==='syncing'&&!subLoading?'Bạn vẫn có thể chỉnh sửa trong khi chạy nền.':subtitleMessage}</Text></View>
+      </View>}
       {song.id&&<View style={styles.subtitleRefresh}>
-        <Pressable style={styles.subtitleRefreshBtn} disabled={subLoading} onPress={reget}>
+        <Pressable style={styles.subtitleRefreshBtn} disabled={subLoading||subtitleStatus==='syncing'} onPress={()=>void reget()}>
           {subLoading?<ActivityIndicator size="small" color="#fff"/>:<Sparkles size={15} color="#d9ceff"/>}
           <Text style={styles.subtitleRefreshText}>{subLoading?'Đang lấy lại…':'Lấy lại subtitle'}</Text>
         </Pressable>
@@ -201,6 +195,7 @@ const styles=StyleSheet.create({
   wave:{position:'absolute',zIndex:3,left:25,right:25,bottom:22,height:42,flexDirection:'row',alignItems:'center',justifyContent:'space-between',opacity:.82},bar:{width:3,borderRadius:3,backgroundColor:'#a47cff'},
   centerPlay:{position:'absolute',zIndex:35,left:'50%',top:'50%',marginLeft:-32,marginTop:-32,width:64,height:64,borderWidth:1,borderColor:'rgba(255,255,255,.45)',borderRadius:32,backgroundColor:'rgba(8,11,18,.72)',alignItems:'center',justifyContent:'center'},
   player:{height:72,flexDirection:'row',alignItems:'center',gap:12,borderBottomLeftRadius:7,borderBottomRightRadius:7,backgroundColor:'#0d1219',paddingHorizontal:22},playerBtn:{width:34,alignItems:'center'},playerTime:{width:105,color:'#c6ccd6',fontSize:12},seek:{flex:1,height:4,borderRadius:99,backgroundColor:'#2a313d',position:'relative'},seekFill:{width:'27%',height:4,borderRadius:99,backgroundColor:'#8967ff'},seekKnob:{position:'absolute',left:'27%',top:-4,width:12,height:12,borderRadius:6,backgroundColor:'#fff'},
+  subtitleJob:{minHeight:48,marginTop:10,borderWidth:1,borderColor:'rgba(34,211,238,.2)',borderRadius:12,backgroundColor:'rgba(8,18,27,.92)',paddingHorizontal:12,paddingVertical:9,flexDirection:'row',alignItems:'center',gap:11},subtitleJobSynced:{borderColor:'rgba(74,222,128,.2)',backgroundColor:'rgba(10,28,21,.82)'},subtitleJobFallback:{borderColor:'rgba(245,158,11,.24)',backgroundColor:'rgba(35,24,8,.76)'},subtitleDot:{width:20,height:20,borderRadius:10,borderWidth:2,borderColor:'#f59e0b'},subtitleDotSynced:{borderWidth:0,backgroundColor:'#22c55e'},subtitleJobTitle:{color:'#e6faff',fontSize:10,fontWeight:'800'},subtitleJobText:{color:'#8292a6',fontSize:9,marginTop:3},
   subtitleRefresh:{minHeight:46,marginTop:10,flexDirection:'row',alignItems:'center',gap:10},subtitleRefreshBtn:{height:34,borderWidth:1,borderColor:'#5b438f',borderRadius:8,backgroundColor:'#211a3b',paddingHorizontal:11,flexDirection:'row',alignItems:'center',gap:7},subtitleRefreshText:{color:'#d9ceff',fontSize:10,fontWeight:'700'},subtitleRefreshHint:{color:'#778395',fontSize:9},
   quickCreate:{marginTop:10,borderWidth:1,borderColor:'#27303d',borderRadius:14,backgroundColor:'#0d131c',padding:12},quickHead:{flexDirection:'row',alignItems:'flex-start',justifyContent:'space-between',gap:12},quickKicker:{color:'#8d72ff',fontSize:8,fontWeight:'900',letterSpacing:1.3},quickTitle:{color:'#f3f5f9',fontSize:12,fontWeight:'800',marginTop:4},quickHint:{color:'#727e90',fontSize:8,textAlign:'right'},quickPresetRow:{flexDirection:'row',gap:8,marginTop:11},quickPreset:{flex:1,overflow:'hidden',borderWidth:1,borderColor:'#29313d',borderRadius:10,backgroundColor:'#0b1017'},quickPresetArt:{height:66,overflow:'hidden',position:'relative'},quickShade:{...StyleSheet.absoluteFill,backgroundColor:'rgba(7,10,16,.42)'},quickBadge:{position:'absolute',left:7,top:7,color:'#eee8ff',fontSize:7,fontWeight:'900'},quickPresetName:{color:'#f5f7fb',fontSize:9,fontWeight:'800',paddingHorizontal:8,paddingTop:7},quickPresetMeta:{color:'#727e90',fontSize:7,paddingHorizontal:8,paddingTop:3,paddingBottom:8},quickActions:{flexDirection:'row',gap:8,marginTop:10},quickAction:{flex:1,minHeight:42,borderWidth:1,borderColor:'#5b49ba',borderRadius:9,backgroundColor:'rgba(112,85,225,.12)',flexDirection:'row',alignItems:'center',justifyContent:'center',gap:7},quickActionPrimary:{backgroundColor:'#7058ed'},quickActionText:{color:'#cfc5ff',fontSize:10,fontWeight:'800'},quickActionPrimaryText:{color:'#fff',fontSize:10,fontWeight:'800'},quickStatus:{marginTop:9,borderWidth:1,borderColor:'rgba(139,92,246,.24)',borderRadius:9,backgroundColor:'rgba(55,42,92,.34)',padding:9},quickStatusDone:{borderColor:'rgba(74,222,128,.18)',backgroundColor:'rgba(15,65,45,.25)'},quickStatusTitle:{color:'#eee9ff',fontSize:9,fontWeight:'800'},quickStatusText:{color:'#8793a4',fontSize:8,marginTop:3},
 
