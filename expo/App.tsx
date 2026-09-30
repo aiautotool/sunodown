@@ -11,6 +11,7 @@ import { StudioScreen } from './src/StudioScreen';
 import { LibraryScreen } from './src/LibraryScreen';
 import { JobsScreen, ProjectsScreen, SettingsScreen } from './src/SecondaryScreens';
 import { MusicPlayer } from './src/MusicPlayer';
+import { MusicHubScreen } from './src/MusicHubScreen';
 import { StartupScreen } from './src/StartupScreen';
 import { SongInitScreen, type SongInitState } from './src/SongInitScreen';
 import { storage } from './src/storage';
@@ -95,21 +96,22 @@ function UniversalApp(){
         onRenderJob={upsertJob}
       />;
     }
+    if(view==='music') return <MusicHubScreen items={library} onPlay={setPlayingSong} onOpenLibrary={()=>setView('library')} onCreate={goCreate}/>;
     if(view==='library') return <LibraryScreen items={library} onPlay={setPlayingSong} onOpen={openLibraryItem} onCreate={goCreate}/>;
     if(view==='projects') return <ProjectsScreen projects={projects} onOpen={openProject} onCreate={goCreate}/>;
     if(view==='jobs') return <JobsScreen jobs={jobs} onCreate={goCreate}/>;
     return <SettingsScreen onCreate={goCreate}/>;
   },[view,song,library,projects,jobs,sourceUrl,compact,initialStudio]);
 
-  const showHeader=!compact;
-  const showGlobalPlayer=Boolean(playingSong) && view==='library';
+  const showHeader=!compact&&view!=='music';
+  const showGlobalPlayer=Boolean(playingSong) && (view==='library'||view==='music');
 
   return <SafeAreaView style={styles.safe} edges={compact?['top']:[]}>
     <StatusBar style="light"/>
     <View style={styles.app}>
       <View nativeID="v24react-build" accessibilityLabel={BUILD_SHA} style={styles.buildMarker}/>
       {showHeader&&<Header song={song} view={view} onNavigate={setView}/>}
-      {compact&&view!=='create'&&<MobileSectionHeader
+      {compact&&view!=='create'&&view!=='music'&&<MobileSectionHeader
         open={mobileMenuOpen}
         onToggle={()=>setMobileMenuOpen(value=>!value)}
         onNavigate={nextView=>{setMobileMenuOpen(false);setView(nextView)}}
@@ -125,6 +127,7 @@ function UniversalApp(){
 function MobileSectionHeader({open,onToggle,onNavigate}:{open:boolean;onToggle:()=>void;onNavigate:(view:AppView)=>void}){
   const items=[
     {id:'create' as const,label:'Create',Icon:PlusCircle},
+    {id:'music' as const,label:'Music',Icon:Music2},
     {id:'library' as const,label:'Library',Icon:BookOpen},
     {id:'projects' as const,label:'Projects',Icon:Folder},
     {id:'jobs' as const,label:'Jobs',Icon:ListMusic},
@@ -148,7 +151,7 @@ function MobileSectionHeader({open,onToggle,onNavigate}:{open:boolean;onToggle:(
 function MobileAppNav({active,onNavigate}:{active:AppView;onNavigate:(view:AppView)=>void}){
   const items=[
     {id:'create' as const,label:'Home',Icon:Home,primary:false,active:active==='create'},
-    {id:'library' as const,label:'Music',Icon:Music2,primary:false,active:false},
+    {id:'music' as const,label:'Music',Icon:Music2,primary:false,active:active==='music'},
     {id:'create' as const,label:'Create',Icon:PlusCircle,primary:true,active:false},
     {id:'library' as const,label:'Library',Icon:LibraryIcon,primary:false,active:active==='library'},
     {id:'settings' as const,label:'Me',Icon:UserRound,primary:false,active:active==='settings'},
@@ -173,7 +176,7 @@ function Header({song,view,onNavigate}:{song:Song|null;view:AppView;onNavigate:(
         ? <View style={styles.loaded}><Text style={styles.loadedCheck}>✓</Text><Text style={styles.loadedText}>Suno song loaded</Text></View>
         : <View style={styles.homeNav}>
             <Pressable style={[styles.homeNavButton,view==='create'&&styles.homeNavButtonActive]} onPress={()=>onNavigate('create')}><Text style={[styles.homeNavText,view==='create'&&styles.homeNavActive]}>Trang chủ</Text></Pressable>
-            <Pressable style={styles.homeNavButton} onPress={()=>onNavigate('library')}><Text style={styles.homeNavText}>Music</Text></Pressable>
+            <Pressable style={[styles.homeNavButton,view==='music'&&styles.homeNavButtonActive]} onPress={()=>onNavigate('music')}><Text style={[styles.homeNavText,view==='music'&&styles.homeNavActive]}>Music</Text></Pressable>
             <Pressable style={[styles.homeNavButton,view==='projects'&&styles.homeNavButtonActive]} onPress={()=>onNavigate('projects')}><Text style={[styles.homeNavText,view==='projects'&&styles.homeNavActive]}>Dự án</Text></Pressable>
             <Pressable style={[styles.homeNavButton,view==='library'&&styles.homeNavButtonActive]} onPress={()=>onNavigate('library')}><Text style={[styles.homeNavText,view==='library'&&styles.homeNavActive]}>Thư viện</Text></Pressable>
             <Pressable style={[styles.homeNavButton,view==='jobs'&&styles.homeNavButtonActive]} onPress={()=>onNavigate('jobs')}><Text style={[styles.homeNavText,view==='jobs'&&styles.homeNavActive]}>Jobs</Text></Pressable>
