@@ -20,18 +20,6 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const credentials = await getGroqCredentials();
-    if (!credentials.key) {
-      return NextResponse.json(
-        {
-          error: 'Groq subtitle chưa được cấu hình trên server.',
-          code: 'GROQ_NOT_CONFIGURED',
-          diagnostics: { source: credentials.source },
-        },
-        { status: 503 },
-      );
-    }
-
     let incoming: FormData;
     try {
       incoming = await request.formData();
@@ -45,6 +33,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const internalKey = incoming.get('__server_groq_key');
+    const fallbackCredentials = await getGroqCredentials();
+    const apiKey =
+      (typeof internalKey === 'string' ? internalKey.trim() : '') ||
+      fallbackCredentials.key;
+
+    if (!apiKey) {
+      return NextResponse.json(
+        {
+          error: 'Groq subtitle chưa được cấu hình trên server.',
+          code: 'GROQ_NOT_CONFIGURED',
+          diagnostics: { source: fallbackCredentials.source },
+        },
+        { status: 503 },
+      );
+    }
+
     const audio = incoming.get('audio');
     if (!(audio instanceof File)) {
       return NextResponse.json({ error: 'Thiếu audio.' }, { status: 400 });
@@ -55,7 +60,7 @@ export async function POST(request: NextRequest) {
     const durationValue = incoming.get('duration');
 
     const result = await generateGroqSubtitle({
-      apiKey: credentials.key,
+      apiKey,
       audio,
       filename: audio.name || undefined,
       lyrics: typeof lyricsValue === 'string' ? lyricsValue : '',
