@@ -7,6 +7,7 @@ import { colors } from './src/theme';
 import type { AppView, LocalLibraryItem, Project, RenderJob, Song } from './src/types';
 import { EmptyCreate } from './src/EmptyCreate';
 import { StudioScreen } from './src/StudioScreen';
+import { MobileStudioScreen } from './src/MobileStudioScreen';
 import { LibraryScreen } from './src/LibraryScreen';
 import { JobsScreen, ProjectsScreen, SettingsScreen } from './src/SecondaryScreens';
 import { MusicPlayer } from './src/MusicPlayer';
@@ -51,12 +52,12 @@ function UniversalApp(){
    setSong(next);setSourceUrl(item.url);setView('create');
  };
  const body=useMemo(()=>{
-   if(view==='create') return song?<StudioScreen song={song} onSave={saveProject}/>:<EmptyCreate onResolved={resolveDone}/>;
+   if(view==='create') return song?(compact?<MobileStudioScreen song={song} onSave={saveProject}/>:<StudioScreen song={song} onSave={saveProject}/>):<EmptyCreate onResolved={resolveDone}/>;
    if(view==='library') return <LibraryScreen items={library} onPlay={setPlayingSong} onOpen={openLibraryItem}/>;
    if(view==='projects') return <ProjectsScreen projects={projects}/>;
    if(view==='jobs') return <JobsScreen jobs={jobs}/>;
    return <SettingsScreen/>;
- },[view,song,library,projects,jobs,sourceUrl]);
+ },[view,song,library,projects,jobs,sourceUrl,compact]);
 
  return <SafeAreaView style={styles.safe} edges={compact?['top']:['top','left','right']}>
    <StatusBar style="light"/>
