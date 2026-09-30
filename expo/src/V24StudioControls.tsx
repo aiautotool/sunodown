@@ -66,6 +66,7 @@ const tabs=[
   ['text','Văn bản',FileText],['wave','Sóng nhạc',SlidersHorizontal],['lyrics','Lời bài hát',FileText],
   ['format','Định dạng',SlidersHorizontal],['background','Nền',ImageIcon],['effects','Hiệu ứng',Sparkles],['trim','Cắt',SlidersHorizontal],
 ] as const;
+export type StudioPanel=(typeof tabs)[number][0];
 
 export function recommendPresets(song:Song){
   const hay=(song.style+' '+song.tags+' '+song.lyrics).toLowerCase();
@@ -86,11 +87,15 @@ export function applyPresetConfig(current:StudioVisualConfig,preset:Preset,durat
 
 export function V24StudioControls({
   song,config,onChange,timeline,subtitleLoading,subtitleError,onReget,onPickBackground,
+  panel:controlledPanel,onPanelChange,
 }:{
   song:Song;config:StudioVisualConfig;onChange:(next:StudioVisualConfig)=>void;timeline:KaraokeLine[];
   subtitleLoading:boolean;subtitleError:string;onReget:()=>void;onPickBackground:()=>void;
+  panel?:StudioPanel;onPanelChange?:(panel:StudioPanel)=>void;
 }){
-  const [panel,setPanel]=useState<(typeof tabs)[number][0]>('audio');
+  const [internalPanel,setInternalPanel]=useState<StudioPanel>('audio');
+  const panel=controlledPanel??internalPanel;
+  const setPanel=(value:StudioPanel)=>{setInternalPanel(value);onPanelChange?.(value)};
   const [category,setCategory]=useState('Nổi bật');
   const categories=['Nổi bật','Social','Lyrics','Cinematic','Album','Visualizer'];
   const presets=useMemo(()=>category==='Nổi bật'?V24_PRESETS:V24_PRESETS.filter(p=>p.category===category),[category]);
