@@ -112,7 +112,7 @@ const styles=StyleSheet.create({
   headCompact:{flexDirection:'column',alignItems:'stretch',paddingTop:0},
   kicker:{color:'#8d72ff',fontSize:9,fontWeight:'800',letterSpacing:3},
   title:{color:'#f5f7fb',fontSize:32,fontWeight:'400',marginTop:7},titleCompact:{fontSize:27},
-  description:{color:'#7f8a9b',fontSize:12,marginTop:7},
+  description:{color:'#7f8ba0',fontSize:13,lineHeight:20,marginTop:18},
   create:{minHeight:42,borderRadius:10,backgroundColor:'#7559f4',paddingHorizontal:16,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8},createFull:{width:'100%'},createText:{color:'#fff',fontSize:12,fontWeight:'700'},
   hero:{flexDirection:'row',gap:12,marginTop:24},heroCompact:{flexDirection:'column'},
   heroCard:{flex:1,minWidth:0,borderWidth:1,borderColor:'rgba(137,153,179,.12)',borderRadius:16,backgroundColor:'#0f1722',padding:18},
