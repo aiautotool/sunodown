@@ -5317,3 +5317,48 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
     transition:none;
   }
 }
+
+
+/* V24 subtitle force refresh */
+.sd-subtitle-refresh{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:8px;
+  padding:8px 10px;
+  border:1px solid rgba(139,92,246,.2);
+  border-radius:11px;
+  background:rgba(12,17,27,.78);
+}
+.sd-subtitle-refresh>button{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  min-height:32px;
+  padding:0 11px;
+  border:1px solid rgba(167,139,250,.38);
+  border-radius:9px;
+  background:linear-gradient(180deg,rgba(124,92,246,.22),rgba(76,58,148,.12));
+  color:#f5f3ff;
+  font-size:10px;
+  font-weight:800;
+  cursor:pointer;
+}
+.sd-subtitle-refresh>button svg{width:14px;height:14px}
+.sd-subtitle-refresh>button:hover:not(:disabled){
+  border-color:rgba(196,181,253,.62);
+  background:linear-gradient(180deg,rgba(139,92,246,.32),rgba(76,58,148,.18));
+}
+.sd-subtitle-refresh>button:disabled{opacity:.48;cursor:wait}
+.sd-subtitle-refresh>small{
+  color:#7f8ba0;
+  font-size:9px;
+  line-height:1.35;
+  text-align:right;
+}
+@media(max-width:800px){
+  .sd-subtitle-refresh{align-items:stretch;flex-direction:column}
+  .sd-subtitle-refresh>button{justify-content:center}
+  .sd-subtitle-refresh>small{text-align:center}
+}
