@@ -112,23 +112,23 @@ export function UniversalEditorTimeline({
     onTrackStateChange({...tracks,[name]:{...tracks[name],...patch}});
   };
 
-  const splitSelected=()=>{
+  const splitSelected=(at=playhead)=>{
     if(!selected)return;
     if(selected.startsWith('sub-')){
       const index=Number(selected.slice(4)),line=subtitles[index];
-      if(!line||playhead<=line.start+.08||playhead>=line.end-.08)return;
+      if(!line||at<=line.start+.08||at>=line.end-.08)return;
       pushHistory();
       const next=cloneLines(subtitles);
-      const leftWords=line.words?.filter(word=>word.start<playhead);
-      const rightWords=line.words?.filter(word=>word.end>playhead);
-      next.splice(index,1,{...line,end:playhead,words:leftWords},{...line,start:playhead,words:rightWords});
+      const leftWords=line.words?.filter(word=>word.start<at);
+      const rightWords=line.words?.filter(word=>word.end>at);
+      next.splice(index,1,{...line,end:at,words:leftWords},{...line,start:at,words:rightWords});
       onSubtitlesChange(next);setSelected('sub-'+(index+1));return;
     }
     const index=clips.findIndex(clip=>clip.id===selected),clip=clips[index];
-    if(!clip||playhead<=clip.start+.08||playhead>=clip.end-.08)return;
+    if(!clip||at<=clip.start+.08||at>=clip.end-.08)return;
     pushHistory();
-    const right:{[K in keyof MediaClip]:MediaClip[K]}={...clip,id:'clip-'+Date.now().toString(36),start:playhead,name:clip.name+' · 2'};
-    const next=cloneClips(clips);next.splice(index,1,{...clip,end:playhead},right as MediaClip);
+    const right:{[K in keyof MediaClip]:MediaClip[K]}={...clip,id:'clip-'+Date.now().toString(36),start:at,name:clip.name+' · 2'};
+    const next=cloneClips(clips);next.splice(index,1,{...clip,end:at},right as MediaClip);
     onClipsChange(next);setSelected((right as MediaClip).id);
   };
   const deleteSelected=()=>{
@@ -155,6 +155,18 @@ export function UniversalEditorTimeline({
       onClipsChange([...cloneClips(clips),value]);setSelected(value.id);
     }
   };
+  const retimeSubtitle=(line:KaraokeLine,start:number,end:number)=>{
+    const previousLength=Math.max(.001,line.end-line.start);
+    const nextLength=Math.max(.001,end-start);
+    const shifted=Math.abs(nextLength-previousLength)<.002;
+    const delta=start-line.start;
+    const words=line.words?.map(word=>{
+      if(shifted)return {...word,start:word.start+delta,end:word.end+delta};
+      return {...word,start:clamp(word.start,start,end),end:clamp(word.end,start,end)};
+    }).filter(word=>word.end-word.start>.01);
+    return {...line,start,end,words};
+  };
+
   const shiftSubtitle=(index:number,requested:number,following=false)=>{
     if(index<0||index>=subtitles.length)return;
     const affected=subtitles.slice(index,following?undefined:index+1);
@@ -215,7 +227,7 @@ export function UniversalEditorTimeline({
             const x=(event.nativeEvent as any).locationX||0;
             const value=snap(x/px);
             onSeek(value);
-            if(tool==='razor'&&selected)splitSelected();
+            if(tool==='razor'&&selected)splitSelected(value);
           }}
         >
           <View style={styles.ruler}>
@@ -238,11 +250,14 @@ export function UniversalEditorTimeline({
             px={px}
             duration={safeDuration}
             locked={tracks.visual.locked}
+            tool={tool}
+            snap={snap}
             color="#273345"
             border="#56657a"
             label={clip.name}
             onSelect={()=>setSelected(clip.id)}
             onHistory={pushHistory}
+            onSplitAt={at=>{setSelected(clip.id);splitSelected(at)}}
             onMove={(start,end)=>onClipsChange(clips.map((item,i)=>i===index?{...item,start,end}:item))}
           />)}
 
@@ -257,12 +272,16 @@ export function UniversalEditorTimeline({
             px={px}
             duration={safeDuration}
             locked={tracks.subtitle.locked}
+            tool={tool}
+            snap={snap}
+            minLength={.12}
             color="#352366"
             border="#6948b4"
             label={line.text}
             onSelect={()=>setSelected('sub-'+index)}
             onHistory={pushHistory}
-            onMove={(start,end)=>onSubtitlesChange(subtitles.map((item,i)=>i===index?{...item,start,end}:item))}
+            onSplitAt={at=>{setSelected('sub-'+index);splitSelected(at)}}
+            onMove={(start,end)=>onSubtitlesChange(subtitles.map((item,i)=>i===index?retimeSubtitle(item,start,end):item))}
           />)}
 
           <TrackHeader name="effects" label="Effects" icon={<Sparkles size={14}/>} state={tracks.effects} onUpdate={patch=>updateTrack('effects',patch)} top={282}/>
@@ -288,23 +307,55 @@ function TrackHeader({name,label,icon,state,onUpdate,top=38}:{name:TimelineTrack
     </View>
   </View>;
 }
-function MovableClip({selected,top,start,end,px,duration,locked,color,border,label,onSelect,onHistory,onMove}:{id:string;selected:boolean;top:number;start:number;end:number;px:number;duration:number;locked:boolean;color:string;border:string;label:string;onSelect:()=>void;onHistory:()=>void;onMove:(start:number,end:number)=>void}){
+function MovableClip({selected,top,start,end,px,duration,locked,tool,snap,minLength=.25,color,border,label,onSelect,onHistory,onSplitAt,onMove}:{id:string;selected:boolean;top:number;start:number;end:number;px:number;duration:number;locked:boolean;tool:Tool;snap:(value:number)=>number;minLength?:number;color:string;border:string;label:string;onSelect:()=>void;onHistory:()=>void;onSplitAt:(at:number)=>void;onMove:(start:number,end:number)=>void}){
   const origin=useRef({start,end});
   origin.current={start,end};
-  const responder=useMemo(()=>PanResponder.create({
-    onStartShouldSetPanResponder:()=>!locked,
-    onMoveShouldSetPanResponder:(_,gesture)=>!locked&&Math.abs(gesture.dx)>3,
+  const moveResponder=useMemo(()=>PanResponder.create({
+    onStartShouldSetPanResponder:()=>!locked&&tool==='select',
+    onMoveShouldSetPanResponder:(_,gesture)=>!locked&&tool==='select'&&Math.abs(gesture.dx)>3,
     onPanResponderGrant:()=>{onSelect();onHistory()},
     onPanResponderMove:(_,gesture)=>{
       const length=origin.current.end-origin.current.start;
-      const nextStart=clamp(origin.current.start+gesture.dx/px,0,Math.max(0,duration-length));
+      const rawStart=origin.current.start+gesture.dx/px;
+      const nextStart=clamp(snap(rawStart),0,Math.max(0,duration-length));
       onMove(nextStart,nextStart+length);
     },
-  }),[locked,px,duration,onSelect,onHistory,onMove]);
-  return <View
-    {...responder.panHandlers}
+  }),[locked,tool,px,duration,onSelect,onHistory,onMove,snap]);
+
+  const leftResponder=useMemo(()=>PanResponder.create({
+    onStartShouldSetPanResponder:()=>!locked&&tool==='select',
+    onMoveShouldSetPanResponder:()=>!locked&&tool==='select',
+    onPanResponderGrant:()=>{onSelect();onHistory()},
+    onPanResponderMove:(_,gesture)=>{
+      const next=snap(origin.current.start+gesture.dx/px);
+      onMove(clamp(next,0,origin.current.end-minLength),origin.current.end);
+    },
+  }),[locked,tool,px,minLength,onSelect,onHistory,onMove,snap]);
+  const rightResponder=useMemo(()=>PanResponder.create({
+    onStartShouldSetPanResponder:()=>!locked&&tool==='select',
+    onMoveShouldSetPanResponder:()=>!locked&&tool==='select',
+    onPanResponderGrant:()=>{onSelect();onHistory()},
+    onPanResponderMove:(_,gesture)=>{
+      const next=snap(origin.current.end+gesture.dx/px);
+      onMove(origin.current.start,clamp(next,origin.current.start+minLength,duration));
+    },
+  }),[locked,tool,px,minLength,duration,onSelect,onHistory,onMove,snap]);
+
+  return <Pressable
+    {...moveResponder.panHandlers}
+    onPress={event=>{
+      onSelect();
+      if(tool==='razor'){
+        const local=(event.nativeEvent as any).locationX||0;
+        onSplitAt(snap(start+local/px));
+      }
+    }}
     style={[styles.clip,{top,left:start*px,width:Math.max(22,(end-start)*px),backgroundColor:color,borderColor:selected?'#9d7bff':border}]}
-  ><View style={styles.edge}/><Text numberOfLines={1} style={styles.clipText}>{label}</Text><View style={[styles.edge,{right:0,left:undefined}]}/></View>;
+  >
+    <View {...leftResponder.panHandlers} style={[styles.edge,selected&&styles.edgeActive]}/>
+    <Text numberOfLines={1} style={styles.clipText}>{label}</Text>
+    <View {...rightResponder.panHandlers} style={[styles.edge,styles.edgeRight,selected&&styles.edgeActive]}/>
+  </Pressable>;
 }
 
 const styles=StyleSheet.create({
@@ -321,7 +372,7 @@ const styles=StyleSheet.create({
   canvas:{position:'relative',backgroundColor:'#070a10'},ruler:{position:'absolute',left:0,right:0,top:0,height:30,borderBottomWidth:1,borderColor:'#28303d'},tick:{position:'absolute',top:16,height:14,borderLeftWidth:1,borderColor:'#3b4556'},tickText:{position:'absolute',bottom:12,left:4,color:'#8792a5',fontSize:8,width:42},
   trackHeader:{position:'absolute',left:6,width:120,height:25,zIndex:10,borderRadius:6,backgroundColor:'rgba(17,23,34,.94)',paddingHorizontal:6,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},trackLabel:{flex:1,flexDirection:'row',alignItems:'center',gap:4},trackText:{flex:1,color:'#818da1',fontSize:8,fontWeight:'700'},trackActions:{flexDirection:'row',alignItems:'center',gap:5},cc:{color:'#aa97ff',fontSize:7,fontWeight:'900'},
   audioLane:{position:'absolute',left:0,height:58,borderBottomWidth:1,borderColor:'#171d27',justifyContent:'center',paddingLeft:58},waveBars:{height:46,flexDirection:'row',alignItems:'center',gap:2,overflow:'hidden'},waveBar:{width:2,borderRadius:2,backgroundColor:'#765cec',opacity:.75},
-  clip:{position:'absolute',height:44,borderWidth:1,borderRadius:5,overflow:'hidden',justifyContent:'center',paddingHorizontal:10},clipText:{color:'#e9edf5',fontSize:8,fontWeight:'700'},edge:{position:'absolute',left:0,top:0,bottom:0,width:5,backgroundColor:'#9d7bff',opacity:.75},
+  clip:{position:'absolute',height:44,borderWidth:1,borderRadius:5,overflow:'hidden',justifyContent:'center',paddingHorizontal:12},clipText:{color:'#e9edf5',fontSize:8,fontWeight:'700'},edge:{position:'absolute',zIndex:6,left:0,top:0,bottom:0,width:8,backgroundColor:'#9d7bff',opacity:.38},edgeRight:{left:undefined,right:0},edgeActive:{opacity:.95},
   effects:{position:'absolute',height:38,borderWidth:1,borderColor:'#40516b',borderRadius:5,backgroundColor:'#172335',justifyContent:'center',paddingHorizontal:10},effectText:{color:'#9cb0cc',fontSize:8},
   playhead:{position:'absolute',zIndex:30,top:18,bottom:0,width:1,backgroundColor:'#fff'},playheadDot:{width:9,height:9,marginLeft:-4,borderRadius:5,backgroundColor:'#fff'},playheadText:{position:'absolute',left:5,top:-4,width:48,color:'#fff',fontSize:7},
 });
