@@ -1,8 +1,9 @@
+import { Platform } from 'react-native';
 import type { KaraokeLine, Song } from './types';
 
 export const API_BASE =
   (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_BASE) ||
-  'https://picai.online';
+  (Platform.OS === 'web' ? '' : 'https://sunoapp.aiautotool.com');
 
 function absoluteUrl(path: string) {
   return path.startsWith('http') ? path : `${API_BASE}${path}`;
