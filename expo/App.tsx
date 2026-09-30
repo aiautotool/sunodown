@@ -15,6 +15,8 @@ import { StartupScreen } from './src/StartupScreen';
 import { SongInitScreen, type SongInitState } from './src/SongInitScreen';
 import { storage } from './src/storage';
 
+const BUILD_SHA=process.env.EXPO_PUBLIC_BUILD_SHA||'dev';
+
 function UniversalApp(){
   const {width}=useWindowDimensions();
   const compact=width<=v24.mobileBreakpoint;
@@ -105,6 +107,7 @@ function UniversalApp(){
   return <SafeAreaView style={styles.safe} edges={compact?['top']:[]}>
     <StatusBar style="light"/>
     <View style={styles.app}>
+      <View nativeID="v24react-build" accessibilityLabel={BUILD_SHA} style={styles.buildMarker}/>
       {showHeader&&<Header song={song} view={view} onNavigate={setView}/>}
       <View style={styles.content}>{songInit.visible?<SongInitScreen state={songInit}/>:body}</View>
       {compact&&!song&&<MobileAppNav active={view} onNavigate={setView}/>}
@@ -194,6 +197,7 @@ export default function App(){return <SafeAreaProvider><UniversalApp/></SafeArea
 const styles=StyleSheet.create({
   safe:{flex:1,backgroundColor:colors.bg},
   app:{flex:1,backgroundColor:colors.bg},
+  buildMarker:{position:'absolute',left:-2,top:-2,width:1,height:1,opacity:0},
   content:{flex:1,backgroundColor:colors.bg},
   mobileSectionHeaderWrap:{position:'absolute',zIndex:95,left:0,right:0,top:0,pointerEvents:'box-none'},
   mobileSectionHeader:{height:58,flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingLeft:16,paddingRight:4},
