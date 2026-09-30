@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, Style
 import * as ImagePicker from 'expo-image-picker';
 import { ChevronDown, Download, Image as ImageIcon, Music2, Palette, Play, RefreshCw, Save, SlidersHorizontal, Sparkles, Subtitles, Upload, Wand2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { KaraokeLine, RenderJob, Song } from './types';
+import type { KaraokeLine, RenderJob, Song, StudioSnapshot } from './types';
 import { colors, v24 } from './theme';
 import { safeFilename, saveExportedAsset, shareTextFile } from './file-actions';
 import { exportAudio, exportVisualizer } from './render-engine';
@@ -13,11 +13,11 @@ import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendP
 
 const fmt=(n=0)=>`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 
-export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>void;onRenderJob:(job:RenderJob)=>void}){
+export function StudioScreen({song,onSave,onRenderJob,initialStudio}:{song:Song;onSave:(snapshot:StudioSnapshot)=>void;onRenderJob:(job:RenderJob)=>void;initialStudio?:StudioSnapshot}){
   const {height}=useWindowDimensions();
-  const [config,setConfig]=useState<StudioVisualConfig>({...DEFAULT_VISUAL_CONFIG,trimEnd:song.duration||0});
-  const [background,setBackground]=useState<string|undefined>(song.picture);
-  const {timeline,setTimeline,status:subtitleStatus,message:subtitleMessage,error:subError,regenerating:subLoading,reget}=useSubtitleSync(song);
+  const [config,setConfig]=useState<StudioVisualConfig>(initialStudio?.config||{...DEFAULT_VISUAL_CONFIG,trimEnd:song.duration||0});
+  const [background,setBackground]=useState<string|undefined>(initialStudio?.background||song.picture);
+  const {timeline,setTimeline,status:subtitleStatus,message:subtitleMessage,error:subError,regenerating:subLoading,reget}=useSubtitleSync(song,initialStudio?.timeline||[]);
   const [saved,setSaved]=useState(false);
   const [rendering,setRendering]=useState(false);
   const [renderProgress,setRenderProgress]=useState(0);
@@ -30,7 +30,7 @@ export function StudioScreen({song,onSave,onRenderJob}:{song:Song;onSave:()=>voi
   const quickPresets=useMemo(()=>recommendPresets(song),[song]);
   const selectedPreset=V24_PRESETS.find(item=>item.id===config.presetId)||V24_PRESETS[0]!;
 
-  const save=()=>{onSave();setSaved(true);setTimeout(()=>setSaved(false),1600)};
+  const save=()=>{onSave({schemaVersion:1,config,timeline,background});setSaved(true);setTimeout(()=>setSaved(false),1600)};
   const pickBackground=async()=>{
     const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images','videos'],quality:0.9});
     if(!result.canceled) setBackground(result.assets[0]?.uri);
