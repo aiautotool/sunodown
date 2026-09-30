@@ -113,6 +113,13 @@ function UniversalApp(){
   </SafeAreaView>
 }
 
+function MobileSectionBrand(){
+  return <View style={styles.mobileSectionBrand}>
+    <View style={styles.mobileSectionBrandLeft}><Music2 size={27} color={colors.violet}/><Text style={styles.mobileSectionBrandText}>SunoDown</Text></View>
+    <View style={styles.mobileSectionMenu}><Text style={styles.mobileSectionMenuText}>☰</Text></View>
+  </View>
+}
+
 function MobileAppNav({active,onNavigate}:{active:AppView;onNavigate:(view:AppView)=>void}){
   const items=[
     {id:'create' as const,label:'Home',Icon:Home,primary:false,active:active==='create'},
@@ -164,6 +171,12 @@ const styles=StyleSheet.create({
   safe:{flex:1,backgroundColor:colors.bg},
   app:{flex:1,backgroundColor:colors.bg},
   content:{flex:1,backgroundColor:colors.bg},
+  contentBody:{flex:1},
+  mobileSectionBrand:{height:58,flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:16,backgroundColor:'#090d14'},
+  mobileSectionBrandLeft:{flexDirection:'row',alignItems:'center',gap:10},
+  mobileSectionBrandText:{color:'#f5f7fb',fontSize:21,fontWeight:'700'},
+  mobileSectionMenu:{width:38,height:38,borderWidth:1,borderColor:'#343d4b',borderRadius:11,backgroundColor:'#111722',alignItems:'center',justifyContent:'center'},
+  mobileSectionMenuText:{color:'#c9d0dc',fontSize:19,lineHeight:22},
   mobileNav:{position:'absolute',zIndex:70,left:0,right:0,bottom:0,height:64,paddingHorizontal:6,paddingTop:4,paddingBottom:4,borderTopWidth:1,borderColor:'rgba(148,163,184,.14)',backgroundColor:'rgba(8,11,18,.97)',flexDirection:'row'},
   mobileNavItem:{flex:1,minHeight:52,borderRadius:12,alignItems:'center',justifyContent:'center',gap:3},
   mobileNavActive:{backgroundColor:'rgba(116,88,225,.08)'},
