@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Download, Menu, Music2, Pause, Play, Save, SlidersHorizontal, Sparkles, Subtitles, Upload, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import type { KaraokeLine, MediaClip, RenderJob, SavedVisualPreset, Song, StudioSnapshot, TimelineTrackState } from './types';
 import { colors, v24 } from './theme';
 import { safeFilename, saveExportedAsset, shareTextFile } from './file-actions';
@@ -18,6 +19,7 @@ import { storage } from './storage';
 import { backgroundPresetColors } from './background-presets';
 import { parseSubtitleText, toSrt } from './subtitle-files';
 import { musicAudioUrl } from './api';
+import { extractWaveform } from './waveform-engine';
 
 type Tool=StudioPanel|null;
 
@@ -555,7 +557,7 @@ function stageLabel(stage:'idle'|'validation'|'prepare'|'render'|'finalize'){
 }
 
 function PreviewStage({
-  compact,song,config,background,selectedPreset,lyricLines,timeline,clips,trackState,currentTime,duration,seekPercent,playing,onToggle,onSeek,desktopHeight,editable,onConfigChange,onEditOverlay,
+  compact,song,config,background,selectedPreset,lyricLines,timeline,clips,trackState,currentTime,duration,seekPercent,playing,onToggle,onSeek,desktopHeight,editable,onConfigChange,
 }:{
   compact:boolean; song:Song; config:StudioVisualConfig; background?:string; selectedPreset:(typeof V24_PRESETS)[number];
   lyricLines:string[]; timeline:KaraokeLine[]; clips:MediaClip[]; trackState:TimelineTrackState; currentTime:number; duration:number; seekPercent:number;
@@ -566,6 +568,7 @@ function PreviewStage({
   const [seekWidth,setSeekWidth]=useState(1);
   const [stageBox,setStageBox]=useState({width:1,height:1});
   const [selectedOverlay,setSelectedOverlay]=useState<OverlayKey|null>(null);
+  const [waveform,setWaveform]=useState<number[]>([]);
   const dragOrigin=useRef({x:50,y:50});
   const ratio=aspectValue(config.aspect);
   const innerH=Math.max(1,Math.min(stageBox.height,stageBox.width/ratio));
@@ -575,19 +578,24 @@ function PreviewStage({
   const activeVisual=trackState.visual.hidden?undefined:(activeClip?.type==='image'?activeClip.uri:sourceVisual);
   const presetColors=backgroundPresetColors(config.backgroundPreset);
   const frameColors=config.backgroundMode==='preset'?[...presetColors]:[selectedPreset.accent,selectedPreset.secondary];
-  const barCount=Math.max(28,Math.round((compact?46:72)*((config.waveDensity??72)/72)));
   const titleX=config.titleX??50,titleY=config.titleY??67;
   const creatorX=config.creatorX??50,creatorY=config.creatorY??75;
-  const subtitleX=config.subtitleX??50,subtitleY=config.subtitleY??70;
-  const waveX=config.waveX??50,waveY=config.waveY??82;
-  const clampPct=(value:number)=>Math.max(4,Math.min(96,value));
+  const subtitleX=config.subtitleX??50,subtitleY=config.subtitleY??58;
+  const waveX=config.waveX??50,waveY=config.waveY??86;
+  const clampPct=(value:number)=>Math.max(0,Math.min(100,value));
+
+  useEffect(()=>{
+    let cancelled=false;
+    void extractWaveform(musicAudioUrl(song),320)
+      .then(values=>{if(!cancelled)setWaveform(values)})
+      .catch(()=>{if(!cancelled)setWaveform([])});
+    return()=>{cancelled=true};
+  },[song.audio,song.id]);
+
   const buildResponder=(key:OverlayKey,xKey:'titleX'|'creatorX'|'subtitleX'|'waveX',yKey:'titleY'|'creatorY'|'subtitleY'|'waveY',x:number,y:number)=>PanResponder.create({
     onStartShouldSetPanResponder:()=>editable,
     onMoveShouldSetPanResponder:(_,gesture)=>editable&&(Math.abs(gesture.dx)>2||Math.abs(gesture.dy)>2),
-    onPanResponderGrant:()=>{
-      setSelectedOverlay(key);
-      dragOrigin.current={x,y};
-    },
+    onPanResponderGrant:()=>{setSelectedOverlay(key);dragOrigin.current={x,y}},
     onPanResponderMove:(_,gesture)=>{
       if(!editable)return;
       const nextX=clampPct(dragOrigin.current.x+gesture.dx/Math.max(1,innerW)*100);
@@ -601,53 +609,87 @@ function PreviewStage({
   const subtitleResponder=useMemo(()=>buildResponder('subtitle','subtitleX','subtitleY',subtitleX,subtitleY),[editable,innerW,innerH,subtitleX,subtitleY,config]);
   const waveResponder=useMemo(()=>buildResponder('wave','waveX','waveY',waveX,waveY),[editable,innerW,innerH,waveX,waveY,config]);
   const editStyle=(key:OverlayKey)=>editable&&selectedOverlay===key?styles.overlaySelected:undefined;
+  const activeLine=timeline.find(line=>currentTime>=line.start&&currentTime<line.end)?.text||lyricLines[0]||'';
+  const nextLine=timeline.find(line=>line.start>currentTime)?.text||lyricLines[1]||'';
 
   return <View>
     <View style={styles.previewHead}>
       <Text style={styles.previewHeadTitle}>Xem trước trực tiếp</Text>
-      <Pressable style={styles.previewPause} onPress={onToggle}><Text style={styles.previewPauseText}>{playing?'Tạm dừng':'Phát'}</Text></Pressable>
+      <Pressable style={styles.previewPause} onPress={onToggle}><Text style={styles.previewPauseText}>{playing?'Tạm dừng':'Phát preview'}</Text></Pressable>
     </View>
+
     <View
       style={[styles.stage,compact&&styles.stageCompact,!compact&&{height:desktopHeight}]}
       onLayout={e=>setStageBox({width:e.nativeEvent.layout.width,height:e.nativeEvent.layout.height})}
     >
       <View style={[styles.visualFrame,{width:innerW,height:innerH}]}>
-        {activeVisual?<ImageBackground source={{uri:activeVisual}} resizeMode="cover" style={StyleSheet.absoluteFill}/>:<LinearGradient colors={trackState.visual.hidden?['#080c12','#080c12']:(frameColors as any)} style={StyleSheet.absoluteFill}/>}
-        <LinearGradient colors={['rgba(4,7,11,0)','rgba(4,7,11,.08)','rgba(4,7,11,.72)']} locations={[0,.62,1]} style={StyleSheet.absoluteFill}/>
-        {!trackState.visual.hidden&&!activeVisual&&<View style={styles.localAudioVisual}>
-          <Music2 size={compact?54:68} color="rgba(255,255,255,.82)"/>
-          <Text style={[styles.localAudioTitle,compact&&styles.localAudioTitleCompact]}>{song.title}</Text>
-          <Text style={styles.localAudioCreator}>{(song.creator||'Local audio').toUpperCase()}</Text>
-        </View>}
+        {activeVisual
+          ? <ImageBackground source={{uri:activeVisual}} resizeMode="cover" style={StyleSheet.absoluteFill} imageStyle={{opacity:config.template==='cover-motion'?.96:config.template==='lyrics-focus'?.42:.56}}/>
+          : <LinearGradient colors={trackState.visual.hidden?['#080c12','#080c12']:(frameColors as any)} style={StyleSheet.absoluteFill}/>}
+        <View style={[StyleSheet.absoluteFill,{backgroundColor:config.template==='cover-motion'?'rgba(3,4,12,.15)':config.template==='editorial'?'rgba(7,8,14,.50)':'rgba(3,4,12,.43)'}]}/>
+
+        {!trackState.visual.hidden&&<V23TemplateLayer template={config.template} visual={activeVisual||song.picture} song={song} currentTime={currentTime} accent={selectedPreset.accent} secondary={selectedPreset.secondary}/>}
+
         {!trackState.visual.hidden&&<Pressable
           {...titleResponder.panHandlers}
-          onPress={()=>{setSelectedOverlay('title');onEditOverlay('title')}}
+          onPress={event=>{event.stopPropagation?.();setSelectedOverlay('title')}}
           style={[styles.titleOverlay,editStyle('title'),{top:(titleY+'%') as any,transform:[{translateX:(titleX-50)*innerW/100},{translateY:-12}]}]}
         >
-          <Text numberOfLines={2} style={[styles.previewTitle,{color:config.titleColor,fontSize:Math.round((compact?18:24)*((config.titleScale??100)/100))}]}>{song.title}</Text>
+          <Text numberOfLines={2} style={[styles.previewTitle,{
+            color:config.titleColor,
+            fontFamily:config.titleFont||'Georgia',
+            fontSize:Math.round((compact?18:24)*((config.titleScale??100)/100)),
+          }]}>{song.title}</Text>
         </Pressable>}
+
         {!trackState.visual.hidden&&<Pressable
           {...creatorResponder.panHandlers}
-          onPress={()=>{setSelectedOverlay('creator');onEditOverlay('creator')}}
+          onPress={event=>{event.stopPropagation?.();setSelectedOverlay('creator')}}
           style={[styles.creatorOverlay,editStyle('creator'),{top:(creatorY+'%') as any,transform:[{translateX:(creatorX-50)*innerW/100},{translateY:-7}]}]}
         >
-          <Text numberOfLines={1} style={[styles.previewCreator,{color:config.creatorColor,fontSize:Math.round((compact?9:12)*((config.creatorScale??100)/100))}]}>{song.creator||'Suno'}</Text>
+          <Text numberOfLines={1} style={[styles.previewCreator,{
+            color:config.creatorColor,
+            fontSize:Math.round((compact?9:12)*((config.creatorScale??100)/100)),
+          }]}>{song.creator||'Suno'}</Text>
         </Pressable>}
-        {!trackState.subtitle.hidden&&config.lyrics!=='off'&&timeline.length>0&&<Pressable
+
+        {!trackState.subtitle.hidden&&config.lyrics!=='off'&&!!activeLine&&<Pressable
           {...subtitleResponder.panHandlers}
-          onPress={()=>{setSelectedOverlay('subtitle');onEditOverlay('subtitle')}}
+          onPress={event=>{event.stopPropagation?.();setSelectedOverlay('subtitle')}}
           style={[styles.karaoke,editStyle('subtitle'),{top:(subtitleY+'%') as any,transform:[{translateX:(subtitleX-50)*innerW/100},{translateY:-15}]}]}
         >
-          <Text style={[styles.karaokeMain,{color:config.subtitleActiveColor,fontSize:Math.round(29*((config.subtitleScale??100)/100))}]}>{timeline.find(line=>currentTime>=line.start&&currentTime<line.end)?.text||lyricLines[0]}</Text>
-          <Text style={[styles.karaokeNext,{color:config.subtitleColor}]}>{timeline.find(line=>line.start>currentTime)?.text||lyricLines[1]||''}</Text>
+          <View style={[styles.karaokeFocus,config.lyrics==='scroll'&&styles.karaokeFocusClear]}>
+            <Text style={[styles.karaokeMain,{color:config.subtitleActiveColor,fontSize:Math.round((compact?16:22)*((config.subtitleScale??100)/100))}]}>{activeLine}</Text>
+            {config.lyrics==='scroll'&&!!nextLine&&<Text style={[styles.karaokeNext,{color:config.subtitleColor}]}>{nextLine}</Text>}
+          </View>
         </Pressable>}
+
         {!trackState.visual.hidden&&<Pressable
           {...waveResponder.panHandlers}
-          onPress={()=>{setSelectedOverlay('wave');onEditOverlay('wave')}}
-          style={[styles.wave,compact&&styles.waveCompact,editStyle('wave'),{top:(waveY+'%') as any,opacity:(config.waveOpacity??92)/100,transform:[{translateX:(waveX-50)*innerW/100},{translateY:compact?-17:-26},{rotate:(config.waveRotation??0)+'deg'}]}]}
+          onPress={event=>{event.stopPropagation?.();setSelectedOverlay('wave')}}
+          style={[styles.waveV23,editStyle('wave'),{
+            top:(waveY+'%') as any,
+            opacity:(config.waveOpacity??94)/100,
+            transform:[
+              {translateX:(waveX-50)*innerW/100},
+              {translateY:-Math.max(24,innerH*.075)},
+              {rotate:(config.waveRotation??0)+'deg'},
+            ],
+          }]}
         >
-          {Array.from({length:barCount}).map((_,i)=>{const h=Math.max(3,((compact?4:6)+((i*(compact?13:17))%(compact?22:34)))*((config.waveHeight??108)/108));return <View key={i} style={styles.mirrorBar}><View style={[styles.bar,{width:Math.max(1,Math.round((config.waveThickness??46)/30)),backgroundColor:i%2?(config.waveColor2||'#60a5fa'):(config.waveColor||'#d946ef'),height:h}]}/><View style={[styles.bar,styles.barMirror,{width:Math.max(1,Math.round((config.waveThickness??46)/30)),backgroundColor:i%2?(config.waveColor2||'#60a5fa'):(config.waveColor||'#d946ef'),height:h}]}/></View>})}
+          <V23Waveform
+            styleName={config.wave}
+            values={waveform}
+            currentTime={currentTime}
+            duration={Math.max(1,duration||song.duration||1)}
+            color={config.waveColor||'#8b5cf6'}
+            color2={config.waveColor2||'#22d3ee'}
+            density={config.waveDensity??72}
+            thickness={config.waveThickness??54}
+            height={config.waveHeight??78}
+          />
         </Pressable>}
+
         <Pressable style={[styles.centerPlay,compact&&styles.centerPlayCompact,playing&&styles.centerPlayPlaying]} onPress={onToggle}>
           {playing?<Pause size={compact?22:25} color="#fff" fill="#fff"/>:<Play size={compact?24:27} color="#fff" fill="#fff"/>}
         </Pressable>
@@ -670,8 +712,109 @@ function PreviewStage({
       <Music2 size={compact?17:19} color="#d7dde7"/>
       {!compact&&<SlidersHorizontal size={18} color="#aeb7c5"/>}
     </View>
-    <Text style={styles.previewHint}>Chạm title / subtitle / sóng để mở chỉnh sửa. Kéo trực tiếp trên preview để đổi vị trí.</Text>
+    <Text style={styles.previewHint}>Preview dùng audio thật làm clock. Nắm trực tiếp sóng hoặc subtitle trên video để kéo tới vị trí mong muốn.</Text>
   </View>;
+}
+
+function V23TemplateLayer({template,visual,song,currentTime,accent,secondary}:{template:string;visual?:string;song:Song;currentTime:number;accent:string;secondary:string}){
+  if(template==='vinyl'||template==='gold-record'){
+    const gold=template==='gold-record';
+    return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <View style={[styles.v23Disc,{borderColor:gold?'#e6b94a':'#252734',backgroundColor:gold?'#9a6a1a':'#090a0f',transform:[{rotate:(currentTime*(gold?19:33))+'deg'}]}]}>
+        {visual&&<Image source={{uri:visual}} style={styles.v23DiscCover}/>}
+        <View style={[styles.v23DiscCore,{backgroundColor:gold?'#f5d56b':'#d9d0ff'}]}/>
+      </View>
+      {gold&&<View style={styles.v23GoldPlaque}><Text style={styles.v23GoldPlaqueText}>GOLD RECORD</Text></View>}
+    </View>;
+  }
+  if(template==='glass-card'){
+    return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <View style={[styles.v23Orb,styles.v23OrbLeft,{backgroundColor:accent+'33'}]}/>
+      <View style={[styles.v23Orb,styles.v23OrbRight,{backgroundColor:secondary+'2A'}]}/>
+      <View style={styles.v23GlassBack}/>
+      <View style={[styles.v23GlassCard,{borderColor:'rgba(255,255,255,.30)'}]}>
+        {visual&&<Image source={{uri:visual}} resizeMode="cover" style={StyleSheet.absoluteFill}/>}
+        <LinearGradient colors={['rgba(255,255,255,.18)','rgba(255,255,255,.02)','rgba(255,255,255,0)']} style={StyleSheet.absoluteFill}/>
+      </View>
+    </View>;
+  }
+  if(template==='editorial'){
+    return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <View style={styles.v23EditorialBorder}/>
+      <View style={styles.v23EditorialV}/>
+      <View style={styles.v23EditorialH}/>
+      <Text style={styles.v23EditorialMusic}>MUSIC</Text>
+      <Text style={styles.v23EditorialIssue}>EDITORIAL / VISUAL ISSUE</Text>
+      <View style={styles.v23EditorialImageWrap}>{visual&&<Image source={{uri:visual}} resizeMode="cover" style={StyleSheet.absoluteFill}/>}</View>
+      <Text style={styles.v23EditorialCreator}>{(song.creator||'MUSIC').toUpperCase()}</Text>
+      <Text style={styles.v23EditorialFeature}>01  /  FEATURE STORY</Text>
+    </View>;
+  }
+  if(template==='spotlight'){
+    return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <LinearGradient colors={[accent+'66','transparent']} start={{x:.25,y:0}} end={{x:.5,y:.7}} style={styles.v23SpotLeft}/>
+      <LinearGradient colors={[secondary+'55','transparent']} start={{x:.75,y:0}} end={{x:.5,y:.7}} style={styles.v23SpotRight}/>
+      <View style={styles.v23SpotImage}>{visual&&<Image source={{uri:visual}} resizeMode="cover" style={StyleSheet.absoluteFill}/>}</View>
+    </View>;
+  }
+  if(template==='lyrics-focus'){
+    return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <LinearGradient colors={['rgba(4,7,15,.10)','rgba(3,6,14,.68)','rgba(3,6,14,.68)','rgba(3,6,14,.12)']} locations={[0,.32,.68,1]} style={styles.v23LyricsShade}/>
+      <View style={[styles.v23LyricsWindow,{borderColor:secondary+'44'}]}/>
+      <Text style={[styles.v23Quote,{color:secondary+'22'}]}>“</Text>
+    </View>;
+  }
+  return null;
+}
+
+function V23Waveform({styleName,values,currentTime,duration,color,color2,density,thickness,height}:{styleName:string;values:number[];currentTime:number;duration:number;color:string;color2:string;density:number;thickness:number;height:number}){
+  const count=Math.max(34,Math.min(96,Math.round(30+density*.7)));
+  const source=values.length?values:Array.from({length:320},(_,i)=>(.12+((i*37)%83)/100));
+  const center=Math.floor((currentTime/Math.max(1,duration))*source.length);
+  const windowValues=Array.from({length:count},(_,i)=>{
+    const offset=i-Math.floor(count/2);
+    return source[(center+offset+source.length*4)%source.length]||.08;
+  });
+  const maxAmp=Math.max(11,22+(height/100)*32);
+  const top=windowValues.map((v,i)=>{
+    const x=7+(i/Math.max(1,count-1))*86;
+    const centerBias=.58+.42*Math.sin((i/Math.max(1,count-1))*Math.PI);
+    const amp=Math.max(1,(Math.max(.035,v)*centerBias)*maxAmp);
+    return [x,50-amp] as const;
+  });
+  const bottom=top.map(([x,y])=>[x,100-y] as const);
+  const path=(pts:readonly (readonly [number,number])[])=>pts.map(([x,y],i)=>(i?'L':'M')+x.toFixed(2)+' '+y.toFixed(2)).join(' ');
+  const circular=/circle|orbit|radial|ring|mandala|pinwheel/.test(styleName);
+  const spectrum=/spectrum|bars|blocks|equalizer|needles|rounded/.test(styleName);
+  if(circular){
+    const bars=Math.max(30,Math.min(74,Math.round(28+density*.5)));
+    return <Svg viewBox="0 0 100 100" width="100%" height="100%" pointerEvents="none">
+      <Defs><SvgLinearGradient id="v23wg" x1="0" y1="0" x2="1" y2="1"><Stop offset="0" stopColor={color}/><Stop offset="1" stopColor={color2}/></SvgLinearGradient></Defs>
+      <Circle cx="50" cy="50" r="20" stroke="url(#v23wg)" strokeWidth={Math.max(1,thickness/34)} fill="rgba(8,10,18,.28)"/>
+      {Array.from({length:bars},(_,i)=>{
+        const a=i/bars*Math.PI*2,v=windowValues[i%windowValues.length]||.08;
+        const r=22,len=2+v*10,x1=50+Math.cos(a)*r,y1=50+Math.sin(a)*r,x2=50+Math.cos(a)*(r+len),y2=50+Math.sin(a)*(r+len);
+        return <Path key={i} d={`M ${x1} ${y1} L ${x2} ${y2}`} stroke={i%2?color2:color} strokeWidth={Math.max(.7,thickness/45)} strokeLinecap="round"/>;
+      })}
+    </Svg>;
+  }
+  if(spectrum){
+    const bars=Math.max(24,Math.min(64,Math.round(20+density*.5)));
+    return <Svg viewBox="0 0 100 100" width="100%" height="100%" pointerEvents="none">
+      <Defs><SvgLinearGradient id="v23wg2" x1="0" y1="0" x2="1" y2="0"><Stop offset="0" stopColor={color}/><Stop offset="1" stopColor={color2}/></SvgLinearGradient></Defs>
+      {Array.from({length:bars},(_,i)=>{
+        const v=windowValues[Math.floor(i/bars*windowValues.length)]||.08,h=Math.max(5,v*48*(height/78)),x=7+(i/Math.max(1,bars-1))*86,w=Math.max(.7,thickness/45);
+        return <Rect key={i} x={x-w/2} y={50-h/2} width={w} height={h} rx={w/2} fill="url(#v23wg2)"/>;
+      })}
+    </Svg>;
+  }
+  return <Svg viewBox="0 0 100 100" width="100%" height="100%" pointerEvents="none">
+    <Defs><SvgLinearGradient id="v23wg3" x1="0" y1="0" x2="1" y2="0"><Stop offset="0" stopColor={color}/><Stop offset=".5" stopColor={color2}/><Stop offset="1" stopColor={color}/></SvgLinearGradient></Defs>
+    <Path d={path(top)} stroke="url(#v23wg3)" strokeWidth={Math.max(1.1,thickness/30)} fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+    <Path d={path(bottom)} stroke="url(#v23wg3)" strokeWidth={Math.max(1.1,thickness/30)} fill="none" strokeLinecap="round" strokeLinejoin="round" opacity=".82"/>
+    <Path d={`M 7 50 ${top.map(([x,y])=>'L '+x+' '+y).join(' ')} L 93 50 Z`} fill={color2} opacity=".12"/>
+    <Path d={`M 7 50 ${bottom.map(([x,y])=>'L '+x+' '+y).join(' ')} L 93 50 Z`} fill={color} opacity=".10"/>
+  </Svg>;
 }
 function SubtitleBlock({
   compact,song,status,message,error,busy,onReget,
@@ -765,7 +908,33 @@ const styles=StyleSheet.create({
   stage:{position:'relative',width:'100%',minHeight:420,borderRadius:7,overflow:'hidden',backgroundColor:'#000',alignItems:'center',justifyContent:'center'},
   stageCompact:{minHeight:0,height:372,borderRadius:8},
   visualFrame:{position:'relative',overflow:'hidden',backgroundColor:'#25165c'},
-  overlaySelected:{borderWidth:1,borderColor:'rgba(167,139,250,.9)',borderRadius:7,backgroundColor:'rgba(139,92,246,.08)'},
+  overlaySelected:{borderWidth:1,borderColor:'rgba(167,139,250,.9)',borderRadius:7,backgroundColor:'rgba(139,92,246,.06)'},
+  waveV23:{position:'absolute',zIndex:3,left:'7%',right:'7%',height:'15.5%' as any,minHeight:48},
+  karaokeFocus:{minWidth:'82%' as any,maxWidth:'94%' as any,borderRadius:10,backgroundColor:'rgba(5,5,16,.48)',paddingHorizontal:10,paddingVertical:8,alignItems:'center'},
+  karaokeFocusClear:{backgroundColor:'transparent'},
+  v23Disc:{position:'absolute',left:'16%',top:'17%',width:'68%',aspectRatio:1,borderRadius:999,borderWidth:3,alignItems:'center',justifyContent:'center',overflow:'hidden',shadowColor:'#000',shadowOpacity:.45,shadowRadius:18,elevation:8},
+  v23DiscCover:{width:'31%',aspectRatio:1,borderRadius:999},
+  v23DiscCore:{position:'absolute',width:'7%',aspectRatio:1,borderRadius:999},
+  v23GoldPlaque:{position:'absolute',left:'27%',right:'27%',top:'58%',height:'6%',borderWidth:1,borderColor:'rgba(255,224,151,.68)',backgroundColor:'#5e421d',alignItems:'center',justifyContent:'center'},
+  v23GoldPlaqueText:{color:'#fff0ae',fontFamily:'Georgia',fontWeight:'700',fontSize:9},
+  v23Orb:{position:'absolute',width:'44%',aspectRatio:1,borderRadius:999},
+  v23OrbLeft:{left:'6%',top:'14%'},v23OrbRight:{right:'4%',top:'35%'},
+  v23GlassBack:{position:'absolute',left:'11%',top:'21%',width:'72%',height:'34%',borderWidth:1,borderColor:'rgba(255,255,255,.12)',borderRadius:18,backgroundColor:'rgba(255,255,255,.045)',transform:[{rotate:'-2deg'}]},
+  v23GlassCard:{position:'absolute',left:'14%',top:'20%',width:'72%',height:'34%',borderWidth:1,borderRadius:18,backgroundColor:'rgba(12,18,34,.48)',overflow:'hidden',shadowColor:'#8b5cf6',shadowOpacity:.32,shadowRadius:20,elevation:6},
+  v23EditorialBorder:{position:'absolute',left:'5.5%',right:'5.5%',top:'7%',bottom:'9%',borderWidth:1,borderColor:'rgba(242,228,196,.78)'},
+  v23EditorialV:{position:'absolute',left:'51%',top:'8%',bottom:'10%',width:1,backgroundColor:'rgba(242,228,196,.28)'},
+  v23EditorialH:{position:'absolute',left:'5.5%',right:'5.5%',top:'28%',height:1,backgroundColor:'rgba(242,228,196,.28)'},
+  v23EditorialMusic:{position:'absolute',left:'7%',top:'10%',color:'rgba(244,232,202,.96)',fontFamily:'Georgia',fontSize:28,fontWeight:'900'},
+  v23EditorialIssue:{position:'absolute',left:'7.5%',top:'22%',color:'rgba(244,232,202,.84)',fontSize:7,fontWeight:'700',letterSpacing:1.3},
+  v23EditorialImageWrap:{position:'absolute',left:'22%',top:'27%',width:'56%',aspectRatio:1,borderWidth:4,borderColor:'#efe6d3',overflow:'hidden',transform:[{rotate:'-3deg'}]},
+  v23EditorialCreator:{position:'absolute',left:'7%',top:'61%',color:'rgba(244,232,202,.88)',fontFamily:'Georgia',fontSize:12,fontWeight:'700',fontStyle:'italic'},
+  v23EditorialFeature:{position:'absolute',left:'7%',top:'65%',color:'rgba(244,232,202,.56)',fontSize:7,fontWeight:'600'},
+  v23SpotLeft:{position:'absolute',left:'7%',top:'4.5%',width:'43%',height:'64%'},
+  v23SpotRight:{position:'absolute',right:'7%',top:'4.5%',width:'43%',height:'64%'},
+  v23SpotImage:{position:'absolute',left:'23%',top:'24%',width:'54%',aspectRatio:1,backgroundColor:'#101521',overflow:'hidden',shadowColor:'#8b5cf6',shadowOpacity:.48,shadowRadius:24,elevation:7},
+  v23LyricsShade:{position:'absolute',left:0,right:0,top:'14%',height:'68%'},
+  v23LyricsWindow:{position:'absolute',left:'7%',right:'7%',top:'36%',height:'28%',borderWidth:1,borderRadius:18,backgroundColor:'rgba(10,13,26,.34)'},
+  v23Quote:{position:'absolute',left:'5.5%',top:'31%',fontFamily:'Georgia',fontSize:64,fontWeight:'900'},
   localAudioVisual:{...StyleSheet.absoluteFill,alignItems:'center',justifyContent:'center',paddingTop:'24%' as any},
   localAudioTitle:{color:'#f1ecff',fontSize:30,fontWeight:'800',marginTop:48,textAlign:'center'},
   localAudioTitleCompact:{fontSize:20,marginTop:34},
