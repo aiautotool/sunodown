@@ -56,7 +56,7 @@ export function JobsScreen({jobs,onCreate}:{jobs:RenderJob[];onCreate:()=>void})
       {jobs.length?jobs.map(job=><View key={job.id} style={styles.jobCard}>
         <ListMusic size={23} color="#9275ff"/>
         <View style={{flex:1}}><Text style={styles.jobTitle}>{job.status==='done'?'Completed video':job.status==='error'?'Render failed':'Rendering video'}</Text><Text style={styles.jobSub}>{job.title} · {Math.round(job.progress)}% complete</Text></View>
-        <View style={[styles.jobProgress,{width:(Math.max(0,Math.min(100,job.progress)))+'%'}]}/>
+        <View style={[styles.jobProgress,{width:((Math.max(0,Math.min(100,job.progress)))+'%') as any}]}/>
       </View>):<View style={styles.jobCard}>
         <ListMusic size={23} color="#9275ff"/>
         <View><Text style={styles.jobTitle}>No active render job</Text><Text style={styles.jobSub}>Completed videos download automatically.</Text></View>
