@@ -157,8 +157,8 @@ export function EmptyCreate({
           <View style={[styles.phone,mobile&&styles.phoneMobile]}>
             <View style={styles.phoneNotch}/>
             <View style={styles.phoneScreen}>
-              <Image source={{uri:previewUri}} style={StyleSheet.absoluteFillObject} resizeMode="cover"/>
-              <LinearGradient colors={['rgba(4,7,12,.02)','rgba(4,7,12,.10)','rgba(4,7,12,.92)']} style={StyleSheet.absoluteFillObject}/>
+              <Image source={{uri:previewUri}} style={StyleSheet.absoluteFill} resizeMode="cover"/>
+              <LinearGradient colors={['rgba(4,7,12,.02)','rgba(4,7,12,.10)','rgba(4,7,12,.92)']} style={StyleSheet.absoluteFill}/>
               <View style={styles.ratioBadge}><Text style={styles.ratioText}>9:16</Text></View>
               <Text style={styles.phoneLyrics}>Có những ngày{"\\n"}chỉ muốn đi thật xa...</Text>
               <View style={styles.phoneWave}>{Array.from({length:34}).map((_,i)=><View key={i} style={[styles.phoneBar,{height:5+((i*11)%18)}]}/>)}</View>
@@ -190,8 +190,8 @@ export function EmptyCreate({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
           {featured.map(([name,id,gradient],index)=><Pressable key={id} style={[styles.template,index===0&&styles.templateActive]}>
             <LinearGradient colors={gradient as any} style={styles.templateThumb}>
-              <Image source={{uri:previewUri}} style={StyleSheet.absoluteFillObject} resizeMode="cover"/>
-              <LinearGradient colors={['transparent','rgba(5,8,13,.68)']} style={StyleSheet.absoluteFillObject}/>
+              <Image source={{uri:previewUri}} style={StyleSheet.absoluteFill} resizeMode="cover"/>
+              <LinearGradient colors={['transparent','rgba(5,8,13,.68)']} style={StyleSheet.absoluteFill}/>
               <View style={styles.templateBadge}><Text style={styles.templateBadgeText}>{index===0?'HOT':'STYLE'}</Text></View>
             </LinearGradient>
             <Text numberOfLines={1} style={styles.templateName}>{name}</Text>
