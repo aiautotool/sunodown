@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import { execute, pickEncoder } from 'munim-ffmpeg';
+import { execute, getMediaDuration, getMediaInformation, pickEncoder } from 'munim-ffmpeg';
 import type { Song } from './types';
 import { publicAudioUrl } from './api';
 import type { ExportAsset } from './render-engine';
@@ -12,6 +12,10 @@ async function inputFor(song:Song){
   const base=FileSystem.cacheDirectory;
   if(!base)throw new Error('Thiết bị không cấp thư mục cache.');
   const path=base+'sunodown-source-'+Date.now().toString(36)+'.m4a';
+  if(/^(file|content):/i.test(song.audio)){
+    await FileSystem.copyAsync({from:song.audio,to:path});
+    return path;
+  }
   const result=await FileSystem.downloadAsync(publicAudioUrl(song),path);
   return result.uri;
 }
@@ -23,7 +27,9 @@ export async function exportVisualizer(song:Song,presetId:string,durationSeconds
   if(!base)throw new Error('Thiết bị không cấp thư mục cache.');
   const input=await inputFor(song);
   const output=base+safe(song.title)+(durationSeconds?'-30s':'')+'-'+Date.now().toString(36)+'.mp4';
-  const duration=Math.max(1,Math.min(durationSeconds||song.duration||3600,song.duration||durationSeconds||3600));
+  const info=await getMediaInformation(input);
+  const probed=getMediaDuration(info)||song.duration||durationSeconds||180;
+  const duration=Math.max(1,Math.min(durationSeconds||probed,probed));
   const encoder=await pickEncoder(['h264_videotoolbox','h264_mediacodec','libopenh264']);
   if(!encoder)throw new Error('Thiết bị không có H.264 encoder phù hợp.');
   const pix=Platform.OS==='android'&&encoder==='h264_mediacodec'?'nv12':'yuv420p';
@@ -47,7 +53,8 @@ export async function exportAudio(song:Song,format:'m4a'|'mp3'|'wav',onProgress?
   const input=await inputFor(song);
   const output=base+safe(song.title)+'-'+Date.now().toString(36)+'.'+format;
   const codec=format==='mp3'?['-c:a','libmp3lame','-b:a','320k']:format==='wav'?['-c:a','pcm_s16le','-ar','48000']:['-c:a','aac','-b:a','256k','-movflags','+faststart'];
-  const duration=Math.max(1,song.duration||1);
+  const info=await getMediaInformation(input);
+  const duration=Math.max(1,getMediaDuration(info)||song.duration||1);
   const result=await execute(['-y','-i',input,'-vn',...codec,output],undefined,(timeMs)=>onProgress?.(Math.max(1,Math.min(99,Math.round((timeMs/1000)/duration*100)))));
   assertResult(result);
   onProgress?.(100);
