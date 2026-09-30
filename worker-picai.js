@@ -1048,6 +1048,21 @@ async function handleSubtitleCloudGenerate(request, env, ctx) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (
+      url.pathname === '/api/music/subtitle' &&
+      request.method === 'GET'
+    ) {
+      return handleSubtitleCloudGet(request, env);
+    }
+
+    if (
+      url.pathname === '/api/music/subtitle/generate' &&
+      request.method === 'POST'
+    ) {
+      return handleSubtitleCloudGenerate(request, env, ctx);
+    }
+
     if (
       (request.method === 'GET' || request.method === 'HEAD') &&
       (url.pathname.startsWith('/_next/') ||
@@ -1122,49 +1137,29 @@ export default {
       }
 
       if (request.method === 'POST') {
-        try {
-          const incoming = await request.formData();
-          incoming.set('__server_groq_key', groqKey);
-          const headers = new Headers(request.headers);
-          headers.delete('content-type');
-          headers.delete('content-length');
-          request = new Request(request.url, {
-            method: 'POST',
-            headers,
-            body: incoming,
-          });
-        } catch {
-          return json(
-            {
-              error: 'Multipart form-data không hợp lệ.',
-              code: 'INVALID_MULTIPART',
-            },
-            400,
-          );
+        const contentType = request.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          try {
+            const incoming = await request.formData();
+            incoming.set('__server_groq_key', groqKey);
+            const headers = new Headers(request.headers);
+            headers.delete('content-type');
+            headers.delete('content-length');
+            request = new Request(request.url, {
+              method: 'POST',
+              headers,
+              body: incoming,
+            });
+          } catch {
+            return json(
+              {
+                error: 'Multipart form-data không hợp lệ.',
+                code: 'INVALID_MULTIPART',
+              },
+              400,
+            );
+          }
         }
-      }
-    }
-
-    if (
-      url.pathname === '/api/music/subtitle/generate' &&
-      request.method === 'POST'
-    ) {
-      try {
-        const input = await request.json();
-        const payload =
-          input && typeof input === 'object' ? { ...input } : {};
-        payload.__serverGroqKey =
-          typeof env.GROQ_API_KEY === 'string' ? env.GROQ_API_KEY : '';
-        const headers = new Headers(request.headers);
-        headers.set('content-type', 'application/json');
-        headers.delete('content-length');
-        request = new Request(request.url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(payload),
-        });
-      } catch {
-        return json({ error: 'invalid_json' }, 400);
       }
     }
 
