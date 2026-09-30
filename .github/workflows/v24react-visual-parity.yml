@@ -1,12 +1,14 @@
 name: v24react visual parity
 
 on:
-  push:
-    branches: [v24react]
-    paths:
-      - 'expo/**'
-      - '.github/workflows/v24react-visual-parity.yml'
+  workflow_run:
+    workflows: ["Deploy v24react universal Expo"]
+    types: [completed]
   workflow_dispatch:
+
+concurrency:
+  group: v24react-visual-parity
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -50,17 +52,21 @@ jobs:
           echo "$body" | jq -e '.id != null and .audio != null' >/dev/null
 
       - name: Wait for latest v24react UI deployment
+        env:
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           node --input-type=module <<'NODE'
           import { chromium } from 'playwright';
           const browser=await chromium.launch({headless:true});
           const page=await browser.newPage({viewport:{width:1440,height:1100}});
+          const expected=(process.env.EXPECTED_SHA||'').trim();
           let ready=false;
-          for(let attempt=0;attempt<40;attempt++){
+          for(let attempt=0;attempt<50;attempt++){
             try{
-              await page.goto('https://sunoapp.aiautotool.com/',{waitUntil:'domcontentloaded',timeout:30000});
-              await page.waitForTimeout(3200);
-              ready=await page.getByText('Sad Lyrics Cinema',{exact:true}).isVisible().catch(()=>false);
+              await page.goto('https://sunoapp.aiautotool.com/?parity='+Date.now(),{waitUntil:'domcontentloaded',timeout:30000});
+              await page.waitForTimeout(1800);
+              const marker=await page.locator('#v24react-build').getAttribute('aria-label').catch(()=>null);
+              ready=Boolean(marker&&(!expected||marker===expected));
               if(ready)break;
             }catch{}
             await page.waitForTimeout(3000);
