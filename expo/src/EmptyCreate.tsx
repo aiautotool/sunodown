@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { BookOpen, ChevronLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Link2, ListMusic, Menu, Music2, Play, Plus, Sparkles, Upload } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,7 +8,7 @@ import type { AppView, Project, Song } from './types';
 import { resolveSuno } from './api';
 
 const DEFAULT='https://suno.com/s/tszo0jGdVUua4rT4';
-const previewUri='/home-cinematic-v23.svg';
+const previewUri=Platform.OS==='web'?'/home-cinematic-v23.svg':'https://sunoapp.aiautotool.com/home-cinematic-v23.svg';
 const featured=[
   ['Cinematic','cinematic',['#281c44','#875dff']],
   ['Minimal','minimal',['#121821','#384454']],
@@ -47,7 +47,7 @@ export function EmptyCreate({
 
   const railWidth=stacked?0:(collapsed?(mid?72:76):(mid?210:250));
 
-  return <View style={styles.root}>
+  return <View style={[styles.root,stacked&&styles.rootStacked]}>
     {!stacked&&<View style={[styles.side,{width:railWidth,paddingHorizontal:collapsed?10:15}]}>
       <Pressable style={[styles.sideItem,styles.collapse,collapsed&&styles.sideCollapsed]} onPress={()=>setCollapsed(v=>!v)}>
         {collapsed?<ChevronRight size={17} color="#7f8ba0"/>:<ChevronLeft size={17} color="#7f8ba0"/>}
@@ -98,7 +98,7 @@ export function EmptyCreate({
       <View style={[styles.hero,stacked&&styles.heroStack]}>
         <View style={styles.copy}>
           <View style={styles.kicker}><Sparkles size={13} color="#a27dff"/><Text style={styles.kickerText}>CREATOR STUDIO</Text></View>
-          <Text style={[styles.headline,mobile&&styles.headlineMobile]}>Turn your Suno song{"\\n"}<Text style={styles.headlineAccent}>into stunning content</Text></Text>
+          <Text style={[styles.headline,mobile&&styles.headlineMobile]}>Turn your Suno song{String.fromCharCode(10)}<Text style={styles.headlineAccent}>into stunning content</Text></Text>
           <Text style={styles.description}>Biến nhạc Suno thành video lyric, karaoke và social video chuyên nghiệp chỉ trong vài phút.</Text>
 
           <View style={[styles.analyzeRow,stacked&&styles.analyzeRowStack]}>
@@ -160,7 +160,7 @@ export function EmptyCreate({
               <Image source={{uri:previewUri}} style={StyleSheet.absoluteFill} resizeMode="cover"/>
               <LinearGradient colors={['rgba(4,7,12,.02)','rgba(4,7,12,.10)','rgba(4,7,12,.92)']} style={StyleSheet.absoluteFill}/>
               <View style={styles.ratioBadge}><Text style={styles.ratioText}>9:16</Text></View>
-              <Text style={styles.phoneLyrics}>Có những ngày{"\\n"}chỉ muốn đi thật xa...</Text>
+              <Text style={styles.phoneLyrics}>Có những ngày{String.fromCharCode(10)}chỉ muốn đi thật xa...</Text>
               <View style={styles.phoneWave}>{Array.from({length:34}).map((_,i)=><View key={i} style={[styles.phoneBar,{height:5+((i*11)%18)}]}/>)}</View>
               <View style={styles.phoneTime}><Text style={styles.phoneTimeText}>00:42</Text><Text style={styles.phoneTimeText}>03:18</Text></View>
               <View style={styles.phoneControls}><Text style={styles.chev}>‹</Text><View style={styles.phonePlay}><Play size={19} color="#fff" fill="#fff"/></View><Text style={styles.chev}>›</Text></View>
@@ -213,7 +213,7 @@ function SliderFake({label,value,text}:{label:string;value:number;text:string}){
 function Benefit({icon,title,sub}:{icon:string;title:string;sub:string}){return <View style={styles.benefit}><View style={styles.benefitIcon}><Text style={styles.benefitIconText}>{icon}</Text></View><View style={{flex:1}}><Text style={styles.benefitTitle}>{title}</Text><Text style={styles.benefitSub}>{sub}</Text></View></View>}
 
 const styles=StyleSheet.create({
-  root:{flex:1,flexDirection:'row',backgroundColor:'#07101b',paddingTop:v24.headerHeight},
+  root:{flex:1,flexDirection:'row',backgroundColor:'#07101b',paddingTop:v24.headerHeight},rootStacked:{paddingTop:0},
   side:{minHeight:'100%',backgroundColor:'rgba(9,15,25,.93)',borderRightWidth:1,borderRightColor:'rgba(132,148,173,.08)',paddingTop:25,paddingBottom:18,gap:7},
   sideItem:{minHeight:48,borderRadius:12,flexDirection:'row',alignItems:'center',gap:12,paddingHorizontal:14},
   sideCollapsed:{justifyContent:'center',paddingHorizontal:0},
