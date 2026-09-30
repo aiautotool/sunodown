@@ -20,6 +20,7 @@ export function MobileStudioScreen({song,onSave,onBack,onRenderJob}:{song:Song;o
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [saved,setSaved]=useState(false);
+  const [mobilePreset,setMobilePreset]=useState('cinematic');
   const [rendering,setRendering]=useState(false);
   const [renderProgress,setRenderProgress]=useState(0);
   const [renderMessage,setRenderMessage]=useState('');
@@ -47,7 +48,7 @@ export function MobileStudioScreen({song,onSave,onBack,onRenderJob}:{song:Song;o
     setRendering(true);setRenderProgress(0);setRenderMessage('');
     onRenderJob({id:jobId,title:song.title,progress:0,status:'queued',createdAt:started});
     try{
-      const asset=await exportVisualizer(song,'cinematic',durationSeconds,(progress)=>{
+      const asset=await exportVisualizer(song,mobilePreset,durationSeconds,(progress)=>{
         setRenderProgress(progress);
         onRenderJob({id:jobId,title:song.title,progress,status:'rendering',createdAt:started});
       });
@@ -126,13 +127,13 @@ export function MobileStudioScreen({song,onSave,onBack,onRenderJob}:{song:Song;o
       <View style={styles.sheetHead}><View><Text style={styles.sheetKicker}>CREATOR TOOLS</Text><Text style={styles.sheetTitle}>{tool==='presets'?'Mẫu video':tool==='style'?'Tùy chỉnh':tool==='lyrics'?'Subtitle & Lyrics':'Audio'}</Text></View><Pressable onPress={()=>setTool(null)} style={styles.close}><X size={20} color="#fff"/></Pressable></View>
       <ScrollView contentContainerStyle={styles.sheetBody}>
         {tool==='presets'&&<View style={styles.presetGrid}>
-          {['Cinematic','Minimal','Neon','Vintage','Aesthetic','Visualizer'].map((name,i)=><Pressable key={name} style={[styles.preset,i===0&&styles.presetActive]}>
+          {['Cinematic','Minimal','Neon','Vintage','Aesthetic','Visualizer'].map((name,i)=>{const id=name.toLowerCase();return <Pressable key={name} onPress={()=>setMobilePreset(id)} style={[styles.preset,mobilePreset===id&&styles.presetActive]}>
             <LinearGradient colors={i===0?['#271d42','#8b6cff']:i===1?['#111820','#455162']:i===2?['#171231','#ad43fa']:i===3?['#30231b','#9f7048']:i===4?['#2c1f35','#cf7cc0']:['#0d1228','#655bf0']} style={styles.presetThumb}>
               {song.picture&&<Image source={{uri:song.picture}} style={StyleSheet.absoluteFill}/>}
               <LinearGradient colors={['transparent','rgba(5,8,13,.72)']} style={StyleSheet.absoluteFill}/>
             </LinearGradient>
             <Text style={styles.presetName}>{name}</Text>
-          </Pressable>)}
+          </Pressable>})}
         </View>}
         {tool==='style'&&<>
           <Pressable style={styles.upload} onPress={pick}><ImageIcon size={20} color="#b9a7ff"/><View><Text style={styles.uploadTitle}>Background riêng</Text><Text style={styles.uploadSub}>Ảnh hoặc video từ thiết bị</Text></View></Pressable>
