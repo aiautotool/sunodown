@@ -111,7 +111,8 @@ function UniversalApp(){
     <StatusBar style="light"/>
     <View style={styles.app}>
       <View nativeID="v24react-build" accessibilityLabel={BUILD_SHA} style={styles.buildMarker}/>
-      {showHeader&&<Header song={song} view={view} onNavigate={setView}/>}
+      {showHeader&&<Header song={song} view={view} open={profileMenuOpen} onToggle={()=>setProfileMenuOpen(value=>!value)} onNavigate={next=>{setProfileMenuOpen(false);setView(next)}}/>}
+      {showHeader&&profileMenuOpen&&<Pressable accessibilityLabel="Đóng menu" style={styles.navBackdrop} onPress={()=>setProfileMenuOpen(false)}/>}
       {compact&&view!=='create'&&view!=='music'&&<MobileSectionHeader
         open={mobileMenuOpen}
         onToggle={()=>setMobileMenuOpen(value=>!value)}
