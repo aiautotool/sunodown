@@ -48,7 +48,24 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
   const encoder=await pickEncoder(['h264_videotoolbox','h264_mediacodec','libopenh264']);
   if(!encoder)throw new Error('Thiết bị không có H.264 encoder phù hợp.');
   const pix=Platform.OS==='android'&&encoder==='h264_mediacodec'?'nv12':'yuv420p';
-  const bg=await backgroundFor(options.backgroundUri||song.picture);
+  const bg=options.visualVisible===false?null:await backgroundFor(options.backgroundUri||song.picture);
+  const activeClips=options.visualVisible===false?[]:(options.mediaClips||[]).filter(clip=>clip.end>start&&clip.start<start+duration);
+  const clipInputs:Array<{index:number;uri:string;video:boolean;start:number;end:number}>=[];
+  const args=['-y','-ss',String(start),'-i',input];
+  let inputIndex=1;
+  if(bg){
+    if(bg.video)args.push('-stream_loop','-1','-i',bg.uri);else args.push('-loop','1','-i',bg.uri);
+    inputIndex+=1;
+  }
+  for(const clip of activeClips){
+    try{
+      const media=await backgroundFor(clip.uri);if(!media)continue;
+      const index=inputIndex++;
+      if(media.video)args.push('-stream_loop','-1','-i',media.uri);else args.push('-loop','1','-i',media.uri);
+      clipInputs.push({index,uri:media.uri,video:media.video,start:Math.max(0,clip.start-start),end:Math.min(duration,clip.end-start)});
+    }catch{}
+  }
+
   const spectrum=/spectrum|circle|ring|circular|neon/.test(options.wave||'');
   const waveH=Math.max(110,Math.round(height*Math.max(.08,Math.min(.25,(options.waveHeight||100)/650))));
   const waveW=Math.max(360,width-120);
@@ -56,15 +73,31 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
     ? `showspectrum=s=${waveW}x${waveH}:mode=combined:color=intensity:slide=scroll:scale=log`
     : `showwaves=s=${waveW}x${waveH}:mode=cline:rate=30:colors=0xb9a7ff`;
   const y=Math.max(30,Math.round(height*.78-waveH/2));
-  const args=['-y','-ss',String(start),'-i',input];
-  let filter='';
-  if(bg){
-    if(bg.video)args.push('-stream_loop','-1','-i',bg.uri);else args.push('-loop','1','-i',bg.uri);
-    filter=`[0:a]${viz},format=rgba[viz];[1:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},format=rgba[bg];[bg]colorchannelmixer=aa=.72[bgdim];[bgdim][viz]overlay=(W-w)/2:${y}:shortest=1,format=${pix}[v]`;
+  const filters:string[]=[];
+  if(options.visualVisible===false){
+    filters.push(`color=c=0x080c12:s=${width}x${height}:r=30:d=${duration}[base0]`);
+  }else if(bg){
+    filters.push(`[1:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},format=rgba,colorchannelmixer=aa=.72[base0]`);
   }else{
-    filter=`[0:a]${viz},format=rgba[viz];color=c=0x080c12:s=${width}x${height}:r=30:d=${duration}[bg];[bg][viz]overlay=(W-w)/2:${y}:shortest=1,format=${pix}[v]`;
+    filters.push(`color=c=0x080c12:s=${width}x${height}:r=30:d=${duration}[base0]`);
   }
-  args.push('-filter_complex',filter,'-map','[v]','-map','0:a:0','-c:v',encoder,'-b:v',options.quality==='balanced'?'2800k':'4500k','-c:a','aac','-b:a','192k','-t',String(duration),'-movflags','+faststart',output);
+  let baseLabel='base0';
+  clipInputs.forEach((clip,index)=>{
+    const clipLabel='clip'+index,nextBase='base'+(index+1);
+    filters.push(`[${clip.index}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},format=rgba,setpts=PTS-STARTPTS+${clip.start}/TB[${clipLabel}]`);
+    filters.push(`[${baseLabel}][${clipLabel}]overlay=0:0:enable='between(t,${clip.start},${clip.end})'[${nextBase}]`);
+    baseLabel=nextBase;
+  });
+  if(options.visualVisible!==false){
+    filters.push(`[0:a]${viz},format=rgba[viz]`);
+    filters.push(`[${baseLabel}][viz]overlay=(W-w)/2:${y}:shortest=1,format=${pix}[v]`);
+  }else{
+    filters.push(`[${baseLabel}]format=${pix}[v]`);
+  }
+  args.push('-filter_complex',filters.join(';'),'-map','[v]');
+  if(options.audioMuted!==true)args.push('-map','0:a:0','-c:a','aac','-b:a','192k');
+  else args.push('-an');
+  args.push('-c:v',encoder,'-b:v',options.quality==='balanced'?'2800k':'4500k','-t',String(duration),'-movflags','+faststart',output);
   const result=await execute(args,undefined,(timeMs)=>{
     const pct=Math.max(1,Math.min(99,Math.round((timeMs/1000)/duration*100)));onProgress?.(pct);
   });
