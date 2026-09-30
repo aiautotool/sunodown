@@ -9,6 +9,7 @@ import { safeFilename, saveExportedAsset, shareTextFile } from './file-actions';
 import { exportAudio, exportVisualizer } from './render-engine';
 import { useStudioPlayback } from './useStudioPlayback';
 import { useSubtitleSync } from './useSubtitleSync';
+import { SuggestedBackground } from './SuggestedBackground';
 import { DEFAULT_VISUAL_CONFIG, V24StudioControls, applyPresetConfig, recommendPresets, V24_PRESETS, type StudioVisualConfig } from './V24StudioControls';
 
 const fmt=(n=0)=>`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`;
@@ -131,6 +132,15 @@ export function StudioScreen({song,onSave,onRenderJob,initialStudio}:{song:Song;
         </Pressable>
         <Text style={styles.subtitleRefreshHint}>Bỏ cache và tạo subtitle mới từ audio hiện tại.</Text>
       </View>}
+
+      <SuggestedBackground
+        song={song}
+        aspect={config.aspect}
+        selectedUri={background}
+        disabled={rendering}
+        onApply={uri=>{setBackground(uri);setConfig({...config,backgroundMode:'image'})}}
+        onBrowse={()=>void pickBackground()}
+      />
 
       <View style={styles.quickCreate}>
         <View style={styles.quickHead}><View><Text style={styles.quickKicker}>QUICK CREATE</Text><Text style={styles.quickTitle}>Tạo nhanh từ preset phù hợp</Text></View><Text style={styles.quickHint}>Gợi ý theo style & lyrics của bài</Text></View>
