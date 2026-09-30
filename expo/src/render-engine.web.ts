@@ -58,7 +58,7 @@ async function normalizeAudio(input:AudioBuffer,targetDb=-14,ceilingDb=-1){
 }
 
 async function applyAudioProcessing(input:AudioBuffer,options:VisualizerExportOptions){
-  const quick=[options.eqBass??0,options.eqVocal??0,options.eqTreble??0];
+  const quick:[number,number,number]=[options.eqBass??0,options.eqVocal??0,options.eqTreble??0];
   const bands=(options.masterEqBands||[]).filter(b=>b.enabled&&Math.abs(b.gain)>.01);
   const profile=options.masteringProfile||'original';
   const drive=Math.max(0,Math.min(.4,options.masterDrive??0));
