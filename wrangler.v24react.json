@@ -4,12 +4,17 @@
   "account_id": "2de679b502c90e736abad750fd0415f7",
   "main": "dist/server/worker-sunoapp.js",
   "compatibility_date": "2026-09-30",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "no_bundle": true,
   "rules": [
     {
       "type": "ESModule",
-      "globs": ["**/*.js", "**/*.mjs"]
+      "globs": [
+        "**/*.js",
+        "**/*.mjs"
+      ]
     }
   ],
   "assets": {
@@ -29,17 +34,47 @@
   },
   "durable_objects": {
     "bindings": [
-      {"name": "MUSIC_USERS", "class_name": "MusicUserStore"},
-      {"name": "MUSIC_DIRECTORY", "class_name": "PublicMusicDirectory"},
-      {"name": "SUBTITLE_STORE", "class_name": "SubtitleStore"}
+      {
+        "name": "MUSIC_USERS",
+        "class_name": "MusicUserStore"
+      },
+      {
+        "name": "MUSIC_DIRECTORY",
+        "class_name": "PublicMusicDirectory"
+      },
+      {
+        "name": "SUBTITLE_STORE",
+        "class_name": "SubtitleStore"
+      }
     ]
   },
   "migrations": [
-    {"tag": "v24react-music-v1", "new_sqlite_classes": ["MusicUserStore"]},
-    {"tag": "v24react-music-v2", "new_sqlite_classes": ["PublicMusicDirectory"]},
-    {"tag": "v24react-subtitle-v1", "new_sqlite_classes": ["SubtitleStore"]}
+    {
+      "tag": "v24react-music-v1",
+      "new_sqlite_classes": [
+        "MusicUserStore"
+      ]
+    },
+    {
+      "tag": "v24react-music-v2",
+      "new_sqlite_classes": [
+        "PublicMusicDirectory"
+      ]
+    },
+    {
+      "tag": "v24react-subtitle-v1",
+      "new_sqlite_classes": [
+        "SubtitleStore"
+      ]
+    }
   ],
   "observability": {
     "enabled": true
-  }
+  },
+  "services": [
+    {
+      "binding": "RENDERER",
+      "service": "sunodown-v24react-renderer"
+    }
+  ]
 }
