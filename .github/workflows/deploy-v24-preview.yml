@@ -79,15 +79,17 @@ jobs:
 
       - name: Verify direct Groq transcription with real Suno audio
         run: |
+          # Use production only as the stable audio fixture source. The
+          # transcription request itself is sent to the v24 preview Worker.
           resolved="$(curl --fail --silent --show-error --max-time 45 \
-            -X POST "$PREVIEW_URL/api/resolve" \
+            -X POST 'https://picai.online/api/resolve' \
             -H 'content-type: application/json' \
             --data '{"input":"https://suno.com/s/tszo0jGdVUua4rT4"}')"
           audio_url="$(printf '%s' "$resolved" | jq -r '.audio // empty')"
           duration="$(printf '%s' "$resolved" | jq -r '.duration // 0')"
           test -n "$audio_url"
           if [[ "$audio_url" == /* ]]; then
-            audio_url="$PREVIEW_URL$audio_url"
+            audio_url="https://picai.online$audio_url"
           fi
 
           curl --fail --silent --show-error --location --max-time 90 \
