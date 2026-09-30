@@ -11,7 +11,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.aiautotool.sunodown",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
     },
     "android": {
@@ -22,12 +24,22 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
+      "output": "single",
       "name": "SunoDown"
     },
     "plugins": [
-      ["expo-audio", { "enableBackgroundPlayback": true }],
-      ["expo-image-picker", { "photosPermission": "Cho phép SunoDown chọn ảnh/video làm background." }]
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép SunoDown chọn ảnh/video làm background."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false
