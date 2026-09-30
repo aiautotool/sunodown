@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
@@ -45,6 +45,8 @@ export function EmptyCreate({
   const [error,setError]=useState('');
   const [collapsed,setCollapsed]=useState(false);
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
+  const scrollRef=useRef<ScrollView|null>(null);
+  const featuredY=useRef(0);
 
   const openResolvedSource=async(value:string,presetId?:string)=>{
     if(!value.trim())return;
@@ -121,7 +123,7 @@ export function EmptyCreate({
       <Pressable style={[styles.sideItem,collapsed&&styles.sideCollapsed]} onPress={()=>onNavigate('library')}>
         <BookOpen size={19} color="#96a3b7"/>{!collapsed&&<Text style={styles.sideText}>Thư viện bài hát</Text>}
       </Pressable>
-      <Pressable style={[styles.sideItem,collapsed&&styles.sideCollapsed]}>
+      <Pressable style={[styles.sideItem,collapsed&&styles.sideCollapsed]} onPress={()=>scrollRef.current?.scrollTo({y:Math.max(0,featuredY.current-28),animated:true})}>
         <Sparkles size={19} color="#96a3b7"/>{!collapsed&&<Text style={styles.sideText}>Preset & Style</Text>}
       </Pressable>
       <Pressable style={[styles.sideItem,collapsed&&styles.sideCollapsed]} onPress={()=>onNavigate('projects')}>
@@ -138,7 +140,7 @@ export function EmptyCreate({
       </Pressable>
     </View>}
 
-    <ScrollView style={styles.scroll} contentContainerStyle={[styles.shell,mid&&styles.shellMid,stacked&&styles.shellStacked,mobile&&styles.shellMobile]}>
+    <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={[styles.shell,mid&&styles.shellMid,stacked&&styles.shellStacked,mobile&&styles.shellMobile]}>
       {mobile&&<View style={styles.mobileBrand}>
         <Pressable style={styles.mobileBrandLeft} onPress={()=>onNavigate('create')}>
           <Music2 size={27} color={colors.violet}/><Text style={styles.mobileBrandText}>SunoDown</Text>
@@ -260,7 +262,7 @@ export function EmptyCreate({
         <Benefit icon="☁" title="Không cần cài đặt" sub="Dùng ngay trên trình duyệt"/>
       </View>
 
-      <View style={styles.featured}>
+      <View style={styles.featured} onLayout={event=>{featuredY.current=event.nativeEvent.layout.y}}>
         <View style={styles.featuredHead}><View style={styles.featuredTitleRow}><Text>🔥</Text><Text style={styles.featuredTitle}>Mẫu video nổi bật</Text></View><Text style={styles.featuredLink}>Xem tất cả  ›</Text></View>
         {stacked?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
           {featured.map(([name,id,badge,gradient],index)=><TemplateCard key={id} name={name} badge={badge} gradient={gradient} index={index} onPress={()=>void openFeatured(id)}/>)}
