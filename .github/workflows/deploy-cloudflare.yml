@@ -94,6 +94,47 @@ jobs:
           test "$status" = "400"
           grep -Eq '"error"[[:space:]]*:[[:space:]]*"Thiếu audio' /tmp/groq-post.json
 
+      - name: Verify v24 direct Groq transcription
+        if: github.ref_name == 'v24'
+        run: |
+          resolved="$(curl --fail --silent --show-error --max-time 45 \
+            -X POST 'https://picai.online/api/resolve' \
+            -H 'content-type: application/json' \
+            --data '{"input":"https://suno.com/s/tszo0jGdVUua4rT4"}')"
+          audio_url="$(printf '%s' "$resolved" | jq -r '.audio // empty')"
+          duration="$(printf '%s' "$resolved" | jq -r '.duration // 0')"
+          test -n "$audio_url"
+          if [[ "$audio_url" == /* ]]; then
+            audio_url="https://picai.online$audio_url"
+          fi
+
+          curl --fail --silent --show-error --location --max-time 90 \
+            "$audio_url" -o /tmp/groq-direct-audio
+
+          mime="$(file --mime-type -b /tmp/groq-direct-audio)"
+          case "$mime" in
+            audio/mp4|video/mp4) ext=mp4 ;;
+            audio/mpeg|audio/mp3) ext=mp3 ;;
+            audio/x-m4a|audio/m4a) ext=m4a ;;
+            audio/wav|audio/x-wav) ext=wav ;;
+            audio/ogg|application/ogg) ext=ogg ;;
+            audio/webm|video/webm) ext=webm ;;
+            *) ext=mp3 ;;
+          esac
+          cp /tmp/groq-direct-audio "/tmp/groq-direct-audio.$ext"
+
+          status="$(curl --silent --show-error --max-time 210 \
+            -o /tmp/groq-direct.json -w '%{http_code}' \
+            -X POST 'https://picai.online/api/karaoke/groq' \
+            -F "audio=@/tmp/groq-direct-audio.$ext;type=$mime" \
+            -F "duration=$duration" \
+            -F 'language=vi')"
+          cat /tmp/groq-direct.json
+          test "$status" = "200"
+          jq -e '.words | length > 0' /tmp/groq-direct.json >/dev/null
+          jq -e '.lines | length > 0' /tmp/groq-direct.json >/dev/null
+          jq -e '.meta.transport == "worker-direct"' /tmp/groq-direct.json >/dev/null
+
       - name: Verify v24 SubtitleStore binding
         if: github.ref_name == 'v24'
         run: |
