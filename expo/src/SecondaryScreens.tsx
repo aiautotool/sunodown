@@ -65,7 +65,7 @@ export function JobsScreen({jobs,onCreate}:{jobs:RenderJob[];onCreate:()=>void})
   </SectionShell>
 }
 
-export function SettingsScreen({onCreate}:{onCreate:()=>void}){
+export function SettingsScreen({onCreate,onClearProjects}:{onCreate:()=>void;onClearProjects:()=>void}){
   const [autoPreview,setAutoPreview]=useState(true);
   return <SectionShell title="Settings" description="Quản lý trạng thái SunoDown." onCreate={onCreate}>
     <View style={styles.settings}>
@@ -79,7 +79,7 @@ export function SettingsScreen({onCreate}:{onCreate:()=>void}){
         <Text style={styles.planSub}>FREE · Advanced mastering locked · Pro entitlements ready</Text>
       </View>
 
-      <Pressable style={styles.clearProjects}><Text style={styles.clearProjectsText}>Clear saved projects</Text></Pressable>
+      <Pressable style={styles.clearProjects} onPress={onClearProjects}><Text style={styles.clearProjectsText}>Clear saved projects</Text></Pressable>
     </View>
   </SectionShell>
 }
