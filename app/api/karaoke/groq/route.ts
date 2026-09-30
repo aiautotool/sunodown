@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGroqCredentials } from '@/app/lib/cloudflare-runtime';
 import {
+  alignGroqWordsToLyrics,
   generateGroqSubtitle,
   GroqSubtitleError,
 } from '@/app/lib/groq-subtitle-server';
@@ -20,6 +21,37 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const contentType = request.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const body = (await request.json()) as {
+        mode?: string;
+        lyrics?: string;
+        words?: Array<{ text?: string; start?: number; end?: number }>;
+        duration?: number;
+      };
+      if (body.mode !== 'align') {
+        return NextResponse.json(
+          { error: 'Unsupported JSON mode.' },
+          { status: 400 },
+        );
+      }
+      const words = Array.isArray(body.words)
+        ? body.words.flatMap((word) => {
+            const text = typeof word.text === 'string' ? word.text.trim() : '';
+            const start = Number(word.start);
+            const end = Number(word.end);
+            return text && Number.isFinite(start) && Number.isFinite(end) && end > start
+              ? [{ text, start, end }]
+              : [];
+          })
+        : [];
+      const duration = Number(body.duration) || words.at(-1)?.end || 0;
+      const lines = body.lyrics?.trim()
+        ? alignGroqWordsToLyrics(body.lyrics, words, duration)
+        : [];
+      return NextResponse.json({ lines, words });
+    }
+
     let incoming: FormData;
     try {
       incoming = await request.formData();
