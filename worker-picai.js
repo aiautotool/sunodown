@@ -818,16 +818,303 @@ async function fetchSubtitleAudio(source, songId) {
   return { bytes, type, extension };
 }
 
-async function callInternalGroq(appRequestUrl, env, ctx, form) {
+const GROQ_ALLOWED_EXTENSIONS = new Set([
+  'flac',
+  'mp3',
+  'mp4',
+  'mpeg',
+  'mpga',
+  'm4a',
+  'ogg',
+  'opus',
+  'wav',
+  'webm',
+]);
+
+function groqExtensionFromMime(type) {
+  const mime = String(type || '').toLowerCase().split(';')[0].trim();
+  if (mime === 'audio/flac' || mime === 'audio/x-flac') return 'flac';
+  if (mime === 'audio/mpeg' || mime === 'audio/mp3') return 'mp3';
+  if (mime === 'audio/mp4' || mime === 'video/mp4') return 'mp4';
+  if (mime === 'audio/x-m4a' || mime === 'audio/m4a') return 'm4a';
+  if (mime === 'audio/ogg' || mime === 'application/ogg') return 'ogg';
+  if (mime === 'audio/opus') return 'opus';
+  if (mime === 'audio/wav' || mime === 'audio/x-wav' || mime === 'audio/wave') {
+    return 'wav';
+  }
+  if (mime === 'audio/webm' || mime === 'video/webm') return 'webm';
+  return '';
+}
+
+function groqUploadFilename(audio) {
+  const name =
+    audio && typeof audio.name === 'string' ? audio.name.toLowerCase() : '';
+  const nameExt = name.match(/\.([a-z0-9]+)$/)?.[1] || '';
+  const extension =
+    (GROQ_ALLOWED_EXTENSIONS.has(nameExt) ? nameExt : '') ||
+    groqExtensionFromMime(audio && audio.type) ||
+    'mp3';
+  return 'mobile-audio.' + extension;
+}
+
+function normalizeDirectGroqWord(value) {
+  const text = String((value && (value.word ?? value.text)) || '').trim();
+  const start = Number(value && value.start);
+  const end = Number(value && value.end);
+  if (!text || !Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+    return null;
+  }
+  return {
+    text,
+    start: Math.max(0, start),
+    end: Math.max(start + 0.01, end),
+  };
+}
+
+function distributeDirectGroqSegment(segment) {
+  const text = String((segment && segment.text) || '').trim();
+  const start = Number(segment && segment.start);
+  const end = Number(segment && segment.end);
+  if (!text || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return [];
+  }
+  const tokens = text.split(/\s+/).filter(Boolean);
+  if (!tokens.length) return [];
+  const span = end - start;
+  return tokens.map((token, index) => {
+    const tokenStart = start + (span * index) / tokens.length;
+    const tokenEnd = start + (span * (index + 1)) / tokens.length;
+    return {
+      text: token,
+      start: tokenStart,
+      end: Math.max(tokenStart + 0.01, tokenEnd),
+    };
+  });
+}
+
+function extractDirectGroqWords(result) {
+  const direct = Array.isArray(result && result.words)
+    ? result.words.map(normalizeDirectGroqWord).filter(Boolean)
+    : [];
+  if (direct.length) return direct;
+
+  const nested = Array.isArray(result && result.segments)
+    ? result.segments.flatMap((segment) =>
+        Array.isArray(segment && segment.words)
+          ? segment.words.map(normalizeDirectGroqWord).filter(Boolean)
+          : [],
+      )
+    : [];
+  if (nested.length) return nested;
+
+  return Array.isArray(result && result.segments)
+    ? result.segments.flatMap(distributeDirectGroqSegment)
+    : [];
+}
+
+function directGroqWordsToLines(words) {
+  const lines = [];
+  let current = [];
+  const flush = () => {
+    if (!current.length) return;
+    lines.push({
+      text: current
+        .map((word) => word.text)
+        .join(' ')
+        .replace(/\s+([,.;!?])/g, '$1'),
+      start: current[0].start,
+      end: current[current.length - 1].end,
+      words: current.map((word) => ({ ...word })),
+    });
+    current = [];
+  };
+
+  for (const word of words) {
+    const previous = current[current.length - 1];
+    const pause = previous ? word.start - previous.end : 0;
+    const characters = current.reduce(
+      (sum, item) => sum + item.text.length + 1,
+      0,
+    );
+    if (
+      current.length &&
+      (pause > 0.9 ||
+        current.length >= 10 ||
+        characters + word.text.length > 58)
+    ) {
+      flush();
+    }
+    current.push(word);
+    if (/[.!?…]$/.test(word.text) && current.length >= 3) flush();
+  }
+  flush();
+  return lines;
+}
+
+async function runDirectGroqMultipart(appRequestUrl, env, ctx, incoming) {
+  const apiKey =
+    typeof env.GROQ_API_KEY === 'string' ? env.GROQ_API_KEY.trim() : '';
+  if (!apiKey) {
+    return json(
+      {
+        error: 'Groq subtitle chưa được cấu hình trên server.',
+        code: 'GROQ_NOT_CONFIGURED',
+      },
+      503,
+    );
+  }
+
+  const audio = incoming.get('audio');
+  if (!(audio instanceof File)) {
+    return json({ error: 'Thiếu audio.' }, 400);
+  }
+  if (!audio.size) {
+    return json({ error: 'Audio không có dữ liệu.', code: 'GROQ_AUDIO_MISSING' }, 400);
+  }
+  if (audio.size > 24 * 1024 * 1024) {
+    return json(
+      {
+        error: 'Audio vượt giới hạn Groq mobile 24 MB.',
+        code: 'GROQ_FILE_TOO_LARGE',
+      },
+      413,
+    );
+  }
+
+  const lyricsValue = incoming.get('lyrics');
+  const languageValue = incoming.get('language');
+  const durationValue = incoming.get('duration');
+  const lyrics = typeof lyricsValue === 'string' ? lyricsValue.trim() : '';
+  const language =
+    typeof languageValue === 'string' && languageValue.trim()
+      ? languageValue.trim()
+      : 'vi';
+  const requestedDuration = Number(durationValue);
+
+  const uploadName = groqUploadFilename(audio);
+  const form = new FormData();
   form.set(
-    '__server_groq_key',
-    typeof env.GROQ_API_KEY === 'string' ? env.GROQ_API_KEY : '',
+    'file',
+    new File([audio], uploadName, {
+      type: audio.type || 'audio/mpeg',
+    }),
   );
-  const internalRequest = new Request(
-    new URL('/api/karaoke/groq', appRequestUrl),
-    { method: 'POST', body: form },
-  );
-  return app.fetch(internalRequest, env, ctx);
+  form.set('model', 'whisper-large-v3-turbo');
+  form.set('response_format', 'verbose_json');
+  form.append('timestamp_granularities[]', 'word');
+  form.set('language', language);
+  form.set('temperature', '0');
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 180000);
+  let upstream;
+  try {
+    upstream = await fetch(
+      'https://api.groq.com/openai/v1/audio/transcriptions',
+      {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + apiKey },
+        body: form,
+        signal: controller.signal,
+      },
+    );
+  } catch (error) {
+    const aborted =
+      error instanceof DOMException && error.name === 'AbortError';
+    return json(
+      {
+        error: aborted
+          ? 'Groq transcription quá thời gian chờ.'
+          : 'Không kết nối được Groq transcription.',
+        code: aborted ? 'GROQ_TIMEOUT' : 'GROQ_REQUEST_FAILED',
+      },
+      aborted ? 504 : 502,
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  const result = await upstream.json().catch(() => ({}));
+  if (!upstream.ok) {
+    return json(
+      {
+        error:
+          (result && result.error && result.error.message) ||
+          'Groq transcription lỗi HTTP ' + upstream.status + '.',
+        code: 'GROQ_UPSTREAM_ERROR',
+        status: upstream.status,
+      },
+      upstream.status === 429 ? 429 : 502,
+    );
+  }
+
+  const words = extractDirectGroqWords(result);
+  if (!words.length) {
+    return json(
+      {
+        error: 'Groq không trả về word timestamp.',
+        code: 'GROQ_NO_WORD_TIMESTAMPS',
+      },
+      422,
+    );
+  }
+
+  const detectedDuration =
+    Number(result && result.duration) ||
+    (words.length ? words[words.length - 1].end : 0);
+  const duration =
+    Number.isFinite(requestedDuration) && requestedDuration > 0
+      ? requestedDuration
+      : Math.max(0.1, detectedDuration);
+
+  let lines = [];
+  if (lyrics) {
+    const alignResponse = await callInternalAlign(appRequestUrl, env, ctx, {
+      lyrics,
+      words,
+      duration,
+    });
+    const aligned = await alignResponse.json().catch(() => ({}));
+    if (alignResponse.ok && Array.isArray(aligned && aligned.lines)) {
+      lines = aligned.lines;
+    }
+  } else {
+    lines = directGroqWordsToLines(words);
+  }
+
+  if (!Array.isArray(lines) || !lines.length) {
+    return json(
+      {
+        error: lyrics
+          ? 'Groq nhận diện được lời nhưng chưa căn được lyric.'
+          : 'Groq không tạo được cue subtitle.',
+        code: 'GROQ_ALIGNMENT_EMPTY',
+      },
+      422,
+    );
+  }
+
+  return json({
+    lines,
+    words,
+    text: (result && result.text) || '',
+    meta: {
+      engine: 'groq-whisper-large-v3-turbo',
+      language: (result && result.language) || language,
+      duration,
+      audio_bytes: audio.size,
+      upload_filename: uploadName,
+      upload_mime: audio.type || 'audio/mpeg',
+      word_count: words.length,
+      line_count: lines.length,
+      lyrics_alignment: Boolean(lyrics),
+      transport: 'worker-direct',
+    },
+  });
+}
+
+async function callInternalGroq(appRequestUrl, env, ctx, form) {
+  return runDirectGroqMultipart(appRequestUrl, env, ctx, form);
 }
 
 async function callInternalAlign(appRequestUrl, env, ctx, payload) {
@@ -1118,18 +1405,14 @@ export default {
       }
     }
 
-    // Vinext route modules do not consistently expose secret bindings.
-    // Keep public health deterministic at the outer Worker layer and inject
-    // the Groq secret into the internal request body only for the two routes
-    // that need it. Browser-supplied internal fields are always overwritten.
     if (url.pathname === '/api/karaoke/groq') {
       const groqKey =
-        typeof env.GROQ_API_KEY === 'string' ? env.GROQ_API_KEY : '';
+        typeof env.GROQ_API_KEY === 'string' ? env.GROQ_API_KEY.trim() : '';
 
       if (request.method === 'GET') {
         return json({
           available: Boolean(groqKey),
-          source: groqKey ? 'worker-binding' : 'none',
+          source: groqKey ? 'worker-direct' : 'none',
           engine: 'groq-whisper-large-v3-turbo',
           wordTimestamps: true,
           maxMobileUploadBytes: 24 * 1024 * 1024,
@@ -1139,17 +1422,9 @@ export default {
       if (request.method === 'POST') {
         const contentType = request.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {
+          let incoming;
           try {
-            const incoming = await request.formData();
-            incoming.set('__server_groq_key', groqKey);
-            const headers = new Headers(request.headers);
-            headers.delete('content-type');
-            headers.delete('content-length');
-            request = new Request(request.url, {
-              method: 'POST',
-              headers,
-              body: incoming,
-            });
+            incoming = await request.formData();
           } catch {
             return json(
               {
@@ -1159,6 +1434,7 @@ export default {
               400,
             );
           }
+          return runDirectGroqMultipart(request.url, env, ctx, incoming);
         }
       }
     }
