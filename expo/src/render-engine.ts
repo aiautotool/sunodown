@@ -33,6 +33,14 @@ export type VisualizerExportOptions = {
   titleScale?: number;
   creatorScale?: number;
   subtitleScale?: number;
+  titleX?: number;
+  titleY?: number;
+  creatorX?: number;
+  creatorY?: number;
+  subtitleX?: number;
+  subtitleY?: number;
+  waveX?: number;
+  waveY?: number;
   quality?: 'balanced'|'high';
   mediaClips?: MediaClip[];
   visualVisible?: boolean;
