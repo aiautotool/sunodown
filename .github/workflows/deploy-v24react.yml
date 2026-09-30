@@ -1,4 +1,4 @@
-name: Deploy v24react exact web
+name: Deploy v24react universal Expo
 # final-v24-parity-redeploy
 
 on:
@@ -10,6 +10,7 @@ on:
       - 'services/**'
       - 'scripts/**'
       - 'migrations/**'
+      - 'expo/**'
       - 'worker-picai.js'
       - 'worker-sunoapp.js'
       - 'package.json'
@@ -36,13 +37,6 @@ jobs:
       - name: Checkout v24react
         uses: actions/checkout@v4
 
-      - name: Assert v24 HTML CSS JS parity
-        shell: bash
-        run: |
-          git fetch origin v24 --depth=1
-          git diff --exit-code origin/v24 -- app components ':(exclude)app/api/audio/export/route.ts'
-          echo "app/** and components/** are byte-for-byte v24 UI source."
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -60,18 +54,31 @@ jobs:
           BUILD_VERSION: v24react
         run: npm run build
 
-      - name: Prepare exact v24 web UI and isolated Worker
+      - name: Install universal Expo dependencies
+        working-directory: expo
         run: |
-          # IMPORTANT: do not replace dist/client with expo/dist.
-          # v24react was branched from v24 and app/** + components/** remain
-          # the source of truth for web parity. Keeping the Vinext build here
-          # preserves the original v24 HTML/CSS/JS exactly.
+          npm install
+          npx expo install --fix
+
+      - name: Typecheck universal Expo app
+        working-directory: expo
+        run: npm run typecheck
+
+      - name: Export universal Expo Web
+        working-directory: expo
+        run: npm run build:web
+
+      - name: Merge universal Expo UI with isolated API Worker
+        run: |
           test -f dist/server/index.js
-          test -d dist/client
+          test -f expo/dist/index.html
+          rm -rf dist/client
+          mkdir -p dist/client
+          cp -R expo/dist/. dist/client/
           cp worker-picai.js dist/server/worker-picai.js
           cp worker-sunoapp.js dist/server/worker-sunoapp.js
+          test -f dist/client/index.html
           test -f dist/server/worker-sunoapp.js
-          test -n "$(find dist/client -maxdepth 2 -type f | head -n 1)"
 
       - name: Provision isolated D1 R2 and Queue
         run: node scripts/provision-v24react-cloudflare.mjs
@@ -106,7 +113,7 @@ jobs:
           MEDIA_TOKEN_SECRET: ${{ secrets.MEDIA_TOKEN_SECRET }}
 
 
-      - name: Smoke check exact v24 frontend
+      - name: Smoke check universal Expo frontend
         run: |
           curl --fail --silent --show-error --retry 6 --retry-delay 3 --max-time 30 "$APP_URL/" -o /tmp/sunoapp.html
           grep -qi '<html' /tmp/sunoapp.html
