@@ -13,6 +13,7 @@ import { LibraryScreen } from './src/LibraryScreen';
 import { JobsScreen, ProjectsScreen, SettingsScreen } from './src/SecondaryScreens';
 import { MusicPlayer } from './src/MusicPlayer';
 import { StartupScreen } from './src/StartupScreen';
+import { SongInitScreen, type SongInitState } from './src/SongInitScreen';
 import { storage } from './src/storage';
 
 function UniversalApp(){
@@ -25,6 +26,7 @@ function UniversalApp(){
   const [library,setLibrary]=useState<LocalLibraryItem[]>([]);
   const [projects,setProjects]=useState<Project[]>([]);
   const [jobs,setJobs]=useState<RenderJob[]>([]);
+  const [songInit,setSongInit]=useState<SongInitState>({visible:false,progress:0,title:'Đang khởi tạo bài hát',detail:'Chuẩn bị dữ liệu mới…'});
 
   useEffect(()=>{void (async()=>{
     const [l,p,j]=await Promise.all([storage.getLibrary(),storage.getProjects(),storage.getJobs()]);
@@ -77,7 +79,7 @@ function UniversalApp(){
 
   const body=useMemo(()=>{
     if(view==='create'){
-      if(!song) return <EmptyCreate onResolved={resolveDone} onNavigate={setView} projects={projects} onOpenProject={openProject}/>;
+      if(!song) return <EmptyCreate onResolved={resolveDone} onNavigate={setView} projects={projects} onOpenProject={openProject} onInitChange={setSongInit}/>;
       return compact
         ? <MobileStudioScreen song={song} onSave={saveProject} onBack={()=>setSong(null)} onRenderJob={upsertJob}/>
         : <StudioScreen song={song} onSave={saveProject} onRenderJob={upsertJob}/>;
@@ -95,7 +97,7 @@ function UniversalApp(){
     <StatusBar style="light"/>
     <View style={styles.app}>
       {showHeader&&<Header song={song} view={view} onNavigate={setView}/>}
-      <View style={styles.content}>{body}</View>
+      <View style={styles.content}>{songInit.visible?<SongInitScreen state={songInit}/>:body}</View>
       {compact&&!song&&<MobileAppNav active={view} onNavigate={setView}/>}
       {showGlobalPlayer&&<MusicPlayer song={playingSong}/>}
     </View>
