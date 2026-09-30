@@ -267,7 +267,7 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
 
       const titleX=width*Math.max(.04,Math.min(.96,(options.titleX??50)/100)),titleY=height*Math.max(.04,Math.min(.96,(options.titleY??67)/100));
       const creatorX=width*Math.max(.04,Math.min(.96,(options.creatorX??50)/100)),creatorY=height*Math.max(.04,Math.min(.96,(options.creatorY??75)/100));
-      const subtitleX=width*Math.max(.04,Math.min(.96,(options.subtitleX??50)/100)),subtitleY=height*Math.max(.04,Math.min(.96,(options.subtitleY??70)/100));
+      const subtitleX=width*Math.max(.04,Math.min(.96,(options.subtitleX??50)/100)),subtitleY=height*Math.max(.04,Math.min(.96,(options.subtitleY??58)/100));
       ctx.textAlign='center';ctx.fillStyle=titleColor;ctx.shadowColor='rgba(0,0,0,.8)';ctx.shadowBlur=18;
       ctx.font=`700 ${Math.round(Math.min(width,height)*.055*((options.titleScale??100)/100))}px system-ui,sans-serif`;ctx.fillText(song.title||'SunoDown',titleX,titleY,width*.86);
       ctx.fillStyle=creatorColor;ctx.font=`500 ${Math.round(Math.min(width,height)*.027*((options.creatorScale??100)/100))}px system-ui,sans-serif`;ctx.fillText(song.creator||'Suno',creatorX,creatorY,width*.8);
@@ -276,7 +276,7 @@ export async function exportVisualizer(song:Song,options:VisualizerExportOptions
         const line=activeLyric(options,song,absoluteTime,t);
         if(line){ctx.fillStyle=subColor;ctx.font=`700 ${Math.round(Math.min(width,height)*.044*((options.subtitleScale??100)/100))}px system-ui,sans-serif`;ctx.fillText(line,subtitleX,subtitleY,width*.84)}
       }
-      if(options.visualVisible!==false)drawWave(ctx,width,height,wave,samples,audio.sampleRate,t,t/duration,options.waveColor||'#d946ef',options.waveColor2||'#60a5fa',options.waveGlow??80,options.waveHeight??100,options.waveThickness??46,options.waveOpacity??92,options.waveDensity??72,options.waveRotation??0,options.waveX??50,options.waveY??82);
+      if(options.visualVisible!==false)drawWave(ctx,width,height,wave,samples,audio.sampleRate,t,t/duration,options.waveColor||'#d946ef',options.waveColor2||'#60a5fa',options.waveGlow??80,options.waveHeight??100,options.waveThickness??46,options.waveOpacity??92,options.waveDensity??72,options.waveRotation??0,options.waveX??50,options.waveY??86);
       if(options.effectsVisible!==false)drawEffects(ctx,width,height,options.effects||[],frame,options.effectSpeed??1,options.effectAngle??0,options.effectDensity??1,options.effectSize??1);
       ctx.shadowBlur=0;ctx.fillStyle='#a0aaba';ctx.font=`500 ${Math.round(Math.min(width,height)*.021)}px system-ui,sans-serif`;
       const mm=Math.floor(t/60),ss=Math.floor(t%60);ctx.fillText(String(mm)+':'+String(ss).padStart(2,'0'),width/2,height*.90);
