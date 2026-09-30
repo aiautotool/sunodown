@@ -23,3 +23,7 @@ jobs:
       - run: npx expo install --fix
       - run: npm run typecheck
       - run: npm run build:web
+      - name: Validate Android native project generation
+        run: npx expo prebuild --platform android --no-install
+      - name: Validate iOS native project generation
+        run: rm -rf android && npx expo prebuild --platform ios --no-install
