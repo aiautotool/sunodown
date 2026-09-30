@@ -392,7 +392,7 @@ export function StudioScreen({
         {subtitleBlock}
         {backgroundBlock}
         {quickMode&&quickBlock}
-        {<View
+        {!quickMode&&<View
           onLayout={event=>{
             if(!focusTimeline)return;
             mobileScrollRef.current?.scrollTo({y:Math.max(0,event.nativeEvent.layout.y-10),animated:true});
@@ -481,7 +481,7 @@ export function StudioScreen({
           onHighlight={()=>void exportVideo(30)}
           onCustomize={()=>setQuickMode(false)}
         />}
-        <UniversalEditorTimeline
+        {!quickMode&&<UniversalEditorTimeline
           duration={playback.duration||song.duration||0}
           playhead={playback.current}
           onSeek={value=>{playback.pause();playback.seekTo(value)}}
@@ -497,7 +497,7 @@ export function StudioScreen({
           trimStart={config.trimStart}
           trimEnd={config.trimEnd||playback.duration||song.duration||0}
           onTrimChange={(trimStart,trimEnd)=>setConfig(prev=>({...prev,trimStart,trimEnd}))}
-        />
+        />}
       </ScrollView>
     </View>
 
