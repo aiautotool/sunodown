@@ -556,8 +556,9 @@ function PreviewStage({
   const sourceVisual=config.backgroundMode==='suno'?song.picture:config.backgroundMode==='preset'?undefined:background;
   const activeVisual=trackState.visual.hidden?undefined:(activeClip?.type==='image'?activeClip.uri:sourceVisual);
   const presetColors=backgroundPresetColors(config.backgroundPreset);
+  const frameColors=config.backgroundMode==='preset'?[...presetColors]:[selectedPreset.accent,selectedPreset.secondary];
   const barCount=Math.max(28,Math.round((compact?46:72)*((config.waveDensity??72)/72)));
-  const titleY=67,creatorY=75,subtitleY=58,waveY=86;
+  const titleY=67,creatorY=75,subtitleY=70,waveY=82;
 
   return <View>
     <View style={styles.previewHead}>
@@ -569,8 +570,13 @@ function PreviewStage({
       onLayout={e=>setStageBox({width:e.nativeEvent.layout.width,height:e.nativeEvent.layout.height})}
     >
       <View style={[styles.visualFrame,{width:innerW,height:innerH}]}>
-        {activeVisual?<ImageBackground source={{uri:activeVisual}} resizeMode="cover" style={StyleSheet.absoluteFill}/>:<LinearGradient colors={trackState.visual.hidden?['#080c12','#080c12']:[selectedPreset.accent,selectedPreset.secondary]} style={StyleSheet.absoluteFill}/>}
+        {activeVisual?<ImageBackground source={{uri:activeVisual}} resizeMode="cover" style={StyleSheet.absoluteFill}/>:<LinearGradient colors={trackState.visual.hidden?['#080c12','#080c12']:(frameColors as any)} style={StyleSheet.absoluteFill}/>}
         <LinearGradient colors={['rgba(4,7,11,0)','rgba(4,7,11,.08)','rgba(4,7,11,.72)']} locations={[0,.62,1]} style={StyleSheet.absoluteFill}/>
+        {!trackState.visual.hidden&&!activeVisual&&<View style={styles.localAudioVisual}>
+          <Music2 size={compact?54:68} color="rgba(255,255,255,.82)"/>
+          <Text style={[styles.localAudioTitle,compact&&styles.localAudioTitleCompact]}>{song.title}</Text>
+          <Text style={styles.localAudioCreator}>{(song.creator||'Local audio').toUpperCase()}</Text>
+        </View>}
         {!trackState.visual.hidden&&<View style={[styles.titleOverlay,{top:(titleY+'%') as any}]}>
           <Text numberOfLines={2} style={[styles.previewTitle,{color:config.titleColor,fontSize:Math.round((compact?18:24)*((config.titleScale??100)/100))}]}>{song.title}</Text>
         </View>}
@@ -700,7 +706,7 @@ const styles=StyleSheet.create({
   stage:{position:'relative',width:'100%',minHeight:420,borderRadius:7,overflow:'hidden',backgroundColor:'#000',alignItems:'center',justifyContent:'center'},
   stageCompact:{minHeight:0,height:372,borderRadius:8},
   visualFrame:{position:'relative',overflow:'hidden',backgroundColor:'#25165c'},
-  localAudioVisual:{...StyleSheet.absoluteFill,alignItems:'center',justifyContent:'center'},
+  localAudioVisual:{...StyleSheet.absoluteFill,alignItems:'center',justifyContent:'center',paddingTop:'24%' as any},
   localAudioTitle:{color:'#f1ecff',fontSize:30,fontWeight:'800',marginTop:48,textAlign:'center'},
   localAudioTitleCompact:{fontSize:20,marginTop:34},
   localAudioCreator:{color:'rgba(226,217,255,.72)',fontSize:10,fontWeight:'800',letterSpacing:1,marginTop:8},
@@ -717,7 +723,7 @@ const styles=StyleSheet.create({
   centerPlayCompact:{marginLeft:-28,marginTop:-28,width:56,height:56,borderRadius:28},
   centerPlayPlaying:{opacity:.18},
   player:{height:72,flexDirection:'row',alignItems:'center',gap:12,borderBottomLeftRadius:7,borderBottomRightRadius:7,backgroundColor:'#0d1219',paddingHorizontal:22},
-  playerCompact:{height:50,marginTop:-64,marginHorizontal:13,zIndex:6,backgroundColor:'transparent',paddingHorizontal:4},
+  playerCompact:{height:50,marginTop:0,marginHorizontal:13,zIndex:6,backgroundColor:'transparent',paddingHorizontal:4},
   playerBtn:{width:34,alignItems:'center'},
   playerTime:{width:105,color:'#c6ccd6',fontSize:12},
   playerTimeCompact:{width:67,color:'#fff',fontSize:9},
