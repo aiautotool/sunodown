@@ -93,11 +93,14 @@ jobs:
           echo "V24REACT_RENDER_TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
       - name: Deploy isolated renderer Worker and Container
+        id: renderer_deploy
+        continue-on-error: true
         run: npx wrangler deploy --config services/vibes-renderer/wrangler.v24react.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Configure isolated renderer secrets
+        if: steps.renderer_deploy.outcome == 'success'
         shell: bash
         run: |
           printf '%s' "$V24REACT_RENDER_TOKEN" | npx wrangler secret put RENDER_SERVICE_TOKEN --config services/vibes-renderer/wrangler.v24react.jsonc
@@ -118,8 +121,12 @@ jobs:
       - name: Configure SunoApp private secrets
         shell: bash
         run: |
-          printf '%s' "$RENDERER_URL/render" | npx wrangler secret put AI_RENDER_SERVICE_URL --config wrangler.v24react.generated.json
-          printf '%s' "$V24REACT_RENDER_TOKEN" | npx wrangler secret put RENDER_SERVICE_TOKEN --config wrangler.v24react.generated.json
+          if [ "$RENDERER_OUTCOME" = "success" ]; then
+            printf '%s' "$RENDERER_URL/render" | npx wrangler secret put AI_RENDER_SERVICE_URL --config wrangler.v24react.generated.json
+            printf '%s' "$V24REACT_RENDER_TOKEN" | npx wrangler secret put RENDER_SERVICE_TOKEN --config wrangler.v24react.generated.json
+          else
+            echo "::warning::Independent renderer is unavailable; no shared renderer fallback is configured."
+          fi
 
           if [ -n "$GROQ_API_KEY" ]; then
             printf '%s' "$GROQ_API_KEY" | npx wrangler secret put GROQ_API_KEY --config wrangler.v24react.generated.json
@@ -138,6 +145,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           MEDIA_TOKEN_SECRET: ${{ secrets.MEDIA_TOKEN_SECRET }}
+          RENDERER_OUTCOME: ${{ steps.renderer_deploy.outcome }}
 
       - name: Smoke check isolated frontend
         run: |
@@ -173,6 +181,7 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
 
       - name: Verify isolated renderer
+        if: steps.renderer_deploy.outcome == 'success'
         run: |
           health="$(curl --fail --silent --show-error --retry 5 --retry-delay 4 --max-time 60 "$RENDERER_URL/health")"
           echo "$health"
