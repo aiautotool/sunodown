@@ -95,10 +95,10 @@ function Header({song,view,onNavigate}:{song:Song|null;view:AppView;onNavigate:(
       {song
         ? <View style={styles.loaded}><Text style={styles.loadedCheck}>✓</Text><Text style={styles.loadedText}>Suno song loaded</Text></View>
         : <View style={styles.homeNav}>
-            <Pressable onPress={()=>onNavigate('create')}><Text style={[styles.homeNavText,view==='create'&&styles.homeNavActive]}>Trang chủ</Text></Pressable>
-            <Pressable onPress={()=>onNavigate('projects')}><Text style={[styles.homeNavText,view==='projects'&&styles.homeNavActive]}>Dự án</Text></Pressable>
-            <Pressable onPress={()=>onNavigate('library')}><Text style={[styles.homeNavText,view==='library'&&styles.homeNavActive]}>Thư viện</Text></Pressable>
-            <Pressable onPress={()=>onNavigate('jobs')}><Text style={[styles.homeNavText,view==='jobs'&&styles.homeNavActive]}>Jobs</Text></Pressable>
+            <Pressable style={[styles.homeNavButton,view==='create'&&styles.homeNavButtonActive]} onPress={()=>onNavigate('create')}><Text style={[styles.homeNavText,view==='create'&&styles.homeNavActive]}>Trang chủ</Text></Pressable>
+            <Pressable style={[styles.homeNavButton,view==='projects'&&styles.homeNavButtonActive]} onPress={()=>onNavigate('projects')}><Text style={[styles.homeNavText,view==='projects'&&styles.homeNavActive]}>Dự án</Text></Pressable>
+            <Pressable style={[styles.homeNavButton,view==='library'&&styles.homeNavButtonActive]} onPress={()=>onNavigate('library')}><Text style={[styles.homeNavText,view==='library'&&styles.homeNavActive]}>Thư viện</Text></Pressable>
+            <Pressable style={[styles.homeNavButton,view==='jobs'&&styles.homeNavButtonActive]} onPress={()=>onNavigate('jobs')}><Text style={[styles.homeNavText,view==='jobs'&&styles.homeNavActive]}>Jobs</Text></Pressable>
           </View>}
     </View>
 
@@ -126,13 +126,15 @@ const styles=StyleSheet.create({
   brand:{width:v24.railWidth,height:'100%',flexDirection:'row',alignItems:'center',gap:12,paddingLeft:26},
   brandMark:{width:25,height:32,alignItems:'center',justifyContent:'center'},
   brandText:{color:'#f5f7fb',fontSize:21,fontWeight:'700'},
-  headerCenter:{flex:1,alignItems:'flex-start',justifyContent:'center'},
-  loaded:{marginLeft:18,minHeight:40,borderWidth:1,borderColor:'#272d37',borderRadius:22,backgroundColor:'#11161e',paddingHorizontal:17,flexDirection:'row',alignItems:'center',gap:8},
+  headerCenter:{flex:1,height:'100%',alignItems:'center',justifyContent:'center'},
+  loaded:{alignSelf:'flex-start',marginLeft:18,minHeight:40,borderWidth:1,borderColor:'#272d37',borderRadius:22,backgroundColor:'#11161e',paddingHorizontal:17,flexDirection:'row',alignItems:'center',gap:8},
   loadedCheck:{width:19,height:19,borderRadius:10,backgroundColor:'#35cb7c',color:'#07130d',fontWeight:'900',fontSize:12,textAlign:'center',lineHeight:19},
   loadedText:{color:'#c8ced8',fontSize:14},
-  homeNav:{marginLeft:18,flexDirection:'row',alignItems:'center',gap:22},
-  homeNavText:{color:'#788497',fontSize:12,fontWeight:'600',paddingVertical:10},
-  homeNavActive:{color:'#e7eaf0'},
+  homeNav:{flexDirection:'row',alignItems:'center',gap:7,height:'100%'},
+  homeNavButton:{height:42,borderWidth:1,borderColor:'transparent',borderRadius:12,paddingHorizontal:16,alignItems:'center',justifyContent:'center'},
+  homeNavButtonActive:{borderColor:'rgba(144,117,255,.20)',backgroundColor:'rgba(104,86,229,.22)'},
+  homeNavText:{color:'#aeb8c8',fontSize:12,fontWeight:'700'},
+  homeNavActive:{color:'#fff'},
   headerActions:{height:'100%',flexDirection:'row',alignItems:'center',gap:24,paddingRight:28},
   profile:{flexDirection:'row',alignItems:'center',gap:5},
   avatar:{width:34,height:34,borderWidth:2,borderColor:'#39414d',borderRadius:17,backgroundColor:'#7569a4',alignItems:'center',justifyContent:'center'},
