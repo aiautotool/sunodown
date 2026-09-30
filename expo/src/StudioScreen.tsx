@@ -60,7 +60,7 @@ export function StudioScreen({
   const [renderMessage,setRenderMessage]=useState('');
   const [highlightNotice,setHighlightNotice]=useState('');
   const [downloadBusy,setDownloadBusy]=useState('');
-  const playback=useStudioPlayback(song);
+  const playback=useStudioPlayback(song,trackState.audio.muted);
   const lyricLines=useMemo(()=>song.lyrics?.split(/\n+/).map(v=>v.trim()).filter(Boolean).slice(0,14)||[],[song.lyrics]);
   const quickPresets=useMemo(()=>recommendPresets(song),[song]);
   const selectedPreset=V24_PRESETS.find(item=>item.id===config.presetId)||V24_PRESETS[0]!;
@@ -150,6 +150,12 @@ export function StudioScreen({
         backgroundUri:background,
         lyricsMode:config.lyrics,
         timeline,
+        mediaClips:clips,
+        visualVisible:!trackState.visual.hidden,
+        subtitleVisible:!trackState.subtitle.hidden,
+        effectsVisible:!trackState.effects.hidden,
+        effects:config.effects,
+        audioMuted:trackState.audio.muted,
         titleColor:config.titleColor,
         subtitleColor:config.subtitleColor,
         subtitleActiveColor:config.subtitleActiveColor,
@@ -215,6 +221,8 @@ export function StudioScreen({
     selectedPreset={selectedPreset}
     lyricLines={lyricLines}
     timeline={timeline}
+    clips={clips}
+    trackState={trackState}
     currentTime={playback.current}
     duration={playback.duration}
     seekPercent={seekPercent}
@@ -424,7 +432,7 @@ function PreviewStage({
   compact,song,config,background,selectedPreset,lyricLines,timeline,currentTime,duration,seekPercent,playing,onToggle,onSeek,desktopHeight,
 }:{
   compact:boolean; song:Song; config:StudioVisualConfig; background?:string; selectedPreset:(typeof V24_PRESETS)[number];
-  lyricLines:string[]; timeline:KaraokeLine[]; currentTime:number; duration:number; seekPercent:number;
+  lyricLines:string[]; timeline:KaraokeLine[]; clips:MediaClip[]; trackState:TimelineTrackState; currentTime:number; duration:number; seekPercent:number;
   playing:boolean; onToggle:()=>void; onSeek:(value:number)=>void; desktopHeight:number;
 }){
   const [seekWidth,setSeekWidth]=useState(1);
@@ -453,7 +461,7 @@ function PreviewStage({
           <Text style={[styles.karaokeMain,{color:config.subtitleActiveColor}]}>{timeline.find(line=>currentTime>=line.start&&currentTime<line.end)?.text||lyricLines[0]}</Text>
           <Text style={[styles.karaokeNext,{color:config.subtitleColor}]}>{timeline.find(line=>line.start>currentTime)?.text||lyricLines[1]||''}</Text>
         </View>}
-        <View style={[styles.wave,compact&&styles.waveCompact]}>
+        {!trackState.effects.hidden&&<View style={[styles.wave,compact&&styles.waveCompact]}>
           {Array.from({length:compact?38:54}).map((_,i)=><View key={i} style={[styles.bar,{height:(compact?6:8)+((i*(compact?13:17))%(compact?31:48))}]}/>)}
         </View>
         <Pressable style={[styles.centerPlay,compact&&styles.centerPlayCompact,playing&&styles.centerPlayPlaying]} onPress={onToggle}>
