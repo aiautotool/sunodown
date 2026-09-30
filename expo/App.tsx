@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Bell, BookOpen, ChevronDown, Folder, Home, Library as LibraryIcon, ListMusic, Menu, Music2, PlusCircle, Settings, UserRound, X } from 'lucide-react-native';
+import { Bell, BookOpen, ChevronDown, Folder, Home, Library as LibraryIcon, ListMusic, Menu, Music2, PlusCircle, Settings, UserRound, X, type LucideIcon } from 'lucide-react-native';
 import { colors, v24 } from './src/theme';
 import type { AppView, LocalLibraryItem, Project, RenderJob, Song, StudioSnapshot } from './src/types';
 import { EmptyCreate } from './src/EmptyCreate';
@@ -198,14 +198,14 @@ function Header({song,view,open,onToggle,onNavigate}:{song:Song|null;view:AppVie
           <View style={styles.avatar}><Text style={styles.avatarText}>S</Text></View>
           <View><Text style={styles.profileMenuName}>SunoDown</Text><Text style={styles.profileMenuSub}>Creator Studio</Text></View>
         </View>
-        {[
+        {([
           ['create','Create',PlusCircle],
           ['music','Music',Music2],
           ['projects','Projects',Folder],
           ['library','Library',BookOpen],
           ['jobs','Jobs',ListMusic],
           ['settings','Settings',Settings],
-        ].map(([id,label,Icon])=><Pressable key={String(id)} style={[styles.profileMenuLink,view===id&&styles.profileMenuLinkActive]} onPress={()=>onNavigate(id as AppView)}>
+        ] as Array<[AppView,string,LucideIcon]>).map(([id,label,Icon])=><Pressable key={String(id)} style={[styles.profileMenuLink,view===id&&styles.profileMenuLinkActive]} onPress={()=>onNavigate(id as AppView)}>
           <Icon size={17} color={view===id?'#b6a4ff':'#a9b4c4'}/><Text style={[styles.profileMenuLinkText,view===id&&styles.profileMenuLinkTextActive]}>{String(label)}</Text>
         </Pressable>)}
       </View>}
