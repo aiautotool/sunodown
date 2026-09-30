@@ -23,8 +23,8 @@ function cloudLines(payload:any):KaraokeLine[]{
   return Array.isArray(lines)?lines.filter((line:any)=>line&&typeof line.text==='string'&&Number.isFinite(Number(line.start))&&Number.isFinite(Number(line.end))).map((line:any)=>({text:String(line.text),start:Number(line.start),end:Number(line.end)})):[];
 }
 
-export function useSubtitleSync(song:Song){
-  const [timeline,setTimeline]=useState<KaraokeLine[]>([]);
+export function useSubtitleSync(song:Song,initialTimeline:KaraokeLine[]=[]){
+  const [timeline,setTimeline]=useState<KaraokeLine[]>(initialTimeline);
   const [status,setStatus]=useState<SubtitleSyncStatus>('idle');
   const [message,setMessage]=useState('');
   const [error,setError]=useState('');
@@ -32,16 +32,16 @@ export function useSubtitleSync(song:Song){
   const run=useRef(0);
 
   const fallback=useCallback((reason:string)=>{
-    const estimated=estimatedTimeline(song);
+    const estimated=initialTimeline.length?initialTimeline:estimatedTimeline(song);
     setTimeline(estimated);
     setStatus('fallback');
     setMessage(estimated.length?'Đang dùng timing lời tạm thời.':'Subtitle cloud chưa sẵn sàng.');
     setError(reason);
-  },[song]);
+  },[song,initialTimeline]);
 
   useEffect(()=>{
     const current=++run.current;
-    setTimeline([]);
+    setTimeline(initialTimeline);
     setError('');
     if(!song.id){
       setStatus('idle');
@@ -81,7 +81,7 @@ export function useSubtitleSync(song:Song){
       }
     })();
     return()=>{run.current+=1};
-  },[song.id,song.audio,fallback]);
+  },[song.id,song.audio,fallback,initialTimeline]);
 
   const reget=useCallback(async()=>{
     if(!song.id){setError('Bài hát chưa có songId.');return}
