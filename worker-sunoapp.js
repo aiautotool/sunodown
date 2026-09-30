@@ -20,15 +20,27 @@ async function dispatchRenderJob(env,id){
   if(!row||row.status==='completed'||row.status==='failed')return 'done';
 
   const input=JSON.parse(row.input_json);
-  if(!env.RENDERER){
-    await updateRenderJob(env,id,'failed',0,'Renderer riêng của SunoApp chưa được cấu hình.');
+  const serviceUrl=input.mode==='ai_music_video'
+    ? env.AI_RENDER_SERVICE_URL||env.RENDER_SERVICE_URL
+    : env.RENDER_SERVICE_URL;
+
+  if(!serviceUrl){
+    await updateRenderJob(
+      env,id,'failed',0,
+      input.mode==='ai_music_video'
+        ? 'AI renderer riêng của SunoApp chưa được cấu hình.'
+        : 'Renderer riêng của SunoApp chưa được cấu hình.',
+    );
     return 'done';
   }
 
   await updateRenderJob(env,id,'preparing',5);
-  const response=await env.RENDERER.fetch('https://renderer/render',{
+  const response=await fetch(serviceUrl,{
     method:'POST',
-    headers:{'content-type':'application/json'},
+    headers:{
+      'content-type':'application/json',
+      ...(env.RENDER_SERVICE_TOKEN?{authorization:`Bearer ${env.RENDER_SERVICE_TOKEN}`}:{}),
+    },
     body:JSON.stringify({jobId:id,input}),
   });
 
