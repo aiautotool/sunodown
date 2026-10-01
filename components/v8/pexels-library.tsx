@@ -63,20 +63,20 @@ export function PexelsLibrary({onSelect,onAddToTimeline}:{onAddToTimeline:AddPex
   finally{clearTimeout(timeout);if(download.current===controller){download.current=null;setSelecting(null);}}
  }
  const control='rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-xs text-white';
- return <details open className="mt-3 rounded-xl border border-white/10 bg-black/20">
+ return <details open className="sd-pexels-library mt-3 rounded-xl border border-white/10 bg-black/20">
   <summary className="cursor-pointer px-3 py-3 text-sm font-semibold">Kho ảnh & video Pexels</summary>
-  <div className="space-y-3 p-3 pt-0">
-   <div className="flex flex-wrap gap-2">
+  <div className="sd-pexels-body space-y-3 p-3 pt-0">
+   <div className="sd-pexels-controls flex flex-wrap gap-2">
     <input aria-label="Tìm nền Pexels" placeholder="Tìm cover: cinematic portrait, neon night, abstract art…" value={query} onChange={e=>{setQuery(e.target.value);setPage(1)}} className={`${control} min-w-0 flex-1`}/>
     <select aria-label="Loại media" value={kind} onChange={e=>{setKind(e.target.value);setPage(1)}} className={control}><option value="photos">Ảnh</option><option value="videos">Video</option></select>
     <select aria-label="Khung hình" value={orientation} onChange={e=>{setOrientation(e.target.value);setPage(1)}} className={control}><option value="">Mọi khung hình</option><option value="portrait">Dọc</option><option value="landscape">Ngang</option><option value="square">Vuông</option></select>
    </div>
-   <div className="flex flex-wrap gap-2">{['cinematic portrait','neon night','dreamy landscape','abstract light','dark aesthetic','editorial art'].map(word=><button key={word} type="button" className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-white/70" onClick={()=>{setQuery(word);setPage(1)}}>{word}</button>)}</div>
+   <div className="sd-pexels-chips flex flex-wrap gap-2">{['cinematic portrait','neon night','dreamy landscape','abstract light','dark aesthetic','editorial art'].map(word=><button key={word} type="button" className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-white/70" onClick={()=>{setQuery(word);setPage(1)}}>{word}</button>)}</div>
    <p className="text-[10px] text-white/50">Nguồn: <a href="https://www.pexels.com" target="_blank" rel="noreferrer" className="underline">Pexels</a> · Chọn một nền để tải về và sử dụng.</p>
    {notice&&<output className="block text-xs text-sky-200">{notice}</output>}
    {error&&<p role="alert" className="text-xs text-amber-200">{error} <button type="button" onClick={()=>setRetry(x=>x+1)} className="underline">Thử lại tìm kiếm</button></p>}
    {selecting!==null&&<output className="block text-xs text-sky-200">Đang tải nền… <button type="button" className="underline" onClick={()=>download.current?.abort()}>Hủy</button></output>}
-   <div className="grid max-h-96 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3" aria-busy={loading}>
+   <div className="sd-pexels-results grid max-h-96 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3" aria-busy={loading}>
     {items.map(item=><div key={`${item.type}-${item.id}`} className="overflow-hidden rounded-lg border border-white/10">
      <button type="button" disabled={selecting!==null} onClick={()=>void choose(item)} aria-label={`Dùng ${item.type==='photo'?'ảnh':'video'} ${item.alt||item.id} làm nền`} className="relative block w-full disabled:opacity-50">
       <img src={item.thumbnail} alt={item.alt||'Video Pexels'} loading="lazy" className="aspect-video w-full object-cover"/>
