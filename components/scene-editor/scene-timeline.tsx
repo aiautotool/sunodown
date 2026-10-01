@@ -9,6 +9,8 @@ import {
   Magnet,
   Minus,
   Plus,
+  Maximize2,
+  Minimize2,
   Redo2,
   Scissors,
   Trash2,
@@ -55,6 +57,19 @@ export function SceneTimeline({
     [ripple, setRipple] = useState(true),
     [draft, setDraft] = useState<SceneDocument | null>(null);
   const [autoFit, setAutoFit] = useState(true);
+  const [mobileWorkspace, setMobileWorkspace] = useState(false);
+  const [compactMobile, setCompactMobile] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 720px)');
+    const sync = () => setCompactMobile(query.matches);
+    sync();
+    query.addEventListener?.('change', sync);
+    return () => query.removeEventListener?.('change', sync);
+  }, []);
+  useEffect(() => {
+    if (!compactMobile) setMobileWorkspace(false);
+  }, [compactMobile]);
+  const gutter = compactMobile ? 52 : 170;
   const [history, setHistory] = useState<SceneDocument[]>([]),
     [future, setFuture] = useState<SceneDocument[]>([]);
   const [peaks, setPeaks] = useState<number[]>([]),
@@ -69,10 +84,10 @@ export function SceneTimeline({
   useEffect(()=>{
     if(!autoFit || !viewport.current)return;
     const node=viewport.current;
-    const observer=new ResizeObserver(()=>setZoom(Math.max(.05, Math.min(8,(node.clientWidth-170)/Math.max(600,scene.canvas.durationMs*.022)))));
+    const observer=new ResizeObserver(()=>setZoom(Math.max(.05, Math.min(8,(node.clientWidth-gutter)/Math.max(600,scene.canvas.durationMs*.022)))));
     observer.observe(node);
     return ()=>observer.disconnect();
-  },[autoFit,scene.canvas.durationMs]);
+  },[autoFit,scene.canvas.durationMs,gutter]);
   useEffect(() => {
     let cancelled = false;
     if (!audioBinary) {
@@ -133,7 +148,7 @@ export function SceneTimeline({
         0,
         Math.min(
           scene.canvas.durationMs,
-          (clientX - rect.left + viewport.current.scrollLeft - 170) /
+          (clientX - rect.left + viewport.current.scrollLeft - gutter) /
             pixelsPerMs,
         ),
       ),
@@ -283,13 +298,28 @@ export function SceneTimeline({
     (l) => l.id === selectedId && l.type !== 'karaoke' && !l.locked && !l.params.timelineReadonly,
   );
   const itemStyle = (item: TimelineItem) => ({
-    left: 170 + item.startMs * pixelsPerMs,
+    left: gutter + item.startMs * pixelsPerMs,
     width: Math.max(8, (item.endMs - item.startMs) * pixelsPerMs),
   });
   return (
-    <section className="sd-nle" aria-label="Scene Timeline">
+    <section className={`sd-nle ${mobileWorkspace ? "sd-nle-mobile-workspace" : ""}`} aria-label="Scene Timeline">
       <header className="sd-nle-toolbar">
         <b>Timeline</b>
+        {compactMobile && (
+          <button
+            type="button"
+            className="sd-nle-mobile-toggle"
+            aria-pressed={mobileWorkspace}
+            title={mobileWorkspace ? 'Thu nhỏ timeline' : 'Mở timeline toàn màn hình'}
+            onClick={() => {
+              setMobileWorkspace((value) => !value);
+              setAutoFit(true);
+            }}
+          >
+            {mobileWorkspace ? <Minimize2 /> : <Maximize2 />}
+            <span>{mobileWorkspace ? 'Đóng' : 'Mở rộng'}</span>
+          </button>
+        )}
         <span>
           {stamp(playheadMs)} / {stamp(scene.canvas.durationMs)}
         </span>
@@ -412,13 +442,13 @@ export function SceneTimeline({
             seek(e.clientX);
         }}
       >
-        <div className="sd-nle-canvas" style={{ width: 170 + contentWidth }}>
+        <div className="sd-nle-canvas" style={{ width: gutter + contentWidth }}>
           <div className="sd-nle-ruler">
-            <div className="sd-nle-corner">Lớp</div>
+            <div className="sd-nle-corner">{compactMobile ? "☰" : "Lớp"}</div>
             {Array.from(
               { length: Math.floor(scene.canvas.durationMs / step) + 1 },
               (_, i) => (
-                <span key={i} style={{ left: 170 + i * step * pixelsPerMs }}>
+                <span key={i} style={{ left: gutter + i * step * pixelsPerMs }}>
                   {stamp(i * step)}
                 </span>
               ),
@@ -559,7 +589,7 @@ export function SceneTimeline({
           ))}
           <div
             className="sd-nle-playhead"
-            style={{ left: 170 + playheadMs * pixelsPerMs }}
+            style={{ left: gutter + playheadMs * pixelsPerMs }}
           >
             <i />
           </div>
