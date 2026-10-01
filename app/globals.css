@@ -5442,3 +5442,11 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
 .sd-preset-management summary{cursor:pointer;color:#abb6c8;font-size:11px;padding:6px 0}.sd-preset-management[open] .sd-preset-head-actions{margin-top:6px}.sd-nle-settings>summary{font-size:12px}.sd-nle-settings>div button{font-size:12px}
 @media(min-width:801px){.sd-scene-workspace .sd-preset-head{display:block;padding-bottom:8px;border-bottom:1px solid #283244}.sd-scene-workspace .sd-preset-head b{font-size:11px;font-weight:400;color:#9aa7bb}.sd-scene-workspace .sd-preset-explainer,.sd-scene-workspace .sd-preset-quick{display:none}.sd-scene-workspace .sd-preset-grid{grid-template-columns:1fr 1fr;gap:8px}.sd-scene-workspace .sd-preset-tabs{margin-top:10px}.sd-scene-workspace .sd-preset-copy>small{display:none}.sd-scene-workspace .sd-preset-copy b{font-size:12px}.sd-scene-workspace .sd-preset-art>strong{display:none}.sd-scene-workspace .sd-preset-copy p{display:none}.sd-scene-workspace .sd-preset-preview{border-radius:6px}.sd-scene-workspace .sd-preset-head-actions{justify-content:flex-start}}
 @media(min-width:801px){.sd-scene-workspace .sd-inspector-tools .sd-options{display:block!important;max-height:none!important;overflow:visible!important;padding:0!important}.sd-scene-workspace .sd-inspector-tools .sd-tab-panel{border-top:0;padding-top:0}.sd-scene-workspace .sd-simple-tools{position:sticky;top:-10px;background:#10151e;padding-top:10px;z-index:5}}
+
+/* v25: keep core audio downloads visible instead of hiding them in advanced export. */
+.sd-mobile-audio-downloads{display:none}
+@media(max-width:720px){
+  .sd-mobile-audio-downloads{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+  .sd-mobile-audio-downloads button{min-height:44px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid #ffffff18;border-radius:11px;background:#ffffff08;color:#e8eef9;font-weight:650}
+  .sd-mobile-audio-downloads button svg{width:16px;height:16px}
+}
