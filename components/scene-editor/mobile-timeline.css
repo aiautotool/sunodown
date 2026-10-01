@@ -1,0 +1,110 @@
+/* v25 mobile timeline workspace */
+@media (max-width: 720px) {
+  .sd-nle {
+    --nle-gutter: 52px;
+    min-width: 0;
+    border-radius: 14px;
+  }
+  .sd-nle-toolbar {
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+    overflow-x: auto;
+    align-items: center;
+    scrollbar-width: none;
+  }
+  .sd-nle-toolbar::-webkit-scrollbar { display: none; }
+  .sd-nle-toolbar > b { flex: 0 0 auto; }
+  .sd-nle-toolbar > span { white-space: nowrap; font-size: 12px; }
+  .sd-nle-toolbar button,
+  .sd-nle-toolbar .sd-nle-add {
+    min-width: 42px;
+    min-height: 42px;
+  }
+  .sd-nle-mobile-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  .sd-nle-mobile-toggle svg { width: 17px; height: 17px; }
+  .sd-nle-mobile-toggle span { font-size: 11px; }
+  .sd-nle-settings,
+  .sd-nle-zoom { flex: 0 0 auto; }
+  .sd-nle-scroll {
+    overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sd-nle-track-header,
+  .sd-nle-corner {
+    width: 52px !important;
+    min-width: 52px !important;
+    max-width: 52px !important;
+  }
+  .sd-nle-track-header {
+    padding: 4px !important;
+    gap: 2px !important;
+    overflow: hidden;
+  }
+  .sd-nle-track-header > span {
+    display: block;
+    width: 44px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 9px;
+  }
+  .sd-nle-track-header button {
+    width: 20px;
+    height: 20px;
+    padding: 2px;
+  }
+  .sd-nle-track-header button svg { width: 12px; height: 12px; }
+  .sd-nle-ruler { min-height: 30px; }
+  .sd-nle-item { touch-action: none; }
+  .sd-nle-item .sd-nle-select { min-height: 36px; }
+  .sd-nle-trim { width: 14px !important; }
+
+  .sd-nle.sd-nle-mobile-workspace {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: #080b12;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .sd-nle.sd-nle-mobile-workspace .sd-nle-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    background: #0c111b;
+    border-bottom: 1px solid rgba(148,163,184,.16);
+  }
+  .sd-nle.sd-nle-mobile-workspace .sd-nle-scroll {
+    height: 100%;
+    max-height: none;
+    overflow: auto;
+  }
+  .sd-nle.sd-nle-mobile-workspace .sd-nle-canvas {
+    min-height: 100%;
+  }
+  .sd-nle.sd-nle-mobile-workspace .sd-nle-track {
+    min-height: 58px;
+  }
+  .sd-nle.sd-nle-mobile-workspace .sd-nle-item {
+    min-height: 44px;
+  }
+  .sd-nle.sd-nle-mobile-workspace .sd-nle-zoom > span {
+    min-width: 46px;
+    text-align: center;
+  }
+}
