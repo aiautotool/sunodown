@@ -2,7 +2,7 @@ name: Deploy SunoDown to picai.online
 
 on:
   push:
-    branches: [v23, v24]
+    branches: [v23, v24, v25]
   workflow_dispatch:
 
 permissions:
