@@ -5472,3 +5472,11 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
   .sd-pexels-results>div{min-width:0}
   .sd-pexels-results img{aspect-ratio:3/4!important}
 }
+
+/* v25: audio download is a primary mobile action, not an inspector-only action. */
+.sd-mobile-audio-quick{display:none}
+@media(max-width:720px){
+ .sd-mobile-audio-quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 8px}
+ .sd-mobile-audio-quick>button{min-width:0;min-height:40px!important;display:flex!important;align-items:center;justify-content:center;gap:5px;border:1px solid #ffffff18!important;border-radius:10px!important;background:#ffffff09!important;color:#e8eef9!important;font-size:12px!important;font-weight:700!important}
+ .sd-mobile-audio-quick svg{width:15px;height:15px}
+}
