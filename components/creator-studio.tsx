@@ -5367,6 +5367,17 @@ export default function CreatorStudio({
                 <span>Visual sync</span>
                 <b>{visualHash}</b>
               </div>
+              <div className="sd-mobile-audio-downloads" aria-label="Tải âm thanh">
+                <button disabled={!!downloading} onClick={() => downloadAudio('mp3')}>
+                  <Download />{downloading === 'mp3' ? 'Creating…' : 'MP3'}
+                </button>
+                <button disabled={!!downloading} onClick={() => downloadAudio('wav')}>
+                  <Download />{downloading === 'wav' ? 'Creating…' : 'WAV'}
+                </button>
+                <button disabled={!!downloading} onClick={() => downloadAudio('m4a')}>
+                  <Music2 />M4A
+                </button>
+              </div>
               <details className="sd-export-options"><summary>Tải âm thanh / phụ đề</summary><div className="sd-actions">
                 <button
                   className="sd-export"
