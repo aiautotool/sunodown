@@ -3140,10 +3140,36 @@ export default function CreatorStudio({
         mediaCache.current.set(song.audio, source);
         setAudioBinary(source);
       }
-      if (format === 'm4a') saveBlob(source, `${safeName(song.title)}.m4a`);
-      else {
-        const processed = await renderTikTokLikeAudio(source),
+      if (format === 'm4a') {
+        const isM4aSource = /audio\/(mp4|x-m4a|aac)/i.test(source.type || '');
+        const blob = isM4aSource ? source : await convertProcessedAudio(source, 'm4a');
+        saveBlob(blob, `${safeName(song.title)}.m4a`);
+      } else {
+        let blob: Blob;
+        try {
+          const processed = await renderTikTokLikeAudio(source);
           blob = await convertProcessedAudio(processed, format);
+        } catch (processingError) {
+          // Safari/iOS can play Suno AAC/MP4 sources while WebAudio.decodeAudioData
+          // rejects the same container. Fall back to MediaBunny direct conversion,
+          // which does not require the WebAudio preprocessing pass.
+          console.warn(
+            '[SunoDown audio download] WebAudio processing failed; trying direct conversion',
+            processingError,
+          );
+          try {
+            blob = await convertProcessedAudio(source, format);
+          } catch (conversionError) {
+            const sourceType = (source.type || '').toLowerCase();
+            if (format === 'mp3' && sourceType.includes('audio/mpeg')) blob = source;
+            else if (
+              format === 'wav' &&
+              (sourceType.includes('audio/wav') || sourceType.includes('audio/x-wav'))
+            )
+              blob = source;
+            else throw conversionError;
+          }
+        }
         saveBlob(blob, `${safeName(song.title)}.${format}`);
       }
     } catch (e) {
