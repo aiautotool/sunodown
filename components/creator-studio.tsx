@@ -3935,13 +3935,10 @@ export default function CreatorStudio({
   };
 
   const navigationItems = [
-    [Plus, 'Creator', '/create', 'create'],
-    [Download, 'Tải MP3', '/tai-suno-mp3', 'download-mp3'],
-    [Download, 'Tải WAV', '/tai-suno-wav', 'download-wav'],
-    [Upload, 'Tải video', '/tai-video-suno', 'download-video'],
-    [BookOpen, 'Library', '/library', 'library'],
+    [Plus, 'Create', '/create', 'create'],
     [Music2, 'Music', '/music', 'music'],
     [Folder, 'Projects', '/projects', 'projects'],
+    [BookOpen, 'Library', '/library', 'library'],
     [ListMusic, 'Jobs', '/jobs', 'jobs'],
     [Settings, 'Settings', '/settings', 'settings'],
   ] as const;
@@ -5540,11 +5537,11 @@ export default function CreatorStudio({
                   ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
                   : 'Create & export video'}
               </button>
-              <nav>
-                <a href="/tai-suno-mp3"><Download />Tải</a>
-                <button disabled={rendering} onClick={()=>{setPanel('presets');setMobileTools(true)}}><Sparkles />Mẫu</button>
-                <button disabled={rendering} onClick={()=>{setPanel('lyrics');setMobileTools(true)}}><FileText />Lời</button>
-                <button type="button" disabled={rendering} onClick={()=>triggerQuickRender('cut')}><Upload />Xuất</button>
+              <nav className="sd-editor-primary-nav">
+                <button type="button" disabled={!!downloading} onClick={()=>downloadAudio('mp3')}><Download />MP3</button>
+                <button type="button" disabled={!!downloading} onClick={()=>downloadAudio('wav')}><Download />WAV</button>
+                <button disabled={rendering} onClick={()=>{setPanel('presets');setMobileTools(true)}}><Sparkles />Creator</button>
+                <button type="button" className="primary-export" disabled={rendering} onClick={()=>triggerQuickRender('cut')}><Upload />Video</button>
               </nav>
             </div>
           </main>
