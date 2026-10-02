@@ -5128,16 +5128,14 @@ export default function CreatorStudio({
                       </button>
                     ))}
                   </div>
-                  <details className="sd-create-aspect">
-                    <summary><span>Tỷ lệ video</span><b>{aspect}</b><span>⌄</span></summary>
-                    <div>
-                      {(['9:16','16:9','1:1','4:5','4:3'] as VideoAspect[]).map((ratio)=><button type="button" key={ratio} className={aspect===ratio?'active':''} onClick={(event)=>{toolControlsProps.setAspect(ratio);(event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open')}}><span className={`sd-ratio-shape ratio-${ratio.replace(':','-')}`}/><b>{ratio}</b></button>)}
-                    </div>
-                  </details>
-                  <div className="sd-create-tools" aria-label="Chỉnh nhanh">
-                    <button type="button" onClick={()=>{setPanel('background');setMobileTools(true)}}><ImageIcon /><span><b>Nền</b></span></button>
-                    <button type="button" onClick={()=>document.querySelector<HTMLDetailsElement>('.sd-create-subtitle-sync')?.setAttribute('open','')}><FileText /><span><b>Subtitle</b></span></button>
-                    <button type="button" onClick={()=>{setPanel('presets');setMobileTools(true)}}><SlidersHorizontal /><span><b>Chỉnh</b></span></button>
+                  <div className="sd-create-action-rail" aria-label="Công cụ Creator">
+                    <details className="sd-create-aspect">
+                      <summary aria-label={`Tỷ lệ video ${aspect}`}><span className={`sd-ratio-shape ratio-${aspect.replace(':','-')}`}/><b>{aspect}</b></summary>
+                      <div>{(['9:16','16:9','1:1','4:5','4:3'] as VideoAspect[]).map((ratio)=><button type="button" key={ratio} className={aspect===ratio?'active':''} onClick={(event)=>{toolControlsProps.setAspect(ratio);(event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open')}}><span className={`sd-ratio-shape ratio-${ratio.replace(':','-')}`}/><b>{ratio}</b></button>)}</div>
+                    </details>
+                    <button type="button" onClick={()=>{setPanel('background');setMobileTools(true)}}><ImageIcon /><b>Nền</b></button>
+                    <button type="button" onClick={()=>document.querySelector<HTMLDetailsElement>('.sd-create-subtitle-sync')?.setAttribute('open','')}><FileText /><b>Sub</b></button>
+                    <button type="button" onClick={()=>{setPanel('presets');setMobileTools(true)}}><SlidersHorizontal /><b>Chỉnh</b></button>
                   </div>
                   <details className="sd-create-subtitle-sync" aria-label="Subtitle sync">
                     <summary><div><b>{karaokeTimeline.length ? '✓ Subtitle' : 'Subtitle'}</b></div><span>›</span></summary>
