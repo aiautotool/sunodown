@@ -1445,10 +1445,16 @@ export default function CreatorStudio({
   const visualSnapshot = studioModel.visual;
   const effectConfig = studioModel.effects;
   const visualHash = studioModel.fingerprint;
-  const quickPresets = useMemo(
-    () => (song ? recommendQuickPresets(song) : []),
-    [song],
-  );
+  const quickPresets = useMemo(() => {
+    if (!song) return [];
+    const recommended = recommendQuickPresets(song);
+    const recommendedIds = new Set(recommended.map((preset) => preset.id));
+    return [
+      ...recommended,
+      ...BUILTIN_STUDIO_PRESETS.filter((preset) => !recommendedIds.has(preset.id)),
+      ...customPresets.filter((preset) => !recommendedIds.has(preset.id)),
+    ];
+  }, [song, customPresets]);
 
   const homeFeaturedPresets = useMemo(() => {
     const featuredIds = [
