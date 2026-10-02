@@ -1,6 +1,6 @@
 'use client';
 
-import { Home, Library, Music2, PlusCircle, UserRound } from 'lucide-react';
+import { Download, Home, Library, PlusCircle, UserRound } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 
 type Item = {
@@ -13,8 +13,8 @@ type Item = {
 
 const ITEMS: Item[] = [
   { href: '/', label: 'Home', icon: Home, match: (path) => path === '/' },
-  { href: '/music', label: 'Music', icon: Music2, match: (path) => path.startsWith('/music') },
-  { href: '/create', label: 'Create', icon: PlusCircle, match: (path) => path === '/create' || path.startsWith('/editor'), primary: true },
+  { href: '/tai-suno-mp3', label: 'Tải', icon: Download, match: (path) => path.startsWith('/tai-suno-') },
+  { href: '/create', label: 'Creator', icon: PlusCircle, match: (path) => path === '/create' || path.startsWith('/editor'), primary: true },
   { href: '/library', label: 'Library', icon: Library, match: (path) => path === '/library' },
   { href: '/settings', label: 'Me', icon: UserRound, match: (path) => path === '/settings' },
 ];
