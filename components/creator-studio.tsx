@@ -5066,7 +5066,6 @@ export default function CreatorStudio({
                 disabled={rendering}
                 onChange={toolControlsProps.setBackground}
                 onBrowse={() => {
-                  setQuickMode(false);
                   setPanel('background');
                   setMobileTools(true);
                 }}
@@ -5088,7 +5087,8 @@ export default function CreatorStudio({
                       className="sd-quick-customize"
                       disabled={rendering}
                       onClick={() => {
-                        setQuickMode(false);
+                        setPanel('presets');
+                        setMobileTools(true);
                         track('customize_opened', {
                           preset_id: selectedPresetId,
                           template,
