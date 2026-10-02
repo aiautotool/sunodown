@@ -5135,32 +5135,9 @@ export default function CreatorStudio({
                       {karaokeTimeline.length > 0 && <div className="sd-create-sync-actions"><button type="button" onClick={()=>setKaraokeTimeline(lines=>lines.map(x=>({...x,start:Math.max(0,x.start-.1),end:Math.max(.1,x.end-.1)})))}>−0.1s toàn bộ</button><button type="button" onClick={()=>setKaraokeTimeline(lines=>lines.map(x=>({...x,start:x.start+.1,end:x.end+.1})))}>+0.1s toàn bộ</button><button type="button" onClick={()=>{setPanel('lyrics');setMobileTools(true)}}>Kiểu chữ & karaoke</button></div>}
                     </div>
                   </details>
-                  <div className="sd-create-audio-downloads" aria-label="Tải âm thanh">
-                    <button disabled={!!downloading} onClick={()=>downloadAudio('mp3')}><Download /> MP3</button>
-                    <button disabled={!!downloading} onClick={()=>downloadAudio('wav')}><Download /> WAV</button>
-                    <button disabled={!!downloading} onClick={()=>downloadAudio('m4a')}><Music2 /> M4A</button>
-                  </div>
+
                   <div className="sd-create-advanced"><a href="/editor">Advanced Editor →</a></div>
-                  <div className="sd-quick-actions">
-                    <button
-                      type="button"
-                      className="primary"
-                      disabled={rendering}
-                      onClick={() => triggerQuickRender('cut')}
-                    >
-                      <Upload />
-                      {rendering
-                        ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
-                        : 'Create video'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={rendering}
-                      onClick={() => triggerQuickRender('30')}
-                    >
-                      <Play /> Tạo 30s cao trào
-                    </button>
-                  </div>
+
                   {highlightNotice && !error && (
                     <div
                       className="sd-quick-highlight-status"
