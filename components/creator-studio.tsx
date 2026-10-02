@@ -5027,15 +5027,11 @@ export default function CreatorStudio({
                         ? 'Đang lấy lại subtitle…'
                         : 'Đang tìm subtitle…'}
                     </b>
-                    <small>
-                      {subtitleRegenerating
-                        ? 'Đang bỏ cache và tạo lại bằng Groq. Subtitle cũ vẫn được giữ cho đến khi bản mới sẵn sàng.'
-                        : 'Bạn vẫn có thể chỉnh sửa trong khi chạy nền.'}
-                    </small>
+
                   </span>
                 </output>
               )}
-              {song.id && (
+              {!quickMode && song.id && (
                 <div className="sd-subtitle-refresh">
                   <button
                     type="button"
@@ -5053,25 +5049,7 @@ export default function CreatorStudio({
                   
                 </div>
               )}
-              {quickMode && <>
-              <details className="sd-media-suggestions" open={quickMode || undefined}>
-                <summary>Ảnh / video nền gợi ý</summary>
-              <SuggestedBackground
-                key={song.audio}
-                onAddToTimeline={addPexelsToTimeline}
-                songKey={song.audio}
-                text={`${song.title} ${song.style || ''} ${song.tags || ''}`}
-                aspect={aspect}
-                background={background}
-                disabled={rendering}
-                onChange={toolControlsProps.setBackground}
-                onBrowse={() => {
-                  setPanel('background');
-                  setMobileTools(true);
-                }}
-              />
-              </details>
-              </>}
+
               {quickMode && (
                 <section className="sd-quick-create" aria-label="Quick Create">
                   <div className="sd-quick-create-head">
