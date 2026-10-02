@@ -108,6 +108,8 @@ export function LivePreview(props: Props) {
     'wave' | 'subtitle' | 'title' | 'creator' | null
   >(null);
   const [time, setTime] = useState(props.start);
+  const gesturePointers = useRef(new Map<number,{x:number;y:number}>());
+  const gestureStart = useRef<{distance:number;scale:number}|null>(null);
   const [status, setStatus] = useState('Đang tải ảnh xem trước…');
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
   const [backgroundBitmap, setBackgroundBitmap] = useState<ImageBitmap | null>(
@@ -863,43 +865,27 @@ export function LivePreview(props: Props) {
                     aria-label={`Kéo trực tiếp ${key}`}
                     title={key==='wave'?'Kéo để di chuyển sóng':'Nhấp đúp để sửa chữ · Kéo để di chuyển'}
                     onPointerDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setSelectedOverlay(key);
-                      const el = e.currentTarget,
-                        box = el.parentElement!.getBoundingClientRect(),
-                        startX = e.clientX,
-                        startY = e.clientY,
-                        origin = { ...p };
-                      el.setPointerCapture(e.pointerId);
-                      const move = (ev: PointerEvent) => {
-                        const x = Math.max(
-                            0,
-                            Math.min(
-                              100,
-                              origin.x +
-                                ((ev.clientX - startX) / box.width) * 100,
-                            ),
-                          ),
-                          y = Math.max(
-                            0,
-                            Math.min(
-                              100,
-                              origin.y +
-                                ((ev.clientY - startY) / box.height) * 100,
-                            ),
-                          );
-                        props.onLayoutChange?.({
-                          ...props.layout!,
-                          [key]: { ...origin, x, y },
-                        });
+                      e.preventDefault(); e.stopPropagation(); setSelectedOverlay(key);
+                      const el=e.currentTarget, box=el.parentElement!.getBoundingClientRect(), origin={...p}, startX=e.clientX, startY=e.clientY;
+                      gesturePointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY}); el.setPointerCapture(e.pointerId);
+                      const move=(ev:PointerEvent)=>{
+                        if(!gesturePointers.current.has(ev.pointerId))return;
+                        gesturePointers.current.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+                        const pts=[...gesturePointers.current.values()];
+                        if(pts.length>=2){
+                          const d=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
+                          if(!gestureStart.current)gestureStart.current={distance:Math.max(1,d),scale:origin.scale};
+                          const next=Math.max(5,gestureStart.current.scale*(d/gestureStart.current.distance));
+                          props.onLayoutChange?.({...props.layout!,[key]:{...p,scale:next}}); return;
+                        }
+                        if(!gestureStart.current){
+                          const x=Math.max(0,Math.min(100,origin.x+((ev.clientX-startX)/box.width)*100));
+                          const y=Math.max(0,Math.min(100,origin.y+((ev.clientY-startY)/box.height)*100));
+                          props.onLayoutChange?.({...props.layout!,[key]:{...origin,x,y}});
+                        }
                       };
-                      const up = () => {
-                        window.removeEventListener('pointermove', move);
-                        window.removeEventListener('pointerup', up);
-                      };
-                      window.addEventListener('pointermove', move);
-                      window.addEventListener('pointerup', up, { once: true });
+                      const up=(ev:PointerEvent)=>{gesturePointers.current.delete(ev.pointerId);if(gesturePointers.current.size<2)gestureStart.current=null;window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up)};
+                      window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);
                     }}
                     onDoubleClick={(event)=>{event.preventDefault();event.stopPropagation();if(key!=='wave')props.onEditText?.(key);}}
                     onKeyDown={(event)=>{if(key!=='wave'&&(event.key==='Enter'||event.key===' ')){event.preventDefault();event.stopPropagation();props.onEditText?.(key);}}}
@@ -916,42 +902,7 @@ export function LivePreview(props: Props) {
                     <span
                       className={`pointer-events-none absolute inset-0 rounded-md border transition-colors ${selectedOverlay === key ? 'border-violet-400 bg-violet-400/[.06]' : 'border-transparent'}`}
                     />
-                    <i
-                      className={`sd-overlay-resize ${selectedOverlay === key ? 'show' : ''}`}
-                      title="Kéo để thay đổi kích thước"
-                      onPointerDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setSelectedOverlay(key);
-                        const startX = event.clientX,
-                          startY = event.clientY,
-                          startScale = p.scale;
-                        event.currentTarget.setPointerCapture(event.pointerId);
-                        const move = (e: PointerEvent) => {
-                          const delta =
-                            (e.clientX - startX + e.clientY - startY) * 0.75;
-                          props.onLayoutChange?.({
-                            ...props.layout!,
-                            [key]: {
-                              ...p,
-                              scale: Math.max(
-                                40,
-                                Math.min(220, startScale + delta),
-                              ),
-                            },
-                          });
-                        };
-                        const up = () => {
-                          window.removeEventListener('pointermove', move);
-                          window.removeEventListener('pointerup', up);
-                        };
-                        window.addEventListener('pointermove', move);
-                        window.addEventListener('pointerup', up, {
-                          once: true,
-                        });
-                      }}
-                      onClick={(event) => event.stopPropagation()}
-                    />
+                    {selectedOverlay===key && (['nw','ne','sw','se'] as const).map(corner=><i key={corner} className={`sd-overlay-corner ${corner}`} aria-hidden="true" />)}
                   </div>
                 );
               })}
