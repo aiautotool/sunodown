@@ -5499,21 +5499,7 @@ export default function CreatorStudio({
                 audioBinary={audioBinary}
               />
             <div className="sd-mobile-export">
-              <div className="sd-mobile-audio-quick" aria-label="Tải bài hát">
-                <button type="button" disabled={!!downloading} onClick={() => downloadAudio('mp3')}><Download />{downloading === 'mp3' ? 'Creating…' : 'MP3'}</button>
-                <button type="button" disabled={!!downloading} onClick={() => downloadAudio('wav')}><Download />{downloading === 'wav' ? 'Creating…' : 'WAV'}</button>
-                <button type="button" disabled={!!downloading} onClick={() => downloadAudio('m4a')}><Music2 />M4A</button>
-              </div>
-              <button
-                type="button"
-                disabled={rendering}
-                onClick={() => triggerQuickRender('cut')}
-              >
-                <Upload />
-                {rendering
-                  ? `${renderStage === 'validation' ? 'Checking' : renderStage === 'prepare' ? 'Preparing' : renderStage === 'finalize' ? 'Finalizing' : 'Rendering'} ${Math.round(progress)}%`
-                  : 'Create & export video'}
-              </button>
+
               <nav className="sd-editor-primary-nav">
                 <button type="button" disabled={!!downloading} onClick={()=>downloadAudio('mp3')}><Download />MP3</button>
                 <button type="button" disabled={!!downloading} onClick={()=>downloadAudio('wav')}><Download />WAV</button>
