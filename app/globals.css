@@ -5508,3 +5508,21 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
 .sd-create-cues time{font-size:10px;opacity:.45;font-variant-numeric:tabular-nums}.sd-create-cues span{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sd-create-cues>button.active span{font-weight:750}
 .sd-create-sync-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;padding-top:9px;border-top:1px solid #ffffff0c}
 @media(max-width:720px){.sd-create-subtitle-sync{padding:10px}.sd-create-cues{max-height:160px}.sd-create-sync-actions{display:grid;grid-template-columns:1fr 1fr}.sd-create-sync-actions button:last-child{grid-column:1/-1}}
+
+/* v25 Create simplification: show outcomes first, reveal editing only on demand */
+.sd-quick-mode .sd-create-tools{grid-template-columns:repeat(3,minmax(0,1fr))}
+.sd-create-subtitle-sync>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none}
+.sd-create-subtitle-sync>summary::-webkit-details-marker{display:none}
+.sd-create-subtitle-sync>summary>div{display:grid;gap:2px}
+.sd-create-subtitle-sync>summary b{font-size:12px}.sd-create-subtitle-sync>summary small{font-size:10px;opacity:.55}
+.sd-create-subtitle-sync>summary>span{font-size:10px;font-weight:700;opacity:.75}
+.sd-create-subtitle-body{padding-top:10px;margin-top:10px;border-top:1px solid #ffffff0c}
+.sd-create-subtitle-body>header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.sd-create-subtitle-body>header small{font-size:10px;opacity:.55}
+.sd-create-subtitle-body>header button{border:1px solid #ffffff14;border-radius:9px;background:#ffffff08;padding:7px 9px;font-size:10px;font-weight:650}
+@media(max-width:720px){
+ .sd-quick-mode .sd-create-tools{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+ .sd-quick-mode .sd-create-tools>button{display:grid;justify-items:center;text-align:center;gap:5px;padding:9px 5px}
+ .sd-quick-mode .sd-create-tools small{display:none}
+ .sd-create-subtitle-body>header{align-items:flex-start;flex-direction:column}
+}
