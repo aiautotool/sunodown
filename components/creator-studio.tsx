@@ -4899,7 +4899,7 @@ export default function CreatorStudio({
                 <img src={song.picture} />
                 <div>
                   <b>{song.title}</b>
-                  <span>{fmt(song.duration)} · Suno song</span>
+                  
                 </div>
                 <button
                   className="sd-mobile-menu-trigger"
@@ -5050,7 +5050,7 @@ export default function CreatorStudio({
                       ? 'Đang lấy lại…'
                       : 'Lấy lại subtitle'}
                   </button>
-                  <small>Bỏ cache và tạo subtitle mới từ audio hiện tại.</small>
+                  
                 </div>
               )}
               {quickMode && <>
@@ -5075,13 +5075,7 @@ export default function CreatorStudio({
               {quickMode && (
                 <section className="sd-quick-create" aria-label="Quick Create">
                   <div className="sd-quick-create-head">
-                    <div>
-                      <small>QUICK CREATE · V23</small>
-                      <b>Video đã sẵn sàng để tùy chỉnh</b>
-                      <span>
-                        Chọn mẫu bên dưới, chỉnh nếu cần rồi tạo video.
-                      </span>
-                    </div>
+                    <div><b>Tạo video</b></div>
                     <button
                       className="sd-quick-customize"
                       disabled={rendering}
@@ -5095,7 +5089,7 @@ export default function CreatorStudio({
                         });
                       }}
                     >
-                      <SlidersHorizontal /> Customize
+                      <SlidersHorizontal />
                     </button>
                   </div>
                   <div className="sd-quick-presets">
@@ -5151,14 +5145,14 @@ export default function CreatorStudio({
                     ))}
                   </div>
                   <div className="sd-create-tools" aria-label="Chỉnh nhanh">
-                    <button type="button" onClick={()=>{setPanel('background');setMobileTools(true)}}><ImageIcon /><span><b>Đổi nền</b><small>Ảnh, video, Pexels</small></span></button>
-                    <button type="button" onClick={()=>document.querySelector<HTMLDetailsElement>('.sd-create-subtitle-sync')?.setAttribute('open','')}><FileText /><span><b>Chỉnh lời</b><small>Subtitle & karaoke</small></span></button>
-                    <button type="button" onClick={()=>{setPanel('presets');setMobileTools(true)}}><SlidersHorizontal /><span><b>Tùy chỉnh</b><small>Phong cách, hiệu ứng, âm thanh</small></span></button>
+                    <button type="button" onClick={()=>{setPanel('background');setMobileTools(true)}}><ImageIcon /><span><b>Nền</b></span></button>
+                    <button type="button" onClick={()=>document.querySelector<HTMLDetailsElement>('.sd-create-subtitle-sync')?.setAttribute('open','')}><FileText /><span><b>Subtitle</b></span></button>
+                    <button type="button" onClick={()=>{setPanel('presets');setMobileTools(true)}}><SlidersHorizontal /><span><b>Chỉnh</b></span></button>
                   </div>
                   <details className="sd-create-subtitle-sync" aria-label="Subtitle sync">
-                    <summary><div><b>{karaokeTimeline.length ? '✓ Subtitle' : 'Subtitle'}</b><small>{karaokeTimeline.length ? `${karaokeTimeline.length} câu · đã có timing` : 'Đang chuẩn bị lời bài hát…'}</small></div><span>Chỉnh lời ›</span></summary>
+                    <summary><div><b>{karaokeTimeline.length ? '✓ Subtitle' : 'Subtitle'}</b></div><span>›</span></summary>
                     <div className="sd-create-subtitle-body">
-                      <header><small>Phát preview và chạm một câu để kiểm tra đúng vị trí.</small><button type="button" disabled={subtitleRegenerating || karaokeSyncStatus === 'syncing'} onClick={()=>void regenerateSubtitleFromCloud()}>{subtitleRegenerating ? 'Đang lấy…' : 'Lấy lại subtitle'}</button></header>
+                      <header><button type="button" disabled={subtitleRegenerating || karaokeSyncStatus === 'syncing'} onClick={()=>void regenerateSubtitleFromCloud()}>{subtitleRegenerating ? 'Đang lấy…' : 'Lấy lại subtitle'}</button></header>
                       {karaokeTimeline.length > 0 && <div className="sd-create-cues">{karaokeTimeline.slice(Math.max(0, karaokeTimeline.findIndex(c=>previewTime>=c.start && previewTime<c.end)-2), Math.max(0, karaokeTimeline.findIndex(c=>previewTime>=c.start && previewTime<c.end)-2)+5).map((cue,idx)=><button type="button" key={`${cue.start}-${idx}`} className={previewTime>=cue.start && previewTime<cue.end?'active':''} onClick={()=>{setPlaybackStart(cue.start);setPreviewTime(cue.start);setTimelinePauseSignal(v=>v+1)}}><time>{fmt(cue.start)}</time><span>{cue.text}</span></button>)}</div>}
                       {karaokeTimeline.length > 0 && <div className="sd-create-sync-actions"><button type="button" onClick={()=>setKaraokeTimeline(lines=>lines.map(x=>({...x,start:Math.max(0,x.start-.1),end:Math.max(.1,x.end-.1)})))}>−0.1s toàn bộ</button><button type="button" onClick={()=>setKaraokeTimeline(lines=>lines.map(x=>({...x,start:x.start+.1,end:x.end+.1})))}>+0.1s toàn bộ</button><button type="button" onClick={()=>{setPanel('lyrics');setMobileTools(true)}}>Kiểu chữ & karaoke</button></div>}
                     </div>
@@ -5168,7 +5162,7 @@ export default function CreatorStudio({
                     <button disabled={!!downloading} onClick={()=>downloadAudio('wav')}><Download /> WAV</button>
                     <button disabled={!!downloading} onClick={()=>downloadAudio('m4a')}><Music2 /> M4A</button>
                   </div>
-                  <div className="sd-create-advanced"><span>Cần chỉnh clip, layer hoặc timing chi tiết?</span><a href="/editor">Mở Advanced Editor →</a></div>
+                  <div className="sd-create-advanced"><a href="/editor">Advanced Editor →</a></div>
                   <div className="sd-quick-actions">
                     <button
                       type="button"
