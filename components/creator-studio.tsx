@@ -5128,6 +5128,12 @@ export default function CreatorStudio({
                       </button>
                     ))}
                   </div>
+                  <details className="sd-create-aspect">
+                    <summary><span>Tỷ lệ video</span><b>{aspect}</b><span>⌄</span></summary>
+                    <div>
+                      {(['9:16','16:9','1:1','4:5','4:3'] as VideoAspect[]).map((ratio)=><button type="button" key={ratio} className={aspect===ratio?'active':''} onClick={(event)=>{toolControlsProps.setAspect(ratio);(event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open')}}><span className={`sd-ratio-shape ratio-${ratio.replace(':','-')}`}/><b>{ratio}</b></button>)}
+                    </div>
+                  </details>
                   <div className="sd-create-tools" aria-label="Chỉnh nhanh">
                     <button type="button" onClick={()=>{setPanel('background');setMobileTools(true)}}><ImageIcon /><span><b>Nền</b></span></button>
                     <button type="button" onClick={()=>document.querySelector<HTMLDetailsElement>('.sd-create-subtitle-sync')?.setAttribute('open','')}><FileText /><span><b>Subtitle</b></span></button>
