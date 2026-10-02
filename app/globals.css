@@ -5480,3 +5480,20 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
  .sd-mobile-audio-quick>button{min-width:0;min-height:40px!important;display:flex!important;align-items:center;justify-content:center;gap:5px;border:1px solid #ffffff18!important;border-radius:10px!important;background:#ffffff09!important;color:#e8eef9!important;font-size:12px!important;font-weight:700!important}
  .sd-mobile-audio-quick svg{width:15px;height:15px}
 }
+
+/* v25 Create: make the default workflow obvious and keep advanced editing optional */
+.sd-create-tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.sd-create-tools>button{display:flex;align-items:center;gap:10px;min-width:0;padding:12px;border:1px solid #ffffff12;border-radius:13px;background:#ffffff07;color:inherit;text-align:left}
+.sd-create-tools>button:hover{background:#ffffff0d;border-color:#ffffff22}
+.sd-create-tools svg{width:18px;height:18px;flex:0 0 auto}
+.sd-create-tools span{display:grid;min-width:0}.sd-create-tools b{font-size:12px}.sd-create-tools small{font-size:10px;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd-create-audio-downloads{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.sd-create-audio-downloads button{min-height:40px;border:1px solid #ffffff12;border-radius:11px;background:#ffffff06;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:700}
+.sd-create-audio-downloads svg{width:15px;height:15px}
+.sd-create-advanced{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0 14px;padding:10px 12px;border-radius:11px;background:#00000020;font-size:11px;color:#ffffff80}
+.sd-create-advanced a{color:#bae6fd;font-weight:700;white-space:nowrap}
+@media(max-width:720px){
+ .sd-create-tools{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .sd-create-tools>button{padding:10px}
+ .sd-create-advanced{align-items:flex-start;flex-direction:column}
+}
