@@ -18,5 +18,5 @@ export const metadata: Metadata = {
 };
 
 export default function EditorPage() {
-  return <CreatorStudio />;
+  return <CreatorStudio initialView="create" initialAdvanced />;
 }
