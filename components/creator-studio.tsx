@@ -5467,7 +5467,7 @@ export default function CreatorStudio({
               </details>
             </aside>
               {!quickMode && <details className="sd-workspace-divider"><summary>Điều chỉnh vùng làm việc</summary><label>Chiều cao timeline <input aria-label="Chiều cao timeline" type="range" min="100" max="400" step="10" value={timelineHeight} onChange={e=>setTimelineHeight(Number(e.target.value))}/></label></details>}
-              <SceneTimeline
+              {!quickMode && <SceneTimeline
                 key={song.id || url}
                 scene={projectScene}
                 playheadMs={previewTime * 1000}
@@ -5490,14 +5490,11 @@ export default function CreatorStudio({
                 }}
                 onAddMedia={(files) => {
                   for (const file of Array.from(files || []))
-                    void addPexelsToTimeline(
-                      file,
-                      file.type.startsWith('video/') ? 'video' : 'photo',
-                    );
+                    void addPexelsToTimeline(file,file.type.startsWith('video/') ? 'video' : 'photo');
                 }}
                 disabled={rendering}
                 audioBinary={audioBinary}
-              />
+              />}
             <div className="sd-mobile-export">
 
               <nav className="sd-editor-primary-nav">
