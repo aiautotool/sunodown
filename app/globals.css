@@ -5552,3 +5552,36 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
  .sd-quick-mode.sd-scene-workspace{display:block!important;min-height:100dvh!important}
  .sd-quick-mode .sd-canvas-column{grid-column:auto!important}
 }
+
+/* v25 app parity pass: Create is a native-style editor, not a webpage */
+.sd-quick-mode{margin:0!important;padding:0!important;min-height:100dvh;background:#090b10!important}
+.sd-quick-mode .sd-canvas-column{padding:0 14px 96px!important}
+.sd-quick-mode .sd-mobile-title{height:64px!important;min-height:64px!important;align-items:center!important;padding:0!important;gap:10px!important;border:0!important}
+.sd-quick-mode .sd-mobile-title>img{width:36px!important;height:36px!important;border-radius:8px!important}
+.sd-quick-mode .sd-mobile-title>div{flex:1!important;padding:0!important}
+.sd-quick-mode .sd-mobile-title>div b{font-size:15px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd-quick-mode .sd-mobile-title>button:first-child{width:34px!important;height:34px!important;margin:0!important;padding:0!important;font-size:28px!important;line-height:1!important}
+.sd-quick-mode .sd-mobile-menu-trigger{margin:0!important}
+.sd-quick-mode .sd-stage.sd-live-preview{margin:0 auto!important;border-radius:14px!important;background:#05070a!important;max-height:calc(100dvh - 255px)!important}
+.sd-quick-mode .sd-preview-toolbar{display:none!important}
+.sd-quick-mode .sd-preview-hint{display:none!important}
+.sd-quick-mode .sd-quick-create{border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;padding:10px 0 0!important;margin:0!important;animation:none!important}
+.sd-quick-mode .sd-quick-create-head{display:none!important}
+.sd-quick-mode .sd-quick-presets{display:flex!important;gap:8px!important;overflow-x:auto!important;padding:3px 0 8px!important;scrollbar-width:none}
+.sd-quick-mode .sd-quick-presets::-webkit-scrollbar{display:none}
+.sd-quick-mode .sd-quick-presets>button{flex:0 0 112px!important;display:grid!important;grid-template-columns:1fr!important;padding:5px!important;border-radius:12px!important}
+.sd-quick-mode .sd-quick-presets .scene-thumb{width:100%!important;height:68px!important;border-radius:9px!important}
+.sd-quick-mode .sd-quick-presets>button>span:last-child em{display:none!important}
+.sd-quick-mode .sd-quick-presets>button>span:last-child small{display:none!important}
+.sd-quick-mode .sd-quick-presets>button>span:last-child b{font-size:10px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd-quick-mode .sd-create-tools{margin:6px 0!important}
+.sd-quick-mode .sd-create-subtitle-sync{margin:7px 0!important;background:#ffffff05!important}
+.sd-quick-mode .sd-create-audio-downloads{margin:7px 0!important}
+.sd-quick-mode .sd-create-advanced{margin:4px 0!important}
+.sd-quick-mode .sd-quick-actions{position:sticky;bottom:8px;z-index:20;margin-top:8px!important;padding:6px;background:#090b10e8;backdrop-filter:blur(16px);border-radius:16px}
+.sd-quick-mode .sd-quick-actions .primary{min-height:48px!important;border-radius:13px!important}
+.sd-quick-mode .sd-subtitle-job{margin:6px 0!important}
+@media(min-width:721px){
+ .sd-quick-mode{--sd-app-width:430px!important}
+ .sd-quick-mode .sd-canvas-column{box-shadow:0 0 0 1px #ffffff08,0 30px 100px #0008}
+}
