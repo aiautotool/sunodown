@@ -5497,3 +5497,14 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
  .sd-create-tools>button{padding:10px}
  .sd-create-advanced{align-items:flex-start;flex-direction:column}
 }
+
+.sd-create-subtitle-sync{margin:12px 0;padding:12px;border:1px solid #ffffff12;border-radius:14px;background:#ffffff05}
+.sd-create-subtitle-sync>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.sd-create-subtitle-sync>header>div{display:grid;gap:2px}.sd-create-subtitle-sync header b{font-size:13px}.sd-create-subtitle-sync header small{font-size:10px;opacity:.55}
+.sd-create-subtitle-sync header button,.sd-create-sync-actions button{border:1px solid #ffffff14;border-radius:9px;background:#ffffff08;padding:7px 9px;font-size:10px;font-weight:650}
+.sd-create-cues{display:grid;gap:3px;max-height:190px;overflow:auto}
+.sd-create-cues>button{display:grid;grid-template-columns:48px 1fr;gap:8px;align-items:center;width:100%;padding:7px 8px;border:0;border-radius:8px;background:transparent;color:inherit;text-align:left}
+.sd-create-cues>button:hover{background:#ffffff08}.sd-create-cues>button.active{background:#ffffff12}
+.sd-create-cues time{font-size:10px;opacity:.45;font-variant-numeric:tabular-nums}.sd-create-cues span{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sd-create-cues>button.active span{font-weight:750}
+.sd-create-sync-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;padding-top:9px;border-top:1px solid #ffffff0c}
+@media(max-width:720px){.sd-create-subtitle-sync{padding:10px}.sd-create-cues{max-height:160px}.sd-create-sync-actions{display:grid;grid-template-columns:1fr 1fr}.sd-create-sync-actions button:last-child{grid-column:1/-1}}
