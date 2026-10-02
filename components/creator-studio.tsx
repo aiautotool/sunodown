@@ -5137,7 +5137,7 @@ export default function CreatorStudio({
                     <button type="button" onClick={()=>document.querySelector<HTMLDetailsElement>('.sd-create-subtitle-sync')?.setAttribute('open','')}><FileText /><b>Sub</b></button>
                     <button type="button" onClick={()=>{setPanel('presets');setMobileTools(true)}}><SlidersHorizontal /><b>Chỉnh</b></button>
                   </div>
-                  <details className="sd-create-subtitle-sync" aria-label="Subtitle sync">
+                  <details className="sd-create-subtitle-sync sd-create-secondary" aria-label="Subtitle sync">
                     <summary><div><b>{karaokeTimeline.length ? '✓ Subtitle' : 'Subtitle'}</b></div><span>›</span></summary>
                     <div className="sd-create-subtitle-body">
                       <header><button type="button" disabled={subtitleRegenerating || karaokeSyncStatus === 'syncing'} onClick={()=>void regenerateSubtitleFromCloud()}>{subtitleRegenerating ? 'Đang lấy…' : 'Lấy lại subtitle'}</button></header>
@@ -5146,7 +5146,7 @@ export default function CreatorStudio({
                     </div>
                   </details>
 
-                  <div className="sd-create-advanced"><a href="/editor">Advanced Editor →</a></div>
+                  <div className="sd-create-advanced sd-create-secondary"><a href="/editor">Advanced Editor →</a></div>
 
                   {highlightNotice && !error && (
                     <div
