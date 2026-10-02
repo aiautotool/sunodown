@@ -5610,3 +5610,14 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
 .sd-create-aspect>div>button.active{background:#ffffff0d}.sd-create-aspect>div>button:hover{background:#ffffff0a}
 .sd-ratio-shape{display:block;margin:auto;border:1.5px solid currentColor;border-radius:2px;opacity:.75}
 .ratio-9-16{width:10px;height:18px}.ratio-16-9{width:20px;height:11px}.ratio-1-1{width:15px;height:15px}.ratio-4-5{width:13px;height:17px}.ratio-4-3{width:18px;height:14px}
+
+/* v25 compact creator rail: one row, app toolbar */
+.sd-create-action-rail{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:7px 0}
+.sd-create-action-rail>button,.sd-create-action-rail>.sd-create-aspect>summary{height:58px!important;min-height:58px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:5px!important;padding:5px!important;border:1px solid #ffffff12!important;border-radius:12px!important;background:#ffffff05!important;color:inherit!important;text-align:center!important}
+.sd-create-action-rail>button svg{width:20px;height:20px}.sd-create-action-rail b{font-size:10px!important;font-weight:650}
+.sd-create-action-rail>.sd-create-aspect{position:static;margin:0!important;border:0!important;background:transparent!important;overflow:visible!important}
+.sd-create-action-rail>.sd-create-aspect>summary{grid-template-columns:none!important;cursor:pointer}
+.sd-create-action-rail>.sd-create-aspect>summary>span:last-child{display:none}
+.sd-create-action-rail>.sd-create-aspect>div{position:absolute;z-index:45;left:0;right:0;top:63px;display:flex!important;flex-direction:column!important;padding:6px!important;border:1px solid #ffffff16!important;border-radius:12px!important;background:#11141b!important;box-shadow:0 18px 50px #000b}
+.sd-create-action-rail>.sd-create-aspect:not([open])>div{display:none!important}
+.sd-create-action-rail>.sd-create-aspect>div>button{min-height:38px!important}
