@@ -5151,6 +5151,20 @@ export default function CreatorStudio({
                       </button>
                     ))}
                   </div>
+                  <div className="sd-create-tools" aria-label="Chỉnh nhanh">
+                    <button type="button" onClick={()=>{setPanel('presets');setMobileTools(true)}}><Sparkles /><span><b>Mẫu</b><small>Đổi phong cách</small></span></button>
+                    <button type="button" onClick={()=>{setPanel('background');setMobileTools(true)}}><ImageIcon /><span><b>Nền</b><small>Ảnh, video, Pexels</small></span></button>
+                    <button type="button" onClick={()=>{setPanel('lyrics');setMobileTools(true)}}><FileText /><span><b>Subtitle</b><small>Lời & karaoke</small></span></button>
+                    <button type="button" onClick={()=>{setPanel('wave');setMobileTools(true)}}><SlidersHorizontal /><span><b>Sóng nhạc</b><small>Visualizer</small></span></button>
+                    <button type="button" onClick={()=>{setPanel('effects');setMobileTools(true)}}><Sparkles /><span><b>Hiệu ứng</b><small>Chuyển động</small></span></button>
+                    <button type="button" onClick={()=>{setPanel('audio');setMobileTools(true)}}><Music2 /><span><b>Âm thanh</b><small>EQ & mastering</small></span></button>
+                  </div>
+                  <div className="sd-create-audio-downloads" aria-label="Tải âm thanh">
+                    <button disabled={!!downloading} onClick={()=>downloadAudio('mp3')}><Download /> MP3</button>
+                    <button disabled={!!downloading} onClick={()=>downloadAudio('wav')}><Download /> WAV</button>
+                    <button disabled={!!downloading} onClick={()=>downloadAudio('m4a')}><Music2 /> M4A</button>
+                  </div>
+                  <div className="sd-create-advanced"><span>Cần chỉnh clip, layer hoặc timing chi tiết?</span><a href="/editor">Mở Advanced Editor →</a></div>
                   <div className="sd-quick-actions">
                     <button
                       type="button"
