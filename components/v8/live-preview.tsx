@@ -110,6 +110,7 @@ export function LivePreview(props: Props) {
   const [time, setTime] = useState(props.start);
   const gesturePointers = useRef(new Map<number,{x:number;y:number}>());
   const gestureStart = useRef<{distance:number;scale:number}|null>(null);
+  const dragFrame = useRef<number | null>(null);
   const [status, setStatus] = useState('Đang tải ảnh xem trước…');
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
   const [backgroundBitmap, setBackgroundBitmap] = useState<ImageBitmap | null>(
@@ -879,12 +880,18 @@ export function LivePreview(props: Props) {
                           props.onLayoutChange?.({...props.layout!,[key]:{...p,scale:next}}); return;
                         }
                         if(!gestureStart.current){
-                          const x=Math.max(0,Math.min(100,origin.x+((ev.clientX-startX)/box.width)*100));
-                          const y=Math.max(0,Math.min(100,origin.y+((ev.clientY-startY)/box.height)*100));
-                          props.onLayoutChange?.({...props.layout!,[key]:{...origin,x,y}});
+                          // Finger follows the object 1:1. Coalesce pointer events into one
+                          // layout write per animation frame so iOS does not feel sticky.
+                          const x=Math.max(-100,Math.min(200,origin.x+((ev.clientX-startX)/box.width)*100));
+                          const y=Math.max(-100,Math.min(200,origin.y+((ev.clientY-startY)/box.height)*100));
+                          if(dragFrame.current!==null)cancelAnimationFrame(dragFrame.current);
+                          dragFrame.current=requestAnimationFrame(()=>{
+                            props.onLayoutChange?.({...props.layout!,[key]:{...origin,x,y}});
+                            dragFrame.current=null;
+                          });
                         }
                       };
-                      const up=(ev:PointerEvent)=>{gesturePointers.current.delete(ev.pointerId);if(gesturePointers.current.size<2)gestureStart.current=null;window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up)};
+                      const up=(ev:PointerEvent)=>{gesturePointers.current.delete(ev.pointerId);if(gesturePointers.current.size<2)gestureStart.current=null;if(dragFrame.current!==null){cancelAnimationFrame(dragFrame.current);dragFrame.current=null}window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up)};
                       window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);
                     }}
                     onDoubleClick={(event)=>{event.preventDefault();event.stopPropagation();if(key!=='wave')props.onEditText?.(key);}}
