@@ -3935,10 +3935,13 @@ export default function CreatorStudio({
   };
 
   const navigationItems = [
-    [Plus, 'Create', '/create', 'create'],
+    [Plus, 'Creator', '/create', 'create'],
+    [Download, 'Tải MP3', '/tai-suno-mp3', 'download-mp3'],
+    [Download, 'Tải WAV', '/tai-suno-wav', 'download-wav'],
+    [Upload, 'Tải video', '/tai-video-suno', 'download-video'],
+    [BookOpen, 'Library', '/library', 'library'],
     [Music2, 'Music', '/music', 'music'],
     [Folder, 'Projects', '/projects', 'projects'],
-    [BookOpen, 'Library', '/library', 'library'],
     [ListMusic, 'Jobs', '/jobs', 'jobs'],
     [Settings, 'Settings', '/settings', 'settings'],
   ] as const;
@@ -5538,44 +5541,10 @@ export default function CreatorStudio({
                   : 'Create & export video'}
               </button>
               <nav>
-                <button
-                  disabled={rendering}
-                  onClick={() => {
-                    setPanel('presets');
-                    setMobileTools(true);
-                  }}
-                >
-                  <Sparkles />
-                  Mẫu
-                </button>
-                <button
-                  disabled={rendering}
-                  onClick={() => {
-                    setPanel('style');
-                    setMobileTools(true);
-                  }}
-                >
-                  <SlidersHorizontal />
-                  Tùy chỉnh
-                </button>
-                <button
-                  disabled={rendering}
-                  onClick={() => {
-                    setPanel('lyrics');
-                    setMobileTools(true);
-                  }}
-                >
-                  <FileText />
-                  Lời
-                </button>
-                <button
-                  type="button"
-                  disabled={rendering}
-                  onClick={() => triggerQuickRender('cut')}
-                >
-                  <Upload />
-                  Xuất
-                </button>
+                <a href="/tai-suno-mp3"><Download />Tải</a>
+                <button disabled={rendering} onClick={()=>{setPanel('presets');setMobileTools(true)}}><Sparkles />Mẫu</button>
+                <button disabled={rendering} onClick={()=>{setPanel('lyrics');setMobileTools(true)}}><FileText />Lời</button>
+                <button type="button" disabled={rendering} onClick={()=>triggerQuickRender('cut')}><Upload />Xuất</button>
               </nav>
             </div>
           </main>
