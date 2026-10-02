@@ -1248,15 +1248,17 @@ function ToolControls(p: {
 
 export default function CreatorStudio({
   initialView = 'create',
+  initialAdvanced = false,
 }: {
   initialView?: AppView;
+  initialAdvanced?: boolean;
 }) {
   const [view, setView] = useState<AppView>(initialView);
   const [autoPreview, setAutoPreview] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [homeSideCollapsed, setHomeSideCollapsed] = useState(false);
   const [signedInUser, setSignedInUser] = useState<SignedInUser | null>(null);
-  const [quickMode, setQuickMode] = useState(true);
+  const [quickMode, setQuickMode] = useState(!initialAdvanced);
   const [projects, setProjects] = useState<SavedProjectListItem[]>([]);
   const [projectQuery, setProjectQuery] = useState('');
   const [libraryItems, setLibraryItems] = useState<LocalLibraryItem[]>([]);
@@ -4887,6 +4889,7 @@ export default function CreatorStudio({
               {rendering && <button type="button" onClick={()=>renderAbort.current?.abort()}>Hủy xuất</button>}
               {resultUrl && <button type="button" onClick={saveVideo}><Download />Tải video</button>}
               <button type="button" aria-pressed={previewExpanded} onClick={()=>setPreviewExpanded(value=>!value)}>{previewExpanded ? 'Trở lại editor' : 'Phóng lớn preview'}</button>
+              <a className="sd-editor-mode-link" href="/create">Create</a>
               <button type="button" disabled={savingProject} onClick={()=>void saveProject()}><Save />{savingProject ? 'Đang lưu…' : 'Lưu dự án'}</button>
               <button type="button" className="sd-workspace-export" disabled={rendering} onClick={()=>void renderVideo('cut')}><Upload />{rendering ? `Đang xuất ${Math.round(progress)}%` : 'Xuất video'}</button>
             </header>}
