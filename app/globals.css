@@ -5630,3 +5630,7 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
 .sd-quick-mode .sd-create-action-rail>button svg{display:block!important;width:21px!important;height:21px!important;flex:none!important}
 .sd-quick-mode .sd-create-action-rail>.sd-create-aspect>summary .sd-ratio-shape{display:block!important;flex:none!important}
 .sd-quick-mode .sd-create-action-rail>.sd-create-aspect[open]>div{top:68px!important}
+
+/* v25 Create cleanup: secondary controls live behind their toolbar actions */
+.sd-quick-mode .sd-create-secondary{display:none!important}
+.sd-quick-mode .sd-create-action-rail{margin-bottom:10px!important}
