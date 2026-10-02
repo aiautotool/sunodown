@@ -5159,6 +5159,11 @@ export default function CreatorStudio({
                     <button type="button" onClick={()=>{setPanel('effects');setMobileTools(true)}}><Sparkles /><span><b>Hiệu ứng</b><small>Chuyển động</small></span></button>
                     <button type="button" onClick={()=>{setPanel('audio');setMobileTools(true)}}><Music2 /><span><b>Âm thanh</b><small>EQ & mastering</small></span></button>
                   </div>
+                  <section className="sd-create-subtitle-sync" aria-label="Subtitle sync">
+                    <header><div><b>Subtitle</b><small>{karaokeTimeline.length ? `${karaokeTimeline.length} câu · chạm câu để xem đúng vị trí` : 'Đang chuẩn bị lời bài hát…'}</small></div><button type="button" disabled={subtitleRegenerating || karaokeSyncStatus === 'syncing'} onClick={()=>void regenerateSubtitleFromCloud()}>{subtitleRegenerating ? 'Đang lấy…' : 'Lấy lại'}</button></header>
+                    {karaokeTimeline.length > 0 && <div className="sd-create-cues">{karaokeTimeline.slice(Math.max(0, karaokeTimeline.findIndex(c=>previewTime>=c.start && previewTime<c.end)-2), Math.max(0, karaokeTimeline.findIndex(c=>previewTime>=c.start && previewTime<c.end)-2)+5).map((cue,idx)=><button type="button" key={`${cue.start}-${idx}`} className={previewTime>=cue.start && previewTime<cue.end?'active':''} onClick={()=>{setPlaybackStart(cue.start);setPreviewTime(cue.start);setTimelinePauseSignal(v=>v+1)}}><time>{fmt(cue.start)}</time><span>{cue.text}</span></button>)}</div>}
+                    {karaokeTimeline.length > 0 && <div className="sd-create-sync-actions"><button type="button" onClick={()=>setKaraokeTimeline(lines=>lines.map(x=>({...x,start:Math.max(0,x.start-.1),end:Math.max(.1,x.end-.1)})))}>−0.1s toàn bộ</button><button type="button" onClick={()=>setKaraokeTimeline(lines=>lines.map(x=>({...x,start:x.start+.1,end:x.end+.1})))}>+0.1s toàn bộ</button><button type="button" onClick={()=>{setPanel('lyrics');setMobileTools(true)}}>Kiểu chữ & karaoke</button></div>}
+                  </section>
                   <div className="sd-create-audio-downloads" aria-label="Tải âm thanh">
                     <button disabled={!!downloading} onClick={()=>downloadAudio('mp3')}><Download /> MP3</button>
                     <button disabled={!!downloading} onClick={()=>downloadAudio('wav')}><Download /> WAV</button>
