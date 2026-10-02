@@ -5634,3 +5634,9 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
 /* v25 Create cleanup: secondary controls live behind their toolbar actions */
 .sd-quick-mode .sd-create-secondary{display:none!important}
 .sd-quick-mode .sd-create-action-rail{margin-bottom:10px!important}
+
+/* v25 direct-manipulation preview */
+.sd-overlay-resize{display:none!important}
+.sd-overlay-corner{position:absolute;width:10px;height:10px;border:2px solid #fff;border-radius:3px;background:#7c5cff;box-shadow:0 1px 5px #0008;pointer-events:none;z-index:4}
+.sd-overlay-corner.nw{left:-5px;top:-5px}.sd-overlay-corner.ne{right:-5px;top:-5px}.sd-overlay-corner.sw{left:-5px;bottom:-5px}.sd-overlay-corner.se{right:-5px;bottom:-5px}
+.sd-live-preview canvas,.sd-live-preview [role="button"]{touch-action:none}
