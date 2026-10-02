@@ -5585,3 +5585,10 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
  .sd-quick-mode{--sd-app-width:430px!important}
  .sd-quick-mode .sd-canvas-column{box-shadow:0 0 0 1px #ffffff08,0 30px 100px #0008}
 }
+
+/* v25 navigation: utility-first, app-like tap targets */
+.sd-mobile-export nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border:0;background:transparent;color:#c2c9d4;font-size:10px;text-decoration:none}
+.sd-mobile-export nav a svg{width:20px;height:20px}
+.sd-profile-menu-link:nth-of-type(-n+4){font-weight:700}
+.sd-profile-menu-link:nth-of-type(1){color:#ddd6fe}
+.sd-profile-menu-link:nth-of-type(2),.sd-profile-menu-link:nth-of-type(3),.sd-profile-menu-link:nth-of-type(4){color:#dbeafe}
