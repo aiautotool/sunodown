@@ -5526,3 +5526,29 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
  .sd-quick-mode .sd-create-tools small{display:none}
  .sd-create-subtitle-body>header{align-items:flex-start;flex-direction:column}
 }
+
+/* v25 unified app shell: same Create composition on phone and desktop */
+.sd-quick-mode{--sd-app-width:520px;background:#090b10}
+.sd-quick-mode .sd-canvas-column{width:min(100%,var(--sd-app-width));max-width:var(--sd-app-width);margin:0 auto!important;padding:0 12px 110px!important}
+.sd-quick-mode .sd-mobile-title{display:flex!important;position:sticky;top:0;z-index:30;min-height:54px;background:#090b10e8;backdrop-filter:blur(18px);border-bottom:1px solid #ffffff0b}
+.sd-quick-mode .sd-stage{width:100%!important;margin:10px auto!important}
+.sd-quick-mode .sd-inspector{position:fixed!important;inset:auto 0 0!important;z-index:80;width:min(100%,var(--sd-app-width))!important;max-width:var(--sd-app-width)!important;margin:auto!important;max-height:78dvh;border-radius:18px 18px 0 0!important}
+.sd-quick-mode .sd-media-suggestions{margin:8px 0!important}
+.sd-quick-mode .sd-quick-create-head{min-height:42px}
+.sd-quick-mode .sd-quick-create-head span,.sd-quick-mode .sd-quick-create-head small{display:none!important}
+.sd-quick-mode .sd-quick-customize{width:38px;height:38px;padding:0!important;justify-content:center}
+.sd-quick-mode .sd-create-tools{grid-template-columns:repeat(3,1fr)!important;gap:8px}
+.sd-quick-mode .sd-create-tools>button{display:grid!important;place-items:center;gap:5px;text-align:center;padding:11px 6px!important}
+.sd-quick-mode .sd-create-tools small{display:none!important}
+.sd-quick-mode .sd-create-tools svg{width:19px;height:19px}
+.sd-quick-mode .sd-create-subtitle-sync>summary{display:flex;align-items:center;justify-content:space-between;list-style:none;cursor:pointer;padding:2px}
+.sd-quick-mode .sd-create-subtitle-sync>summary::-webkit-details-marker{display:none}
+.sd-quick-mode .sd-create-subtitle-sync>summary small{display:none}
+.sd-quick-mode .sd-create-subtitle-body>header{display:flex;justify-content:flex-end;margin-bottom:7px}
+.sd-quick-mode .sd-create-advanced{justify-content:flex-end;background:transparent!important;padding:3px 0!important}
+.sd-quick-mode .sd-create-advanced span{display:none}
+.sd-quick-mode .sd-draft-status{display:none!important}
+@media(min-width:721px){
+ .sd-quick-mode.sd-scene-workspace{display:block!important;min-height:100dvh!important}
+ .sd-quick-mode .sd-canvas-column{grid-column:auto!important}
+}
