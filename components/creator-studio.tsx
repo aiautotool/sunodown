@@ -18,7 +18,7 @@ import {
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { requestRegeneratedSubtitle } from '@/app/lib/subtitle-regeneration';
-import { useRenderWakeLock } from '@/hooks/use-render-wake-lock';
+import { useRenderWakeLock } from '@/src/hooks/use-render-wake-lock';
 import {
   Bell,
   BookOpen,
