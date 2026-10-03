@@ -5160,7 +5160,7 @@ export default function CreatorStudio({
                       <div>{(['9:16','16:9','1:1','4:5','4:3'] as VideoAspect[]).map((ratio)=><button type="button" key={ratio} className={aspect===ratio?'active':''} onClick={(event)=>{toolControlsProps.setAspect(ratio);(event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open')}}><span className={`sd-ratio-shape ratio-${ratio.replace(':','-')}`}/><b>{ratio}</b></button>)}</div>
                     </details>
                     <button type="button" onClick={()=>{setPanel('background');setMobileTools(true)}}><ImageIcon /><b>Nền</b></button>
-                    <button type="button" onClick={()=>document.querySelector<HTMLDetailsElement>('.sd-create-subtitle-sync')?.setAttribute('open','')}><FileText /><b>Sub</b></button>
+                    <button type="button" onClick={()=>{setPanel('lyrics');setMobileTools(true)}}><FileText /><b>Sub</b></button>
                     <button type="button" onClick={()=>{setPanel('presets');setMobileTools(true)}}><SlidersHorizontal /><b>Chỉnh</b></button>
                   </div>
                   <details className="sd-create-subtitle-sync sd-create-secondary" aria-label="Subtitle sync">
@@ -5540,6 +5540,12 @@ export default function CreatorStudio({
                 <button type="button" className="primary-export" disabled={rendering} onClick={()=>triggerQuickRender('cut')}><Upload />Video</button>
               </nav>
             </div>
+            {quickMode && <div className="sd-desktop-downloads" aria-label="Tải xuống">
+              <button type="button" disabled={!!downloading} onClick={()=>downloadAudio('mp3')}><Download /><span>MP3</span></button>
+              <button type="button" disabled={!!downloading} onClick={()=>downloadAudio('wav')}><Download /><span>WAV</span></button>
+              <button type="button" disabled={rendering} onClick={()=>{setPanel('presets');setMobileTools(true)}}><Sparkles /><span>Creator</span></button>
+              <button type="button" className="primary-export" disabled={rendering} onClick={()=>triggerQuickRender('cut')}><Upload /><span>Video</span></button>
+            </div>}
           </main>
         ))}
       {song && view !== 'settings' && mobileTools && (
