@@ -443,6 +443,7 @@ function ToolControls(p: {
   subtitleMessage: string;
   subtitleRegenerating: boolean;
   onRegenerateSubtitle: () => void;
+  canRegenerateSubtitle: boolean;
   background: BackgroundConfig;
   setBackground: (v: BackgroundConfig) => void;
   onError: (message: string) => void;
@@ -1055,7 +1056,7 @@ function ToolControls(p: {
                     </div>
                     <button
                       type="button"
-                      disabled={p.subtitleRegenerating || !p.audioUrl}
+                      disabled={p.subtitleRegenerating || !p.canRegenerateSubtitle}
                       onClick={p.onRegenerateSubtitle}
                     >
                       <RefreshCw className={p.subtitleRegenerating ? 'spin' : ''} />
@@ -3881,6 +3882,7 @@ export default function CreatorStudio({
     subtitleMessage: karaokeSyncMessage,
     subtitleRegenerating,
     onRegenerateSubtitle: () => void regenerateSubtitleFromCloud(),
+    canRegenerateSubtitle: Boolean(song?.id),
     setSubtitleStyle: (value) => {
       markPresetField('subtitleStyle');
       changeVisual(() => setSubtitleStyle(value));
