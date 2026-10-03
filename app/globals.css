@@ -5672,3 +5672,14 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
 .sd-subtitle-generate{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;padding:10px 11px;border:1px solid #ffffff12;border-radius:12px;background:#ffffff05}
 .sd-subtitle-generate>div{min-width:0;display:flex;flex-direction:column;gap:3px}.sd-subtitle-generate>div b{font-size:11px}.sd-subtitle-generate>div small{max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#8f99aa;font-size:9px}
 .sd-subtitle-generate>button{flex:none;min-height:38px!important;display:flex!important;align-items:center!important;gap:6px!important;border:1px solid #765cff66!important;border-radius:10px!important;background:#7357f620!important;color:#cfc5ff!important;padding:0 11px!important;font-size:10px!important;font-weight:750!important}.sd-subtitle-generate>button svg{width:15px;height:15px}.sd-subtitle-generate>button:disabled{opacity:.45}.sd-subtitle-generate .spin{animation:sd-sub-spin .8s linear infinite}@keyframes sd-sub-spin{to{transform:rotate(360deg)}}
+
+/* v26 desktop Create parity: same controls and export actions as mobile */
+.sd-desktop-downloads{display:none}
+@media(min-width:801px){
+  .sd-quick-mode .sd-tool-sheet.studio-sheet{position:fixed;z-index:80;right:24px;bottom:24px;display:block;width:min(430px,calc(100vw - 48px));max-height:78vh;overflow:hidden;border:1px solid #303744;border-radius:18px;background:#0e141d;padding:14px;box-shadow:0 24px 80px #000a}
+  .sd-quick-mode .sd-tool-sheet.studio-sheet .studio-sheet-body{max-height:calc(78vh - 58px);overflow-y:auto}
+  .sd-quick-mode .sd-desktop-downloads{position:sticky;z-index:18;bottom:14px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;width:100%;margin:14px auto 0;padding:8px;border:1px solid #ffffff12;border-radius:15px;background:#0c1118eF;box-shadow:0 14px 45px #0008;backdrop-filter:blur(16px)}
+  .sd-quick-mode .sd-desktop-downloads button{min-width:0;height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:0;border-radius:10px;background:transparent;color:#c2c9d4;font-size:10px;font-weight:700}
+  .sd-quick-mode .sd-desktop-downloads button svg{width:19px;height:19px}
+  .sd-quick-mode .sd-desktop-downloads .primary-export{background:#6d5dfc;color:#fff}
+}
