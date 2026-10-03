@@ -5,6 +5,8 @@ on:
     branches: [v23]
   workflow_dispatch:
 
+# Redeploy marker: restore v23 to picai.online
+
 permissions:
   contents: read
   statuses: write
