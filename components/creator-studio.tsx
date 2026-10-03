@@ -437,6 +437,11 @@ function ToolControls(p: {
   setTextStyles: (v: OverlayTextStyles) => void;
   subtitleStyle: KaraokeDrawStyle;
   setSubtitleStyle: (v: KaraokeDrawStyle) => void;
+  subtitleCueCount: number;
+  subtitleStatus: string;
+  subtitleMessage: string;
+  subtitleRegenerating: boolean;
+  onRegenerateSubtitle: () => void;
   background: BackgroundConfig;
   setBackground: (v: BackgroundConfig) => void;
   onError: (message: string) => void;
@@ -1042,9 +1047,20 @@ function ToolControls(p: {
                   </div>
                 )}
                 {id === 'lyrics' && (
-                  <p className="sd-control-hint">
-                    Bật subtitle rồi kéo trực tiếp chữ trên preview.
-                  </p>
+                  <section className="sd-subtitle-generate">
+                    <div>
+                      <b>Subtitle</b>
+                      <small>{p.subtitleCueCount ? `${p.subtitleCueCount} câu · ${p.subtitleStatus}` : (p.subtitleMessage || 'Chưa có subtitle')}</small>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={p.subtitleRegenerating || !p.audioUrl}
+                      onClick={p.onRegenerateSubtitle}
+                    >
+                      <RefreshCw className={p.subtitleRegenerating ? 'spin' : ''} />
+                      {p.subtitleRegenerating ? 'Đang tạo…' : 'Gen lại Sub'}
+                    </button>
+                  </section>
                 )}
                 {id === 'lyrics' &&
                   (['off', 'scroll', 'focus'] as LyricsMode[]).map((x) => (
@@ -3859,6 +3875,11 @@ export default function CreatorStudio({
       changeVisual(() => setTextStyles(value));
     },
     subtitleStyle,
+    subtitleCueCount: karaokeTimeline.length,
+    subtitleStatus: karaokeSyncStatus,
+    subtitleMessage: karaokeSyncMessage,
+    subtitleRegenerating,
+    onRegenerateSubtitle: () => void regenerateSubtitleFromCloud(),
     setSubtitleStyle: (value) => {
       markPresetField('subtitleStyle');
       changeVisual(() => setSubtitleStyle(value));
