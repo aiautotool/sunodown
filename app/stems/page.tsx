@@ -3,17 +3,15 @@
 import { useState } from 'react';
 import { Download, Mic2, Music2, Scissors, Upload } from 'lucide-react';
 import { MobileAppNav } from '@/components/mobile-app-nav';
-
-type Result={vocals?:string;instrumental?:string;error?:string};
+import { separateVocals, type StemSeparationResult as Result } from '@/src/api/stems';
 
 export default function StemsPage(){
  const [file,setFile]=useState<File|null>(null),[busy,setBusy]=useState(false),[result,setResult]=useState<Result|null>(null);
  async function separate(){
-  if(!file||busy)return; setBusy(true);setResult(null);
-  try{const body=new FormData();body.append('audio',file);body.append('stem','vocals');
-   const res=await fetch('/api/stems',{method:'POST',body}); const data=await res.json();
-   if(!res.ok)throw new Error(data.error||'Không thể tách vocal'); setResult(data);
-  }catch(e){setResult({error:e instanceof Error?e.message:'Không thể tách vocal'});}finally{setBusy(false)}
+  if(!file||busy)return;setBusy(true);setResult(null);
+  try{setResult(await separateVocals(file));}
+  catch(e){setResult({error:e instanceof Error?e.message:'Không thể tách vocal'});}
+  finally{setBusy(false)}
  }
  return <main className="sd-stems-page">
   <header><a href="/" aria-label="Quay lại">‹</a><b>Tách Vocal</b><span><Scissors/></span></header>
