@@ -643,6 +643,8 @@ function ToolControls(p: {
                           </button>
                         )}
                         <select
+                          name={`overlay-${key}-font`}
+                          aria-label={`${key} font`}
                           value={p.textStyles[key].font}
                           onChange={(e) =>
                             p.setTextStyles({
@@ -677,6 +679,8 @@ function ToolControls(p: {
                           ))}
                         </select>
                         <input
+                          name={`overlay-${key}-color`}
+                          aria-label={`${key} color`}
                           type="color"
                           value={p.textStyles[key].color}
                           onChange={(e) =>
@@ -690,6 +694,8 @@ function ToolControls(p: {
                           }
                         />
                         <input
+                          name={`overlay-${key}-scale`}
+                          aria-label={`${key} scale`}
                           type="range"
                           min="40"
                           max="220"
@@ -793,6 +799,7 @@ function ToolControls(p: {
                           <label>
                             Màu chính
                             <input
+                              name="wave-primary-color"
                               type="color"
                               value={p.waveAppearance.color}
                               onChange={(e) =>
@@ -806,6 +813,7 @@ function ToolControls(p: {
                           <label>
                             Màu phụ
                             <input
+                              name="wave-secondary-color"
                               type="color"
                               value={p.waveAppearance.color2}
                               onChange={(e) =>
@@ -1084,6 +1092,7 @@ function ToolControls(p: {
                       <div>
                         <b>Kiểu subtitle</b>
                         <select
+                          name="subtitle-font"
                           value={p.subtitleStyle.font || 'system'}
                           onChange={(e) =>
                             p.setSubtitleStyle({
@@ -1099,6 +1108,7 @@ function ToolControls(p: {
                           <option value="impact">Impact</option>
                         </select>
                         <input
+                          name="subtitle-color"
                           type="color"
                           value={p.subtitleStyle.color || '#ffffff'}
                           onChange={(e) =>
@@ -1113,6 +1123,7 @@ function ToolControls(p: {
                     <label className="sd-scale">
                       Kích thước chữ
                       <input
+                        name="subtitle-scale"
                         type="range"
                         min="60"
                         max="180"
@@ -1225,6 +1236,7 @@ function ToolControls(p: {
                     <label>
                       Start{' '}
                       <input
+                        name="trim-start"
                         type="range"
                         min="0"
                         max={Math.max(0, p.duration - 1)}
@@ -1241,6 +1253,7 @@ function ToolControls(p: {
                     <label>
                       End{' '}
                       <input
+                        name="trim-end"
                         type="range"
                         min="1"
                         max={p.duration}
@@ -4268,6 +4281,7 @@ export default function CreatorStudio({
                 <label>
                   <span>Tìm project</span>
                   <input
+                    name="project-search"
                     value={projectQuery}
                     onChange={(event) => setProjectQuery(event.target.value)}
                     placeholder="Tên dự án hoặc link Suno..."
@@ -4352,6 +4366,7 @@ export default function CreatorStudio({
                 <label>
                   <span>Tìm bài hát</span>
                   <input
+                    name="library-search"
                     value={libraryQuery}
                     onChange={(event) => setLibraryQuery(event.target.value)}
                     placeholder="Tên bài, nghệ sĩ hoặc link Suno..."
@@ -4557,6 +4572,7 @@ export default function CreatorStudio({
                 <Upload />
                 <span>Tải audio lên</span>
                 <input
+                  name="audio-file"
                   type="file"
                   accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
                   onChange={(event) => {
@@ -4668,6 +4684,7 @@ export default function CreatorStudio({
                     <div className="sd-home-linkbox">
                       <Link2 />
                       <input
+                        name="suno-url"
                         value={url}
                         onChange={(e) => change(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && void resolve()}
@@ -4710,6 +4727,7 @@ export default function CreatorStudio({
                       </span>
                       <i>›</i>
                       <input
+                        name="home-audio-file"
                         type="file"
                         accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
                         onChange={(event) => {
@@ -5503,7 +5521,7 @@ export default function CreatorStudio({
               </div>
               </details>
             </aside>
-              {!quickMode && <details className="sd-workspace-divider"><summary>Điều chỉnh vùng làm việc</summary><label>Chiều cao timeline <input aria-label="Chiều cao timeline" type="range" min="100" max="400" step="10" value={timelineHeight} onChange={e=>setTimelineHeight(Number(e.target.value))}/></label></details>}
+              {!quickMode && <details className="sd-workspace-divider"><summary>Điều chỉnh vùng làm việc</summary><label>Chiều cao timeline <input name="timeline-height" aria-label="Chiều cao timeline" type="range" min="100" max="400" step="10" value={timelineHeight} onChange={e=>setTimelineHeight(Number(e.target.value))}/></label></details>}
               {!quickMode && <SceneTimeline
                 key={song.id || url}
                 scene={projectScene}
