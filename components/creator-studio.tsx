@@ -37,6 +37,7 @@ import {
   Music2,
   Play,
   Plus,
+  RefreshCw,
   Save,
   Scissors,
   Settings,
