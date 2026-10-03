@@ -3946,6 +3946,7 @@ export default function CreatorStudio({
     [Folder, 'Projects', '/projects', 'projects'],
     [BookOpen, 'Library', '/library', 'library'],
     [ListMusic, 'Jobs', '/jobs', 'jobs'],
+    [Scissors, 'Tách Vocal', '/stems', 'stems'],
     [Settings, 'Settings', '/settings', 'settings'],
   ] as const;
   const navigationMenu = (
