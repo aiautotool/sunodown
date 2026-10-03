@@ -38,6 +38,7 @@ import {
   Play,
   Plus,
   Save,
+  Scissors,
   Settings,
   SlidersHorizontal,
   Sparkles,
