@@ -1278,6 +1278,7 @@ export default function CreatorStudio({
   const [homeSideCollapsed, setHomeSideCollapsed] = useState(false);
   const [signedInUser, setSignedInUser] = useState<SignedInUser | null>(null);
   const [quickMode, setQuickMode] = useState(!initialAdvanced);
+  const [desktopToolOpen, setDesktopToolOpen] = useState(false);
   const [projects, setProjects] = useState<SavedProjectListItem[]>([]);
   const [projectQuery, setProjectQuery] = useState('');
   const [libraryItems, setLibraryItems] = useState<LocalLibraryItem[]>([]);
@@ -5159,16 +5160,16 @@ export default function CreatorStudio({
                       <summary aria-label={`Tỷ lệ video ${aspect}`}><span className={`sd-ratio-shape ratio-${aspect.replace(':','-')}`}/><b>{aspect}</b></summary>
                       <div>{(['9:16','16:9','1:1','4:5','4:3'] as VideoAspect[]).map((ratio)=><button type="button" key={ratio} className={aspect===ratio?'active':''} onClick={(event)=>{toolControlsProps.setAspect(ratio);(event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open')}}><span className={`sd-ratio-shape ratio-${ratio.replace(':','-')}`}/><b>{ratio}</b></button>)}</div>
                     </details>
-                    <button type="button" onClick={()=>{setPanel('background');setMobileTools(true)}}><ImageIcon /><b>Nền</b></button>
-                    <button type="button" onClick={()=>{setPanel('lyrics');setMobileTools(true)}}><FileText /><b>Sub</b></button>
-                    <button type="button" onClick={()=>{setPanel('presets');setMobileTools(true)}}><SlidersHorizontal /><b>Chỉnh</b></button>
+                    <button type="button" onClick={()=>{setPanel('background');setMobileTools(true);setDesktopToolOpen(true)}}><ImageIcon /><b>Nền</b></button>
+                    <button type="button" onClick={()=>{setPanel('lyrics');setMobileTools(true);setDesktopToolOpen(true)}}><FileText /><b>Sub</b></button>
+                    <button type="button" onClick={()=>{setPanel('presets');setMobileTools(true);setDesktopToolOpen(true)}}><SlidersHorizontal /><b>Chỉnh</b></button>
                   </div>
                   <details className="sd-create-subtitle-sync sd-create-secondary" aria-label="Subtitle sync">
                     <summary><div><b>{karaokeTimeline.length ? '✓ Subtitle' : 'Subtitle'}</b></div><span>›</span></summary>
                     <div className="sd-create-subtitle-body">
                       <header><button type="button" disabled={subtitleRegenerating || karaokeSyncStatus === 'syncing'} onClick={()=>void regenerateSubtitleFromCloud()}>{subtitleRegenerating ? 'Đang lấy…' : 'Lấy lại subtitle'}</button></header>
                       {karaokeTimeline.length > 0 && <div className="sd-create-cues">{karaokeTimeline.slice(Math.max(0, karaokeTimeline.findIndex(c=>previewTime>=c.start && previewTime<c.end)-2), Math.max(0, karaokeTimeline.findIndex(c=>previewTime>=c.start && previewTime<c.end)-2)+5).map((cue,idx)=><button type="button" key={`${cue.start}-${idx}`} className={previewTime>=cue.start && previewTime<cue.end?'active':''} onClick={()=>{setPlaybackStart(cue.start);setPreviewTime(cue.start);setTimelinePauseSignal(v=>v+1)}}><time>{fmt(cue.start)}</time><span>{cue.text}</span></button>)}</div>}
-                      {karaokeTimeline.length > 0 && <div className="sd-create-sync-actions"><button type="button" onClick={()=>setKaraokeTimeline(lines=>lines.map(x=>({...x,start:Math.max(0,x.start-.1),end:Math.max(.1,x.end-.1)})))}>−0.1s toàn bộ</button><button type="button" onClick={()=>setKaraokeTimeline(lines=>lines.map(x=>({...x,start:x.start+.1,end:x.end+.1})))}>+0.1s toàn bộ</button><button type="button" onClick={()=>{setPanel('lyrics');setMobileTools(true)}}>Kiểu chữ & karaoke</button></div>}
+                      {karaokeTimeline.length > 0 && <div className="sd-create-sync-actions"><button type="button" onClick={()=>setKaraokeTimeline(lines=>lines.map(x=>({...x,start:Math.max(0,x.start-.1),end:Math.max(.1,x.end-.1)})))}>−0.1s toàn bộ</button><button type="button" onClick={()=>setKaraokeTimeline(lines=>lines.map(x=>({...x,start:x.start+.1,end:x.end+.1})))}>+0.1s toàn bộ</button><button type="button" onClick={()=>{setPanel('lyrics');setMobileTools(true);setDesktopToolOpen(true)}}>Kiểu chữ & karaoke</button></div>}
                     </div>
                   </details>
 
@@ -5536,22 +5537,22 @@ export default function CreatorStudio({
               <nav className="sd-editor-primary-nav">
                 <button type="button" disabled={!!downloading} onClick={()=>downloadAudio('mp3')}><Download />MP3</button>
                 <button type="button" disabled={!!downloading} onClick={()=>downloadAudio('wav')}><Download />WAV</button>
-                <button disabled={rendering} onClick={()=>{setPanel('presets');setMobileTools(true)}}><Sparkles />Creator</button>
+                <button disabled={rendering} onClick={()=>{setPanel('presets');setMobileTools(true);setDesktopToolOpen(true)}}><Sparkles />Creator</button>
                 <button type="button" className="primary-export" disabled={rendering} onClick={()=>triggerQuickRender('cut')}><Upload />Video</button>
               </nav>
             </div>
             {quickMode && <div className="sd-desktop-downloads" aria-label="Tải xuống">
               <button type="button" disabled={!!downloading} onClick={()=>downloadAudio('mp3')}><Download /><span>MP3</span></button>
               <button type="button" disabled={!!downloading} onClick={()=>downloadAudio('wav')}><Download /><span>WAV</span></button>
-              <button type="button" disabled={rendering} onClick={()=>{setPanel('presets');setMobileTools(true)}}><Sparkles /><span>Creator</span></button>
+              <button type="button" disabled={rendering} onClick={()=>{setPanel('presets');setMobileTools(true);setDesktopToolOpen(true)}}><Sparkles /><span>Creator</span></button>
               <button type="button" className="primary-export" disabled={rendering} onClick={()=>triggerQuickRender('cut')}><Upload /><span>Video</span></button>
             </div>}
           </main>
         ))}
-      {song && view !== 'settings' && mobileTools && (
+      {song && view !== 'settings' && (mobileTools || desktopToolOpen) && (
         <StudioSheet
           title="Điều khiển video"
-          onClose={() => setMobileTools(false)}
+          onClose={() => {setMobileTools(false);setDesktopToolOpen(false)}}
           className="sd-tool-sheet"
         >
           <ToolControls
