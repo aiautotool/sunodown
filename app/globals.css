@@ -5667,3 +5667,8 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
   }
   .sd-quick-mode .sd-create-action-rail{margin-bottom:18px!important}
 }
+
+/* v26 subtitle tab: regeneration is a first-class action */
+.sd-subtitle-generate{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;padding:10px 11px;border:1px solid #ffffff12;border-radius:12px;background:#ffffff05}
+.sd-subtitle-generate>div{min-width:0;display:flex;flex-direction:column;gap:3px}.sd-subtitle-generate>div b{font-size:11px}.sd-subtitle-generate>div small{max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#8f99aa;font-size:9px}
+.sd-subtitle-generate>button{flex:none;min-height:38px!important;display:flex!important;align-items:center!important;gap:6px!important;border:1px solid #765cff66!important;border-radius:10px!important;background:#7357f620!important;color:#cfc5ff!important;padding:0 11px!important;font-size:10px!important;font-weight:750!important}.sd-subtitle-generate>button svg{width:15px;height:15px}.sd-subtitle-generate>button:disabled{opacity:.45}.sd-subtitle-generate .spin{animation:sd-sub-spin .8s linear infinite}@keyframes sd-sub-spin{to{transform:rotate(360deg)}}
