@@ -5683,3 +5683,15 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
   .sd-quick-mode .sd-desktop-downloads button svg{width:19px;height:19px}
   .sd-quick-mode .sd-desktop-downloads .primary-export{background:#6d5dfc;color:#fff}
 }
+
+/* v26 desktop Create hit targets: keep preview gesture layers from intercepting the tool rail */
+@media(min-width:801px){
+  .sd-quick-mode .sd-quick-create{position:relative!important;z-index:60!important;pointer-events:auto!important;isolation:isolate}
+  .sd-quick-mode .sd-create-action-rail{position:relative!important;z-index:70!important;pointer-events:auto!important}
+  .sd-quick-mode .sd-create-action-rail>button,
+  .sd-quick-mode .sd-create-action-rail>.sd-create-aspect,
+  .sd-quick-mode .sd-create-action-rail>.sd-create-aspect>summary,
+  .sd-quick-mode .sd-create-action-rail>.sd-create-aspect>div,
+  .sd-quick-mode .sd-create-action-rail>.sd-create-aspect button{position:relative;z-index:71;pointer-events:auto!important;cursor:pointer!important}
+  .sd-quick-mode .sd-live-preview{z-index:1!important}
+}
