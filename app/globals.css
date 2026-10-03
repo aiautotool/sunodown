@@ -5653,3 +5653,17 @@ radial-gradient(circle at 74% 20%,rgba(130,82,238,.34),transparent 24rem);paddin
 .sd-stems-mode{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.sd-stems-mode button{height:58px;border:1px solid #ffffff12;border-radius:14px;background:#ffffff05;color:inherit;display:flex;align-items:center;justify-content:center;gap:8px}.sd-stems-mode button.active{border-color:#8b6cff;background:#7657ff18}.sd-stems-mode button:disabled{opacity:.35}.sd-stems-mode svg{width:19px}
 .sd-stems-run{width:100%;height:50px;border:0;border-radius:14px;background:#7357f6;color:white;font-weight:750}.sd-stems-run:disabled{opacity:.35}.sd-stems-error{margin-top:12px;padding:12px;border-radius:12px;background:#ff4d5e16;color:#ff9ca6;font-size:12px}
 .sd-stems-results{display:grid;gap:8px;margin-top:14px}.sd-stems-results a{height:58px;padding:0 14px;border:1px solid #ffffff12;border-radius:14px;background:#ffffff05;color:inherit;text-decoration:none;display:grid;grid-template-columns:28px 1fr 24px;align-items:center;gap:8px}.sd-stems-results svg{width:19px}
+
+/* v26 mobile Create: fixed export bar must never cover the final controls */
+@media(max-width:800px){
+  .sd-quick-mode{height:auto!important;min-height:100dvh!important;overflow:visible!important}
+  .sd-quick-mode .sd-canvas-column{
+    height:auto!important;min-height:100dvh!important;overflow:visible!important;
+    padding-bottom:calc(190px + env(safe-area-inset-bottom))!important
+  }
+  .sd-quick-mode .sd-editor-primary-nav{
+    height:calc(76px + env(safe-area-inset-bottom))!important;
+    padding-bottom:env(safe-area-inset-bottom)!important
+  }
+  .sd-quick-mode .sd-create-action-rail{margin-bottom:18px!important}
+}
