@@ -471,6 +471,114 @@ export class PublicMusicDirectory {
   }
 }
 
+
+function subtitleLanguage(value) {
+  const normalized = String(value || 'vi').trim().toLowerCase();
+  return /^[a-z]{2,8}(?:-[a-z0-9]{2,8})?$/.test(normalized)
+    ? normalized
+    : 'vi';
+}
+
+// Compatibility export for the existing production Durable Object namespace.
+// v23 itself does not use SUBTITLE_STORE, but Cloudflare requires the class to
+// remain exported while stored Durable Objects still depend on it.
+export class SubtitleStore {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    const language = subtitleLanguage(url.searchParams.get('language'));
+    const artifactKey = `artifact:${language}`;
+    const claimKey = `claim:${language}`;
+
+    if (url.pathname === '/artifact') {
+      if (request.method === 'GET') {
+        const subtitle = await this.state.storage.get(artifactKey);
+        if (!subtitle) return json({ status: 'missing' }, 404);
+        return json({ status: 'ready', subtitle });
+      }
+
+      if (request.method === 'PUT') {
+        let body;
+        try {
+          body = await request.json();
+        } catch {
+          return json({ error: 'Invalid JSON' }, 400);
+        }
+        const subtitle = body?.subtitle;
+        if (
+          !subtitle ||
+          typeof subtitle !== 'object' ||
+          !Array.isArray(subtitle.lines) ||
+          typeof subtitle.songId !== 'string'
+        ) {
+          return json({ error: 'Invalid subtitle artifact' }, 400);
+        }
+        await this.state.storage.put(artifactKey, subtitle);
+        await this.state.storage.delete(claimKey);
+        return json({ status: 'ready', subtitle });
+      }
+
+      if (request.method === 'DELETE') {
+        await this.state.storage.delete(artifactKey);
+        return json({ status: 'deleted' });
+      }
+
+      return json({ error: 'Method not allowed' }, 405);
+    }
+
+    if (url.pathname === '/claim') {
+      if (request.method === 'POST') {
+        let body;
+        try {
+          body = await request.json();
+        } catch {
+          return json({ error: 'Invalid JSON' }, 400);
+        }
+        const fingerprint =
+          typeof body?.fingerprint === 'string'
+            ? body.fingerprint.slice(0, 256)
+            : '';
+        if (!fingerprint) return json({ error: 'Missing fingerprint' }, 400);
+
+        const now = Date.now();
+        const current = await this.state.storage.get(claimKey);
+        const fresh =
+          current &&
+          typeof current.startedAt === 'number' &&
+          now - current.startedAt < 3 * 60 * 1000;
+
+        if (fresh) {
+          return json(
+            {
+              status: 'generating',
+              startedAt: current.startedAt,
+              fingerprint: current.fingerprint || null,
+            },
+            409,
+          );
+        }
+
+        const claim = { fingerprint, startedAt: now };
+        await this.state.storage.put(claimKey, claim);
+        return json({ status: 'claimed', startedAt: now });
+      }
+
+      if (request.method === 'DELETE') {
+        await this.state.storage.delete(claimKey);
+        return json({ status: 'released' });
+      }
+
+      return json({ error: 'Method not allowed' }, 405);
+    }
+
+    return json({ error: 'Not found' }, 404);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
