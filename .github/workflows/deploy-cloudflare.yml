@@ -61,6 +61,11 @@ jobs:
           // picai.online is already routed to sunodown-picai. CI only updates
           // that Worker script/assets, so the token does not need Zone Routes write.
           delete cfg.routes;
+          // The production Worker already has these Durable Object classes and
+          // migration history. Replaying v23's old new_sqlite_classes migrations
+          // is rejected by Cloudflare (10074), so CI deploys the existing bindings
+          // without attempting to re-apply historical migrations.
+          delete cfg.migrations;
           writeFileSync('wrangler.picai.ci.json', JSON.stringify(cfg, null, 2));
           NODE
 
