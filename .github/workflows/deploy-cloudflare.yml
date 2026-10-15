@@ -40,6 +40,11 @@ jobs:
       - name: Run karaoke regression tests
         run: npm run test:karaoke
 
+      - name: Verify standalone Groq API
+        run: |
+          node services/groq-api/build.mjs
+          node --test services/groq-api/server.test.mjs
+
       - name: Build production bundle
         env:
           BUILD_VERSION: v23
@@ -74,29 +79,18 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Sync Groq API key to Worker secret
-        run: |
-          if [ -n "$GROQ_API_KEY" ]; then
-            printf '%s' "$GROQ_API_KEY" | npx wrangler secret put GROQ_API_KEY --config wrangler.picai.ci.json
-          else
-            echo "GROQ_API_KEY is not configured in GitHub Actions; keeping any existing Worker secret unchanged."
-          fi
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-
       - name: Smoke check picai.online
         run: curl --fail --location --retry 5 --retry-delay 3 --max-time 20 https://picai.online/ >/dev/null
 
       - name: Verify Groq subtitle engine is available
         run: |
-          response="$(curl --fail --silent --show-error --location --retry 5 --retry-delay 3 --max-time 20 https://picai.online/api/karaoke/groq)"
+          response="$(curl --fail --silent --show-error --location --retry 5 --retry-delay 3 --max-time 20 https://groq.aiautotool.com/api/karaoke/groq)"
           echo "$response"
           echo "$response" | grep -Eq '"available"[[:space:]]*:[[:space:]]*true'
 
-      - name: Verify Groq POST sees Worker secret
+      - name: Verify Groq VPS accepts browser requests
         run: |
-          status="$(curl --silent --show-error --location --max-time 20 -o /tmp/groq-post.json -w '%{http_code}' -X POST -F 'probe=1' https://picai.online/api/karaoke/groq)"
+          status="$(curl --silent --show-error --location --max-time 20 -o /tmp/groq-post.json -w '%{http_code}' -X POST -H 'Origin: https://picai.online' -F 'probe=1' https://groq.aiautotool.com/api/karaoke/groq)"
           cat /tmp/groq-post.json
           test "$status" = "400"
           grep -Eq '"error"[[:space:]]*:[[:space:]]*"Thiếu audio' /tmp/groq-post.json

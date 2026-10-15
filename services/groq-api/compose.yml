@@ -1,0 +1,22 @@
+services:
+  groq-api:
+    build:
+      context: ../..
+      dockerfile: services/groq-api/Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8021:8021"
+    mem_limit: 192m
+    cpus: 0.5
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8021/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

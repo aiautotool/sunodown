@@ -96,7 +96,7 @@ export async function buildGroqKaraokeTimeline({
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 180_000);
   try {
-    const response = await fetch('/api/karaoke/groq', {
+    const response = await fetch('https://groq.aiautotool.com/api/karaoke/groq', {
       method: 'POST',
       body: form,
       signal: controller.signal,
