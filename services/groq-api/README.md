@@ -24,8 +24,10 @@ docker compose -f services/groq-api/compose.yml up -d --build
 
 The container listens only on 127.0.0.1:8021 on the host. Nginx terminates TLS.
 DNS A record: groq.aiautotool.com -> 203.24.89.20, DNS only.
-Use the supplied Nginx HTTP config for initial ACME webroot validation, then
-configure the issued certificate and redirect HTTP to HTTPS. Renew via certbot.
+The supplied Nginx config includes HTTPS and HTTP-to-HTTPS redirection.
+The certificate is managed by certbot, with a deploy hook reloading Nginx
+after renewal. For initial issuance, serve only the HTTP ACME location first,
+then enable the HTTPS server after the certificate exists.
 
 Only browser origin https://picai.online can POST. CORS is not authentication;
 Nginx limits requests per IP and the service permits one concurrent request.
