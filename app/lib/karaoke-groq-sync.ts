@@ -65,10 +65,10 @@ export async function buildGroqKaraokeTimeline({
 
   if (!audio.size) throw new Error('Audio không có dữ liệu.');
   if (audio.size > 24 * 1024 * 1024) {
-    throw new Error('Audio vượt giới hạn Groq mobile 24 MB.');
+    throw new Error('Audio vượt giới hạn Groq 24 MB.');
   }
 
-  onStage?.('Mobile · đang gửi audio lên Groq Whisper…');
+  onStage?.('Đang gửi audio lên Groq Whisper…');
   onDebug?.('groq-start', {
     audioBytes: audio.size,
     duration: Math.round(duration * 100) / 100,
@@ -77,7 +77,7 @@ export async function buildGroqKaraokeTimeline({
   });
 
   const form = new FormData();
-  const uploadName = `mobile-audio.${extensionFromMime(audio.type || 'audio/mpeg')}`;
+  const uploadName = `subtitle-audio.${extensionFromMime(audio.type || 'audio/mpeg')}`;
   form.set(
     'audio',
     new File([audio], uploadName, {
