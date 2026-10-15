@@ -806,9 +806,9 @@ export default function CreatorStudio({
   const [homeSideCollapsed, setHomeSideCollapsed] = useState(false);
   const [signedInUser, setSignedInUser] = useState<SignedInUser | null>(null);
   const [quickMode, setQuickMode] = useState(true);
-  const [projects, setProjects] = useState<SavedProjectListItem[]>(readSavedProjectList);
+  const [projects, setProjects] = useState<SavedProjectListItem[]>([]);
   const [projectQuery, setProjectQuery] = useState('');
-  const [libraryItems, setLibraryItems] = useState<LocalLibraryItem[]>(readLocalLibraryItems);
+  const [libraryItems, setLibraryItems] = useState<LocalLibraryItem[]>([]);
   const [libraryQuery, setLibraryQuery] = useState('');
   const [url, setUrl] = useState('https://suno.com/s/tszo0jGdVUua4rT4'),
     [song, setSong] = useState<Song | null>(null),
@@ -1638,6 +1638,7 @@ export default function CreatorStudio({
     // failure never wipes already synchronized cues back to Subtitle 0.
     let bestPartialTimeline: KaraokeLine[] = [];
 
+    let lastSubtitleError = '';
     const delays = [0, 2200];
     for (let attempt = 0; attempt < delays.length; attempt++) {
       if (karaokeSyncRun.current !== syncRun) return;
@@ -1734,6 +1735,7 @@ export default function CreatorStudio({
         if (karaokeSyncRun.current !== syncRun) return;
         const debugError =
           error instanceof Error ? error.message : 'Unknown subtitle error';
+        lastSubtitleError = debugError;
         pushSubtitleDebug('attempt-failed', {
           attempt: attempt + 1,
           error: debugError,
@@ -1772,7 +1774,7 @@ export default function CreatorStudio({
     });
     setKaraokeTimeline([]);
     setKaraokeSyncStatus('fallback');
-    setKaraokeSyncMessage('Chưa tạo được subtitle.');
+    setKaraokeSyncMessage(lastSubtitleError || 'Chưa tạo được subtitle.');
     track('karaoke_auto_sync_failed', {
       attempts: delays.length,
     });
@@ -2272,6 +2274,8 @@ export default function CreatorStudio({
   useEffect(() => {
     const readProjects = () => setProjects(readSavedProjectList());
     const readLibrary = () => setLibraryItems(readLocalLibraryItems());
+    readProjects();
+    readLibrary();
     window.addEventListener('sunodown-v10-library-change', readLibrary);
     window.addEventListener('storage', readLibrary);
     window.addEventListener('storage', readProjects);
