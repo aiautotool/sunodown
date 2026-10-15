@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Download,
   FileText,
+  RefreshCw,
   Folder,
   Image as ImageIcon,
   Link2,
@@ -885,6 +886,7 @@ export default function CreatorStudio({
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeLine[]>([]);
   const [karaokeSyncStatus, setKaraokeSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'fallback'>('idle');
   const [karaokeSyncMessage, setKaraokeSyncMessage] = useState('');
+  const subtitleRegenRunning = useRef(false);
   const [subtitleNotice, setSubtitleNotice] = useState('');
   const [subtitleDebugEnabled, setSubtitleDebugEnabled] = useState(false);
   const [subtitleDebugOpen, setSubtitleDebugOpen] = useState(false);
@@ -1622,6 +1624,7 @@ export default function CreatorStudio({
     audio: Blob,
     duration: number,
     syncRun: number,
+    previousTimeline: KaraokeLine[] = [],
   ) {
     setKaraokeSyncStatus('syncing');
     setKaraokeSyncMessage('Đang chuẩn bị subtitle…');
@@ -1636,7 +1639,7 @@ export default function CreatorStudio({
     // Mobile backend emits useful chunk-by-chunk timelines before the whole
     // song has finished. Keep the best one so a later network/validation
     // failure never wipes already synchronized cues back to Subtitle 0.
-    let bestPartialTimeline: KaraokeLine[] = [];
+    let bestPartialTimeline: KaraokeLine[] = previousTimeline;
 
     let lastSubtitleError = '';
     const delays = [0, 2200];
@@ -1715,6 +1718,8 @@ export default function CreatorStudio({
           lines: result.timeline.length,
           attempts: result.attempts.length,
         });
+        invalidateRenderedResult();
+        setSavedProject(false);
         setKaraokeTimeline(result.timeline);
         cacheMusicSubtitle(target.id, result.timeline);
         setKaraokeSyncStatus(result.status);
@@ -1778,6 +1783,36 @@ export default function CreatorStudio({
     track('karaoke_auto_sync_failed', {
       attempts: delays.length,
     });
+  }
+
+  async function regenerateSubtitles() {
+    if (!song || busy || rendering || karaokeSyncStatus === 'syncing' || subtitleRegenRunning.current) return;
+    subtitleRegenRunning.current = true;
+    const syncRun = ++karaokeSyncRun.current;
+    const previousStatus = karaokeSyncStatus;
+    setKaraokeSyncStatus('syncing');
+    setKaraokeSyncMessage('Đang chuẩn bị tạo lại subtitle…');
+    setSubtitleNotice('');
+    try {
+      let audio = audioBinary || mediaCache.current.get(song.audio);
+      if (!audio) {
+        const response = await fetch(song.audio, { cache: 'no-store' });
+        if (!response.ok) throw new Error('Không tải được audio để tạo lại subtitle.');
+        audio = await response.blob();
+      }
+      if (karaokeSyncRun.current !== syncRun) return;
+      mediaCache.current.set(song.audio, audio);
+      setAudioBinary(audio);
+      const duration = song.duration || await readAudioDuration(song.audio);
+      if (karaokeSyncRun.current !== syncRun) return;
+      await generateSubtitlesInBackground(song, audio, duration, syncRun, karaokeTimeline);
+    } catch (error) {
+      if (karaokeSyncRun.current !== syncRun) return;
+      setKaraokeSyncStatus(previousStatus);
+      setKaraokeSyncMessage(error instanceof Error ? error.message : 'Không tạo lại được subtitle.');
+    } finally {
+      subtitleRegenRunning.current = false;
+    }
   }
 
   async function resolve(
@@ -3412,19 +3447,21 @@ export default function CreatorStudio({
                 resultUrl={resultUrl || undefined}
               />
             </div>
-            {karaokeSyncStatus === 'syncing' && (
-              <output
-                className="sd-subtitle-job"
-                aria-live="polite"
-                aria-label="Đang tìm subtitle"
-              >
-                <i aria-hidden="true" />
-                <span>
-                  <b>Đang tìm subtitle…</b>
-                  <small>Bạn vẫn có thể chỉnh sửa trong khi chạy nền.</small>
-                </span>
+            <div className="sd-subtitle-actions">
+              <output aria-live="polite">
+                {karaokeSyncStatus === 'syncing'
+                  ? (karaokeSyncMessage || 'Đang tạo subtitle…')
+                  : (karaokeSyncMessage || `${karaokeTimeline.length} dòng subtitle`)}
               </output>
-            )}
+              <button
+                type="button"
+                disabled={busy || rendering || karaokeSyncStatus === 'syncing'}
+                onClick={() => void regenerateSubtitles()}
+              >
+                <RefreshCw aria-hidden="true" />
+                {karaokeSyncStatus === 'syncing' ? 'Đang tạo subtitle…' : 'Tạo lại subtitle'}
+              </button>
+            </div>
             <SuggestedBackground
               key={song.audio}
               onAddToTimeline={addPexelsToTimeline}
